@@ -288,8 +288,6 @@
     "katex": ">=0.16.22",
     "mermaid": ">=11",
     "stream-diffs": ">=0.0.2",
-    "stream-markdown": ">=0.0.16",
-    "stream-monaco": ">=0.0.48",
     "vue": ">=3.0.0",
     "vue-i18n": ">=9"
   },
@@ -307,12 +305,6 @@
       "optional": true
     },
     "stream-diffs": {
-      "optional": true
-    },
-    "stream-markdown": {
-      "optional": true
-    },
-    "stream-monaco": {
       "optional": true
     },
     "vue-i18n": {
@@ -355,7 +347,6 @@
     "rollup-plugin-dts": "^5.3.1",
     "rollup-plugin-visualizer": "^6.0.11",
     "stream-diffs": "latest",
-    "stream-markdown": "latest",
     "streamdown": "2.5.0",
     "tailwindcss": "^3.4.19",
     "terser": "^5.49.0",

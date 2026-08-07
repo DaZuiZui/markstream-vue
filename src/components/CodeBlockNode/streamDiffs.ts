@@ -1,103 +1,103 @@
-import type { CodeBlockMonacoOptions, CodeBlockMonacoTheme } from '../../types/component-props'
-import { preload } from '../NodeRenderer/preloadMonaco'
+import type { CodeBlockTheme } from '../../types/component-props'
+import { preload } from '../NodeRenderer/preloadStreamDiffs'
 import { markCodeBlockRuntimeReady } from './runtime'
 
 export { isCodeBlockRuntimeReady } from './runtime'
 
-export interface MonacoDisposableLike {
+export interface StreamDiffsDisposableLike {
   dispose?: () => void
 }
 
-export interface MonacoModelLike {
+export interface StreamDiffsModelLike {
   getLineCount?: () => number
   getValue?: () => string
 }
 
-export interface MonacoEditorViewLike {
-  getModel?: () => MonacoModelLike | null | undefined
+export interface StreamDiffsEditorViewLike {
+  getModel?: () => StreamDiffsModelLike | null | undefined
   getOption?: (option: unknown) => unknown
   updateOptions?: (options: Record<string, unknown>) => void
   layout?: (dimension?: { width: number, height: number }) => void
   getContentHeight?: () => number
   getScrollTop?: () => number
   setScrollTop?: (scrollTop: number) => void
-  onDidContentSizeChange?: (listener: () => void) => MonacoDisposableLike | void
-  onDidLayoutChange?: (listener: () => void) => MonacoDisposableLike | void
+  onDidContentSizeChange?: (listener: () => void) => StreamDiffsDisposableLike | void
+  onDidLayoutChange?: (listener: () => void) => StreamDiffsDisposableLike | void
 }
 
-export interface MonacoDiffLineChangeLike {
+export interface StreamDiffsDiffLineChangeLike {
   originalStartLineNumber?: number
   originalEndLineNumber?: number
   modifiedStartLineNumber?: number
   modifiedEndLineNumber?: number
 }
 
-export interface MonacoDiffEditorViewLike extends MonacoEditorViewLike {
-  getOriginalEditor?: () => MonacoEditorViewLike | null | undefined
-  getModifiedEditor?: () => MonacoEditorViewLike | null | undefined
-  getLineChanges?: () => MonacoDiffLineChangeLike[] | null | undefined
-  onDidUpdateDiff?: (listener: () => void) => MonacoDisposableLike | void
+export interface StreamDiffsDiffEditorViewLike extends StreamDiffsEditorViewLike {
+  getOriginalEditor?: () => StreamDiffsEditorViewLike | null | undefined
+  getModifiedEditor?: () => StreamDiffsEditorViewLike | null | undefined
+  getLineChanges?: () => StreamDiffsDiffLineChangeLike[] | null | undefined
+  onDidUpdateDiff?: (listener: () => void) => StreamDiffsDisposableLike | void
 }
 
-export interface MonacoNamespaceLike {
+export interface StreamDiffsNamespaceLike {
   EditorOption?: {
     fontInfo?: unknown
     lineHeight?: unknown
   }
 }
 
-export interface MonacoRuntimeOptions extends Omit<CodeBlockMonacoOptions, 'theme'> {
-  theme?: CodeBlockMonacoTheme
-  themes?: CodeBlockMonacoTheme[]
+export interface StreamDiffsRuntimeOptions extends Record<string, unknown> {
+  theme?: CodeBlockTheme
+  themes?: CodeBlockTheme[]
   onThemeChange?: () => void
 }
 
-export interface MonacoHelpers {
+export interface StreamDiffsHelpers {
   createEditor?: (container: HTMLElement, code: string, language: string) => Promise<unknown> | unknown
   createDiffEditor?: (container: HTMLElement, original: string, modified: string, language: string) => Promise<unknown> | unknown
   updateCode?: (code: string, language: string) => Promise<unknown> | unknown
   updateDiff?: (original: string, modified: string, language: string) => Promise<unknown> | unknown
-  getEditor?: () => MonacoNamespaceLike | null
-  getEditorView?: () => MonacoEditorViewLike | null
-  getDiffEditorView?: () => MonacoDiffEditorViewLike | null
+  getEditor?: () => StreamDiffsNamespaceLike | null
+  getEditorView?: () => StreamDiffsEditorViewLike | null
+  getDiffEditorView?: () => StreamDiffsDiffEditorViewLike | null
   cleanupEditor?: () => void
   safeClean?: () => void
   refreshDiffPresentation?: () => Promise<unknown> | unknown
-  setTheme?: (theme: CodeBlockMonacoTheme | undefined) => Promise<void> | void
+  setTheme?: (theme: CodeBlockTheme | undefined) => Promise<void> | void
   whenVisualReady?: () => Promise<boolean>
 }
 
-export interface MonacoModule {
-  useMonaco?: (options: MonacoRuntimeOptions) => MonacoHelpers | null | undefined
+export interface StreamDiffsModule {
+  useMonaco?: (options: StreamDiffsRuntimeOptions) => StreamDiffsHelpers | null | undefined
   detectLanguage?: (code: string) => string
   preloadMonacoWorkers?: () => Promise<unknown> | unknown
 }
 
-let mod: MonacoModule | null = null
-let loadingPromise: Promise<MonacoModule | null> | null = null
+let mod: StreamDiffsModule | null = null
+let loadingPromise: Promise<StreamDiffsModule | null> | null = null
 
-function normalizeMonacoModule(value: unknown): MonacoModule | null {
-  const moduleValue = value as MonacoModule | undefined
+function normalizeStreamDiffsModule(value: unknown): StreamDiffsModule | null {
+  const moduleValue = value as StreamDiffsModule | undefined
   if (typeof moduleValue?.useMonaco === 'function')
     return moduleValue
 
-  const defaultValue = (value as { default?: unknown } | undefined)?.default as MonacoModule | undefined
+  const defaultValue = (value as { default?: unknown } | undefined)?.default as StreamDiffsModule | undefined
   return typeof defaultValue?.useMonaco === 'function' ? defaultValue : null
 }
 
 export async function preloadCodeBlockRuntime() {
-  const runtime = await getUseMonaco()
+  const runtime = await getStreamDiffsRuntime()
   return !!runtime
 }
 
-export async function getUseMonaco(): Promise<MonacoModule | null> {
+export async function getStreamDiffsRuntime(): Promise<StreamDiffsModule | null> {
   if (loadingPromise)
     return loadingPromise
 
   loadingPromise = (async () => {
     if (!mod) {
       try {
-        mod = normalizeMonacoModule(await import('stream-diffs'))
+        mod = normalizeStreamDiffsModule(await import('stream-diffs'))
         if (!mod)
           return null
       }

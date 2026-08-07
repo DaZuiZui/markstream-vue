@@ -36,8 +36,7 @@
     "katex",
     "streaming-katex",
     "shiki",
-    "monaco",
-    "monaco-editor",
+    "stream-diffs",
     "streaming-code-blocks",
     "large-documents",
     "safe-html",
@@ -100,8 +99,7 @@
     "katex": ">=0.16.22",
     "mermaid": ">=11",
     "octane": "^0.1.21",
-    "stream-markdown": ">=0.0.16",
-    "stream-monaco": ">=0.0.48"
+    "stream-diffs": ">=0.0.2"
   },
   "peerDependenciesMeta": {
     "@antv/infographic": {
@@ -116,10 +114,7 @@
     "mermaid": {
       "optional": true
     },
-    "stream-markdown": {
-      "optional": true
-    },
-    "stream-monaco": {
+    "stream-diffs": {
       "optional": true
     }
   },
