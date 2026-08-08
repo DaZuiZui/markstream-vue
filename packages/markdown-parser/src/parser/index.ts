@@ -2855,89 +2855,14 @@ function stripDanglingHtmlLikeTail(markdown: string) {
     return true
   }
 
-  const isInsideFencedCodeBlock = (src: string, pos: number) => {
-    let inFence = false
-    let fenceChar: '`' | '~' | '' = ''
-    let fenceLen = 0
-
-    const isIndentWs = (ch: string) => ch === ' ' || ch === '\t'
-
-    const parseFenceMarker = (line: string) => {
-      let i = 0
-      while (i < line.length && isIndentWs(line[i])) i++
-      const ch = line[i]
-      if (ch !== '`' && ch !== '~')
-        return null
-      let j = i
-      while (j < line.length && line[j] === ch) j++
-      const len = j - i
-      if (len < 3)
-        return null
-      return { markerChar: ch as '`' | '~', markerLen: len, rest: line.slice(j) }
-    }
-
-    const stripBlockquotePrefix = (line: string) => {
-      let i = 0
-      while (i < line.length && isIndentWs(line[i])) i++
-      let saw = false
-      while (i < line.length && line[i] === '>') {
-        saw = true
-        i++
-        while (i < line.length && isIndentWs(line[i])) i++
-      }
-      return saw ? line.slice(i) : null
-    }
-
-    const matchFence = (rawLine: string) => {
-      const direct = parseFenceMarker(rawLine)
-      if (direct)
-        return direct
-
-      const afterQuote = stripBlockquotePrefix(rawLine)
-      if (afterQuote == null)
-        return null
-
-      return parseFenceMarker(afterQuote)
-    }
-
-    let offset = 0
-    const lines = src.split(/\r?\n/)
-    for (const line of lines) {
-      const lineStart = offset
-      const lineEnd = offset + line.length
-
-      const pastTargetLine = pos < lineStart
-      if (pastTargetLine)
-        break
-
-      const fenceMatch = matchFence(line)
-      if (fenceMatch) {
-        const markerChar = fenceMatch.markerChar
-        const markerLen = fenceMatch.markerLen
-        if (inFence) {
-          if (markerChar === fenceChar && markerLen >= fenceLen) {
-            if (/^\s*$/.test(fenceMatch.rest)) {
-              inFence = false
-              fenceChar = ''
-              fenceLen = 0
-            }
-          }
-        }
-        else {
-          inFence = true
-          fenceChar = markerChar
-          fenceLen = markerLen
-        }
-      }
-
-      if (pos <= lineEnd)
-        break
-
-      offset = lineEnd + 1
-    }
-
-    return inFence
-  }
+  // Delegate to the full fence scanner used elsewhere: the previous local
+  // scanner only recognized direct and blockquote-prefixed fences, so a
+  // fence nested inside a list item (`- ```html` / `  <div`) was invisible
+  // and the incomplete `<div` tail got truncated from the code content on
+  // every non-final commit. `isInsideOpenMarkdownFenceBeforeOffset` also
+  // handles list/blockquote fence exit conditions (de-dent ends the fence).
+  const isInsideFencedCodeBlock = (src: string, pos: number) =>
+    isInsideOpenMarkdownFenceBeforeOffset(src, pos)
 
   // In streaming mode it's common to have an incomplete HTML-ish fragment at
   // the very end of the current buffer (e.g. '<fo' or '</think'). Letting it
@@ -3987,13 +3912,170 @@ function ensureBlankLineBeforeCustomHtmlBlocks(markdown: string, tags: string[])
   return out
 }
 
+/**
+ * Math-context scanner used to gate the transport-split LaTeX-command
+ * reconstruction. Tracks fenced code (including list/blockquote-prefixed
+ * fences via matchMarkdownFenceMarker), backtick spans, $$...$$ blocks,
+ * \[...\] spans and single-$ math.
+ *
+ * Single-$ math is line-scoped (markdown-it-math never lets $...$ span a
+ * line break): the opener state resets at every line break. A $ that is the
+ * last char of a line counts as an opener because a transport split can land
+ * exactly after it (`$\nabla$` -> "$" + newline + "abla$").
+ *
+ * The scanner is a pure function of the consumed text, so the append-only
+ * windowed fast path in getSafeMarkdown stays deterministic.
+ */
+function createLatexSplitMathScanner(source: string) {
+  let inFence = false
+  let fenceMarker: '`' | '~' | '' = ''
+  let fenceLen = 0
+  let inDollarBlock = false
+  let inBracketMath = false
+  let singleDollarOpen = false
+  let scanned = 0
+
+  const processLine = (line: string, _lineStartOffset: number) => {
+    const fenceMatch = matchMarkdownFenceMarker(line)
+    if (fenceMatch) {
+      if (inFence) {
+        if (fenceMatch.markerChar === fenceMarker && fenceMatch.markerLen >= fenceLen && /^\s*$/.test(fenceMatch.rest)) {
+          inFence = false
+          fenceMarker = ''
+          fenceLen = 0
+        }
+      }
+      else {
+        inFence = true
+        fenceMarker = fenceMatch.markerChar
+        fenceLen = fenceMatch.markerLen
+      }
+      return
+    }
+
+    if (inFence)
+      return
+
+    let i = 0
+    while (i < line.length) {
+      if (inDollarBlock) {
+        if (line.startsWith('$$', i) && !isEscapedDelimiterAt(line, i)) {
+          inDollarBlock = false
+          i += 2
+        }
+        else {
+          i++
+        }
+        continue
+      }
+
+      if (inBracketMath) {
+        if (line.startsWith('\\]', i) && !isEscapedDelimiterAt(line, i)) {
+          inBracketMath = false
+          i += 2
+        }
+        else {
+          i++
+        }
+        continue
+      }
+
+      const ch = line[i]
+      if (ch === '`') {
+        const runLen = countRepeatedChar(line, i, '`')
+        const closeIndex = findCodeSpanCloseIndex(line, i + runLen, runLen)
+        if (closeIndex === -1)
+          break // unclosed span: the rest of the line is code
+        i = closeIndex + runLen
+        continue
+      }
+
+      if (ch === '\\') {
+        const next = line[i + 1]
+        if (next === '[' && !isEscapedDelimiterAt(line, i)) {
+          inBracketMath = true
+          i += 2
+        }
+        else if (next === ']' && !isEscapedDelimiterAt(line, i) && !inBracketMath) {
+          i += 2
+        }
+        else {
+          i += 2 // escaped char (\$, \`, \\, ...)
+        }
+        continue
+      }
+
+      if (ch === '$') {
+        if (line[i + 1] === '$' && !isEscapedDelimiterAt(line, i)) {
+          inDollarBlock = true
+          singleDollarOpen = false
+          i += 2
+          continue
+        }
+        if (singleDollarOpen) {
+          singleDollarOpen = false
+          i++
+          continue
+        }
+        // Opener when followed by non-whitespace, or at end of line (a split
+        // can land right after the opener). A $ followed by a digit is
+        // currency in prose ("$5 total") and must not open math.
+        const after = line[i + 1]
+        if (after === undefined || ((after !== ' ' && after !== '\t') && !/\d/.test(after)))
+          singleDollarOpen = true
+        i++
+        continue
+      }
+
+      i++
+    }
+  }
+
+  const scanTo = (target: number) => {
+    while (scanned < target) {
+      const newlineIndex = source.indexOf('\n', scanned)
+      const lineEndRaw = newlineIndex === -1 || newlineIndex >= target ? target : newlineIndex
+      const lineEnd = lineEndRaw > scanned && source[lineEndRaw - 1] === '\r' ? lineEndRaw - 1 : lineEndRaw
+      const line = source.slice(scanned, lineEnd)
+      processLine(line, scanned)
+      if (newlineIndex === -1 || newlineIndex >= target) {
+        scanned = target
+        break
+      }
+      singleDollarOpen = false // single-$ math never spans a line
+      scanned = newlineIndex + 1
+    }
+  }
+
+  return {
+    scanTo,
+    inMath: () => inDollarBlock || inBracketMath || singleDollarOpen,
+  }
+}
+
 function transformStreamingSafeMarkdown(
   source: string,
   isFinal: boolean,
   md: MarkdownIt,
   options: ParseOptions,
 ) {
-  let safeMarkdown = source.replace(/([^\\])\r(ight|ho)/g, '$1\\r$2').replace(/([^\\])\r?\n(abla|eq|ot|exists)/g, '$1\\n$2')
+  // Reconstruct transport-split LaTeX commands ONLY inside open math contexts
+  // ($...$ / $$...$$ / \[...\]). The previous version rewrote every soft line
+  // break followed by `abla|eq|ot|exists`, which corrupted ordinary prose
+  // ("First.\nother things" gained a literal backslash-n and merged
+  // paragraphs). A bare CR (the \rho/\right split) cannot occur in prose, so
+  // that reconstruction stays ungated.
+  let safeMarkdown = source.replace(/([^\\])\r(ight|ho)/g, '$1\\r$2')
+  const latexSplitMathScanner = createLatexSplitMathScanner(safeMarkdown)
+  safeMarkdown = safeMarkdown.replace(/([^\\])\r?\n(abla|eq|ot|exists)/g, (full, before, cmd, offset) => {
+    // Consume up to (not including) the newline at offset+1: the $ that opens
+    // math may sit anywhere on this line, including as its last char.
+    latexSplitMathScanner.scanTo(offset + 1)
+    const shouldReconstruct = latexSplitMathScanner.inMath()
+    // Consume the newline itself: single-$ math is line-scoped and resets.
+    latexSplitMathScanner.scanTo(offset + full.length)
+    return shouldReconstruct ? `${before}\\n${cmd}` : full
+  })
 
   if (!isFinal) {
     if (safeMarkdown.endsWith('- *')) {

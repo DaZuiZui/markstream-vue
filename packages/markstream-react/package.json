@@ -1,7 +1,7 @@
 {
   "name": "markstream-react",
   "type": "module",
-  "version": "0.0.56-beta.3",
+  "version": "0.0.56-beta.4",
   "description": "React/Next.js streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, stream-diffs powered code blocks, and custom React components.",
   "author": "Simon He",
   "license": "MIT",
@@ -81,7 +81,7 @@
   ],
   "scripts": {
     "dev": "vite dev",
-    "build": "pnpm --dir ../markstream-core build && vite build --mode npm && node ../../scripts/cleanup-style-entry.mjs && node ./scripts/finalize-tailwind-export.mjs && vite build -c vite.config.tailwind.ts --mode npm && node ./scripts/copy-tailwind-css.mjs && node ../../scripts/generate-px-css.mjs && pnpm run build:dts && node ./scripts/ensure-next-client-directive.mjs",
+    "build": "pnpm --dir ../markdown-parser build && pnpm --dir ../markstream-core build && vite build --mode npm && node ../../scripts/cleanup-style-entry.mjs && node ./scripts/finalize-tailwind-export.mjs && vite build -c vite.config.tailwind.ts --mode npm && node ./scripts/copy-tailwind-css.mjs && node ../../scripts/generate-px-css.mjs && pnpm run build:dts && node ./scripts/ensure-next-client-directive.mjs",
     "build:analyze": "ANALYZE=true pnpm build",
     "build:dts": "rollup -c ./scripts/rollup.dts.config.mjs && node ./scripts/clean-dts.cjs",
     "check:exports": "node ../../scripts/check-react-package-exports.mjs",

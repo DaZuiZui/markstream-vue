@@ -140,3 +140,43 @@ describe('parseMarkdownToStructure - fence regression', () => {
     expect(JSON.stringify(nodes)).toContain('Hello')
   })
 })
+
+describe('parseMarkdownToStructure - list fence html tail (streaming)', () => {
+  it('keeps incomplete html content monotonic inside a list-nested fence', () => {
+    // Regression: the inner fence scanner in stripDanglingHtmlLikeTail used
+    // to miss list-item-prefixed fences, so an incomplete `<div` tail inside
+    // `- ```html` was truncated from the code content on every non-final
+    // commit (content flashed '' while typing `<d`). The streamed prefixes
+    // must match a cold parse of the same prefix at every step.
+    const md = getMarkdown('fence-list-html-tail')
+    const src = '- ```html\n  <div\n  ```\n'
+    for (let end = 1; end <= src.length; end++) {
+      const prefix = src.slice(0, end)
+      const streamed = parseMarkdownToStructure(prefix, md, {
+        final: false,
+        streamParse: true,
+        __reuseStableTopLevelNodes: true,
+      }) as any[]
+      const cold = parseMarkdownToStructure(prefix, getMarkdown(`fence-list-html-tail-cold-${end}`), {
+        final: false,
+        streamParse: false,
+      }) as any[]
+      const codeOf = (nodes: any[]) => {
+        const out: string[] = []
+        const walk = (ns: any[]) => {
+          for (const n of ns) {
+            if (n?.type === 'code_block')
+              out.push(String(n.code ?? ''))
+            for (const key of ['children', 'items']) {
+              if (Array.isArray(n?.[key]))
+                walk(n[key])
+            }
+          }
+        }
+        walk(nodes)
+        return out.join('|')
+      }
+      expect(codeOf(streamed), `streamed != cold at prefix ${end}: '${codeOf(streamed)}' vs '${codeOf(cold)}'`).toBe(codeOf(cold))
+    }
+  })
+})

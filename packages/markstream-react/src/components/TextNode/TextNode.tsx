@@ -9,6 +9,12 @@ interface StreamSegment {
   fading: boolean
 }
 
+// Settling merges the delta into the previous (settled) segment — the merge
+// keeps the previous segment's id so its span element is reused — but the
+// merged content must reach the DOM through SettledSegmentContent, which
+// appends new text nodes instead of mutating the existing one. Browsers
+// collapse a Selection anchored inside a text node as soon as that node is
+// mutated or replaced (verified in Chromium).
 function settleAndMergeSegments(segments: StreamSegment[], segmentId?: number) {
   return segments.reduce<StreamSegment[]>((result, segment) => {
     const nextSegment = segmentId == null || segment.id === segmentId
@@ -26,6 +32,36 @@ function settleAndMergeSegments(segments: StreamSegment[], segmentId?: number) {
     }
     return result
   }, [])
+}
+
+/**
+ * Renders a settled segment's content without ever mutating an existing text
+ * node: the initial content is rendered by JSX (SSR-safe), and every growth
+ * is appended as a NEW sibling text node. A non-prefix replacement rebuilds
+ * the node (the old content is gone anyway).
+ */
+function SettledSegmentContent({ content }: { content: string }) {
+  const initialRef = useRef(content)
+  const renderedRef = useRef(initialRef.current)
+  const spanRef = useRef<HTMLSpanElement | null>(null)
+
+  useEffect(() => {
+    const el = spanRef.current
+    if (!el)
+      return
+    if (content.startsWith(renderedRef.current)) {
+      const increment = content.slice(renderedRef.current.length)
+      if (increment)
+        el.appendChild(document.createTextNode(increment))
+      renderedRef.current = content
+    }
+    else {
+      el.textContent = content
+      renderedRef.current = content
+    }
+  }, [content])
+
+  return <span ref={spanRef}>{initialRef.current}</span>
 }
 
 export function TextNode(props: NodeComponentProps<{ type: 'text', content: string, center?: boolean }>) {
@@ -71,11 +107,24 @@ export function TextNode(props: NodeComponentProps<{ type: 'text', content: stri
     }
 
     if (!fadeEnabled) {
-      setSegments(current => current.length === 1 && !current[0]?.fading && current[0].content === content
-        ? current
-        : content
-          ? [{ id: nextSegmentIdRef.current++, content, fading: false }]
-          : [])
+      // Append-only growth: every content change creates a NEW immutable
+      // segment. Replacing or mutating the existing segment's span would
+      // collapse a user Selection anchored inside its text node.
+      setSegments((current) => {
+        if (!content)
+          return []
+        const rendered = current.reduce((acc, segment) => acc + segment.content, '')
+        if (content === rendered)
+          return current
+        if (content.startsWith(rendered)) {
+          return [
+            ...current,
+            { id: nextSegmentIdRef.current++, content: content.slice(rendered.length), fading: false },
+          ]
+        }
+        // Non-prefix replacement: the old content is gone anyway.
+        return [{ id: nextSegmentIdRef.current++, content, fading: false }]
+      })
     }
     else if (content !== previousContent) {
       if (previousContent && content.startsWith(previousContent)) {
@@ -157,7 +206,9 @@ export function TextNode(props: NodeComponentProps<{ type: 'text', content: stri
             : undefined}
           onAnimationEnd={segment.fading ? () => settleSegment(segment.id) : undefined}
         >
-          {segment.content}
+          {segment.fading
+            ? segment.content
+            : <SettledSegmentContent content={segment.content} />}
         </span>
       ))}
     </span>

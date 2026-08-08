@@ -1,7 +1,7 @@
 {
   "name": "markstream-vue2",
   "type": "module",
-  "version": "0.0.52",
+  "version": "0.0.53",
   "description": "Vue 2.6/2.7 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, stream-diffs powered code blocks, and Vue 2 component rendering.",
   "author": "Simon He",
   "license": "MIT",
@@ -100,7 +100,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "pnpm --dir ../markstream-core build && vite build -c vite.config.ts --mode npm && vite build -c vite.config.tailwind.ts --mode npm && node ./scripts/copy-tailwind-css.mjs && node ../../scripts/generate-px-css.mjs && pnpm run build:dts && pnpm run validate:dist",
+    "build": "pnpm --dir ../markdown-parser build && pnpm --dir ../markstream-core build && vite build -c vite.config.ts --mode npm && vite build -c vite.config.tailwind.ts --mode npm && node ./scripts/copy-tailwind-css.mjs && node ../../scripts/generate-px-css.mjs && pnpm run build:dts && pnpm run validate:dist",
     "build:analyze": "ANALYZE=true pnpm build",
     "build:dts": "rollup -c ./scripts/rollup.dts.config.mjs && node ./scripts/clean-dts.cjs",
     "validate:dist": "node ./scripts/validate-dist-entries.mjs",

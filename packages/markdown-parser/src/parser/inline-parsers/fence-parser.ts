@@ -1,7 +1,11 @@
 import type { CodeBlockNode, MarkdownToken } from '../../types'
 
-// Strip a final line that looks like a fence marker (``` etc.)
-const TRAILING_FENCE_LINE_RE = /\r?\n[ \t]*`+\s*$/
+// A trailing line made of the fence's own marker character that is long
+// enough to be a valid closing fence for it.
+function TRAILING_OWN_FENCE_LINE_RE(marker: string, minLen: number) {
+  return new RegExp(`\r?\n[ \\t]*${marker}{${minLen},}[ \\t]*$`)
+}
+
 // Unified diff metadata/header line prefixes to skip when splitting a diff
 const DIFF_HEADER_PREFIXES = ['diff ', 'index ', '--- ', '+++ ', '@@ ']
 // Newline splitter reused in this module
@@ -119,15 +123,21 @@ export function parseFenceToken(token: MarkdownToken): CodeBlockNode {
 
   // Defensive sanitization: sometimes a closing fence line (e.g. ``` or ``)
   // can accidentally end up inside `token.content` (for example when
-  // the parser/mapping is confused). Remove a trailing line that only
-  // contains backticks and optional whitespace so we don't render stray
-  // ` or `` characters at the end of the code output. This is a
-  // conservative cleanup and only strips a final line that looks like a
-  // fence marker (starts with optional spaces then one or more ` and
-  // only whitespace until end-of-string).
+  // the parser/mapping is confused during streaming). This cleanup is ONLY
+  // valid for the streaming/unclosed case, and ONLY when the trailing line
+  // could actually be the fence's own closing marker (same character, at
+  // least as long as the opening run). A closed fence carries authoritative
+  // content and must never be altered: a nested fence inside a 4-backtick
+  // outer block legitimately ends with a ``` line, and a ``` fence whose
+  // code ends in a backtick-only line keeps it.
   let content = String(token.content ?? '')
-  if (TRAILING_FENCE_LINE_RE.test(content))
-    content = content.replace(TRAILING_FENCE_LINE_RE, '')
+  if (!closed && token.markup) {
+    const marker = token.markup[0]
+    const minLen = token.markup.length
+    const trailingFenceLineRe = TRAILING_OWN_FENCE_LINE_RE(marker, minLen)
+    if (trailingFenceLineRe.test(content))
+      content = content.replace(trailingFenceLineRe, '')
+  }
 
   if (diff) {
     const { original, updated } = splitUnifiedDiff(content, closed === true)

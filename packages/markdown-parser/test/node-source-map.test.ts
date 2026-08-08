@@ -309,7 +309,7 @@ describe('node source map metadata', () => {
   })
 
   it('maps source ranges across math newline preprocessing that collapses lines', () => {
-    const nodes = parseMarkdownToStructure('x\nabla', getMarkdown('source-map-math-collapse'), {
+    const nodes = parseMarkdownToStructure('x $\nabla$', getMarkdown('source-map-math-collapse'), {
       final: true,
       includeSourceMap: true,
       streamParse: false,
@@ -319,7 +319,7 @@ describe('node source map metadata', () => {
   })
 
   it('maps source ranges across CRLF math newline preprocessing', () => {
-    const nodes = parseMarkdownToStructure('x\r\nabla', getMarkdown('source-map-math-crlf'), {
+    const nodes = parseMarkdownToStructure('x $\r\nabla$', getMarkdown('source-map-math-crlf'), {
       final: true,
       includeSourceMap: true,
       streamParse: false,
@@ -329,13 +329,32 @@ describe('node source map metadata', () => {
   })
 
   it('keeps CRLF math newline preprocessing on the default path without source maps', () => {
-    const nodes = parseMarkdownToStructure('x\r\nabla', getMarkdown('source-map-math-crlf-default'), {
+    const nodes = parseMarkdownToStructure('x $\r\nabla$', getMarkdown('source-map-math-crlf-default'), {
       final: true,
       streamParse: false,
     }) as any[]
 
-    expect(nodes[0]?.raw).toBe('x\\nabla')
+    expect(nodes[0]?.raw).toBe('x $\\nabla$')
     expect(nodes[0]?.sourceMap).toBeUndefined()
+  })
+
+  it('does not rewrite prose line breaks before other/equal/exists', () => {
+    const nodes = parseMarkdownToStructure('First.\nother things and\nequal parts below', getMarkdown('prose-softbreak-regression'), {
+      final: true,
+      streamParse: false,
+    }) as any[]
+
+    expect(nodes[0]?.raw).toBe('First.\nother things and\nequal parts below')
+    expect(nodes.length).toBe(1)
+  })
+
+  it('reconstructs split LaTeX commands inside single-$ math', () => {
+    const nodes = parseMarkdownToStructure('use $\nabla f$ here', getMarkdown('math-split-reconstruct'), {
+      final: true,
+      streamParse: false,
+    }) as any[]
+
+    expect(nodes[0]?.raw).toBe('use $\\nabla f$ here')
   })
 
   it('attaches source maps when root-level inline tokens expand to html blocks', () => {
