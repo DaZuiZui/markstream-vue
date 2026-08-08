@@ -837,16 +837,31 @@ async function revealEditorDisplay() {
   if (!isDiff.value) {
     if (whenRuntimeVisualReady && !await whenRuntimeVisualReady())
       return false
+    // Hold the grid row at the fallback <pre>'s full height (content + vertical
+    // padding) while the stream-diffs surface is revealed, then settle on a
+    // later frame. Without this pin, removing the fallback collapses the row by
+    // its padding and any content-estimation delta in the same patch the surface
+    // mounts, producing a CLS. Mirror the diff handoff below.
+    syncEditorHostToFallbackHeight()
+    layoutEditorToHost(true)
+    editorHandoffPrepared.value = true
+    await nextTick()
+    syncEditorHostToFallbackHeight()
+    layoutEditorToHost(true)
+    await waitForAnimationFrame()
+    syncEditorHostToFallbackHeight()
+    layoutEditorToHost(true)
     editorDisplayReady.value = true
     await nextTick()
-    syncEditorHostHeight(false)
-    layoutEditorToHost()
+    // Keep the removal frame at the pinned fallback height; schedule the settle
+    // on a subsequent frame instead of collapsing synchronously.
+    scheduleEditorHeightSync()
     return true
   }
 
   // The editor is fully prepared while hidden. Flip the two layers in one Vue
   // patch so there is no visible pre-reveal or post-reveal validation state.
-  syncDiffEditorHostToFallbackHeight() ?? syncDiffRevealHostHeight()
+  syncEditorHostToFallbackHeight() ?? syncDiffRevealHostHeight()
   layoutEditorToHost(true)
   syncDiffScrollFromFallback()
   syncInlineFoldProxies()
@@ -881,7 +896,7 @@ function syncDiffRevealHostHeight() {
     scheduleStreamingDiffHeightChase()
     return Number.parseFloat(editorHost.style.height || '') || null
   }
-  return syncDiffEditorHostToFallbackHeight()
+  return syncEditorHostToFallbackHeight()
 }
 
 function canReleaseEstimatedFloorForFoldedDiff() {
@@ -1581,12 +1596,14 @@ function shouldFreezeVisibleDiffFallbackMetrics() {
   return isDiff.value && renderPreFallback.value
 }
 
-// Sync the Monaco host to the fallback pre height while the fallback is visible,
-// so the transition from fallback → editor has no height jump.
-function syncDiffEditorHostToFallbackHeight() {
+// Sync the editor host to the fallback pre height while the fallback is visible,
+// so the transition from fallback → editor has no height jump. Covers both diff
+// and single-editor surfaces: the fallback <pre> owns the grid row height in its
+// full form (content + vertical padding), and the host must match that exact
+// height before the fallback is removed, otherwise removing it collapses the row.
+function syncEditorHostToFallbackHeight() {
   if (
-    !isDiff.value
-    || !showPreWhileMonacoLoads.value
+    !showPreWhileMonacoLoads.value
   ) {
     return null
   }
@@ -2238,7 +2255,7 @@ function updateCollapsedHeight(options: EditorHostHeightSyncOptions = {}) {
       }
     }
     if (isDiff.value && !hasRenderedDiffDom && !hasVisibleCollapsedDiffSummary && showPreWhileMonacoLoads.value) {
-      const fallbackHeight = syncDiffEditorHostToFallbackHeight()
+      const fallbackHeight = syncEditorHostToFallbackHeight()
       if (fallbackHeight != null) {
         const h = applyCollapsedContainerHeight(container, fallbackHeight, max, {
           allowBelowEstimatedFloor: true,
