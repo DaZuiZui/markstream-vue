@@ -40,7 +40,7 @@
     "streaming-mermaid",
     "katex",
     "streaming-katex",
-    "monaco-editor",
+    "stream-diffs",
     "streaming-code-blocks",
     "large-documents",
     "custom-components",

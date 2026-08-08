@@ -1,12 +1,12 @@
 ---
 title: Angular Installation
-description: Install markstream-angular in Angular 20+ standalone apps, import CSS, and choose optional peers for Monaco, Mermaid, KaTeX, D2, Infographic, and workers.
+description: Install markstream-angular in Angular 20+ standalone apps, import CSS, and choose optional peers for Mermaid, KaTeX, stream-diffs enhanced code blocks, D2, Infographic, and workers.
 keywords:
   - markstream-angular installation
   - Angular 20 Markdown renderer
   - Angular Mermaid Markdown
   - Angular KaTeX Markdown
-  - Angular Monaco Markdown
+  - Angular stream-diffs enhanced code block Markdown
 ---
 
 # Angular Installation

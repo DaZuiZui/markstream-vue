@@ -1,12 +1,12 @@
 ---
 title: Angular 安装
-description: 在 Angular 20+ standalone 应用中安装 markstream-angular，导入 CSS，并按需选择 Monaco、Mermaid、KaTeX、D2、Infographic 和 worker。
+description: 在 Angular 20+ standalone 应用中安装 markstream-angular，导入 CSS，并按需选择 `stream-diffs` 增强代码块、Mermaid、KaTeX、D2、Infographic 和 worker。
 keywords:
   - markstream-angular 安装
   - Angular 20 Markdown 渲染器
   - Angular Mermaid Markdown
   - Angular KaTeX Markdown
-  - Angular Monaco Markdown
+  - Angular stream-diffs 增强代码块
 ---
 
 # Angular 安装

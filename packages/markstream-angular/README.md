@@ -25,7 +25,7 @@ Optional peer dependencies:
 - `@terrastruct/d2` for D2 diagrams
 - `@antv/infographic` for infographic blocks
 
-Install only the peers your output actually needs. Plain Markdown does not require Mermaid, KaTeX, Monaco, D2, or Infographic.
+Install only the peers your output actually needs. Plain Markdown does not require Mermaid, KaTeX, stream-diffs enhanced code blocks, D2, or Infographic.
 
 Example:
 

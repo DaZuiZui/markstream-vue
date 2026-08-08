@@ -60,7 +60,7 @@
     "progressive-mermaid",
     "katex",
     "streaming-katex",
-    "shiki",
+    "stream-diffs",
     "streaming-code-blocks",
     "streaming-diff",
     "diff-codeblock",

@@ -26,7 +26,7 @@ description: 从 react-markdown 迁移到 markstream-react，并了解渲染器�
 ## 什么情况下更适合 `markstream-react`
 
 - 你在渲染 AI / 聊天 / SSE 这种“内容边到边显示”的流式输出。
-- 你需要渐进式 Mermaid、D2、KaTeX 或 Monaco 代码块体验。
+- 你需要渐进式 Mermaid、D2、KaTeX 或 `stream-diffs` 增强代码块体验。
 - 你需要针对大文档做视口优先的重节点调度。
 - 你希望从“字符串进、元素出”的模型升级到更适合流式更新的 AST 模型。
 

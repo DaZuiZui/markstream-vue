@@ -39,7 +39,7 @@
     "streaming-mermaid",
     "katex",
     "streaming-katex",
-    "shiki",
+    "stream-diffs",
     "streaming-code-blocks",
     "large-documents",
     "safe-html",

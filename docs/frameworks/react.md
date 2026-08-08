@@ -93,7 +93,7 @@ For SSR safety with optional peers, see the [React installation guide](/guide/re
 - **Progressive Mermaid**: diagrams render incrementally
 - **Streaming code blocks**: with diff tracking
 - **Virtualized long documents**: for 1MB+ content
-- **Optional peers**: Mermaid, KaTeX, `stream-diffs` (enhanced code blocks), Monaco (fallback) — install only what you need
+- **Optional peers**: Mermaid, KaTeX, `stream-diffs` (enhanced code blocks) — install only what you need
 - **TypeScript-first**: full type coverage
 
 ## Framework integration

@@ -34,7 +34,7 @@ Open the [React migration demo](https://markstream-react.pages.dev/migration-dem
 ## When `markstream-react` is a better fit
 
 - You render AI/chat/SSE output while text is still arriving.
-- You want progressive Mermaid, D2, KaTeX, or Monaco-backed code blocks.
+- You want progressive Mermaid, D2, KaTeX, or stream-diffs enhanced code blocks.
 - You want viewport-aware heavy-node scheduling for large documents.
 - You want to move from string-in/string-out rendering to a streaming-friendly AST model.
 
