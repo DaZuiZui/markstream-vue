@@ -1188,7 +1188,7 @@ async function runCodeBlockScenario(browser, port) {
     port,
     shareId,
     content,
-'stream-diffs',
+    'stream-diffs',
     viewport,
     {
       disableViewportPriorityIdleDrain: true,
