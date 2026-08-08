@@ -219,6 +219,8 @@ let createEditor: ((el: HTMLElement, code: string, lang: string) => Promise<unkn
 let createDiffEditor: ((el: HTMLElement, original: string, modified: string, lang: string) => Promise<unknown> | unknown) | null = null
 let updateCode: (code: string, lang: string) => Promise<unknown> | unknown = () => {}
 let updateDiffCode: (original: string, modified: string, lang: string) => Promise<unknown> | unknown = () => {}
+let finalizeCode: () => Promise<unknown> | unknown = () => {}
+let finalizeDiff: () => Promise<unknown> | unknown = () => {}
 let getEditor: () => StreamDiffsNamespaceLike | null = () => null
 let getEditorView: () => StreamDiffsEditorViewLike | null = () => ({ getModel: () => ({ getLineCount: () => 1 }), getOption: () => 14, updateOptions: () => {} })
 let getDiffEditorView: () => StreamDiffsDiffEditorViewLike | null = () => ({ getModel: () => ({ getLineCount: () => 1 }), getOption: () => 14, updateOptions: () => {} })
@@ -540,6 +542,8 @@ async function ensureMonacoRuntime() {
       createDiffEditor = helpers.createDiffEditor || createDiffEditor
       updateCode = helpers.updateCode || updateCode
       updateDiffCode = helpers.updateDiff || updateDiffCode
+      finalizeCode = helpers.finalizeCode || finalizeCode
+      finalizeDiff = helpers.finalizeDiff || finalizeDiff
       getEditor = helpers.getEditor || getEditor
       getEditorView = helpers.getEditorView || getEditorView
       getDiffEditorView = helpers.getDiffEditorView || getDiffEditorView
@@ -2787,6 +2791,26 @@ function queuePlainCodeUpdate(code: string, language: string) {
   void flushPlainCodeUpdateQueue(plainCodeUpdateGeneration)
 }
 
+// Resolves once the plain-code update queue has drained (or is already idle).
+// Used after the stream settles to finalize the stream-diffs controller only
+// after the final content append has been applied.
+function waitForPlainCodeQueueSettled(): Promise<void> {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (isUnmounted) {
+        resolve()
+        return
+      }
+      if (!plainCodeUpdateRunning && !pendingPlainCodeUpdate) {
+        resolve()
+        return
+      }
+      setTimeout(check, 16)
+    }
+    check()
+  })
+}
+
 watch(
   () => [props.node.language, props.node.code, props.node.raw, props.node.loading, props.loading] as const,
   ([newLanguage, code, _raw, nodeLoading, propLoading]) => {
@@ -4012,6 +4036,9 @@ watch(
               )
               if (isUnmounted || !isDiff.value)
                 return
+              // 2.0: finalize the stream-diffs diff controller so the
+              // highlighted surface replaces the streaming plain-text view.
+              await Promise.resolve(finalizeDiff())
               refreshDiffPresentationSafely()
               layoutEditorToHost(true)
               syncDiffScrollFromFallback()
@@ -4026,6 +4053,13 @@ watch(
             else {
               clearPlainCodeUpdateQueue()
               queuePlainCodeUpdate(displayCode.value, runtimeLanguage.value)
+              // 2.0: once streaming settles, hand the stream-diffs controller
+              // over to its finalized (highlighted) surface after the final
+              // content update has been applied. Idempotent — repeat calls
+              // early-return once the controller is finalized.
+              await waitForPlainCodeQueueSettled()
+              if (!isUnmounted && !isDiff.value)
+                await Promise.resolve(finalizeCode())
             }
           }
           if (loadingJustFinished && isDiff.value) {

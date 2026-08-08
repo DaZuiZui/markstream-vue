@@ -1225,6 +1225,36 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     viewportReady,
   ])
 
+  // 2.0: finalize the stream-diffs controller once streaming completes so the
+  // highlighted pierre/Shiki surface replaces the streaming plain-text view.
+  // Streaming updates run in the effect above; React runs effects in
+  // declaration order, so when `loading` flips to false the last updateCode
+  // append has already been applied synchronously before this effect fires.
+  // finalizeCode()/finalizeDiff() are idempotent (they early-return when the
+  // controller is already finalized), so repeat calls are safe.
+  useEffect(() => {
+    if (loading)
+      return
+    if (!runtimeReady || !viewportReady || collapsed || useFallback)
+      return
+    const helpers = helpersRef.current
+    if (!helpers)
+      return
+    const finalize = async () => {
+      try {
+        if (node.diff && helpers.finalizeDiff) {
+          await Promise.resolve(helpers.finalizeDiff())
+        }
+        else if (helpers.finalizeCode) {
+          await Promise.resolve(helpers.finalizeCode())
+        }
+      }
+      catch {}
+      scheduleEditorHeightSync(expanded)
+    }
+    void finalize()
+  }, [collapsed, expanded, loading, node.diff, runtimeReady, scheduleEditorHeightSync, useFallback, viewportReady])
+
   useEffect(() => {
     if (useFallback)
       return

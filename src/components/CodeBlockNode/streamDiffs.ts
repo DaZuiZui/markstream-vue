@@ -57,6 +57,8 @@ export interface StreamDiffsHelpers {
   createDiffEditor?: (container: HTMLElement, original: string, modified: string, language: string) => Promise<unknown> | unknown
   updateCode?: (code: string, language: string) => Promise<unknown> | unknown
   updateDiff?: (original: string, modified: string, language: string) => Promise<unknown> | unknown
+  finalizeCode?: () => Promise<unknown> | unknown
+  finalizeDiff?: () => Promise<unknown> | unknown
   getEditor?: () => StreamDiffsNamespaceLike | null
   getEditorView?: () => StreamDiffsEditorViewLike | null
   getDiffEditorView?: () => StreamDiffsDiffEditorViewLike | null
