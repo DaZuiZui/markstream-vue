@@ -86,16 +86,10 @@ export class StreamingDemoComponent {
 ## TypeScript Props
 
 ```ts
-import type { CodeBlockMonacoOptions, NodeRendererProps } from 'markstream-angular'
-
-const monacoOptions: CodeBlockMonacoOptions = {
-  fontSize: 13,
-  wordWrap: 'on',
-}
+import type { NodeRendererProps } from 'markstream-angular'
 
 const props: NodeRendererProps = {
   content: '# Angular',
-  codeBlockMonacoOptions: monacoOptions,
   final: true,
 }
 ```

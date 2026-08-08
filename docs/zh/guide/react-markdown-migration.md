@@ -216,32 +216,18 @@ export function Article({ markdown }: { markdown: string }) {
 
 很多 `react-markdown` 项目会通过覆盖 `components.code` 接第三方高亮器。
 
-到了 `markstream-react`，一般有三种选择：
+到了 `markstream-react`，默认的 `CodeBlockNode` 由可选的对等依赖 `stream-diffs` 增强（未安装时会回退渲染普通 `<pre>`）。一般有两种选择：
 
-- 继续使用默认 `CodeBlockNode`，拿到 Monaco 驱动的代码块体验。
-- 把 `code_block` 切到 `MarkdownCodeBlockNode`，使用更轻量的 Shiki 方案。
+- 继续使用默认 `CodeBlockNode`，体验由 `stream-diffs` 增强的代码块。
 - 设置 `renderCodeBlocksAsPre`，直接回退到普通 `<pre><code>`。
 
-下面是切到 Shiki 的例子：
+要使用增强代码块运行时，请安装可选对等依赖：
 
-```tsx
-import MarkdownRender, { MarkdownCodeBlockNode, setCustomComponents } from 'markstream-react'
-
-setCustomComponents('docs', {
-  code_block: ({ node, isDark, ctx }: any) => (
-    <MarkdownCodeBlockNode
-      node={node}
-      isDark={isDark}
-      stream={ctx?.codeBlockStream}
-      {...(ctx?.codeBlockProps || {})}
-    />
-  ),
-})
-
-export function Article({ markdown }: { markdown: string }) {
-  return <MarkdownRender customId="docs" content={markdown} />
-}
+```bash
+pnpm add stream-diffs
 ```
+
+主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 控制，代码与 diff 选项使用 `stream-diffs` 内置默认值。
 
 ## 迁移插件逻辑
 

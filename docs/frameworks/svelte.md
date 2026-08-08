@@ -91,14 +91,11 @@ pnpm add markstream-svelte svelte@^5
 | --- | --- |
 | `mermaid` | Mermaid diagrams |
 | `katex` | Inline and block math rendering |
-| `stream-diffs` | Enhanced code blocks (recommended; smaller runtime, no `monaco-editor`) |
-| `stream-monaco` | Monaco-powered code blocks (automatic fallback when `stream-diffs` is absent) |
+| `stream-diffs` | Enhanced code blocks (recommended) |
 | `@terrastruct/d2` | D2 diagrams |
 | `@antv/infographic` | Infographic blocks |
 
-Plain Markdown does not require these optional peers. Install them only for the block types you render.
-
-Shiki is not documented for `markstream-svelte` unless you add a supported integration path.
+Plain Markdown does not require these optional peers. Install them only for the block types you render. Enhanced code blocks fall back to a plain `<pre>` when `stream-diffs` is not installed.
 
 ## When not to use this package
 
