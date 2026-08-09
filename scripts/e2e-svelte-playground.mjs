@@ -208,6 +208,25 @@ async function main() {
         && scrollRoot.scrollHeight - scrollRoot.clientHeight > 1000
         && document.querySelector('.chat-header__meta')?.textContent?.includes('Streaming')
     }, null, { timeout: 15000 })
+    await page.waitForFunction((selector) => {
+      if (!document.querySelector('.chat-header__meta')?.textContent?.includes('Streaming'))
+        return false
+      const root = document.querySelector(selector)
+      if (!root)
+        return false
+      return Array.from(root.querySelectorAll('.code-block-container.is-rendering[data-markstream-code-block="1"]')).some((block) => {
+        const fallback = block.querySelector('.code-pre-fallback')
+        const fallbackStyle = fallback ? getComputedStyle(fallback) : null
+        const fallbackVisible = fallback && fallbackStyle?.display !== 'none' && fallbackStyle?.visibility !== 'hidden' && Number.parseFloat(fallbackStyle?.opacity || '1') > 0.01 && fallback.getBoundingClientRect().height > 0
+        const surface = block.querySelector('.stream-diffs-shell')
+        const surfaceRect = surface?.getBoundingClientRect()
+        return block.getAttribute('data-markstream-enhanced') === 'true'
+          && !fallbackVisible
+          && !!surfaceRect
+          && surfaceRect.width > 0
+          && surfaceRect.height > 0
+      })
+    }, homeRendererSelector, { timeout: 15000 })
     await page.evaluate(() => window.scrollTo(0, document.scrollingElement.scrollHeight))
     await page.waitForFunction(() => {
       const scrollRoot = document.scrollingElement
@@ -262,20 +281,6 @@ async function main() {
       return visibleCodeBlocks.length > 0 && visibleCodeBlocks.every(node => (node.textContent || '').trim().length > 0)
     }, homeRendererSelector, { timeout: 15000 })
     await page.waitForFunction((selector) => {
-      if (document.querySelector('.chat-header__meta')?.textContent?.includes('Ready'))
-        return false
-      const root = document.querySelector(selector)
-      if (!root)
-        return false
-      return Array.from(root.querySelectorAll('.code-block-container[data-markstream-code-block="1"]')).some((block) => {
-        const fallback = block.querySelector('.code-pre-fallback')
-        const fallbackVisible = fallback && getComputedStyle(fallback).display !== 'none' && fallback.getBoundingClientRect().height > 0
-        return block.getAttribute('data-markstream-enhanced') === 'true'
-          && !fallbackVisible
-          && !!block.querySelector('.monaco-editor, .monaco-diff-editor')
-      })
-    }, homeRendererSelector, { timeout: 30000 })
-    await page.waitForFunction((selector) => {
       if (!document.querySelector('.chat-header__meta')?.textContent?.includes('Ready'))
         return false
       const root = document.querySelector(selector)
@@ -286,35 +291,37 @@ async function main() {
         return false
       return blocks.every((block) => {
         const fallback = block.querySelector('.code-pre-fallback')
-        const fallbackVisible = fallback && getComputedStyle(fallback).display !== 'none' && fallback.getBoundingClientRect().height > 0
+        const fallbackStyle = fallback ? getComputedStyle(fallback) : null
+        const fallbackVisible = fallback && fallbackStyle?.display !== 'none' && fallbackStyle?.visibility !== 'hidden' && Number.parseFloat(fallbackStyle?.opacity || '1') > 0.01 && fallback.getBoundingClientRect().height > 0
         return block.getAttribute('data-markstream-enhanced') === 'true'
           && !fallbackVisible
-          && !!block.querySelector('.monaco-editor, .monaco-diff-editor')
+          && !!block.querySelector('.stream-diffs-shell')
       })
     }, homeRendererSelector, { timeout: 45000 })
     const homeCodeBlockState = await page.evaluate((selector) => {
       const root = document.querySelector(selector)
       return Array.from(root?.querySelectorAll('.code-block-container[data-markstream-code-block="1"]') ?? []).map((block, index) => {
         const fallback = block.querySelector('.code-pre-fallback')
-        const fallbackVisible = fallback && getComputedStyle(fallback).display !== 'none' && fallback.getBoundingClientRect().height > 0
+        const fallbackStyle = fallback ? getComputedStyle(fallback) : null
+        const fallbackVisible = fallback && fallbackStyle?.display !== 'none' && fallbackStyle?.visibility !== 'hidden' && Number.parseFloat(fallbackStyle?.opacity || '1') > 0.01 && fallback.getBoundingClientRect().height > 0
         return {
           index,
           label: block.querySelector('.code-block-header__label')?.textContent || '',
           enhanced: block.getAttribute('data-markstream-enhanced'),
-          hasMonaco: !!block.querySelector('.monaco-editor, .monaco-diff-editor'),
+          hasStreamDiffs: !!block.querySelector('.stream-diffs-shell'),
           fallbackVisible: !!fallbackVisible,
           bodyHeight: Math.round(block.querySelector('.code-block-body')?.getBoundingClientRect().height || 0),
           editorHeight: Math.round(block.querySelector('.code-editor-container')?.getBoundingClientRect().height || 0),
-          monacoHeight: Math.round(block.querySelector('.monaco-editor, .monaco-diff-editor')?.getBoundingClientRect().height || 0),
+          surfaceHeight: Math.round(block.querySelector('.stream-diffs-shell')?.getBoundingClientRect().height || 0),
         }
       })
     }, homeRendererSelector)
-    const invalidHomeCodeBlocks = homeCodeBlockState.filter(block => block.enhanced !== 'true' || !block.hasMonaco || block.fallbackVisible)
+    const invalidHomeCodeBlocks = homeCodeBlockState.filter(block => block.enhanced !== 'true' || !block.hasStreamDiffs || block.fallbackVisible)
     if (invalidHomeCodeBlocks.length > 0)
-      throw new Error(`Home code blocks must render Monaco without visible fallback: ${JSON.stringify(invalidHomeCodeBlocks)}`)
-    const collapsedHomeCodeBlocks = homeCodeBlockState.filter(block => block.bodyHeight > 0 && (block.editorHeight + 2 < block.bodyHeight || block.monacoHeight + 2 < block.editorHeight))
-    if (collapsedHomeCodeBlocks.length > 0)
-      throw new Error(`Home code block Monaco containers must fill their body: ${JSON.stringify(collapsedHomeCodeBlocks)}`)
+      throw new Error(`Home code blocks must render stream-diffs without visible fallback: ${JSON.stringify(invalidHomeCodeBlocks)}`)
+    const invalidHomeCodeBlockGeometry = homeCodeBlockState.filter(block => block.bodyHeight <= 0 || block.editorHeight <= 0 || block.surfaceHeight <= 0 || block.editorHeight + 2 < block.bodyHeight || block.surfaceHeight + 2 < block.editorHeight)
+    if (invalidHomeCodeBlockGeometry.length > 0)
+      throw new Error(`Home code block stream-diffs surfaces must fill their body: ${JSON.stringify(invalidHomeCodeBlockGeometry)}`)
     const scrollProbe = await page.evaluate(() => {
       const scrollHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)
       const maxScrollTop = Math.max(0, scrollHeight - window.innerHeight)
@@ -411,7 +418,7 @@ async function main() {
     }, homeRendererSelector, { timeout: 15000 })
     await page.waitForFunction(() => document.querySelectorAll('.chatbot-messages .thinking-node .markstream-svelte').length > 0, null, { timeout: 30000 })
 
-    await page.evaluate(() => window.localStorage.setItem('vmr-test-render-mode', 'monaco'))
+    await page.evaluate(() => window.localStorage.setItem('vmr-test-render-mode', 'stream-diffs'))
     await page.goto(`http://${host}:${port}/test`, { waitUntil: 'load' })
     await page.locator(testRendererSelector).waitFor({ state: 'visible', timeout: 15000 })
     await page.waitForFunction(() => document.querySelector('.workspace-card--preview')?.textContent?.includes('Markstream Test Lab'), null, { timeout: 15000 })
@@ -452,18 +459,20 @@ async function main() {
         return rect.width > 0 && rect.height > 0 && text.includes(codeText)
       })
     }, testRendererSelector, { timeout: 30000 })
-    await page.waitForFunction(selector => document.querySelectorAll(`${selector} .code-block-container[data-markstream-enhanced="true"] .monaco-editor`).length > 0, testRendererSelector, { timeout: 30000 })
+    await page.waitForFunction(selector => document.querySelectorAll(`${selector} .code-block-container[data-markstream-enhanced="true"] .stream-diffs-shell`).length > 0, testRendererSelector, { timeout: 30000 })
     await page.waitForFunction((selector) => {
       const block = document.querySelector(`${selector} .code-block-container[data-markstream-enhanced="true"]`)
-      const editor = block?.querySelector('.monaco-editor')
-      if (!block || !editor)
+      const surface = block?.querySelector('.stream-diffs-shell')
+      const diffs = block?.querySelector('diffs-container')
+      if (!block || !surface || !diffs?.shadowRoot)
         return false
       const fallback = block.querySelector('.code-pre-fallback')
-      const fallbackVisible = fallback && getComputedStyle(fallback).display !== 'none' && fallback.getBoundingClientRect().height > 0
-      const tokens = Array.from(editor.querySelectorAll('.view-line span span'))
+      const fallbackStyle = fallback ? getComputedStyle(fallback) : null
+      const fallbackVisible = fallback && fallbackStyle?.display !== 'none' && fallbackStyle?.visibility !== 'hidden' && Number.parseFloat(fallbackStyle?.opacity || '1') > 0.01 && fallback.getBoundingClientRect().height > 0
+      const tokens = Array.from(diffs.shadowRoot.querySelectorAll('[data-content] [data-line] span[style*="--diffs-token-"]'))
       const tokenColors = new Set(tokens.map(node => getComputedStyle(node).color).filter(Boolean))
-      const tokenClasses = new Set(tokens.map(node => String(node.className)).filter(Boolean))
-      return !fallbackVisible && tokenColors.size > 2 && tokenClasses.size > 2
+      const surfaceRect = surface.getBoundingClientRect()
+      return !fallbackVisible && surfaceRect.width > 0 && surfaceRect.height > 0 && tokenColors.size > 2
     }, testRendererSelector, { timeout: 15000 })
     await page.waitForFunction((selector) => {
       const root = document.querySelector(selector)
@@ -658,19 +667,19 @@ async function main() {
 
     await page.selectOption('.workspace-card--editor select', 'diff')
     await page.waitForFunction(() => document.querySelector('.workspace-card--preview')?.textContent?.includes('Diff Regression'), null, { timeout: 15000 })
-    await page.waitForFunction(selector => document.querySelectorAll(`${selector} .code-block-container.is-diff .monaco-diff-editor`).length > 0, testRendererSelector, { timeout: 30000 })
+    await page.waitForFunction(selector => document.querySelectorAll(`${selector} .code-block-container.is-diff .stream-diffs-shell`).length > 0, testRendererSelector, { timeout: 30000 })
     await page.waitForFunction((selector) => {
       const block = document.querySelector(`${selector} .code-block-container.is-diff`)
       const host = block?.querySelector('.code-editor-container')
-      const editor = block?.querySelector('.monaco-diff-editor')
-      if (!host || !editor)
+      const surface = block?.querySelector('.stream-diffs-shell')
+      if (!host || !surface)
         return false
       const hostRect = host.getBoundingClientRect()
-      const editorRect = editor.getBoundingClientRect()
+      const surfaceRect = surface.getBoundingClientRect()
       return hostRect.width > 0
         && hostRect.height > 120
         && hostRect.height < 700
-        && Math.abs(hostRect.height - editorRect.height) <= 2
+        && Math.abs(hostRect.height - surfaceRect.height) <= 2
     }, testRendererSelector, { timeout: 15000 })
 
     if (errors.length) {

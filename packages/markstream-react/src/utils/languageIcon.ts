@@ -127,17 +127,19 @@ export function normalizeLanguageIdentifier(lang?: string | null): string {
   return LANGUAGE_ALIAS_MAP[token] ?? token
 }
 
-export function resolveMonacoLanguageId(lang?: string | null): string {
+export function resolveLanguageId(lang?: string | null): string {
   const canonical = normalizeLanguageIdentifier(lang)
   if (!canonical)
     return 'plaintext'
   switch (canonical) {
     case 'plain':
       return 'plaintext'
-    case 'jsx':
-      return 'javascript'
-    case 'tsx':
-      return 'typescript'
+    case 'shell':
+      return 'zsh'
+    case 'objectivec':
+      return 'objective-c'
+    case 'objectivecpp':
+      return 'objective-cpp'
     default:
       return canonical
   }

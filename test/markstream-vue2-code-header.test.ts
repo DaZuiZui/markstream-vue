@@ -4,16 +4,19 @@ import { describe, expect, it } from 'vitest'
 import {
   getLanguageIcon,
   normalizeLanguageIdentifier,
+  resolveLanguageId,
 } from '../packages/markstream-vue2/src/utils/languageIcon'
 
 const componentPaths = [
   'packages/markstream-vue2/src/components/CodeBlockNode/CodeBlockNode.vue',
-  'packages/markstream-vue2/src/components/MarkdownCodeBlockNode/MarkdownCodeBlockNode.vue',
 ]
 
 describe('markstream-vue2 React code header parity', () => {
   it('uses the Material TypeScript language icon and canonical label', () => {
     expect(normalizeLanguageIdentifier('ts:example.ts')).toBe('typescript')
+    expect(resolveLanguageId('bash')).toBe('zsh')
+    expect(resolveLanguageId('jsx')).toBe('jsx')
+    expect(resolveLanguageId('tsx')).toBe('tsx')
     expect(getLanguageIcon('ts')).toContain('fill="#0288d1"')
     expect(getLanguageIcon('ts')).toContain('viewBox="0 0 16 16"')
   })

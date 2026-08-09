@@ -17,11 +17,7 @@ const layouts = process.env.DIFF_LAYOUT === 'side-by-side'
   : process.env.DIFF_LAYOUT === 'inline'
     ? ['inline']
     : ['inline', 'side-by-side']
-const renderModes = process.env.CODE_BLOCK_RENDERER === 'markdown'
-  ? ['markdown']
-  : process.env.CODE_BLOCK_RENDERER === 'monaco'
-    ? ['monaco']
-    : ['monaco', 'markdown']
+const renderModes = ['stream-diffs']
 
 const diffSample = [
   '```diff json:package.json',

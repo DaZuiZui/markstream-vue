@@ -1,17 +1,21 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { MarkdownCodeBlockNode } from '../packages/markstream-react/src/components/MarkdownCodeBlockNode/MarkdownCodeBlockNode'
+import { CodeBlockNode } from '../packages/markstream-react/src/components/CodeBlockNode/CodeBlockNode'
 import {
   getLanguageIcon,
   languageMap,
   normalizeLanguageIdentifier,
   preloadExtendedLanguageIcons,
+  resolveLanguageId,
 } from '../packages/markstream-react/src/utils/languageIcon'
 
 describe('markstream-react Vue 3 code header parity', () => {
   it('uses the Vue 3 Material language icons by default', async () => {
     expect(normalizeLanguageIdentifier('ts:example.ts')).toBe('typescript')
+    expect(resolveLanguageId('bash')).toBe('zsh')
+    expect(resolveLanguageId('jsx')).toBe('jsx')
+    expect(resolveLanguageId('tsx')).toBe('tsx')
     expect(getLanguageIcon('ts')).toContain('fill="#0288d1"')
     expect(getLanguageIcon('ts')).toContain('viewBox="0 0 16 16"')
     expect(getLanguageIcon('javascript')).toContain('fill="#ffca28"')
@@ -35,8 +39,8 @@ describe('markstream-react Vue 3 code header parity', () => {
     expect(languageMap.vbnet).toBe('VB.NET')
   })
 
-  it('uses the shared semantic header structure in MarkdownCodeBlockNode', () => {
-    const html = renderToStaticMarkup(React.createElement(MarkdownCodeBlockNode, {
+  it('uses the shared semantic header structure in CodeBlockNode', () => {
+    const html = renderToStaticMarkup(React.createElement(CodeBlockNode, {
       loading: false,
       stream: false,
       node: {
@@ -49,8 +53,8 @@ describe('markstream-react Vue 3 code header parity', () => {
 
     expect(html).toContain('class="code-block-header"')
     expect(html).toContain('class="code-header-main"')
-    expect(html).toContain('class="code-header-copy"')
-    expect(html).toContain('class="code-header-title"')
+    expect(html).toContain('code-header-copy')
+    expect(html).toContain('code-header-title')
     expect(html).toContain('class="code-header-actions"')
     expect(html).toContain('class="action-icon"')
     expect(html).not.toContain('px-4 py-2.5')
