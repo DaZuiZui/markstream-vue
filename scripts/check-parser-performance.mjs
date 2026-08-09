@@ -25,6 +25,7 @@ const countMetrics = ['processedTokenCount', 'reusedNodeCount', 'outputNodeVisit
 const positiveCountMetrics = new Set(['processedTokenCount', 'outputNodeVisits', 'finalNodeCount'])
 const streamCountMetrics = ['total', 'cacheHits', 'appendHits', 'unboundedAppendHits', 'tailHits', 'fullParses', 'resets', 'chunkedParses']
 const streamModes = new Set(['idle', 'cache', 'append', 'tail', 'full', 'reset', 'chunked'])
+const heapDiagnosticFields = ['heapUsedBytes', 'oldSpaceUsedBytes', 'codeSpaceUsedBytes', 'codeLargeObjectSpaceUsedBytes']
 const absoluteTimingMultipliers = {
   commitMaxMs: { multiplier: 3, fixedSlackMs: 2 },
   commitMedianMs: { multiplier: 4, fixedSlackMs: 0.5 },
@@ -100,6 +101,23 @@ function validateEnvironment(environment, label, field) {
   requireBoolean(environment.gcExposed, label, `${field}.gcExposed`)
 }
 
+function validateHeapExecution(environment, profile, label, field) {
+  requireObject(environment.heapExecution, label, `${field}.heapExecution`)
+  const expectedMode = profile === 'deep' ? 'jitless-child-process-v1' : 'not-collected'
+  if (environment.heapExecution.mode !== expectedMode)
+    shapeError(label, `${field}.heapExecution.mode`, `expected ${expectedMode}`)
+  requireString(environment.heapExecution.node, label, `${field}.heapExecution.node`)
+  requireString(environment.heapExecution.v8, label, `${field}.heapExecution.v8`)
+  requireBoolean(environment.heapExecution.jitless, label, `${field}.heapExecution.jitless`)
+  requireBoolean(environment.heapExecution.gcExposed, label, `${field}.heapExecution.gcExposed`)
+  if (environment.heapExecution.node !== environment.node || environment.heapExecution.v8 !== environment.v8)
+    shapeError(label, `${field}.heapExecution`, 'expected the same Node and V8 versions as the main process')
+  if (profile === 'deep' && (!environment.heapExecution.jitless || !environment.heapExecution.gcExposed))
+    shapeError(label, `${field}.heapExecution`, 'deep reports require jitless and exposed GC')
+  if (profile === 'deterministic' && (environment.heapExecution.jitless || environment.heapExecution.gcExposed))
+    shapeError(label, `${field}.heapExecution`, 'deterministic reports must not collect heap')
+}
+
 function validateStreamStats(stats, label, field) {
   requireObject(stats, label, field)
   for (const key of streamCountMetrics)
@@ -139,6 +157,32 @@ function validateMetrics(metrics, label, field, heapRequired) {
     requireFiniteNumber(metrics.retainedHeapBytes, label, `${field}.retainedHeapBytes`)
   }
   validateStreamStats(metrics.streamStats, label, `${field}.streamStats`)
+}
+
+function correctedRetainedHeapBytes(before, after) {
+  const heapUsedDelta = after.heapUsedBytes - before.heapUsedBytes
+  const codeSpaceDelta = Math.max(0, after.codeSpaceUsedBytes - before.codeSpaceUsedBytes)
+  const codeLargeObjectSpaceDelta = Math.max(0, after.codeLargeObjectSpaceUsedBytes - before.codeLargeObjectSpaceUsedBytes)
+  return Math.max(0, Math.round(heapUsedDelta - codeSpaceDelta - codeLargeObjectSpaceDelta))
+}
+
+function validateHeapDiagnostics(sample, label, field, executionMode) {
+  requireObject(sample.heapDiagnostics, label, `${field}.heapDiagnostics`)
+  if (sample.heapDiagnostics.executionMode !== executionMode)
+    shapeError(label, `${field}.heapDiagnostics.executionMode`, `expected ${executionMode}`)
+  for (const phase of ['before', 'after']) {
+    const phaseField = `${field}.heapDiagnostics.${phase}`
+    requireObject(sample.heapDiagnostics[phase], label, phaseField)
+    for (const metric of heapDiagnosticFields)
+      requireInteger(sample.heapDiagnostics[phase][metric], label, `${phaseField}.${metric}`, metric === 'heapUsedBytes' ? 1 : 0)
+    for (const metric of ['oldSpaceUsedBytes', 'codeSpaceUsedBytes', 'codeLargeObjectSpaceUsedBytes']) {
+      if (sample.heapDiagnostics[phase][metric] > sample.heapDiagnostics[phase].heapUsedBytes)
+        shapeError(label, `${phaseField}.${metric}`, 'expected heap space <= heapUsed')
+    }
+  }
+  const expected = correctedRetainedHeapBytes(sample.heapDiagnostics.before, sample.heapDiagnostics.after)
+  if (sample.retainedHeapBytes !== expected)
+    shapeError(label, `${field}.retainedHeapBytes`, `expected ${expected} from heap diagnostics`)
 }
 
 function median(values) {
@@ -206,7 +250,7 @@ function validateChunkPlan(chunkPlan, label, field, includeSizes) {
   }
 }
 
-function validateScale(scale, label, field, heapRequired, expectedSamples) {
+function validateScale(scale, label, field, heapRequired, expectedSamples, heapExecutionMode) {
   requireObject(scale, label, field)
   if (!requiredScales.includes(scale.scale))
     shapeError(label, `${field}.scale`, `expected one of ${requiredScales.join(', ')}`)
@@ -219,7 +263,12 @@ function validateScale(scale, label, field, heapRequired, expectedSamples) {
     return
   if (!Array.isArray(scale.samples) || scale.samples.length !== expectedSamples)
     shapeError(label, `${field}.samples`, `expected exactly ${expectedSamples} samples`)
-  scale.samples.forEach((sample, index) => validateMetrics(sample, label, `${field}.samples[${index}]`, heapRequired))
+  scale.samples.forEach((sample, index) => {
+    const sampleField = `${field}.samples[${index}]`
+    validateMetrics(sample, label, sampleField, heapRequired)
+    if (heapRequired)
+      validateHeapDiagnostics(sample, label, sampleField, heapExecutionMode)
+  })
   validateSummaryAgainstSamples(scale.metrics, scale.samples, label, `${field}.metrics`)
 }
 
@@ -240,6 +289,7 @@ function validateReport(report, label) {
   if (!['deep', 'deterministic'].includes(report.profile))
     shapeError(label, 'profile', 'expected deep or deterministic')
   validateEnvironment(report.environment, label, 'environment')
+  validateHeapExecution(report.environment, report.profile, label, 'environment')
   requireObject(report.parser, label, 'parser')
   requireString(report.parser.package, label, 'parser.package')
   requireString(report.parser.version, label, 'parser.version')
@@ -250,7 +300,7 @@ function validateReport(report, label) {
   if (!Array.isArray(report.cases))
     shapeError(label, 'cases', 'expected a non-empty fixed case array')
   requireExactValues(report.cases.map(testCase => testCase?.id), requiredCaseIds, label, 'cases[].id')
-  const heapRequired = report.profile === 'deep' && report.environment.gcExposed
+  const heapRequired = report.profile === 'deep' && report.environment.heapExecution.gcExposed
   for (const testCase of report.cases) {
     requireObject(testCase, label, `cases[${testCase?.id ?? '?'}]`)
     if (!Array.isArray(testCase.scales))
@@ -262,6 +312,7 @@ function validateReport(report, label) {
       `cases[${testCase.id}].scales[${scale.scale}x]`,
       heapRequired,
       report.config.rounds,
+      report.environment.heapExecution.mode,
     ))
   }
 }
@@ -303,6 +354,7 @@ function validateBaseline(baseline, label) {
       label,
       `${caseField}.referenceScales[${scale.scale}x]`,
       baseline.environment.gcExposed,
+      null,
       null,
     ))
     requireObject(testCase.budgets, label, `${caseField}.budgets`)
@@ -483,6 +535,8 @@ function compare(report, baseline) {
   const failures = []
   const fail = message => failures.push(`[parser-perf] ${message}`)
   const frozenEnvironmentComparable = timeEnvironmentKey(report.environment) === baseline.timeEnvironmentKey
+  const baselineHeapExecutionMode = baseline.environment.heapExecution?.mode ?? 'legacy-in-process-jit'
+  const frozenHeapComparable = frozenEnvironmentComparable && baselineHeapExecutionMode === report.environment.heapExecution.mode
   if (report.schemaVersion !== baseline.schemaVersion)
     fail(`schemaVersion mismatch: expected ${baseline.schemaVersion}, received ${report.schemaVersion}`)
   if (report.benchmarkVersion !== baseline.benchmarkVersion)
@@ -528,7 +582,7 @@ function compare(report, baseline) {
         fail(`case=${baselineCase.id} scale=${reference.scale}x metric=fullParses exceeded max=${budget.fullParsesMax}; actual=${fullParses}`)
       }
 
-      if (!deterministicOnly && report.profile === 'deep' && frozenEnvironmentComparable && Number.isFinite(metrics.retainedHeapBytes)) {
+      if (!deterministicOnly && report.profile === 'deep' && frozenHeapComparable && Number.isFinite(metrics.retainedHeapBytes)) {
         const maxHeap = baselineCase.budgets.retainedHeapBytesMax[reference.scale]
         if (metrics.retainedHeapBytes > maxHeap) {
           fail(`case=${baselineCase.id} scale=${reference.scale}x metric=retainedHeapBytes exceeded max=${Math.round(maxHeap)}; actual=${metrics.retainedHeapBytes}`)
@@ -568,7 +622,7 @@ function compare(report, baseline) {
             }
           }
         }
-        if (frozenEnvironmentComparable) {
+        if (frozenHeapComparable) {
           for (const budget of baselineCase.budgets.retainedHeapGrowth) {
             const fromValue = metricByScale(actualCase.scales, budget.fromScale, 'retainedHeapBytes')
             const toValue = metricByScale(actualCase.scales, budget.toScale, 'retainedHeapBytes')
@@ -610,6 +664,10 @@ function compareReference(report, reference) {
   for (const field of ['node', 'v8', 'platform', 'release', 'arch', 'cpuModel', 'cpuCount', 'totalMemoryBytes', 'gcExposed']) {
     if (report.environment[field] !== reference.environment[field])
       fail(`same-runner environment.${field} mismatch: reference=${reference.environment[field]}, actual=${report.environment[field]}`)
+  }
+  for (const field of ['mode', 'node', 'v8', 'jitless', 'gcExposed']) {
+    if (report.environment.heapExecution[field] !== reference.environment.heapExecution[field])
+      fail(`same-runner heapExecution.${field} mismatch: reference=${reference.environment.heapExecution[field]}, actual=${report.environment.heapExecution[field]}`)
   }
 
   const referenceCases = new Map(reference.cases.map(testCase => [testCase.id, testCase]))
@@ -676,9 +734,17 @@ const mode = deterministicOnly || report.profile === 'deterministic' ? 'determin
 console.log(`[parser-perf] PASS ${mode} baseline (${report.cases.length} cases, scales 1x/2x/4x).`)
 if (!deterministicOnly && report.profile === 'deep') {
   if (timeEnvironmentKey(report.environment) === baseline.timeEnvironmentKey)
-    console.log(`[parser-perf] same-environment absolute timing and frozen retained-heap budgets checked (${baseline.timeEnvironmentKey}).`)
+    console.log(`[parser-perf] same-environment absolute timing budgets checked (${baseline.timeEnvironmentKey}).`)
   else
-    console.log(`[parser-perf] absolute timing and frozen retained-heap ceilings/growth skipped across runners (baseline=${baseline.timeEnvironmentKey}, actual=${timeEnvironmentKey(report.environment)}); repeated-median timing scale and deterministic work budgets were checked.`)
+    console.log(`[parser-perf] absolute timing budgets skipped across runners (baseline=${baseline.timeEnvironmentKey}, actual=${timeEnvironmentKey(report.environment)}); repeated-median timing scale and deterministic work budgets were checked.`)
+  const baselineHeapExecutionMode = baseline.environment.heapExecution?.mode ?? 'legacy-in-process-jit'
+  if (timeEnvironmentKey(report.environment) !== baseline.timeEnvironmentKey)
+    console.log('[parser-perf] frozen retained-heap ceilings/growth skipped because baseline and report environments differ.')
+  else if (baselineHeapExecutionMode !== report.environment.heapExecution.mode)
+    console.log(`[parser-perf] frozen retained-heap ceilings/growth skipped because measurement modes differ (baseline=${baselineHeapExecutionMode}, actual=${report.environment.heapExecution.mode}).`)
+  else
+    console.log(`[parser-perf] same-environment frozen retained-heap budgets checked (mode=${baselineHeapExecutionMode}).`)
   if (referencePath)
     console.log(`[parser-perf] same-runner base/head timing and heap checked (timingMaxRatio=${sameRunnerTimingMaxRatio}, heapMaxRatio=${sameRunnerHeapMaxRatio}, heapFixedSlackBytes=${sameRunnerHeapFixedSlackBytes}).`)
+  console.log(`[parser-perf] heap execution mode=${report.environment.heapExecution.mode}; before/after heap-space diagnostics validated.`)
 }

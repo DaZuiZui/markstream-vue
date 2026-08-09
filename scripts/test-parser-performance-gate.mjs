@@ -17,9 +17,13 @@ const invalidReportPath = path.join(outputDir, 'invalid-report.json')
 const invalidBaselinePath = path.join(outputDir, 'invalid-baseline.json')
 const emptyReportPath = path.join(outputDir, 'empty-report.json')
 const emptyBaselinePath = path.join(outputDir, 'empty-baseline.json')
+const sameMethodBaselinePath = path.join(outputDir, 'same-method-baseline.json')
 const deepOutputPath = path.join(outputDir, 'deep.json')
 const zeroProcessedRegressionPath = path.join(outputDir, 'zero-processed-regression.json')
 const sampleSummaryMismatchPath = path.join(outputDir, 'sample-summary-mismatch.json')
+const jitPhaseReportPath = path.join(outputDir, 'jit-phase-report.json')
+const missingHeapDiagnosticsPath = path.join(outputDir, 'missing-heap-diagnostics.json')
+const forgedHeapDiagnosticsPath = path.join(outputDir, 'forged-heap-diagnostics.json')
 const uniformTimeRegressionPath = path.join(outputDir, 'uniform-time-regression.json')
 const uniformHeapRegressionPath = path.join(outputDir, 'uniform-heap-regression.json')
 const heapGrowthRegressionPath = path.join(outputDir, 'heap-growth-regression.json')
@@ -27,15 +31,37 @@ const crossEnvironmentHeapPath = path.join(outputDir, 'cross-environment-heap.js
 const referenceConfigMismatchPath = path.join(outputDir, 'reference-config-mismatch.json')
 const zeroHeapReportPath = path.join(outputDir, 'zero-heap-report.json')
 const zeroHeapBaselinePath = path.join(outputDir, 'zero-heap-baseline.json')
+const actualHeapBaseDir = path.join(outputDir, 'actual-heap-base')
+const actualHeapRegressionDir = path.join(outputDir, 'actual-heap-regression')
 const timingMetrics = ['streamTotalMs', 'commitMedianMs', 'commitP95Ms', 'commitMaxMs', 'finalFlushMs']
 const countMetrics = ['processedTokenCount', 'reusedNodeCount', 'outputNodeVisits', 'finalNodeCount']
 
-function run(script, args, env = process.env) {
-  return spawnSync(process.execPath, [script, ...args], {
+function run(script, args, env = process.env, nodeArgs = []) {
+  return spawnSync(process.execPath, [...nodeArgs, script, ...args], {
     cwd: repoRoot,
     encoding: 'utf8',
     env,
   })
+}
+
+function setSampleRetainedHeap(sample, retainedHeapBytes, codeSpaceDelta = 0, codeLargeObjectSpaceDelta = 0) {
+  const before = {
+    heapUsedBytes: 16 * 1024 * 1024,
+    oldSpaceUsedBytes: 8 * 1024 * 1024,
+    codeSpaceUsedBytes: 512 * 1024,
+    codeLargeObjectSpaceUsedBytes: 128 * 1024,
+  }
+  sample.retainedHeapBytes = retainedHeapBytes
+  sample.heapDiagnostics = {
+    executionMode: 'jitless-child-process-v1',
+    before,
+    after: {
+      heapUsedBytes: before.heapUsedBytes + retainedHeapBytes + codeSpaceDelta + codeLargeObjectSpaceDelta,
+      oldSpaceUsedBytes: before.oldSpaceUsedBytes + retainedHeapBytes,
+      codeSpaceUsedBytes: before.codeSpaceUsedBytes + codeSpaceDelta,
+      codeLargeObjectSpaceUsedBytes: before.codeLargeObjectSpaceUsedBytes + codeLargeObjectSpaceDelta,
+    },
+  }
 }
 
 function diagnostic(result) {
@@ -44,6 +70,10 @@ function diagnostic(result) {
 
 rmSync(outputDir, { force: true, recursive: true })
 mkdirSync(outputDir, { recursive: true })
+
+const unguardedHeapChild = run(benchmarkPath, ['--heap-child', '--profile=deep'])
+assert.notEqual(unguardedHeapChild.status, 0, 'heap child unexpectedly ran without explicit jitless/GC flags')
+assert.match(diagnostic(unguardedHeapChild), /heap child mode requires --jitless and --expose-gc/)
 
 const benchmarkArgs = ['--profile=deterministic']
 const checkArgs = [
@@ -110,7 +140,16 @@ const deepReport = {
   corpusVersion: baseline.corpusVersion,
   generatedAt: new Date().toISOString(),
   profile: 'deep',
-  environment: baseline.environment,
+  environment: {
+    ...baseline.environment,
+    heapExecution: {
+      mode: 'jitless-child-process-v1',
+      node: baseline.environment.node,
+      v8: baseline.environment.v8,
+      jitless: true,
+      gcExposed: true,
+    },
+  },
   parser: baseline.parser,
   config: {
     ...baseline.config,
@@ -120,10 +159,11 @@ const deepReport = {
     id: testCase.id,
     scales: testCase.referenceScales.map(scale => ({
       ...structuredClone(scale),
-      samples: Array.from(
-        { length: baseline.config.rounds },
-        () => structuredClone(scale.metrics),
-      ),
+      samples: Array.from({ length: baseline.config.rounds }, () => {
+        const sample = structuredClone(scale.metrics)
+        setSampleRetainedHeap(sample, scale.metrics.retainedHeapBytes)
+        return sample
+      }),
     })),
   })),
 }
@@ -142,9 +182,38 @@ assert.match(diagnostic(emptyUpdate), /Parser performance report invalid at case
 assert.equal(existsSync(emptyBaselinePath), false, 'empty baseline file was created')
 
 writeFileSync(deepOutputPath, JSON.stringify(deepReport))
+const sameMethodBaseline = structuredClone(baseline)
+sameMethodBaseline.environment.heapExecution = structuredClone(deepReport.environment.heapExecution)
+writeFileSync(sameMethodBaselinePath, JSON.stringify(sameMethodBaseline))
 const cleanDeepCheck = run(checkPath, [`--input=${deepOutputPath}`, `--baseline=${baselinePath}`])
 assert.equal(cleanDeepCheck.status, 0, cleanDeepCheck.stderr)
-assert.match(cleanDeepCheck.stdout, /same-environment absolute timing and frozen retained-heap budgets checked/)
+assert.match(cleanDeepCheck.stdout, /same-environment absolute timing budgets checked/)
+assert.match(cleanDeepCheck.stdout, /frozen retained-heap ceilings\/growth skipped because measurement modes differ/)
+
+const jitPhaseReport = structuredClone(deepReport)
+for (const testCase of jitPhaseReport.cases) {
+  for (const scale of testCase.scales) {
+    for (const sample of scale.samples)
+      setSampleRetainedHeap(sample, sample.retainedHeapBytes, 4 * 1024 * 1024, 2 * 1024 * 1024)
+  }
+}
+writeFileSync(jitPhaseReportPath, JSON.stringify(jitPhaseReport))
+const jitPhaseCheck = run(checkPath, [`--input=${jitPhaseReportPath}`, `--baseline=${baselinePath}`])
+assert.equal(jitPhaseCheck.status, 0, jitPhaseCheck.stderr)
+
+const missingHeapDiagnostics = structuredClone(deepReport)
+delete missingHeapDiagnostics.cases[0].scales[0].samples[0].heapDiagnostics
+writeFileSync(missingHeapDiagnosticsPath, JSON.stringify(missingHeapDiagnostics))
+const missingHeapDiagnosticsCheck = run(checkPath, [`--input=${missingHeapDiagnosticsPath}`, `--baseline=${baselinePath}`])
+assert.notEqual(missingHeapDiagnosticsCheck.status, 0, 'missing heap diagnostics unexpectedly passed')
+assert.match(diagnostic(missingHeapDiagnosticsCheck), /heapDiagnostics: expected an object/)
+
+const forgedHeapDiagnostics = structuredClone(deepReport)
+forgedHeapDiagnostics.cases[0].scales[0].samples[0].heapDiagnostics.after.heapUsedBytes++
+writeFileSync(forgedHeapDiagnosticsPath, JSON.stringify(forgedHeapDiagnostics))
+const forgedHeapDiagnosticsCheck = run(checkPath, [`--input=${forgedHeapDiagnosticsPath}`, `--baseline=${baselinePath}`])
+assert.notEqual(forgedHeapDiagnosticsCheck.status, 0, 'forged heap diagnostics unexpectedly passed')
+assert.match(diagnostic(forgedHeapDiagnosticsCheck), /retainedHeapBytes: expected .* from heap diagnostics/)
 
 const zeroProcessedRegression = structuredClone(deepReport)
 for (const testCase of zeroProcessedRegression.cases) {
@@ -168,7 +237,7 @@ for (const testCase of sampleSummaryMismatch.cases) {
       for (const metric of countMetrics)
         sample[metric] *= 10
       if (Number.isFinite(sample.retainedHeapBytes))
-        sample.retainedHeapBytes *= 10
+        setSampleRetainedHeap(sample, sample.retainedHeapBytes * 10)
     }
   }
 }
@@ -203,7 +272,7 @@ for (const testCase of uniformHeapRegression.cases) {
     scale.metrics.retainedHeapBytes *= 5
     assert.ok(scale.metrics.retainedHeapBytes < 8 * 1024 * 1024)
     for (const sample of scale.samples)
-      sample.retainedHeapBytes *= 5
+      setSampleRetainedHeap(sample, sample.retainedHeapBytes * 5)
   }
 }
 writeFileSync(uniformHeapRegressionPath, JSON.stringify(uniformHeapRegression))
@@ -221,11 +290,11 @@ for (const testCase of heapGrowthRegression.cases) {
   for (const [index, scale] of testCase.scales.entries()) {
     scale.metrics.retainedHeapBytes = retainedHeapBytes[index]
     for (const sample of scale.samples)
-      sample.retainedHeapBytes = retainedHeapBytes[index]
+      setSampleRetainedHeap(sample, retainedHeapBytes[index])
   }
 }
 writeFileSync(heapGrowthRegressionPath, JSON.stringify(heapGrowthRegression))
-const heapGrowthCheck = run(checkPath, [`--input=${heapGrowthRegressionPath}`, `--baseline=${baselinePath}`])
+const heapGrowthCheck = run(checkPath, [`--input=${heapGrowthRegressionPath}`, `--baseline=${sameMethodBaselinePath}`])
 assert.notEqual(heapGrowthCheck.status, 0, 'strong retained-heap growth unexpectedly passed')
 assert.match(diagnostic(heapGrowthCheck), /metric=retainedHeapBytesGrowth exceeded/)
 
@@ -236,13 +305,13 @@ for (const testCase of crossEnvironmentHeap.cases) {
   for (const [index, scale] of testCase.scales.entries()) {
     scale.metrics.retainedHeapBytes = crossEnvironmentHeapBytes[index]
     for (const sample of scale.samples)
-      sample.retainedHeapBytes = crossEnvironmentHeapBytes[index]
+      setSampleRetainedHeap(sample, crossEnvironmentHeapBytes[index])
   }
 }
 writeFileSync(crossEnvironmentHeapPath, JSON.stringify(crossEnvironmentHeap))
 const crossEnvironmentHeapCheck = run(checkPath, [`--input=${crossEnvironmentHeapPath}`, `--baseline=${baselinePath}`])
 assert.equal(crossEnvironmentHeapCheck.status, 0, crossEnvironmentHeapCheck.stderr)
-assert.match(crossEnvironmentHeapCheck.stdout, /frozen retained-heap ceilings\/growth skipped across runners/)
+assert.match(crossEnvironmentHeapCheck.stdout, /frozen retained-heap ceilings\/growth skipped because baseline and report environments differ/)
 
 const referenceConfigMismatch = structuredClone(deepReport)
 referenceConfigMismatch.config.rounds++
@@ -268,7 +337,7 @@ for (const testCase of zeroHeapReport.cases) {
   for (const scale of testCase.scales) {
     scale.metrics.retainedHeapBytes = 0
     for (const sample of scale.samples)
-      sample.retainedHeapBytes = 0
+      setSampleRetainedHeap(sample, 0)
   }
 }
 writeFileSync(zeroHeapReportPath, JSON.stringify(zeroHeapReport))
@@ -289,5 +358,25 @@ for (const testCase of zeroHeapBaseline.cases) {
 const zeroHeapCheck = run(checkPath, [`--input=${zeroHeapReportPath}`, `--baseline=${zeroHeapBaselinePath}`])
 assert.equal(zeroHeapCheck.status, 0, zeroHeapCheck.stderr)
 
+const actualHeapBenchmarkArgs = ['--profile=deep', '--rounds=3', '--warmups=1']
+const actualHeapBaseBenchmark = run(benchmarkPath, actualHeapBenchmarkArgs, {
+  ...process.env,
+  MARKSTREAM_PARSER_PERF_OUTPUT_DIR: actualHeapBaseDir,
+}, ['--expose-gc'])
+assert.equal(actualHeapBaseBenchmark.status, 0, actualHeapBaseBenchmark.stderr)
+const actualHeapRegressionBenchmark = run(benchmarkPath, actualHeapBenchmarkArgs, {
+  ...process.env,
+  MARKSTREAM_PARSER_PERF_INJECT_HEAP_RETENTION_BYTES: String(4 * 1024 * 1024),
+  MARKSTREAM_PARSER_PERF_OUTPUT_DIR: actualHeapRegressionDir,
+}, ['--expose-gc'])
+assert.equal(actualHeapRegressionBenchmark.status, 0, actualHeapRegressionBenchmark.stderr)
+const actualHeapRegressionCheck = run(checkPath, [
+  `--input=${path.join(actualHeapRegressionDir, 'latest.json')}`,
+  `--baseline=${baselinePath}`,
+  `--reference=${path.join(actualHeapBaseDir, 'latest.json')}`,
+])
+assert.notEqual(actualHeapRegressionCheck.status, 0, 'strongly retained heap in the jitless child unexpectedly passed')
+assert.match(diagnostic(actualHeapRegressionCheck), /metric=retainedHeapBytes exceeded same-runner reference/)
+
 rmSync(outputDir, { force: true, recursive: true })
-console.log('[parser-perf-self-test] Clean, zero-heap, and cross-environment baselines passed; invalid shapes/config, empty updates, zero instrumentation, summary/sample disagreement, quadratic work, uniform timing/heap, and same-environment heap-growth regressions were rejected.')
+console.log('[parser-perf-self-test] Clean jitless, JIT-phase, zero-heap, and cross-environment paths passed; invalid diagnostics/shapes/config, zero instrumentation, summary/sample disagreement, quadratic work, uniform timing/heap, real heap retention, and same-environment heap-growth regressions were rejected.')

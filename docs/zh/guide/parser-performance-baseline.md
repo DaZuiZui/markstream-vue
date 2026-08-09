@@ -23,7 +23,9 @@ pnpm run check:parser-perf
 
 CI 还会在同一个 runner 上依次构建并测量 PR base SHA 与 head；push、schedule 和手动运行则比较 `HEAD^` 与 `HEAD`。head 的每个时间重复中位数不得超过同机 base 的 1.75 倍。retained heap 使用 2 倍比例加 256 KiB 固定余量，既吸收接近零时的 GC 噪声，也能拒绝全尺度 heap 增长；即使 CI 机器与 checked-in 基线机器不同，这项同 runner heap 比较仍会执行。比较还要求 rounds、warmups、chunk 配置和环境元数据完全一致。额外成本是 checkout、安装并构建 base，以及第二轮 42 个样本的 deep benchmark；base 不存在、构建失败、报告不合法或指标超限都会让 job 失败，两份报告都会保留在 artifact 中。
 
-`retainedHeapBytes` 在强制 GC 后、仍保留活跃流式解析缓存时测量。在 frozen baseline 环境上，deep 门禁同时检查每个 scale 的上限和 1x/2x/4x heap 增长预算；增长率使用固定 256 KiB 有效分母下限，因此测得零值也会生成有限、可复用的基线。跨环境运行跳过这些 frozen heap 预算，CI 改由同 runner base/head heap 比较兜底。heap 不进入单样本 deterministic 发布门禁。
+正常 JIT 样本继续提供全部 timing、work、reuse 和 scale 指标。deep 报告会在全新的 `--jitless --expose-gc` 子进程中独立采集 `retainedHeapBytes`，execution mode 记为 `jitless-child-process-v1`；子进程使用同一份当前 collector 和指定 parser dist，父子进程之间不写临时报告。每个 heap sample 都记录 GC 后 before/after 的 `heapUsed`、old-space、code-space 和 code-large-object-space bytes。应用 retained heap 等于 heapUsed 增量扣除 code/code-large 的正向相位增长；checker 会把结果与 diagnostics 绑定，缺失或不一致的记录会直接失败。
+
+只有 runner 环境和记录的 heap execution mode 都一致时，才比较 frozen 逐 scale heap 上限与 1x/2x/4x 增长预算。缺少 mode provenance 的 baseline 会被明确视为旧版进程内 JIT 数据，不会套到新的 jitless-child 报告上；absolute timing 仍可独立比较。这样既不改 checked-in baseline 和阈值，也不会混用测量方法；在以新 mode 审核并采集 baseline 前，CI 依赖同 runner base/head heap 比较。heap growth 继续使用 256 KiB 有效分母下限，且 heap 不进入单样本 deterministic 发布门禁。
 
 本地报告默认写入 `.tmp/parser-performance/latest.json`。可以通过 `MARKSTREAM_PARSER_PERF_OUTPUT_DIR` 修改目录。
 
@@ -46,4 +48,4 @@ pnpm run check:parser-perf
 node scripts/test-parser-performance-gate.mjs
 ```
 
-自测会验证干净的 deterministic、deep、零 heap 和跨环境路径、严格的 report/baseline/config 校验、sample-summary 一致性，以及拒绝空基线更新；它证明跨环境会跳过 frozen heap 预算，同时要求 instrumentation 归零、quadratic processed work、同机 2 倍全尺度统一时间、同机 5 倍全尺度 heap 和同环境强 retained-heap 增长失败。
+自测会验证干净的 deterministic、deep jitless-child、code-space 相位、零 heap 和跨环境路径，以及严格的 diagnostics/report/baseline/config 与 sample-summary 校验。它证明 code-space 相位变化和跨环境 frozen heap 不会误报，同时要求缺失/伪造 diagnostics、真实强引用 heap retention、instrumentation 归零、quadratic processed work、统一 timing/heap 和同环境强 retained-heap 增长失败。
