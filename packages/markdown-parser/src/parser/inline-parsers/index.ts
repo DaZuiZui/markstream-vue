@@ -1,6 +1,7 @@
 import type { MarkdownToken, ParsedNode, ParseOptions, TextNode } from '../../types'
 import type { ParseContext } from '../parse-context'
-import { inferLinkifyDemotionContext, isDecodedFromRawPunycode, shouldDemoteFilenameLikeLinkify } from '../linkifyHeuristics'
+import type { InlineParseState } from './inline-parser-state'
+import { inferLinkifyDemotionContext } from '../linkifyHeuristics'
 import { ensureParseContext } from '../parse-context'
 import { cloneTokenWithMutableChildren } from '../token-copy'
 import { parseCheckboxInputToken, parseCheckboxToken } from './checkbox-parser'
@@ -25,10 +26,18 @@ import { parseFootnoteRefToken } from './footnote-ref-parser'
 import { parseHardbreakToken } from './hardbreak-parser'
 import { parseHighlightToken } from './highlight-parser'
 import { parseHtmlInlineCodeToken } from './html-inline-code-parser'
-import { parseImageToken } from './image-parser'
 import { parseInlineCodeToken } from './inline-code-parser'
 import { parseInsertToken } from './insert-parser'
-import { parseLinkToken } from './link-parser'
+import {
+  handleFallbackToken,
+  handleImageToken,
+  handleInlineImageContent,
+  handleInlineLinkContent,
+  handleLinkOpen,
+  isMarkdownLinkBeforeLinkifiedUrl,
+  recoverOuterImageLinkFromRawText,
+  recoverOuterImageLinkMidStateFromText,
+} from './link-image-recovery'
 import {
   decodeVisibleTextFromRaw,
   ESCAPED_PUNCTUATION_RE,
@@ -42,8 +51,6 @@ import {
   INLINE_TEXT_MARKER_DOLLAR,
   INLINE_TEXT_MARKER_OPEN_BRACKET,
   INLINE_TEXT_MARKER_OPEN_PAREN,
-  isEscapedVisibleChar,
-  recoverTrailingMarkdownLinkLabel,
   stripTrailingMidStateMarker,
 } from './literal-text-helpers'
 import { parseMathInlineToken } from './math-inline-parser'
@@ -59,16 +66,7 @@ const STRIKETHROUGH_RE = /[^~]*~{2,}[^~]+/
 const HAS_STRONG_RE = /\*\*/
 const INLINE_REPARSE_MARKER_RE = /[[_*^~]/
 
-// Helper: detect likely URLs/hrefs (autolinks). Extracted so the
-// detection logic is easy to tweak and test.
-const AUTOLINK_PROTOCOL_RE = /^(?:https?:\/\/|mailto:|ftp:\/\/)/i
-const AUTOLINK_GENERIC_RE = /:\/\//
-
-export function isLikelyUrl(href?: string) {
-  if (!href)
-    return false
-  return AUTOLINK_PROTOCOL_RE.test(href) || AUTOLINK_GENERIC_RE.test(href)
-}
+export { isLikelyUrl } from './link-image-recovery'
 
 // Process inline tokens (for text inside paragraphs, headings, etc.)
 export function parseInlineTokens(
@@ -96,27 +94,40 @@ export function parseInlineTokens(
   }
 
   options = parseContext
-  const result: ParsedNode[] = []
-  let currentTextNode: TextNode | null = null
-
-  let i = 0
   // Default to strict matching for strong unless caller explicitly sets false
   const requireClosingStrong = options?.requireClosingStrong
   const originalTokens = tokens
+  const state: InlineParseState = {
+    currentTextNode: null,
+    index: 0,
+    options: parseContext,
+    parseInlineTokens,
+    pPreToken,
+    raw,
+    requireClosingStrong,
+    result: [],
+    tokens,
+    dispatchToken: token => handleToken(token),
+    ensureWorkingTokens,
+    pushParsed,
+    pushText,
+    pushToken,
+    resetCurrentTextNode,
+  }
 
   function ensureWorkingTokens() {
-    if (tokens === originalTokens)
-      tokens = tokens.slice()
-    return tokens
+    if (state.tokens === originalTokens)
+      state.tokens = state.tokens.slice()
+    return state.tokens
   }
 
   // Helpers to manage text node merging and pushing parsed nodes
   function resetCurrentTextNode() {
-    currentTextNode = null
+    state.currentTextNode = null
   }
 
   function handleEmphasisAndStrikethrough(content: string, token: MarkdownToken): boolean {
-    const rawSource = tokens.length === 1 ? raw : String(token.content ?? '')
+    const rawSource = state.tokens.length === 1 ? raw : String(token.content ?? '')
     const markerCandidates: Array<{ type: 'strong' | 'emphasis' | 'strikethrough', index: number }> = []
     const literalIntrawordRunPairEnd = findLiteralIntrawordAsteriskRunPairEnd(content)
     if (literalIntrawordRunPairEnd !== -1) {
@@ -124,9 +135,9 @@ export function parseInlineTokens(
       const afterContent = content.slice(literalIntrawordRunPairEnd)
       if (afterContent) {
         handleToken({ type: 'text', content: afterContent, raw: afterContent } as unknown as MarkdownToken)
-        i--
+        state.index--
       }
-      i++
+      state.index++
       return true
     }
 
@@ -179,7 +190,7 @@ export function parseInlineTokens(
         pushText(beforeText, beforeText)
 
       if (idx === -1) {
-        i++
+        state.index++
         return true
       }
 
@@ -202,10 +213,10 @@ export function parseInlineTokens(
           content: after,
           raw: after,
         })
-        i--
+        state.index--
       }
 
-      i++
+      state.index++
       return true
     }
 
@@ -221,7 +232,7 @@ export function parseInlineTokens(
       }
 
       if (openIdx === -1) {
-        i++
+        state.index++
         return true
       }
 
@@ -262,7 +273,7 @@ export function parseInlineTokens(
           // If all leading asterisks in content are escaped in raw, treat as text
           if (escapedCount >= 2) {
             pushText(content, content)
-            i++
+            state.index++
             return true
           }
         }
@@ -275,7 +286,7 @@ export function parseInlineTokens(
         const rawAsteriskCount = countUnescapedAsterisks(raw)
         if (contentAsteriskCount > rawAsteriskCount) {
           pushText(content.slice(beforeText.length), content.slice(beforeText.length))
-          i++
+          state.index++
           return true
         }
       }
@@ -300,10 +311,10 @@ export function parseInlineTokens(
             const afterContent = content.slice(closeIndex + 3)
             if (afterContent) {
               handleToken({ type: 'text', content: afterContent, raw: afterContent } as unknown as MarkdownToken)
-              i--
+              state.index--
             }
 
-            i++
+            state.index++
             return true
           }
         }
@@ -314,9 +325,9 @@ export function parseInlineTokens(
         const afterContent = content.slice(openIdx + runInfo.len)
         if (afterContent) {
           handleToken({ type: 'text', content: afterContent, raw: afterContent } as unknown as MarkdownToken)
-          i--
+          state.index--
         }
-        i++
+        state.index++
         return true
       }
 
@@ -334,12 +345,12 @@ export function parseInlineTokens(
           && !isWordOnly(inner)
         ) {
           pushText(content.slice(beforeText.length), content.slice(beforeText.length))
-          i++
+          state.index++
           return true
         }
         if (!inner && runInfo.len >= 4 && runInfo.intraword) {
           pushText(content.slice(beforeText.length), content.slice(beforeText.length))
-          i++
+          state.index++
           return true
         }
       }
@@ -347,12 +358,12 @@ export function parseInlineTokens(
         // no closing pair found: decide behavior based on strict option
         if (requireClosingStrong || close.sawInvalidClose) {
           pushText(content.slice(beforeText.length), content.slice(beforeText.length))
-          i++
+          state.index++
           return true
         }
         if (runInfo.intraword) {
           pushText(content.slice(beforeText.length), content.slice(beforeText.length))
-          i++
+          state.index++
           return true
         }
         // 非严格模式（原行为）：mid-state, take rest as inner
@@ -366,7 +377,7 @@ export function parseInlineTokens(
       if (!inner && /^\*+$/.test(after)) {
         // The entire content is just asterisks, treat as text
         pushText(content, content)
-        i++
+        state.index++
         return true
       }
 
@@ -385,10 +396,10 @@ export function parseInlineTokens(
           content: after,
           raw: after,
         })
-        i--
+        state.index--
       }
 
-      i++
+      state.index++
       return true
     }
 
@@ -406,15 +417,15 @@ export function parseInlineTokens(
         const afterContent = content.slice(idx + 1)
         if (afterContent) {
           handleToken({ type: 'text', content: afterContent, raw: afterContent } as unknown as MarkdownToken)
-          i--
+          state.index--
         }
-        i++
+        state.index++
         return true
       }
       const runInfo = getAsteriskRunInfo(content, idx)
       const close = findNextUnescapedEmphasisClose(rawSource, content, idx + 1)
       const closeIndex = close.index
-      const nextInlineToken = tokens[i + 1]
+      const nextInlineToken = state.tokens[state.index + 1]
       if (
         options?.final
         && nextInlineToken?.type === 'em_open'
@@ -422,12 +433,12 @@ export function parseInlineTokens(
         && content.slice(idx + 1, closeIndex).trim() !== content.slice(idx + 1, closeIndex)
       ) {
         pushText(content.slice(idx), content.slice(idx))
-        i++
+        state.index++
         return true
       }
       if (closeIndex === -1 && (close.sawInvalidClose || options?.final || runInfo.intraword || !isWordChar(content[idx + 1]))) {
         pushText(content.slice(idx), content.slice(idx))
-        i++
+        state.index++
         return true
       }
       const emphasisContent = closeIndex > -1
@@ -446,10 +457,10 @@ export function parseInlineTokens(
         const afterContent = content.slice(closeIndex + 1)
         if (afterContent) {
           handleToken({ type: 'text', content: afterContent, raw: afterContent } as unknown as MarkdownToken)
-          i--
+          state.index--
         }
       }
-      i++
+      state.index++
       return true
     }
 
@@ -501,21 +512,21 @@ export function parseInlineTokens(
           if (!handled)
             pushText(beforeText, beforeText)
           else
-            i--
+            state.index--
         }
 
         pushParsed({ type: 'inline_code', code: codeContent, raw: String(codeContent) } as ParsedNode)
-        i++
+        state.index++
         return true
       }
 
       // For `` or longer mid-states, treat as text fallback (non-recursive)
       let merged = content
-      for (let j = i + 1; j < tokens.length; j++)
-        merged += String((tokens[j].content ?? '') + (tokens[j].markup ?? ''))
-      i = tokens.length - 1
+      for (let j = state.index + 1; j < state.tokens.length; j++)
+        merged += String((state.tokens[j].content ?? '') + (state.tokens[j].markup ?? ''))
+      state.index = state.tokens.length - 1
       pushText(merged, merged)
-      i++
+      state.index++
       return true
     }
 
@@ -527,12 +538,12 @@ export function parseInlineTokens(
 
     if (beforeText) {
       // Try to parse emphasis/strong inside the pre-code fragment, without
-      // advancing the outer token index `i` permanently.
+      // advancing the outer token cursor permanently.
       const handled = handleEmphasisAndStrikethrough(beforeText, _token)
       if (!handled)
         pushText(beforeText, beforeText)
       else
-        i--
+        state.index--
     }
 
     pushParsed({
@@ -543,9 +554,9 @@ export function parseInlineTokens(
 
     if (after) {
       handleToken({ type: 'text', content: after, raw: after } as unknown as MarkdownToken)
-      i--
+      state.index--
     }
-    i++
+    state.index++
     return true
   }
 
@@ -553,7 +564,7 @@ export function parseInlineTokens(
     const md = parseContext.markdownIt
     if (!md)
       return null
-    if (tokens.length <= 1 || !tokens.some(token => token?.type === 'math_inline'))
+    if (state.tokens.length <= 1 || !state.tokens.some(token => token?.type === 'math_inline'))
       return null
     if (!INLINE_REPARSE_MARKER_RE.test(rawContent))
       return null
@@ -580,14 +591,14 @@ export function parseInlineTokens(
   function pushParsed(node: ParsedNode) {
     // ensure the ongoing text node is closed when pushing non-text nodes
     resetCurrentTextNode()
-    result.push(node)
+    state.result.push(node)
   }
 
   function pushToken(token: MarkdownToken) {
     // push a raw token into result as a ParsedNode (best effort cast)
     resetCurrentTextNode()
     const node = cloneTokenWithMutableChildren(token) as unknown as ParsedNode
-    result.push(node)
+    state.result.push(node)
   }
 
   // backward-compatible alias used by existing call sites that pass parsed nodes
@@ -596,73 +607,43 @@ export function parseInlineTokens(
   }
 
   function pushText(content: string, raw?: string) {
-    if (currentTextNode) {
-      currentTextNode.content += content
-      currentTextNode.raw += raw ?? content
+    if (state.currentTextNode) {
+      state.currentTextNode.content += content
+      state.currentTextNode.raw += raw ?? content
     }
     else {
-      currentTextNode = {
+      state.currentTextNode = {
         type: 'text',
         content: String(content ?? ''),
         raw: String(raw ?? content ?? ''),
       } as TextNode
-      result.push(currentTextNode)
+      state.result.push(state.currentTextNode)
     }
-  }
-
-  function pushInlineTextContent(content: string, token: MarkdownToken) {
-    if (!content)
-      return
-
-    const parsed = parseInlineTokens([
-      { ...token, type: 'text', content, raw: content } as MarkdownToken,
-    ], content, pPreToken, options)
-
-    if (parsed.length === 1 && parsed[0]?.type === 'text') {
-      const text = parsed[0] as TextNode
-      pushText(String(text.content ?? ''), String(text.raw ?? text.content ?? ''))
-      return
-    }
-
-    for (const node of parsed)
-      pushNode(node)
   }
 
   function stripTrailingLoadingParenMathOpener(token: MarkdownToken) {
-    if (!currentTextNode || token.loading !== true || token.markup !== '\\(\\)')
+    if (!state.currentTextNode || token.loading !== true || token.markup !== '\\(\\)')
       return
 
-    const previousToken = tokens[i - 1]
+    const previousToken = state.tokens[state.index - 1]
     if (!previousToken || previousToken.type !== 'text' || !hasEscapedMarkup(previousToken, '\\('))
       return
 
-    if (!currentTextNode.content.endsWith('('))
+    if (!state.currentTextNode.content.endsWith('('))
       return
 
-    currentTextNode.content = currentTextNode.content.slice(0, -1)
-    if (currentTextNode.raw.endsWith('('))
-      currentTextNode.raw = currentTextNode.raw.slice(0, -1)
+    state.currentTextNode.content = state.currentTextNode.content.slice(0, -1)
+    if (state.currentTextNode.raw.endsWith('('))
+      state.currentTextNode.raw = state.currentTextNode.raw.slice(0, -1)
 
-    if (!currentTextNode.content && result[result.length - 1] === currentTextNode) {
-      result.pop()
-      currentTextNode = null
+    if (!state.currentTextNode.content && state.result[state.result.length - 1] === state.currentTextNode) {
+      state.result.pop()
+      state.currentTextNode = null
     }
   }
 
-  function isMarkdownLinkBeforeLinkifiedUrl(content: string) {
-    if (!content.endsWith(']('))
-      return false
-
-    return tokens[i + 1]?.type === 'link_open'
-      && tokens[i + 1]?.markup === 'linkify'
-      && tokens[i + 2]?.type === 'text'
-      && tokens[i + 3]?.type === 'link_close'
-      && tokens[i + 4]?.type === 'text'
-      && String(tokens[i + 4]?.content ?? '').startsWith(')')
-  }
-
-  while (i < tokens.length) {
-    const token = tokens[i] as MarkdownToken
+  while (state.index < state.tokens.length) {
+    const token = state.tokens[state.index] as MarkdownToken
     handleToken(token)
   }
 
@@ -674,108 +655,104 @@ export function parseInlineTokens(
       }
 
       case 'softbreak':
-        if (currentTextNode) {
+        if (state.currentTextNode) {
           // Append newline to the current text node
-          currentTextNode.content += '\n'
-          currentTextNode.raw += '\n' // Assuming raw should also reflect the newline
+          state.currentTextNode.content += '\n'
+          state.currentTextNode.raw += '\n' // Assuming raw should also reflect the newline
         }
         else {
-          currentTextNode = {
+          state.currentTextNode = {
             type: 'text',
             content: '\n',
             raw: '\n',
           }
-          result.push(currentTextNode)
+          state.result.push(state.currentTextNode)
         }
         // Don't create a node for softbreak itself, just modify text
-        i++
+        state.index++
         break
 
       case 'code_inline':
         pushNode(parseInlineCodeToken(token))
-        i++
+        state.index++
         break
       case 'html_inline': {
         const [node, index] = parseHtmlInlineCodeToken(
           token,
-          tokens,
-          i,
+          state.tokens,
+          state.index,
           parseInlineTokens,
           raw,
           pPreToken,
           options,
         )
         pushNode(node)
-        i = index
+        state.index = index
         break
       }
 
       case 'link_open': {
-        handleLinkOpen(token)
+        handleLinkOpen(state, token)
         break
       }
 
       case 'image':
-        if (!recoverOuterImageLinkStartFromImageToken(token)) {
-          resetCurrentTextNode()
-          pushNode(parseImageToken(token))
-          i++
-        }
+        handleImageToken(state, token)
         break
 
       case 'strong_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseStrongToken(tokens, i, parseInlineTokens, token.content, options)
+        const { node, nextIndex } = parseStrongToken(state.tokens, state.index, parseInlineTokens, token.content, options)
         pushNode(node)
-        i = nextIndex
+        state.index = nextIndex
         break
       }
 
       case 'em_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseEmphasisToken(tokens, i, parseInlineTokens, options)
+        const { node, nextIndex } = parseEmphasisToken(state.tokens, state.index, parseInlineTokens, options)
         pushNode(node)
-        i = nextIndex
+        state.index = nextIndex
         break
       }
 
       case 's_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseStrikethroughToken(tokens, i, parseInlineTokens, options)
+        const { node, nextIndex } = parseStrikethroughToken(state.tokens, state.index, parseInlineTokens, options)
         pushNode(node)
-        i = nextIndex
+        state.index = nextIndex
         break
       }
 
       case 'mark_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseHighlightToken(tokens, i, parseInlineTokens, options)
+        const { node, nextIndex } = parseHighlightToken(state.tokens, state.index, parseInlineTokens, options)
         pushNode(node)
-        i = nextIndex
+        state.index = nextIndex
         break
       }
 
       case 'ins_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseInsertToken(tokens, i, parseInlineTokens, options)
+        const { node, nextIndex } = parseInsertToken(state.tokens, state.index, parseInlineTokens, options)
         pushNode(node)
-        i = nextIndex
+        state.index = nextIndex
         break
       }
 
       case 'sub_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseSubscriptToken(tokens, i, parseInlineTokens, options)
+        const { node, nextIndex } = parseSubscriptToken(state.tokens, state.index, parseInlineTokens, options)
         pushNode(node)
-        i = nextIndex
+        state.index = nextIndex
         break
       }
 
       case 'sup_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseSuperscriptToken(tokens, i, parseInlineTokens, options)
+        const { node, nextIndex } = parseSuperscriptToken(state.tokens, state.index, parseInlineTokens, options)
         pushNode(node)
-        i = nextIndex
+        state.index = nextIndex
         break
       }
 
@@ -792,7 +769,7 @@ export function parseInlineTokens(
           ],
           raw: `~${String(token.content ?? '')}~`,
         })
-        i++
+        state.index++
         break
 
       case 'sup':
@@ -808,12 +785,12 @@ export function parseInlineTokens(
           ],
           raw: `^${String(token.content ?? '')}^`,
         })
-        i++
+        state.index++
         break
 
       case 'emoji': {
         resetCurrentTextNode()
-        const preToken = tokens[i - 1]
+        const preToken = state.tokens[state.index - 1]
         if (preToken?.type === 'text' && /\|:-+/.test(String(preToken.content ?? ''))) {
           // 处理表格中的 emoji，跳过
           pushText('', '')
@@ -821,23 +798,23 @@ export function parseInlineTokens(
         else {
           pushNode(parseEmojiToken(token))
         }
-        i++
+        state.index++
         break
       }
       case 'checkbox':
         resetCurrentTextNode()
         pushNode(parseCheckboxToken(token))
-        i++
+        state.index++
         break
       case 'checkbox_input':
         resetCurrentTextNode()
         pushNode(parseCheckboxInputToken(token))
-        i++
+        state.index++
         break
       case 'footnote_ref':
         resetCurrentTextNode()
         pushNode(parseFootnoteRefToken(token))
-        i++
+        state.index++
         break
 
       case 'footnote_anchor':{
@@ -853,21 +830,21 @@ export function parseInlineTokens(
           raw: String(token.content ?? ''),
         } as ParsedNode)
 
-        i++
+        state.index++
         break
       }
 
       case 'hardbreak':
         resetCurrentTextNode()
         pushNode(parseHardbreakToken())
-        i++
+        state.index++
         break
 
       case 'fence': {
         resetCurrentTextNode()
         // Handle fenced code blocks with language specifications
-        pushNode(parseFenceToken(tokens[i]))
-        i++
+        pushNode(parseFenceToken(state.tokens[state.index]))
+        state.index++
         break
       }
 
@@ -875,17 +852,17 @@ export function parseInlineTokens(
         stripTrailingLoadingParenMathOpener(token)
         resetCurrentTextNode()
         // 可能遇到 math_inline text math_inline 的特殊情况，需要合并成一个
-        if (!token.content && token.markup === '$' && tokens[i + 1]?.type === 'text' && tokens[i + 2]?.type === 'math_inline') {
+        if (!token.content && token.markup === '$' && state.tokens[state.index + 1]?.type === 'text' && state.tokens[state.index + 2]?.type === 'math_inline') {
           pushNode(parseMathInlineToken({
             ...token,
-            content: tokens[i + 1].content,
+            content: state.tokens[state.index + 1].content,
           }))
-          i += 2
+          state.index += 2
         }
         else {
           pushNode(parseMathInlineToken(token))
         }
-        i++
+        state.index++
         break
       }
 
@@ -897,36 +874,12 @@ export function parseInlineTokens(
       case 'text_special':{
         // treat as plain text (merge into adjacent text nodes)
         pushText(String(token.content ?? ''), String(token.content ?? ''))
-        i++
+        state.index++
         break
       }
 
       default: {
-        // Skip unknown token types, ensure text merging stops.
-        // Synthetic 'link' tokens (from fixLinkTokens) must respect validateLink.
-        const syntheticLink = token as MarkdownToken & { href?: unknown, text?: unknown }
-        if (token.type === 'link' && syntheticLink.href != null && options?.validateLink && !options.validateLink(String(syntheticLink.href))) {
-          resetCurrentTextNode()
-          const displayText = String(syntheticLink.text ?? '')
-          pushText(displayText, displayText)
-          i++
-        }
-        else if (recoverOuterImageLinkFromSyntheticLinkToken(token)) {
-          i++
-        }
-        else if (recoverMarkdownImageFromLoadingImageTail(token)) {
-          i++
-        }
-        else if (recoverMarkdownImageFromTrailingBang(token)) {
-          i++
-        }
-        else if (recoverMarkdownLinkFromTrailingText(token)) {
-          i++
-        }
-        else {
-          pushToken(token)
-          i++
-        }
+        handleFallbackToken(state, token)
         break
       }
     }
@@ -941,27 +894,27 @@ export function parseInlineTokens(
   ) {
     const textNode = parseTextToken({ ...token, content })
 
-    if (currentTextNode) {
+    if (state.currentTextNode) {
       // Merge with the previous text node. The mid-state marker strip only
       // applies to streaming tails; final parses must keep real trailing
       // characters (`(`, `*`, `\`) intact.
-      currentTextNode.content += options?.final
+      state.currentTextNode.content += options?.final
         ? textNode.content
         : stripTrailingMidStateMarker(textNode.content, token, markerFlags)
-      currentTextNode.raw += textNode.raw
+      state.currentTextNode.raw += textNode.raw
       return
     }
 
-    const maybeMath = preToken?.tag === 'br' && tokens[i - 2]?.content === '['
+    const maybeMath = preToken?.tag === 'br' && state.tokens[state.index - 2]?.content === '['
     if (!nextToken) {
       textNode.content = options?.final
         ? textNode.content
         : stripTrailingMidStateMarker(textNode.content, token, markerFlags)
     }
 
-    currentTextNode = textNode
-    currentTextNode.center = maybeMath
-    result.push(currentTextNode)
+    state.currentTextNode = textNode
+    state.currentTextNode.center = maybeMath
+    state.result.push(state.currentTextNode)
   }
 
   function handleTextToken(token: MarkdownToken) {
@@ -969,7 +922,7 @@ export function parseInlineTokens(
     const rawContent = String(token.content ?? '')
     const rawMarkerFlags = getInlineTextMarkerFlags(rawContent)
     const rawHasBackslash = (rawMarkerFlags & INLINE_TEXT_MARKER_BACKSLASH) !== 0
-    const rawSource = tokens.length === 1 && rawHasBackslash && typeof raw === 'string'
+    const rawSource = state.tokens.length === 1 && rawHasBackslash && typeof raw === 'string'
       ? String(raw)
       : ''
     let content = rawSource
@@ -981,8 +934,8 @@ export function parseInlineTokens(
       ? rawMarkerFlags
       : getInlineTextMarkerFlags(content)
 
-    if (token.content === '<' || (content === '1' && tokens[i - 1]?.tag === 'br')) {
-      i++
+    if (token.content === '<' || (content === '1' && state.tokens[state.index - 1]?.tag === 'br')) {
+      state.index++
       return
     }
 
@@ -997,74 +950,74 @@ export function parseInlineTokens(
     if (content.endsWith('undefined') && !raw?.endsWith('undefined')) {
       content = content.slice(0, -9)
     }
-    let trailingTextStart = result.length
+    let trailingTextStart = state.result.length
     let trailingTextContent = ''
-    for (let index = result.length - 1; index >= 0; index--) {
-      const item = result[index]
+    for (let index = state.result.length - 1; index >= 0; index--) {
+      const item = state.result[index]
       if (item.type !== 'text')
         break
       trailingTextStart = index
       trailingTextContent = String(item.content ?? '') + trailingTextContent
     }
-    if (trailingTextStart < result.length) {
+    if (trailingTextStart < state.result.length) {
       // Some mid-state token streams resend the full trailing text chunk. Only
       // replace the existing text tail when the incoming token clearly starts
       // with that exact tail; otherwise keep the previous text nodes so later
       // inline parsing (for example an opening backtick) cannot accidentally
       // drop the already-rendered sibling text.
       if (content.startsWith(trailingTextContent)) {
-        currentTextNode = null
-        result.length = trailingTextStart
+        state.currentTextNode = null
+        state.result.length = trailingTextStart
       }
       else {
-        currentTextNode = result[result.length - 1] as TextNode
+        state.currentTextNode = state.result[state.result.length - 1] as TextNode
       }
     }
 
-    const nextToken = tokens[i + 1]
+    const nextToken = state.tokens[state.index + 1]
     if (
       ((content === '`' || content === '|' || content === '$') && !hasEscapedMarkup(token, `\\${content}`))
       || (/^\*+$/.test(content) && !hasEscapedMarkup(token, '\\*'))
     ) {
-      i++
+      state.index++
       return
     }
     if (!nextToken && options?.final !== true && (markerFlags & INLINE_TEXT_MARKER_OPEN_PAREN) !== 0 && /[^\]]\s*\(\s*$/.test(content))
       content = content.replace(/\(\s*$/, '')
     if (!content) {
-      i++
+      state.index++
       return
     }
 
     if (
       (markerFlags & (INLINE_TEXT_MARKER_OPEN_BRACKET | INLINE_TEXT_MARKER_BANG)) === (INLINE_TEXT_MARKER_OPEN_BRACKET | INLINE_TEXT_MARKER_BANG)
-      && recoverOuterImageLinkFromRawText(content)
+      && recoverOuterImageLinkFromRawText(state, content)
     ) {
       return
     }
 
     if (
       (markerFlags & (INLINE_TEXT_MARKER_CLOSE_BRACKET | INLINE_TEXT_MARKER_OPEN_PAREN)) === (INLINE_TEXT_MARKER_CLOSE_BRACKET | INLINE_TEXT_MARKER_OPEN_PAREN)
-      && recoverOuterImageLinkMidStateFromText(content)
+      && recoverOuterImageLinkMidStateFromText(state, content)
     ) {
       return
     }
 
     const hasInlineCandidates = (markerFlags & INLINE_CANDIDATE_MARKERS) !== 0
     if (!hasInlineCandidates) {
-      commitTextNode(content, token, tokens[i - 1], nextToken, markerFlags)
-      i++
+      commitTextNode(content, token, state.tokens[state.index - 1], nextToken, markerFlags)
+      state.index++
       return
     }
 
     if ((markerFlags & INLINE_TEXT_MARKER_OPEN_BRACKET) !== 0 && handleCheckboxLike(content))
       return
-    const preToken = tokens[i - 1]
+    const preToken = state.tokens[state.index - 1]
     if (
       ((markerFlags & INLINE_TEXT_MARKER_OPEN_BRACKET) !== 0 && content === '[' && !nextToken?.markup?.includes('*') && !hasEscapedMarkup(token, '\\['))
       || ((markerFlags & INLINE_TEXT_MARKER_CLOSE_BRACKET) !== 0 && content === ']' && !preToken?.markup?.includes('*') && !hasEscapedMarkup(token, '\\]'))
     ) {
-      i++
+      state.index++
       return
     }
     // Use raw token content for inline-code fallback parsing so backslashes
@@ -1074,7 +1027,7 @@ export function parseInlineTokens(
 
     if (
       (markerFlags & (INLINE_TEXT_MARKER_BANG | INLINE_TEXT_MARKER_OPEN_BRACKET)) === (INLINE_TEXT_MARKER_BANG | INLINE_TEXT_MARKER_OPEN_BRACKET)
-      && handleInlineImageContent(content)
+      && handleInlineImageContent(state, content)
     ) {
       return
     }
@@ -1084,8 +1037,8 @@ export function parseInlineTokens(
     // allowing fallback for later tricky links in the same inline run.
     if (
       (markerFlags & INLINE_TEXT_MARKER_OPEN_BRACKET) !== 0
-      && (tokens[i + 1]?.type !== 'link_open' || isMarkdownLinkBeforeLinkifiedUrl(content))
-      && handleInlineLinkContent(content, token)
+      && (state.tokens[state.index + 1]?.type !== 'link_open' || isMarkdownLinkBeforeLinkifiedUrl(state, content))
+      && handleInlineLinkContent(state, content, token)
     ) {
       return
     }
@@ -1095,7 +1048,7 @@ export function parseInlineTokens(
       resetCurrentTextNode()
       for (const node of reparsedNodes)
         pushNode(node)
-      i++
+      state.index++
       return
     }
 
@@ -1104,617 +1057,13 @@ export function parseInlineTokens(
 
     // Emit remaining text token
     commitTextNode(content, token, preToken, nextToken, markerFlags)
-    i++
-  }
-
-  function handleLinkOpen(token: MarkdownToken) {
-    if (recoverMarkdownImageFromLoadingImageTailLinkOpen(token))
-      return
-
-    if (shouldTreatLinkOpenAsTextInEscapedOuterImageTail()) {
-      const { node, nextIndex } = parseLinkToken(tokens, i, parseInlineTokens, options)
-      const text = String(node.text || node.href || '')
-      pushText(text, text)
-      i = nextIndex
-      return
-    }
-
-    // mirror logic previously in the switch-case for 'link_open'
-    resetCurrentTextNode()
-    // 直接使用 parseLinkToken 来解析链接及其子节点，这能正确处理包含 code_inline 等复杂内容的链接
-    const linkStartIndex = i
-    const { node, nextIndex } = parseLinkToken(tokens, i, parseInlineTokens, options)
-    i = nextIndex
-
-    const linkText = node.text || node.href || ''
-    if (
-      token.markup === 'linkify'
-      && !isDecodedFromRawPunycode(linkText, node.href, raw)
-      && shouldDemoteFilenameLikeLinkify(linkText, parseContext.linkifyDemotionContext)
-    ) {
-      pushText(linkText, linkText)
-      return
-    }
-
-    const hasSingleTextChild = node.children.length === 1 && node.children[0]?.type === 'text'
-    if (node.loading && raw && node.text === node.href && hasSingleTextChild) {
-      const recoveredLabel = recoverTrailingMarkdownLinkLabel(raw, node.href)
-      if (recoveredLabel) {
-        node.text = recoveredLabel
-        node.children = [{ type: 'text', content: recoveredLabel, raw: recoveredLabel }]
-        node.raw = String(`[${recoveredLabel}](${node.href}${node.title ? ` "${node.title}"` : ''})`)
-      }
-    }
-
-    // Respect consumer link validation (e.g. md.set({ validateLink }) so javascript: is not output as link
-    if (options?.validateLink && !options.validateLink(node.href)) {
-      pushText(node.text, node.text)
-      return
-    }
-
-    // Determine loading state conservatively: if the link token parser
-    // marked it as loading already, keep it; otherwise compute from raw
-    // and href as a fallback so unclosed links remain marked as loading.
-    const hrefAttr = token.attrs?.find(([name]) => name === 'href')?.[1]
-    const hrefStr = String(hrefAttr ?? '')
-    // Only override the link parser's default loading state when we
-    // actually have an href to check against the raw source. If the
-    // tokenizer emitted a link_open without an href (partial tokenizers
-    // may do this), prefer the parseLinkToken's initial loading value
-    // (which defaults to true for mid-state links).
-    if (raw && hrefStr) {
-      // More robust: locate the first "](" after the link text and see if
-      // there's a matching ')' that closes the href. This avoids false
-      // positives when other parentheses appear elsewhere in the source.
-      const openIdx = raw.indexOf('](')
-      if (openIdx === -1) {
-        // No explicit link start found in raw — be conservative and keep
-        // the parser's default loading value.
-      }
-      else {
-        const closeIdx = raw.indexOf(')', openIdx + 2)
-        if (closeIdx === -1) {
-          node.loading = true
-        }
-        else if (node.loading) {
-          // Check that the href inside the parens corresponds to this token
-          const inside = raw.slice(openIdx + 2, closeIdx)
-          if (inside.includes(hrefStr))
-            node.loading = false
-        }
-      }
-    }
-
-    if (
-      /^file:\/\/\/[a-z]:\//i.test(node.href)
-      && recoverMarkdownImageFromTrailingBang(node as unknown as MarkdownToken, linkStartIndex - 1)
-    ) {
-      return
-    }
-
-    if (recoverMarkdownLinkFromTrailingText(node as unknown as MarkdownToken))
-      return
-
-    pushParsed(node)
-  }
-
-  function recoverMarkdownImageFromLoadingImageTailLinkOpen(token: MarkdownToken): boolean {
-    if (token.markup !== 'linkify')
-      return false
-
-    const { node, nextIndex } = parseLinkToken(tokens, i, parseInlineTokens, options)
-    if (!recoverMarkdownImageFromLoadingImageTailLink(node, nextIndex))
-      return false
-
-    i = nextIndex
-    return true
+    state.index++
   }
 
   function handleReference(token: MarkdownToken) {
     resetCurrentTextNode()
     pushNode(parseReferenceToken(token))
-    i++
-  }
-
-  function recoverMarkdownLinkFromTrailingText(token: MarkdownToken): boolean {
-    if (token.type !== 'link')
-      return false
-
-    const previous = result[result.length - 1] as TextNode | undefined
-    if (!previous || previous.type !== 'text')
-      return false
-
-    const previousContent = String(previous.content ?? '')
-    const match = previousContent.match(/^([^[]*)\[([^\]\n]+)\]\($/)
-    if (!match)
-      return false
-
-    const linkToken = token as MarkdownToken & { href?: string, text?: string, title?: string | null }
-    const href = String(linkToken.href ?? '')
-    const linkText = String(linkToken.text ?? '')
-    const label = String(match[2] ?? '')
-    const visibleHref = href.replace(/^(?:https?:\/\/|mailto:|ftp:\/\/)/i, '')
-
-    if (!href || !(linkText === href || linkText === visibleHref || isLikelyUrl(linkText)))
-      return false
-
-    const before = String(match[1] ?? '')
-    if (before) {
-      previous.content = before
-      previous.raw = before
-    }
-    else {
-      result.pop()
-    }
-
-    pushParsed({
-      ...(token as ParsedNode),
-      text: label,
-      children: [{ type: 'text', content: label, raw: label }],
-      raw: String(`[${label}](${href}${linkToken.title ? ` "${linkToken.title}"` : ''})`),
-    } as ParsedNode)
-    return true
-  }
-
-  function recoverMarkdownImageFromLoadingImageTail(token: MarkdownToken): boolean {
-    if (token.type !== 'link')
-      return false
-
-    const linkToken = token as MarkdownToken & { href?: string, loading?: boolean, title?: string | null }
-    const href = String(linkToken.href ?? '')
-    if (!href)
-      return false
-
-    return recoverMarkdownImageFromLoadingImageTailLink({
-      href,
-      title: linkToken.title == null || linkToken.title === '' ? null : String(linkToken.title),
-      loading: Boolean(linkToken.loading),
-    }, i + 1)
-  }
-
-  function recoverMarkdownImageFromLoadingImageTailLink(
-    link: { href: string, loading?: boolean, title: string | null },
-    nextIndex: number,
-  ): boolean {
-    const previous = result[result.length - 1] as ParsedNode & {
-      alt?: string
-      loading?: boolean
-      raw?: string
-      src?: string
-    } | undefined
-    if (previous?.type !== 'image' || previous.src || !previous.loading || !String(previous.raw ?? '').endsWith(']('))
-      return false
-
-    const nextToken = tokens[nextIndex]
-    const nextContent = String(nextToken?.content ?? '')
-    if (nextToken?.type !== 'text' || !nextContent.startsWith(')'))
-      return false
-
-    result.pop()
-    currentTextNode = null
-
-    const alt = String(previous.alt ?? '')
-    pushParsed({
-      type: 'image',
-      src: link.href,
-      alt,
-      title: link.title,
-      raw: String(`![${alt}](${link.href}${link.title ? ` "${link.title}"` : ''})`),
-      loading: Boolean(link.loading),
-    } as ParsedNode)
-
-    const trailing = nextContent.slice(1)
-    const adjustedNext = cloneTokenWithMutableChildren(nextToken)
-    adjustedNext.content = trailing
-    adjustedNext.raw = trailing
-    ensureWorkingTokens()[nextIndex] = adjustedNext
-    return true
-  }
-
-  function recoverMarkdownImageFromTrailingBang(token: MarkdownToken, previousTokenIndex = i - 1): boolean {
-    if (token.type !== 'link')
-      return false
-
-    const previous = result[result.length - 1] as TextNode | undefined
-    const previousToken = tokens[previousTokenIndex]
-    if (!previous || previous.type !== 'text' || previousToken?.type !== 'text')
-      return false
-
-    const previousContent = String(previous.content ?? '')
-    const previousTokenContent = String(previousToken.content ?? '')
-    if (!previousContent.endsWith('!') || !previousTokenContent.endsWith('!'))
-      return false
-    if (hasEscapedMarkup(previousToken, '\\!'))
-      return false
-
-    const before = previousContent.slice(0, -1)
-    if (before) {
-      previous.content = before
-      previous.raw = before
-      currentTextNode = previous
-    }
-    else {
-      result.pop()
-      currentTextNode = null
-    }
-
-    const linkToken = token as MarkdownToken & {
-      href?: string
-      loading?: boolean
-      text?: string
-      title?: string | null
-      children?: Array<{ type?: string, content?: string, raw?: string }>
-    }
-    const alt = String(
-      linkToken.text
-      ?? linkToken.children?.map(child => String(child?.content ?? child?.raw ?? '')).join('')
-      ?? '',
-    )
-    const href = String(linkToken.href ?? '')
-    const title = linkToken.title == null || linkToken.title === '' ? null : String(linkToken.title)
-
-    pushParsed({
-      type: 'image',
-      src: href,
-      alt,
-      title,
-      raw: String(`![${alt}](${href}${title ? ` "${title}"` : ''})`),
-      loading: Boolean(linkToken.loading),
-    } as ParsedNode)
-    return true
-  }
-
-  function buildLoadingOuterImageLinkNode(
-    imageNode: ParsedNode & { alt?: string, raw?: string },
-    href = '',
-    title: string | null = null,
-  ): ParsedNode {
-    const text = String(imageNode.alt ?? imageNode.raw ?? '')
-
-    return {
-      type: 'link',
-      href,
-      title,
-      text,
-      children: [imageNode as ParsedNode],
-      raw: String(`[${text}](${href}${title ? ` "${title}"` : ''})`),
-      loading: true,
-    } as ParsedNode
-  }
-
-  function buildLoadingImageNodeFromRaw(raw: string): ParsedNode {
-    const normalizedRaw = raw.startsWith('![') ? raw : `![${raw}`
-    const innerRaw = normalizedRaw.slice(2)
-    const closeIdx = innerRaw.indexOf('](')
-    const alt = closeIdx === -1 ? innerRaw.replace(/\]$/, '') : innerRaw.slice(0, closeIdx)
-
-    return {
-      type: 'image',
-      src: '',
-      alt,
-      title: null,
-      raw: normalizedRaw,
-      loading: true,
-    } as ParsedNode
-  }
-
-  function recoverOuterImageLinkFromRawText(content: string): boolean {
-    const outerStart = content.indexOf('[![')
-    if (outerStart === -1)
-      return false
-    if (typeof raw === 'string' && tokens.length === 1 && isEscapedVisibleChar(raw, outerStart, '['))
-      return false
-
-    const before = content.slice(0, outerStart)
-    if (before)
-      pushText(before, before)
-
-    const imageNode = buildLoadingImageNodeFromRaw(content.slice(outerStart + 1))
-    pushParsed(buildLoadingOuterImageLinkNode(imageNode))
-    i++
-    return true
-  }
-
-  function recoverOuterImageLinkStartFromImageToken(token: MarkdownToken): boolean {
-    if (options?.final)
-      return false
-
-    const previousToken = tokens[i - 1]
-    if (previousToken?.type !== 'text')
-      return false
-
-    const previousTokenContent = String(previousToken.content ?? '')
-    if (!previousTokenContent.endsWith('['))
-      return false
-    if (hasEscapedMarkup(previousToken, '\\['))
-      return false
-
-    const previous = result[result.length - 1] as TextNode | undefined
-    if (previous?.type === 'text' && previous.content.endsWith('[')) {
-      const before = previous.content.slice(0, -1)
-      if (before) {
-        previous.content = before
-        previous.raw = before
-        currentTextNode = previous
-      }
-      else {
-        result.pop()
-        currentTextNode = null
-      }
-    }
-
-    const imageNode = parseImageToken(token)
-    pushParsed(buildLoadingOuterImageLinkNode(imageNode))
-    i++
-    return true
-  }
-
-  function recoverOuterImageLinkFromSyntheticLinkToken(token: MarkdownToken): boolean {
-    if (token.type !== 'link')
-      return false
-
-    const linkToken = token as MarkdownToken & {
-      href?: string
-      text?: string
-      title?: string | null
-      raw?: string
-    }
-    const raw = String(linkToken.raw ?? '')
-    const text = String(linkToken.text ?? '')
-    if (!raw.startsWith('[![') && !text.startsWith('!['))
-      return false
-
-    const imageTitle = linkToken.title == null || linkToken.title === '' ? null : String(linkToken.title)
-    const imageNode = {
-      type: 'image',
-      src: String(linkToken.href ?? ''),
-      alt: text.replace(/^!\[/, '').replace(/\]$/, ''),
-      title: imageTitle,
-      raw: raw.startsWith('[![') ? raw.slice(1) : raw,
-      loading: true,
-    } as ParsedNode & { alt?: string, raw?: string }
-
-    pushParsed(buildLoadingOuterImageLinkNode(imageNode))
-    return true
-  }
-
-  function recoverOuterImageLinkMidStateFromText(content: string): boolean {
-    if (!content.startsWith(']('))
-      return false
-    const outerOpenToken = tokens[i - 2]
-    if (outerOpenToken?.type === 'text' && String(outerOpenToken.content ?? '').endsWith('[') && hasEscapedMarkup(outerOpenToken, '\\['))
-      return false
-
-    const previous = result[result.length - 1] as ParsedNode | undefined
-    if (previous?.type !== 'image' && previous?.type !== 'link')
-      return false
-
-    const previousWithChildren = previous as ParsedNode & { children?: ParsedNode[] }
-    const previousLink = previous?.type === 'link'
-      && Array.isArray(previousWithChildren.children)
-      && previousWithChildren.children.length === 1
-      && previousWithChildren.children[0]?.type === 'image'
-      ? result.pop() as ParsedNode & {
-        href?: string
-        title?: string | null
-        text?: string
-        children: ParsedNode[]
-        loading?: boolean
-      }
-      : null
-
-    const imageNode = previousLink
-      ? previousLink.children[0] as ParsedNode & { alt?: string, raw?: string }
-      : result.pop() as ParsedNode & { alt?: string, raw?: string }
-
-    if (!imageNode || imageNode.type !== 'image')
-      return false
-
-    const nextToken = tokens[i + 1]
-    let href = String(previousLink?.href ?? '')
-    let title: string | null = previousLink?.title == null ? null : String(previousLink.title)
-    let loading = true
-
-    if (nextToken?.type === 'link_open') {
-      const { node, nextIndex } = parseLinkToken(tokens, i + 1, parseInlineTokens, options)
-      href = node.href
-      title = node.title
-      loading = true
-      i = nextIndex
-    }
-    else {
-      href = content.slice(2)
-      if (href.includes('"')) {
-        const parts = href.split('"')
-        href = String(parts[0] ?? '').trim()
-        title = parts[1] == null ? null : String(parts[1]).trim()
-      }
-      i++
-    }
-
-    const linkNode = buildLoadingOuterImageLinkNode(imageNode as ParsedNode & { alt?: string, raw?: string }, href, title) as ParsedNode & { loading?: boolean }
-    linkNode.loading = loading
-    pushParsed(linkNode)
-    return true
-  }
-
-  function shouldTreatLinkOpenAsTextInEscapedOuterImageTail() {
-    const outerOpenToken = tokens[i - 3]
-    return (
-      tokens[i - 2]?.type === 'image'
-      && tokens[i - 1]?.type === 'text'
-      && String(tokens[i - 1].content ?? '') === ']('
-      && outerOpenToken?.type === 'text'
-      && String(outerOpenToken.content ?? '').endsWith('[')
-      && hasEscapedMarkup(outerOpenToken, '\\[')
-    )
-  }
-
-  function handleInlineLinkContent(content: string, _token: MarkdownToken): boolean {
-    const linkStart = content.indexOf('[')
-    if (linkStart === -1)
-      return false
-
-    let textNodeContent = content.slice(0, linkStart)
-    const linkEnd = content.indexOf('](', linkStart)
-    if (linkEnd !== -1) {
-      const textToken = tokens[i + 2]
-      let text = content.slice(linkStart + 1, linkEnd)
-      if (text.includes('[')) {
-        const secondLinkStart = text.indexOf('[')
-        // adjust original linkStart and text
-        textNodeContent += content.slice(0, linkStart + secondLinkStart + 1)
-        const newLinkStart = linkStart + secondLinkStart + 1
-        text = content.slice(newLinkStart + 1, linkEnd)
-      }
-      const nextToken = tokens[i + 1]
-      if (content.endsWith('](') && nextToken?.type === 'link_open' && textToken) {
-        const last = tokens[i + 4]
-        let index = 4
-        let loading = true
-        if (last?.type === 'text') {
-          const lastContent = String(last.content ?? '')
-          if (lastContent.startsWith(')')) {
-            loading = false
-            const trailingAfterClose = lastContent.slice(1)
-            if (trailingAfterClose) {
-              const trailingToken = cloneTokenWithMutableChildren(last)
-              trailingToken.content = trailingAfterClose
-              trailingToken.raw = trailingAfterClose
-              ensureWorkingTokens()[i + 4] = trailingToken
-            }
-            else {
-              index++
-            }
-          }
-          else if (lastContent === '.') {
-            index++
-          }
-        }
-
-        pushInlineTextContent(textNodeContent, _token)
-        const hrefFromToken = String(textToken.content ?? '')
-        if (options?.validateLink && !options.validateLink(hrefFromToken)) {
-          pushText(text, text)
-        }
-        else {
-          pushParsed({
-            type: 'link',
-            href: hrefFromToken,
-            title: null,
-            text,
-            children: [{ type: 'text', content: text, raw: text }],
-            loading,
-          } as ParsedNode)
-        }
-        i += index
-        return true
-      }
-
-      const linkContentEnd = content.indexOf(')', linkEnd)
-      const href = linkContentEnd !== -1 ? content.slice(linkEnd + 2, linkContentEnd) : ''
-      const loading = linkContentEnd === -1
-      let emphasisMatch = textNodeContent.match(/\*+$/)
-      if (emphasisMatch) {
-        textNodeContent = textNodeContent.replace(/\*+$/, '')
-      }
-      pushInlineTextContent(textNodeContent, _token)
-      if (!emphasisMatch)
-        emphasisMatch = text.match(/^\*+/)
-      if (!requireClosingStrong && emphasisMatch) {
-        const type = emphasisMatch[0].length
-        text = text.replace(/^\*+/, '').replace(/\*+$/, '')
-        const newTokens = []
-        if (type === 1) {
-          newTokens.push({ type: 'em_open', tag: 'em', nesting: 1 })
-        }
-        else if (type === 2) {
-          newTokens.push({ type: 'strong_open', tag: 'strong', nesting: 1 })
-        }
-        else if (type === 3) {
-          newTokens.push({ type: 'strong_open', tag: 'strong', nesting: 1 })
-          newTokens.push({ type: 'em_open', tag: 'em', nesting: 1 })
-        }
-        newTokens.push({
-          type: 'link',
-          href,
-          title: null,
-          text,
-          children: [{ type: 'text', content: text, raw: text }],
-          loading,
-        })
-        if (type === 1) {
-          newTokens.push({ type: 'em_close', tag: 'em', nesting: -1 })
-          const { node } = parseEmphasisToken(newTokens, 0, parseInlineTokens, options)
-          pushNode(node)
-        }
-        else if (type === 2) {
-          newTokens.push({ type: 'strong_close', tag: 'strong', nesting: -1 })
-          const { node } = parseStrongToken(newTokens, 0, parseInlineTokens, undefined, options)
-          pushNode(node)
-        }
-        else if (type === 3) {
-          newTokens.push({ type: 'em_close', tag: 'em', nesting: -1 })
-          newTokens.push({ type: 'strong_close', tag: 'strong', nesting: -1 })
-          const { node } = parseStrongToken(newTokens, 0, parseInlineTokens, undefined, options)
-          pushNode(node)
-        }
-        else {
-          const { node } = parseEmphasisToken(newTokens, 0, parseInlineTokens, options)
-          pushNode(node)
-        }
-      }
-      else {
-        if (options?.validateLink && !options.validateLink(href)) {
-          pushText(text, text)
-        }
-        else {
-          pushParsed({
-            type: 'link',
-            href,
-            title: null,
-            text,
-            children: [{ type: 'text', content: text, raw: text }],
-            loading,
-          } as ParsedNode)
-        }
-      }
-
-      const afterText = linkContentEnd !== -1 ? content.slice(linkContentEnd + 1) : ''
-      if (afterText) {
-        handleToken({ type: 'text', content: afterText, raw: afterText } as unknown as MarkdownToken)
-        i--
-      }
-      i++
-      return true
-    }
-
-    return false
-  }
-
-  function handleInlineImageContent(content: string): boolean {
-    const imageStart = content.indexOf('![')
-    if (imageStart === -1)
-      return false
-
-    const textNodeContent = content.slice(0, imageStart)
-    if (textNodeContent && !currentTextNode) {
-      currentTextNode = {
-        type: 'text',
-        content: textNodeContent,
-        raw: textNodeContent,
-      }
-    }
-    else if (textNodeContent && currentTextNode) {
-      currentTextNode.content += textNodeContent
-    }
-    if (currentTextNode) {
-      result.push(currentTextNode)
-      currentTextNode = null
-    }
-    pushParsed(buildLoadingImageNodeFromRaw(content.slice(imageStart)))
-    i++
-    return true
+    state.index++
   }
 
   function handleCheckboxLike(content: string): boolean {
@@ -1725,7 +1074,7 @@ export function parseInlineTokens(
     const _content = content.slice(1)
     const w = _content.match(/[^\s\]]/)
     if (w === null) {
-      i++
+      state.index++
       return true
     }
     // If the first non-space/']' char is x/X treat as a checkbox input
@@ -1736,12 +1085,12 @@ export function parseInlineTokens(
         checked,
         raw: checked ? '[x]' : '[ ]',
       } as ParsedNode)
-      i++
+      state.index++
       return true
     }
 
     return false
   }
 
-  return result
+  return state.result
 }

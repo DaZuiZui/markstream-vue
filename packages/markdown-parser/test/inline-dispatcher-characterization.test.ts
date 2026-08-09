@@ -171,4 +171,30 @@ describe('parseInlineTokens dispatcher characterization', () => {
       { type: 'text', content: ' sentinel', raw: ' sentinel' },
     ])
   })
+
+  it('keeps the initial strong-closing mode when link validation mutates options', () => {
+    const options = {
+      requireClosingStrong: false,
+      validateLink(this: ParseOptions) {
+        this.requireClosingStrong = true
+        return true
+      },
+    } satisfies ParseOptions
+    const nodes = parseInlineTokens([
+      token('link_open', '', { attrs: [['href', 'https://first.test']] }),
+      token('text', 'first'),
+      token('link_close'),
+      token('text', ' *[second](https://second.test)* sentinel'),
+    ], undefined, undefined, options)
+
+    expect(nodes).toMatchObject([
+      { type: 'link', href: 'https://first.test', text: 'first' },
+      { type: 'text', content: ' ', raw: ' ' },
+      {
+        type: 'emphasis',
+        children: [{ type: 'link', href: 'https://second.test', text: 'second' }],
+      },
+      { type: 'text', content: '* sentinel', raw: '* sentinel' },
+    ])
+  })
 })
