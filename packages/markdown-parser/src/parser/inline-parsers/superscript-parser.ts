@@ -1,25 +1,18 @@
 import type { MarkdownToken, ParsedNode, ParseOptions, SuperscriptNode } from '../../types'
-import { parseInlineTokens } from '../index'
+import type { ParseInlineTokensFn } from './inline-parser-types'
+import { collectDelimitedInlineTokens } from './token-range'
 
 export function parseSuperscriptToken(
   tokens: MarkdownToken[],
   startIndex: number,
+  parseInlineTokens: ParseInlineTokensFn,
   options?: ParseOptions,
 ): {
   node: SuperscriptNode
   nextIndex: number
 } {
   const children: ParsedNode[] = []
-  let supText = ''
-  let i = startIndex + 1
-  const innerTokens: MarkdownToken[] = []
-
-  // Process tokens between sup_open and sup_close (if applicable)
-  while (i < tokens.length && tokens[i].type !== 'sup_close') {
-    supText += String(tokens[i].content ?? '')
-    innerTokens.push(tokens[i])
-    i++
-  }
+  const { content: supText, innerTokens, nextIndex } = collectDelimitedInlineTokens(tokens, startIndex, 'sup_close')
 
   // Parse inner tokens to handle nested elements
   children.push(...parseInlineTokens(innerTokens, undefined, undefined, options))
@@ -39,9 +32,6 @@ export function parseSuperscriptToken(
           ],
     raw: `^${supText || String(tokens[startIndex].content ?? '')}^`,
   }
-
-  // Skip to after sup_close
-  const nextIndex = i < tokens.length ? i + 1 : tokens.length
 
   return { node, nextIndex }
 }

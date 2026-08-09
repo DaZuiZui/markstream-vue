@@ -1,5 +1,5 @@
 import type { BlockquoteNode, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
-import { parseInlineTokens } from '../inline-parsers'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 import { applyNodeSourceMap } from '../node-source-map'
 import { parseCommonBlockToken } from './block-token-parser'
@@ -9,7 +9,8 @@ import { parseList } from './list-parser'
 export function parseBlockquote(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [BlockquoteNode, number] {
   const blockquoteChildren: ParsedNode[] = []
   const linkifyContext = createLinkifyDemotionContextTracker(options, true)
@@ -35,21 +36,21 @@ export function parseBlockquote(
       }
       case 'bullet_list_open':
       case 'ordered_list_open': {
-        const [listNode, newIndex] = parseList(tokens, j, linkifyContext.options())
+        const [listNode, newIndex] = parseList(tokens, j, linkifyContext.options(), parseInlineTokens)
         blockquoteChildren.push(listNode)
         linkifyContext.remember(listNode.raw)
         j = newIndex
         break
       }
       case 'blockquote_open': {
-        const [nestedBlockquote, newIndex] = parseBlockquote(tokens, j, linkifyContext.options())
+        const [nestedBlockquote, newIndex] = parseBlockquote(tokens, j, linkifyContext.options(), parseInlineTokens)
         blockquoteChildren.push(nestedBlockquote)
         linkifyContext.remember(nestedBlockquote.raw)
         j = newIndex
         break
       }
       default:{
-        const handled = parseCommonBlockToken(tokens, j, linkifyContext.options(), containerTokenHandlers)
+        const handled = parseCommonBlockToken(tokens, j, linkifyContext.options(), containerTokenHandlers, parseInlineTokens)
         if (handled) {
           blockquoteChildren.push(handled[0])
           linkifyContext.remember(handled[0].raw)

@@ -21,7 +21,15 @@ Tracked in [issue #615](https://github.com/Simon-He95/markstream-vue/issues/615)
 - [x] Clean playgrounds (deps, vite config, sandbox pages) — `2.0.0-remove-monaco` 分支
 - [x] Update documentation (en + zh), LLM docs, package descriptions — `2.0.0-remove-monaco` 分支
 
-## Goal 2: 2.0.0 release validation
+## Goal 2: Parser reliability and maintainability
+
+The neutral 2.0 parser work is tracked independently from the renderer removal in [issue #625](https://github.com/Simon-He95/markstream-vue/issues/625). Internal runtime ownership and reset lifecycle are tracked in [issue #633](https://github.com/Simon-He95/markstream-vue/issues/633).
+
+### Parser options migration
+
+2.0 removes the parser-only options interface that was previously exported from the package root. Application code should type parser configuration as `ParseOptions`. The formerly undocumented structured-reuse and timing instrumentation fields are now official as `reuseStableTopLevelNodes` and `parserMetrics`; all other cursor, fragment, and stream-control flags remain internal and have no public replacement. `ParserRuntime` and `ParseContext` are implementation details, not a Session API.
+
+## Goal 3: 2.0.0 release validation
 
 Get the breaking release through the normal release gates before publishing.
 
@@ -31,7 +39,7 @@ Get the breaking release through the normal release gates before publishing.
 - [ ] Reconcile `check:peer-deps` for workspace-root optional peers
 - [ ] Bump version to 2.0.0 and write release notes
 
-## Goal 3: Runtime visual verification
+## Goal 4: Runtime visual verification
 
 Verify the stream-diffs handoff in a real browser (the migration so far is verified by unit/type checks only).
 
@@ -39,7 +47,7 @@ Verify the stream-diffs handoff in a real browser (the migration so far is verif
 - [ ] `test:e2e:octane-playground` green against stream-diffs selectors
 - [ ] Svelte diff color mapping on `.is-diff .code-block-body`
 
-## Goal 4: Leftover cleanup (low priority)
+## Goal 5: Leftover cleanup (low priority)
 
 Small consistency cleanups that were intentionally left out of Goal 1.
 

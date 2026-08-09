@@ -23,13 +23,13 @@ describe('streaming safe-markdown tail-window seam', () => {
     parseMarkdownToStructure(commit1, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     })
 
     const nodes2 = parseMarkdownToStructure(commit2, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     })
     const cold2 = parseMarkdownToStructure(commit2, coldMd, { final: false, streamParse: false })
 
@@ -49,13 +49,13 @@ describe('streaming safe-markdown tail-window seam', () => {
     parseMarkdownToStructure(commit1, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     })
 
     const nodes2 = parseMarkdownToStructure(commit2, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     })
     const cold2 = parseMarkdownToStructure(commit2, coldMd, { final: false, streamParse: false })
 

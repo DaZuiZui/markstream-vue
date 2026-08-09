@@ -1,4 +1,4 @@
-import type { MarkdownIt, Token } from './markdown-it-types';
+import type { Token } from './markdown-it-types';
 export interface BaseNode {
     type: string;
     raw: string;
@@ -352,14 +352,19 @@ export interface ParseOptions {
      * children may also be annotated.
      */
     includeSourceMap?: boolean;
+    /** Reuse eligible stable top-level nodes between append-only stream parses. */
+    reuseStableTopLevelNodes?: boolean;
+    /** Optional parser work/timing collector. */
+    parserMetrics?: {
+        tokenCloneMs?: number;
+        processTokensInputTokens?: number;
+        processTokensReusedTopLevelNodes?: number;
+        processTokensMs?: number;
+        safeMarkdownMs?: number;
+        tokenizeMs?: number;
+        htmlBlockPassesMs?: number;
+        parseMarkdownToStructureTotalMs?: number;
+    };
     debug?: boolean;
-}
-export interface InternalParseOptions extends ParseOptions {
-    __customHtmlBlockCursor?: number;
-    __disableStreamParse?: boolean;
-    __insideStrong?: boolean;
-    __markdownIt?: MarkdownIt;
-    __sourceLineMapper?: (line: number) => MarkdownNodeSourceMap;
-    __sourceMarkdown?: string;
 }
 export {};

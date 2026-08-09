@@ -11,6 +11,10 @@ on:
       - playground/src/**
       - playground-shared/**
       - scripts/benchmark-1-0.mjs
+      - scripts/benchmark-parser-performance.mjs
+      - scripts/check-parser-performance.mjs
+      - scripts/parser-performance-baseline.json
+      - scripts/test-parser-performance-gate.mjs
       - scripts/e2e-*-performance.mjs
       - scripts/web-vitals-budget-checks.mjs
       - package.json
@@ -24,6 +28,10 @@ on:
       - playground/src/**
       - playground-shared/**
       - scripts/benchmark-1-0.mjs
+      - scripts/benchmark-parser-performance.mjs
+      - scripts/check-parser-performance.mjs
+      - scripts/parser-performance-baseline.json
+      - scripts/test-parser-performance-gate.mjs
       - scripts/e2e-*-performance.mjs
       - scripts/web-vitals-budget-checks.mjs
       - package.json
@@ -46,6 +54,8 @@ jobs:
       MARKSTREAM_BENCHMARK_MAX_LONG_TASK_MS: 800
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -63,6 +73,37 @@ jobs:
 
       - name: Run 1.0 benchmark
         run: pnpm benchmark:1.0
+
+      - name: Resolve parser comparison base
+        id: parser-base
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$PR_BASE_SHA" ]; then
+            echo "sha=$PR_BASE_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$(git rev-parse HEAD^)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out parser comparison base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.parser-base.outputs.sha }}
+          path: .tmp/parser-perf-base
+
+      - name: Install and build parser comparison base
+        run: |
+          pnpm --dir .tmp/parser-perf-base install --frozen-lockfile --filter stream-markdown-parser...
+          pnpm --dir .tmp/parser-perf-base run build:parser
+
+      - name: Run parser base/head time and heap baseline
+        env:
+          MARKSTREAM_PARSER_PERF_OUTPUT_DIR: benchmark/parser-performance/head
+        run: |
+          pnpm run build:parser
+          MARKSTREAM_PARSER_PERF_OUTPUT_DIR=benchmark/parser-performance/base node --expose-gc scripts/benchmark-parser-performance.mjs --profile=deep --parser-dist=.tmp/parser-perf-base/packages/markdown-parser/dist/index.js
+          pnpm run benchmark:parser-perf
+          pnpm run check:parser-perf -- --reference=benchmark/parser-performance/base/latest.json
 
       - name: Append benchmark summary
         if: always()

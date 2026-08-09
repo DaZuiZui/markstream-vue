@@ -1,0 +1,78 @@
+name: Parser bug report
+description: Report a stream-markdown-parser correctness, state, or streaming issue
+labels: [parser]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please keep the Markdown and action trace exact. Parser bugs often depend on a single chunk boundary, reset, replacement, or final transition.
+
+  - type: input
+    id: versions
+    attributes:
+      label: Parser and runtime versions
+      description: Include stream-markdown-parser, Node.js, package manager, and the consuming renderer when applicable.
+      placeholder: stream-markdown-parser 1.2.3, Node 22.x, pnpm 10.x, markstream-vue 2.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: source
+    attributes:
+      label: Exact Markdown source
+      description: Paste the original source without correcting delimiters or line endings. State whether it uses LF or CRLF.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: action-trace
+    attributes:
+      label: Action and chunk trace
+      description: List every append, duplicate commit, truncate, range replacement, reset, and final transition in order. Include a differential-validator replay command or seed when available.
+      placeholder: |
+        1. reset
+        2. append "# title\r\n"
+        3. append "$x"
+        4. duplicate commit
+        5. final false -> true
+        Replay: pnpm validate:parser-differential -- --fixture=... --seed=...
+    validations:
+      required: true
+
+  - type: textarea
+    id: parse-options
+    attributes:
+      label: final, streamParse, and parser options
+      description: Include the options for each commit when they change, including customHtmlTags, includeSourceMap, validateLink, and hooks.
+      render: json
+      placeholder: |
+        {
+          "final": false,
+          "streamParse": true,
+          "customHtmlTags": ["thinking"]
+        }
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected parser output
+      description: Provide the expected text, node types, loading state, source maps, or serialized nodes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual parser output
+      description: Paste the actual output or differential failure, including commit index and replay details.
+    validations:
+      required: true
+
+  - type: input
+    id: reproduction
+    attributes:
+      label: Additional reproduction link
+      description: Optional test-page, StackBlitz, repository, or gist link.
