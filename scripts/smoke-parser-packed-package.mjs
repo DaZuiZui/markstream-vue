@@ -61,17 +61,32 @@ try {
     },
   }, null, 2)}\n`)
 
-  writeTemporaryFile('smoke.mjs', `import assert from 'node:assert/strict'\nimport { createRequire } from 'node:module'\n\nconst esm = await import('stream-markdown-parser')\nconst require = createRequire(import.meta.url)\nconst cjs = require('stream-markdown-parser')\n\nfor (const [format, parser] of [['ESM', esm], ['CJS', cjs]]) {\n  assert.equal(typeof parser.getMarkdown, 'function', \`\${format} getMarkdown export is missing\`)\n  assert.equal(typeof parser.parseMarkdownToStructure, 'function', \`\${format} parseMarkdownToStructure export is missing\`)\n  for (const internalExport of ['ParserRuntime', 'getParserRuntime', 'disposeParserRuntime', 'ParseContext', 'createParseContext'])\n    assert.equal(internalExport in parser, false, \`\${format} leaked internal export: \${internalExport}\`)\n}\n\nconst source = '# Packed parser\\n\\n- ESM\\n- CJS\\n'\nconst esmNodes = esm.parseMarkdownToStructure(source, esm.getMarkdown('packed-smoke'), { final: true, streamParse: false })\nconst cjsNodes = cjs.parseMarkdownToStructure(source, cjs.getMarkdown('packed-smoke'), { final: true, streamParse: false })\nassert.deepEqual(esmNodes, cjsNodes)\nconsole.log('[parser-packed-smoke] ESM and CJS imports produced matching nodes.')\n`)
+  writeTemporaryFile('smoke.mjs', `import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
+
+const esm = await import('stream-markdown-parser')
+const require = createRequire(import.meta.url)
+const cjs = require('stream-markdown-parser')
+
+for (const [format, parser] of [['ESM', esm], ['CJS', cjs]]) {
+  assert.equal(typeof parser.getMarkdown, 'function', format + ' getMarkdown export is missing')
+  assert.equal(typeof parser.parseInlineTokens, 'function', format + ' parseInlineTokens export is missing')
+  assert.equal(typeof parser.parseMarkdownToStructure, 'function', format + ' parseMarkdownToStructure export is missing')
+  const inlineNodes = parser.parseInlineTokens([], undefined, undefined, { final: true })
+  assert.deepEqual(inlineNodes, [], format + ' parseInlineTokens four-argument call failed')
+  for (const internalExport of ['ParserRuntime', 'getParserRuntime', 'disposeParserRuntime', 'ParseContext', 'createParseContext'])
+    assert.equal(internalExport in parser, false, format + ' leaked internal export: ' + internalExport)
+}
+
+const source = '# Packed parser\\n\\n- ESM\\n- CJS\\n'
+const esmNodes = esm.parseMarkdownToStructure(source, esm.getMarkdown('packed-smoke'), { final: true, streamParse: false })
+const cjsNodes = cjs.parseMarkdownToStructure(source, cjs.getMarkdown('packed-smoke'), { final: true, streamParse: false })
+assert.deepEqual(esmNodes, cjsNodes)
+console.log('[parser-packed-smoke] ESM and CJS imports produced matching nodes.')
+`)
 
   writeTemporaryFile('no-dom-consumer.ts', `import type { BaseNode, ParseOptions } from 'stream-markdown-parser'\nimport { getMarkdown, parseMarkdownToStructure } from 'stream-markdown-parser'\n\nconst parserMetrics: NonNullable<ParseOptions['parserMetrics']> = {}\nconst options: ParseOptions = { final: true, streamParse: false, reuseStableTopLevelNodes: true, parserMetrics }\nconst nodes: BaseNode[] = parseMarkdownToStructure('# no DOM', getMarkdown('no-dom'), options)\nvoid nodes\n`)
   writeTemporaryFile('internal-surface-consumer.ts', `import type { ParseOptions } from 'stream-markdown-parser'\n// @ts-expect-error The parser-only options type was removed from the public package.\nimport type { InternalParseOptions as RemovedOptions } from 'stream-markdown-parser'\n// @ts-expect-error ParserRuntime is internal.\nimport type { ParserRuntime as LeakedRuntime } from 'stream-markdown-parser'\n// @ts-expect-error ParseContext is internal.\nimport type { ParseContext as LeakedContext } from 'stream-markdown-parser'\n\nconst parserMetrics: NonNullable<ParseOptions['parserMetrics']> = {}\nconst options: ParseOptions = { final: true, reuseStableTopLevelNodes: true, parserMetrics }\nvoid options\n`)
-  writeTemporaryFile('parse-inline-smoke.mjs', `import assert from 'node:assert/strict'
-
-const parser = await import('stream-markdown-parser')
-assert.equal(typeof parser.parseInlineTokens, 'function')
-const nodes = parser.parseInlineTokens([], undefined, undefined, { final: true })
-assert.deepEqual(nodes, [])
-`)
   writeTemporaryFile('parse-inline-consumer.ts', `import type { MarkdownToken, ParsedNode, ParseOptions } from 'stream-markdown-parser'
 import { parseInlineTokens } from 'stream-markdown-parser'
 
@@ -95,7 +110,6 @@ void nodes
 
   run('pnpm', ['install', '--ignore-workspace'], { cwd: temporaryDir })
   run(process.execPath, ['smoke.mjs'], { cwd: temporaryDir })
-  run(process.execPath, ['parse-inline-smoke.mjs'], { cwd: temporaryDir })
   run('pnpm', ['exec', 'tsc', '-p', join(temporaryDir, 'tsconfig.json')])
   console.log('[parser-packed-smoke] Packed ESM/CJS and no-DOM type smoke passed.')
 }
