@@ -174,6 +174,6 @@ describe('release dist-tag routing', () => {
   it('serializes stable release workflows', () => {
     const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-stable.yml'), 'utf8')
 
-    expect(workflow).toMatch(/concurrency:\n {2}group: release-stable\n {2}cancel-in-progress: false/)
+    expect(workflow).toMatch(/concurrency:\n {2}group: release-stable\n {2}queue: max\n {2}cancel-in-progress: false/)
   })
 })
