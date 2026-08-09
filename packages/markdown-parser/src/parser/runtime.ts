@@ -107,19 +107,22 @@ export class ParserRuntime {
   private semantics?: ParserRuntimeSemantics
   private finalized = false
   private resettingStream = false
+  private streamStateActive = false
+  private streamResetInCurrentRootParse = false
 
   constructor(markdownIt: MarkdownIt) {
     this.markdownIt = markdownIt
   }
 
   beginRootParse(source: string, semantics: ParserRuntimeSemantics) {
+    this.streamResetInCurrentRootParse = false
     const sourceChangedNonAppend = this.documentSource !== undefined
       && source !== this.documentSource
       && !source.startsWith(this.documentSource)
     const semanticsChanged = this.semantics !== undefined && !sameSemantics(this.semantics, semantics)
 
     if (this.finalized || sourceChangedNonAppend || semanticsChanged)
-      this.resetDocument(true)
+      this.resetDocument(this.streamStateActive)
 
     this.finalized = false
     this.documentSource = source
@@ -137,8 +140,13 @@ export class ParserRuntime {
   }
 
   resetForFinalAutoParse() {
-    this.resetStreamOnly()
+    if (!this.streamResetInCurrentRootParse)
+      this.resetStreamOnly()
     this.clearDocumentCaches()
+  }
+
+  markStreamParseStarted() {
+    this.streamStateActive = true
   }
 
   resetDocument(resetStream: boolean) {
@@ -159,6 +167,8 @@ export class ParserRuntime {
     this.resettingStream = true
     try {
       reset.call(stream)
+      this.streamStateActive = false
+      this.streamResetInCurrentRootParse = true
     }
     finally {
       this.resettingStream = false
@@ -170,6 +180,8 @@ export class ParserRuntime {
   }
 
   handleExternalStreamReset() {
+    this.streamStateActive = false
+    this.streamResetInCurrentRootParse = true
     this.clearDocumentCaches()
     this.documentSource = undefined
     this.semantics = undefined

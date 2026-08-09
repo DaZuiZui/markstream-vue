@@ -80,6 +80,44 @@ describe('parser runtime lifecycle characterization', () => {
     expect(next[0]).not.toBe(first[0])
   })
 
+  it('does not reset the stream for sync-only replacement parses', () => {
+    const md = getMarkdown('parser-runtime-sync-only-replacement')
+    const stream = md.stream!
+    const originalReset = stream.reset!
+    let resetCount = 0
+    stream.reset = function (...args: Parameters<NonNullable<typeof originalReset>>) {
+      resetCount++
+      return Reflect.apply(originalReset, this, args)
+    }
+
+    parseMarkdownToStructure('alpha\n\n', md, { final: false, streamParse: false })
+    parseMarkdownToStructure('omega\n\n', md, { final: false, streamParse: false })
+
+    expect(resetCount).toBe(0)
+  })
+
+  it('resets the stream once per consecutive final auto parse', () => {
+    const md = getMarkdown('parser-runtime-consecutive-final-auto')
+    const stream = md.stream!
+    const originalReset = stream.reset!
+    let resetCount = 0
+    stream.reset = function (...args: Parameters<NonNullable<typeof originalReset>>) {
+      resetCount++
+      return Reflect.apply(originalReset, this, args)
+    }
+
+    parseStreaming('streaming\n\n', md)
+    resetCount = 0
+
+    const resetDeltas = ['streaming\n\n', 'omega\n\n'].map((source) => {
+      const before = resetCount
+      parseMarkdownToStructure(source, md, { final: true })
+      return resetCount - before
+    })
+
+    expect(resetDeltas).toEqual([1, 1])
+  })
+
   it.each(['auto', true, false] as const)('ends a %s final document before parsing the next document', (streamParse) => {
     const md = getMarkdown(`parser-runtime-next-document-${streamParse}`)
     const firstSource = 'alpha\n\nbeta\n\n'

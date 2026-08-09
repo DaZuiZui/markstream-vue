@@ -159,6 +159,7 @@ export function parseTopLevelTokens(
     return md.parse(source, env)
   }
 
+  runtime.markStreamParseStarted()
   const tokens = md.stream!.parse!(source, getStableStreamEnv(runtime, env))
   if (shouldFallbackDuplicateTolerantMathStreamTokens(md, source, tokens)) {
     runtime.resetStreamOnly()
