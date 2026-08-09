@@ -161,16 +161,18 @@ export function normalizeLanguageIdentifier(lang?: string | null): string {
   return LANGUAGE_ALIAS_MAP[token] ?? token
 }
 
-export function resolveMonacoLanguageId(lang?: string | null): string {
+export function resolveLanguageId(lang?: string | null): string {
   const canonical = normalizeLanguageIdentifier(lang)
   if (!canonical)
     return 'plaintext'
   if (canonical === 'plain')
     return 'plaintext'
-  if (canonical === 'jsx')
-    return 'javascript'
-  if (canonical === 'tsx')
-    return 'typescript'
+  if (canonical === 'shell')
+    return 'zsh'
+  if (canonical === 'objectivec')
+    return 'objective-c'
+  if (canonical === 'objectivecpp')
+    return 'objective-cpp'
   return canonical
 }
 

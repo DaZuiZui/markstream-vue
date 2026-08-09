@@ -147,23 +147,34 @@ async function main() {
       undefined,
       { timeout: 60000 },
     )
-    await page.waitForTimeout(1500)
+    const expectedLanguages = ['Shell', 'JavaScript', 'JSON', 'Python', 'C++', 'Vue', 'JavaScript', 'JavaScript']
+    await page.waitForFunction(
+      expectedCount => document.querySelectorAll('[data-node-type="code_block"]').length >= expectedCount,
+      expectedLanguages.length,
+      { timeout: 15000 },
+    )
 
-    const result = await page.evaluate(() => {
-      const expectedLanguages = ['Shell', 'JavaScript', 'JSON', 'Python', 'C++', 'Vue', 'JavaScript', 'JavaScript']
-      const blocks = Array.from(document.querySelectorAll('[data-node-type="code_block"]')).slice(0, expectedLanguages.length)
-      return {
-        expectedCount: expectedLanguages.length,
-        blocks: blocks.map((slot, index) => ({
-          index: index + 1,
-          expectedLanguage: expectedLanguages[index],
-          language: slot.querySelector('.code-block-header')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
-          hasShell: Boolean(slot.querySelector('.code-block-container')),
-          hasMonaco: Boolean(slot.querySelector('.monaco-editor')),
-          hasBareFallback: Boolean(slot.querySelector(':scope > .node-content > pre')),
-        })),
-      }
-    })
+    const slots = page.locator('[data-node-type="code_block"]')
+    const blocks = []
+    for (const [index, expectedLanguage] of expectedLanguages.entries()) {
+      const slot = slots.nth(index)
+      await slot.scrollIntoViewIfNeeded()
+      await slot.locator('.code-editor-container[data-markstream-enhanced="true"] .stream-diffs-shell').waitFor({ state: 'visible', timeout: 15000 })
+      blocks.push(await slot.evaluate((element, { index, expectedLanguage }) => ({
+        index: index + 1,
+        expectedLanguage,
+        language: element.querySelector('.code-block-header')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        hasShell: Boolean(element.querySelector('.code-block-container')),
+        hasStreamDiffs: Boolean(element.querySelector('.stream-diffs-shell')),
+        enhanced: element.querySelector('.code-editor-container')?.getAttribute('data-markstream-enhanced') === 'true',
+        fallbackVisible: Array.from(element.querySelectorAll('.code-fallback-plain')).some((fallback) => {
+          const style = getComputedStyle(fallback)
+          const rect = fallback.getBoundingClientRect()
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
+        }),
+      }), { index, expectedLanguage }))
+    }
+    const result = { expectedCount: expectedLanguages.length, blocks }
 
     assert(
       result.blocks.length === result.expectedCount,
@@ -172,8 +183,9 @@ async function main() {
 
     const degradedBlocks = result.blocks.filter(block =>
       !block.hasShell
-      || !block.hasMonaco
-      || block.hasBareFallback
+      || !block.hasStreamDiffs
+      || !block.enhanced
+      || block.fallbackVisible
       || block.language !== block.expectedLanguage,
     )
     assert(

@@ -1,41 +1,43 @@
-import { preload } from '../NodeRenderer/preloadMonaco'
+import { preloadStreamDiffs } from '../NodeRenderer/preloadStreamDiffs'
 
 let mod: any = null
 let importAttempted = false
+let pendingImport: Promise<any | null> | null = null
 
-export async function getUseMonaco() {
+/**
+ * Resolve the stream-diffs runtime. markstream-react 2.0 no longer supports the
+ * heavy `stream-monaco` runtime — only the lightweight `stream-diffs` runtime is
+ * used to render diff/single code blocks.
+ */
+export async function getStreamDiffsRuntime() {
+  if (pendingImport)
+    return pendingImport
   if (mod)
     return mod
   if (importAttempted)
     return null
 
-  // Prefer `stream-diffs`: it is a smaller runtime without the heavy
-  // `monaco-editor` dependency. Consumers who still install `stream-monaco`
-  // keep working through the fallback below.
-  try {
-    const diffs = await import('stream-diffs')
-    if (diffs?.useMonaco) {
-      mod = diffs
-      await preload(mod)
-      return mod
+  pendingImport = (async () => {
+    try {
+      const diffs = await import('stream-diffs')
+      if (diffs?.useMonaco) {
+        await preloadStreamDiffs(diffs)
+        mod = diffs
+        return mod
+      }
     }
-  }
-  catch {
-    // stream-diffs is not installed; fall through to stream-monaco.
-  }
+    catch {
+      // stream-diffs is not installed; the component falls back to the <pre>.
+    }
+
+    importAttempted = true
+    return null
+  })()
 
   try {
-    const monaco = await import('stream-monaco')
-    if (monaco?.useMonaco) {
-      mod = monaco
-      await preload(mod)
-      return mod
-    }
+    return await pendingImport
   }
-  catch {
-    // stream-monaco is not installed either.
+  finally {
+    pendingImport = null
   }
-
-  importAttempted = true
-  return null
 }

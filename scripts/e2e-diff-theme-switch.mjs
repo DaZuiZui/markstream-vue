@@ -96,60 +96,49 @@ function colorLuminance(color) {
 
 async function snapshot(page) {
   return page.evaluate(() => {
-    function visibleTextElements(selector) {
-      return Array.from(document.querySelectorAll(selector))
-        .filter((node) => {
-          if (!(node instanceof HTMLElement))
-            return false
-          const text = node.textContent?.trim() ?? ''
-          if (!text)
-            return false
-          const style = window.getComputedStyle(node)
-          return style.display !== 'none'
-            && style.visibility !== 'hidden'
-            && Number.parseFloat(style.opacity || '1') > 0.05
-        })
-        .map(node => node.textContent.trim())
+    function isVisible(node) {
+      if (!(node instanceof HTMLElement))
+        return false
+      const style = window.getComputedStyle(node)
+      const rect = node.getBoundingClientRect()
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number.parseFloat(style.opacity || '1') > 0.05
+        && rect.width > 0
+        && rect.height > 0
     }
 
     const container = document.querySelector('.code-block-container')
     const header = document.querySelector('.code-block-header')
     const preview = document.querySelector('[data-testid="diff-theme-preview"]')
-    const diffRoot = document.querySelector('.stream-monaco-diff-root')
-    const editorBackground = diffRoot?.querySelector('.monaco-editor .monaco-editor-background')
+    const shell = container?.querySelector('.stream-diffs-shell')
+    const diffs = container?.querySelector('diffs-container')
+    const surfaceRoot = diffs?.shadowRoot
+    const surface = surfaceRoot?.querySelector('pre[data-diff]')
+    const fallback = container?.querySelector('.code-pre-fallback')
+    const token = surfaceRoot?.querySelector('[data-content] [data-line] > span[style*="--diffs-token-"]')
 
     const containerStyle = container instanceof HTMLElement ? window.getComputedStyle(container) : null
     const headerStyle = header instanceof HTMLElement ? window.getComputedStyle(header) : null
     const previewStyle = preview instanceof HTMLElement ? window.getComputedStyle(preview) : null
-    const editorStyle = editorBackground instanceof HTMLElement ? window.getComputedStyle(editorBackground) : null
-
-    const visibleNativeCompactTexts = visibleTextElements('.diff-hidden-lines-compact .text')
-    const visibleNativeCenterTexts = Array.from(document.querySelectorAll('.diff-hidden-lines .center'))
-      .filter((node) => {
-        if (!(node instanceof HTMLElement))
-          return false
-        if (node.classList.contains('stream-monaco-clickable'))
-          return false
-        const style = window.getComputedStyle(node)
-        return style.display !== 'none'
-          && style.visibility !== 'hidden'
-          && Number.parseFloat(style.opacity || '1') > 0.05
-      })
-      .map(node => (node instanceof HTMLElement ? node.textContent.trim() : ''))
-      .filter(Boolean)
+    const surfaceStyle = surface instanceof HTMLElement ? window.getComputedStyle(surface) : null
+    const tokenStyle = token instanceof HTMLElement ? window.getComputedStyle(token) : null
+    const fallbackVisible = isVisible(fallback)
+    const shellRect = shell?.getBoundingClientRect()
 
     return {
-      pageMode: document.documentElement.dataset.themeMode || '',
       containerBg: containerStyle?.backgroundColor || '',
       headerBg: headerStyle?.backgroundColor || '',
       previewBg: previewStyle?.backgroundColor || '',
-      editorBg: editorStyle?.backgroundColor || '',
-      rootClasses: diffRoot instanceof HTMLElement ? Array.from(diffRoot.classList) : [],
+      surfaceBg: surfaceStyle?.backgroundColor || '',
+      tokenColor: tokenStyle?.color || '',
+      diffType: surface?.getAttribute('data-diff-type') || '',
+      surfaceMounted: Boolean(shellRect && shellRect.width > 0 && shellRect.height > 0 && surface),
+      fallbackVisible,
       isDarkClass: container instanceof HTMLElement ? container.classList.contains('is-dark') : false,
-      metadataLabels: Array.from(document.querySelectorAll('.stream-monaco-unchanged-metadata-label')).map(node => node.textContent?.trim() || ''),
-      visibleNativeCompactTexts,
-      visibleNativeCenterTexts,
-      visibleHiddenLinesInBody: /hidden lines/i.test(document.body.textContent || ''),
+      unmodifiedLabels: Array.from(surfaceRoot?.querySelectorAll('[data-unmodified-lines]') ?? [])
+        .filter(isVisible)
+        .map(node => node.textContent?.trim() || ''),
     }
   })
 }
@@ -208,9 +197,10 @@ async function main() {
     await page.goto(`http://${host}:${port}/diff-theme-regression`, {
       waitUntil: 'networkidle',
     })
-    await page.waitForSelector('.monaco-diff-editor', { timeout: 30000 })
+    await page.waitForSelector('.code-block-container[data-markstream-enhanced="true"] .stream-diffs-shell', { timeout: 30000 })
     await page.waitForFunction(() => {
-      return Array.from(document.querySelectorAll('.stream-monaco-unchanged-metadata-label'))
+      const root = document.querySelector('diffs-container')?.shadowRoot
+      return Array.from(root?.querySelectorAll('[data-unmodified-lines]') ?? [])
         .some((node) => {
           if (!(node instanceof HTMLElement))
             return false
@@ -236,10 +226,10 @@ async function main() {
     const darkLum = colorLuminance(toDark.final.containerBg)
 
     const frames = [...toLight.frames, ...toDark.frames]
-    const anyHiddenFlash = frames.some(frame =>
-      frame.visibleHiddenLinesInBody
-      || frame.visibleNativeCompactTexts.length > 0
-      || frame.visibleNativeCenterTexts.some(text => /hidden lines/i.test(text)),
+    const surfaceGapSeen = frames.some(frame =>
+      !frame.surfaceMounted
+      || frame.fallbackVisible
+      || frame.unmodifiedLabels.length === 0,
     )
 
     const ok = (initialLum != null && initialLum < 90)
@@ -247,9 +237,14 @@ async function main() {
       && (darkLum != null && darkLum < 90)
       && initial.containerBg !== toLight.final.containerBg
       && toLight.final.containerBg !== toDark.final.containerBg
-      && toLight.final.rootClasses.includes('stream-monaco-diff-appearance-light')
-      && toDark.final.rootClasses.includes('stream-monaco-diff-appearance-dark')
-      && !anyHiddenFlash
+      && initial.surfaceBg !== toLight.final.surfaceBg
+      && toLight.final.surfaceBg !== toDark.final.surfaceBg
+      && initial.tokenColor !== toLight.final.tokenColor
+      && initial.isDarkClass
+      && !toLight.final.isDarkClass
+      && toDark.final.isDarkClass
+      && initial.diffType === 'split'
+      && !surfaceGapSeen
       && pageErrors.length === 0
       && consoleErrors.length === 0
 
@@ -268,7 +263,7 @@ async function main() {
       initial,
       finalLight: toLight.final,
       finalDark: toDark.final,
-      anyHiddenFlash,
+      surfaceGapSeen,
       pageErrors,
       consoleErrors,
     }

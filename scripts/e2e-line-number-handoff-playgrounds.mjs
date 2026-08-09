@@ -302,7 +302,7 @@ async function installDocumentStartSampler(page) {
       const block = section?.querySelector('.code-block-container')
       if (!block)
         return null
-      const editor = queryDeep(block, '.monaco-editor, .monaco-diff-editor, diffs-container, .stream-diffs-shell, [data-stream-diffs-state], .code-block-render .shiki')
+      const editor = queryDeep(block, 'diffs-container, .stream-diffs-shell, [data-stream-diffs-state], .code-block-render .shiki')
       const header = block.querySelector('.code-block-header')
       const headerActionSvgs = header ? Array.from(header.querySelectorAll('.code-header-actions svg, .code-block-header__actions svg')) : []
       if (header) {
@@ -425,7 +425,7 @@ async function collectResult(page, framework, url) {
       }
       return null
     }
-    const editor = queryDeep(document.querySelector('[data-handoff-case="enhanced"]'), '.monaco-editor, .monaco-diff-editor, diffs-container, .stream-diffs-shell, [data-stream-diffs-state], .code-block-render .shiki')
+    const editor = queryDeep(document.querySelector('[data-handoff-case="enhanced"]'), 'diffs-container, .stream-diffs-shell, [data-stream-diffs-state], .code-block-render .shiki')
     if (!editor)
       return false
     const rect = editor.getBoundingClientRect()
@@ -520,7 +520,7 @@ async function collectResult(page, framework, url) {
     const gutterBox = preElement?.querySelector('.markstream-pre__line-numbers')
     const preStyle = preElement ? getComputedStyle(preElement) : null
     const gutterStyle = gutterBox ? getComputedStyle(gutterBox) : null
-    const editor = queryDeep(enhancedBlock, '.monaco-editor, .monaco-diff-editor, diffs-container, .stream-diffs-shell, [data-stream-diffs-state], .code-block-render .shiki')
+    const editor = queryDeep(enhancedBlock, 'diffs-container, .stream-diffs-shell, [data-stream-diffs-state], .code-block-render .shiki')
     const editorNumberElements = queryAllDeep(editor, '.line-numbers, [data-line-number-content], [data-line-number]')
     const editorFileHeaders = queryAllDeep(editor, '[data-diffs-header], [data-file-header], .stream-diffs-file-header')
       .filter(visible)

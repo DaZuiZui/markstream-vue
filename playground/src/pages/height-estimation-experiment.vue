@@ -2,7 +2,6 @@
 import type { ParsedNode } from 'stream-markdown-parser'
 import { getMarkdown, parseMarkdownToStructure } from 'stream-markdown-parser'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import MarkdownCodeBlockNode from '../../../src/components/MarkdownCodeBlockNode'
 import MarkdownRender from '../../../src/components/NodeRenderer'
 import {
   buildBlockTextProfile,
@@ -14,10 +13,9 @@ import {
   resetHeightEstimationExperimentCaches,
   setHeightEstimationExperiment,
 } from '../../../src/internal/heightEstimationExperiment'
-import { removeCustomComponents, setCustomComponents } from '../../../src/utils/nodeComponents'
+import { removeCustomComponents } from '../../../src/utils/nodeComponents'
 
 type SourceMode = 'nodes' | 'content'
-type CodeRendererMode = 'monaco' | 'markdown'
 
 interface TrialSnapshot {
   baseline: number | null
@@ -44,8 +42,22 @@ const baselineId = 'height-estimation-baseline'
 const experimentId = 'height-estimation-experiment'
 const referenceId = 'height-estimation-reference'
 
+setHeightEstimationExperiment(experimentId, {
+  enabled: true,
+  textEstimation: true,
+  codeBlockEstimation: true,
+  restore: true,
+  diagnostics: true,
+})
+setHeightEstimationExperiment(referenceId, {
+  enabled: true,
+  textEstimation: false,
+  codeBlockEstimation: false,
+  restore: true,
+  diagnostics: true,
+})
+
 const sourceMode = ref<SourceMode>('nodes')
-const codeRendererMode = ref<CodeRendererMode>('markdown')
 const paneWidthPx = ref(520)
 const loadingPhase = ref(false)
 const isDark = ref(false)
@@ -58,17 +70,6 @@ const experimentPaneRef = ref<HTMLElement | null>(null)
 const referencePaneRef = ref<HTMLElement | null>(null)
 
 const md = getMarkdown('height-estimation-experiment')
-const codeBlockMonacoOptions = {
-  fontSize: 13,
-  lineHeight: 30,
-  renderSideBySide: true,
-  useInlineViewWhenSpaceIsLimited: false,
-  maxComputationTime: 0,
-  ignoreTrimWhitespace: false,
-  renderIndicators: true,
-  diffAlgorithm: 'legacy',
-  MAX_HEIGHT: 500,
-} as const
 
 function buildLargeTranscriptMarkdown() {
   const blocks: string[] = [
@@ -151,7 +152,6 @@ const rendererCommonProps = computed(() => ({
   final: true,
   isDark: isDark.value,
   codeBlockStream: false,
-  codeBlockMonacoOptions,
   viewportPriority: false,
   maxLiveNodes: 280,
   liveNodeBuffer: 48,
@@ -161,22 +161,10 @@ const referenceRendererProps = computed(() => ({
   final: true,
   isDark: isDark.value,
   codeBlockStream: false,
-  codeBlockMonacoOptions,
   viewportPriority: false,
   maxLiveNodes: 0,
   batchRendering: false,
 }))
-
-function applyRendererMode() {
-  const ids = [baselineId, experimentId, referenceId]
-  if (codeRendererMode.value === 'markdown') {
-    for (const id of ids)
-      setCustomComponents(id, { code_block: MarkdownCodeBlockNode })
-    return
-  }
-  for (const id of ids)
-    removeCustomComponents(id)
-}
 
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -328,8 +316,7 @@ async function runEstimatorBenchmark(options?: {
         continue
 
       const estimatedCode = estimateCodeBlockHeight(node, {
-        rendererKind: codeRendererMode.value,
-        monacoOptions: codeBlockMonacoOptions,
+        rendererKind: 'stream-diffs',
         showHeader: true,
       })
       if (!estimatedCode)
@@ -463,7 +450,22 @@ async function waitUntilReady(timeoutMs = 45000) {
   while (Date.now() - startedAt < timeoutMs) {
     const current = await refreshReports()
     const referenceCodeBlocks = current.reference?.nodes.filter(node => node.type === 'code_block') ?? []
-    const referenceCodeBlocksReady = referenceCodeBlocks.every(node => typeof node.measuredHeight === 'number' && node.measuredHeight > 0)
+    const referenceCodeBlocksReady = referenceCodeBlocks.length > 0 && referenceCodeBlocks.every((node) => {
+      const slot = referencePaneRef.value?.querySelector(`[data-node-index="${node.index}"]`) as HTMLElement | null
+      const measuredHeight = node.measuredHeight
+      if (!slot || typeof measuredHeight !== 'number' || measuredHeight <= 0)
+        return false
+      if (Math.abs(measuredHeight - slot.offsetHeight) > 1)
+        return false
+      if (loadingPhase.value)
+        return true
+
+      const block = slot.querySelector('.code-block-container') as HTMLElement | null
+      const surface = block?.querySelector('.stream-diffs-shell') as HTMLElement | null
+      const surfaceRect = surface?.getBoundingClientRect()
+      return block?.dataset.markstreamEnhancementState === 'ready'
+        && Boolean(surfaceRect && surfaceRect.width > 0 && surfaceRect.height > 0)
+    })
     const widthsAligned = current.baseline
       && current.experiment
       && current.reference
@@ -617,15 +619,6 @@ async function runResizeTrial(widths = [375, 768, 1280]) {
 }
 
 watch(
-  codeRendererMode,
-  async () => {
-    applyRendererMode()
-    await refreshReports()
-  },
-  { immediate: true },
-)
-
-watch(
   [sourceMode, loadingPhase, paneWidthPx, isDark],
   async () => {
     await refreshReports()
@@ -642,14 +635,6 @@ watch(
 )
 
 onMounted(() => {
-  setHeightEstimationExperiment(experimentId, {
-    enabled: true,
-    textEstimation: true,
-    codeBlockEstimation: true,
-    restore: true,
-    diagnostics: true,
-  })
-
   const api = {
     waitUntilReady,
     refreshReports,
@@ -659,10 +644,6 @@ onMounted(() => {
     runEstimatorBenchmark,
     setSourceMode: async (mode: SourceMode) => {
       sourceMode.value = mode
-      await refreshReports()
-    },
-    setCodeRendererMode: async (mode: CodeRendererMode) => {
-      codeRendererMode.value = mode
       await refreshReports()
     },
     setPaneWidth: async (width: number) => {
@@ -684,6 +665,7 @@ onBeforeUnmount(() => {
   if ((window as any).__heightEstimationExperiment)
     delete (window as any).__heightEstimationExperiment
   clearHeightEstimationExperiment(experimentId)
+  clearHeightEstimationExperiment(referenceId)
   for (const id of [baselineId, experimentId, referenceId])
     removeCustomComponents(id)
 })
@@ -707,13 +689,6 @@ onBeforeUnmount(() => {
           <select v-model="sourceMode">
             <option value="nodes">nodes + final</option>
             <option value="content">content</option>
-          </select>
-        </label>
-        <label>
-          <span>Code Renderer</span>
-          <select v-model="codeRendererMode">
-            <option value="markdown">MarkdownCodeBlockNode</option>
-            <option value="monaco">CodeBlockNode</option>
           </select>
         </label>
         <label>
@@ -787,14 +762,14 @@ onBeforeUnmount(() => {
         <div ref="baselinePaneRef" class="renderer-pane" :style="{ width: `${paneWidthPx}px` }" data-testid="baseline-pane">
           <MarkdownRender
             v-if="sourceMode === 'nodes'"
-            :key="`baseline-nodes-${codeRendererMode}-${loadingPhase}-${paneWidthPx}-${isDark}`"
+            :key="`baseline-nodes-stream-diffs-${loadingPhase}-${paneWidthPx}-${isDark}`"
             :custom-id="baselineId"
             :nodes="renderNodes"
             v-bind="rendererCommonProps"
           />
           <MarkdownRender
             v-else
-            :key="`baseline-content-${codeRendererMode}-${paneWidthPx}-${isDark}`"
+            :key="`baseline-content-stream-diffs-${paneWidthPx}-${isDark}`"
             :custom-id="baselineId"
             :content="transcriptMarkdown"
             v-bind="rendererCommonProps"
@@ -807,14 +782,14 @@ onBeforeUnmount(() => {
         <div ref="experimentPaneRef" class="renderer-pane" :style="{ width: `${paneWidthPx}px` }" data-testid="experiment-pane">
           <MarkdownRender
             v-if="sourceMode === 'nodes'"
-            :key="`experiment-nodes-${codeRendererMode}-${loadingPhase}-${paneWidthPx}-${isDark}`"
+            :key="`experiment-nodes-stream-diffs-${loadingPhase}-${paneWidthPx}-${isDark}`"
             :custom-id="experimentId"
             :nodes="renderNodes"
             v-bind="rendererCommonProps"
           />
           <MarkdownRender
             v-else
-            :key="`experiment-content-${codeRendererMode}-${paneWidthPx}-${isDark}`"
+            :key="`experiment-content-stream-diffs-${paneWidthPx}-${isDark}`"
             :custom-id="experimentId"
             :content="transcriptMarkdown"
             v-bind="rendererCommonProps"
@@ -827,14 +802,14 @@ onBeforeUnmount(() => {
       <div ref="referencePaneRef" class="renderer-pane reference-pane" :style="{ width: `${paneWidthPx}px` }">
         <MarkdownRender
           v-if="sourceMode === 'nodes'"
-          :key="`reference-nodes-${codeRendererMode}-${loadingPhase}-${paneWidthPx}-${isDark}`"
+          :key="`reference-nodes-stream-diffs-${loadingPhase}-${paneWidthPx}-${isDark}`"
           :custom-id="referenceId"
           :nodes="renderNodes"
           v-bind="referenceRendererProps"
         />
         <MarkdownRender
           v-else
-          :key="`reference-content-${codeRendererMode}-${paneWidthPx}-${isDark}`"
+          :key="`reference-content-stream-diffs-${paneWidthPx}-${isDark}`"
           :custom-id="referenceId"
           :content="transcriptMarkdown"
           v-bind="referenceRendererProps"
