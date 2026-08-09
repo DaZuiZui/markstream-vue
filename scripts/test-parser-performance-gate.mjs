@@ -36,6 +36,10 @@ const actualHeapBaseDir = path.join(outputDir, 'actual-heap-base')
 const actualHeapRegressionDir = path.join(outputDir, 'actual-heap-regression')
 const timingMetrics = ['streamTotalMs', 'commitMedianMs', 'commitP95Ms', 'commitMaxMs', 'finalFlushMs']
 const countMetrics = ['processedTokenCount', 'reusedNodeCount', 'outputNodeVisits', 'finalNodeCount']
+const packageJson = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'))
+
+assert.match(packageJson.scripts['benchmark:parser-perf'], /^pnpm run build:parser && /)
+assert.match(packageJson.scripts['benchmark:real-corpus'], /^pnpm run build:parser && pnpm run build:core && /)
 
 function run(script, args, env = process.env, nodeArgs = []) {
   return spawnSync(process.execPath, [...nodeArgs, script, ...args], {
