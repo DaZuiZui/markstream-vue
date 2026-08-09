@@ -1,7 +1,7 @@
 import type { MarkdownIt, Token } from '../markdown-it-types'
 import type { HtmlBlockNode, InternalParseOptions, MarkdownToken, ParsedNode, ParseOptions } from '../types'
 import { normalizeCustomHtmlTags } from '../customHtmlTags'
-import { NON_STRUCTURING_HTML_TAGS, STANDARD_BLOCK_HTML_TAGS, STANDARD_HTML_TAGS, VOID_HTML_TAGS } from '../htmlTags'
+import { NON_STRUCTURING_HTML_TAGS, STANDARD_BLOCK_HTML_TAGS, VOID_HTML_TAGS } from '../htmlTags'
 import { escapeTagForRegExp, findTagCloseIndexOutsideQuotes, parseTagAttrs } from '../htmlTagUtils'
 import { isMathLike } from '../plugins/isMathLike'
 import { isCacheStableLinkValidator, readSyntheticLinkOrigin } from '../plugins/linkTokenMetadata'
@@ -12,6 +12,16 @@ import {
 } from '../plugins/math'
 import { parseInlineTokens } from './inline-parsers'
 import { createLinkifyDemotionContextTracker } from './linkifyHeuristics'
+import {
+  consumeMarkdownIndent,
+  countRepeatedChar,
+  findCodeSpanCloseIndex,
+  getMarkdownIndent,
+  isEscapedDelimiterAt,
+  matchMarkdownFenceMarker,
+  stripMarkdownBlockquotePrefix,
+  stripMarkdownListPrefix,
+} from './markdown-context'
 import { parseCommonBlockToken } from './node-parsers/block-token-parser'
 import { parseBlockquote } from './node-parsers/blockquote-parser'
 import { containerTokenHandlers } from './node-parsers/container-token-handlers'
@@ -20,7 +30,8 @@ import { parseHtmlBlock } from './node-parsers/html-block-parser'
 import { parseList } from './node-parsers/list-parser'
 import { parseParagraph } from './node-parsers/paragraph-parser'
 import { applyNodeSourceMap, createSourceMapFromOffsets } from './node-source-map'
-import { cloneTokenWithMutableChildren } from './token-copy'
+import { createSourceLineMapper } from './source-line-mapper'
+import { cloneMarkdownTokens } from './token-clone'
 
 type ParsedNodeWithFields = ParsedNode & {
   children?: ParsedNode[]
@@ -572,176 +583,6 @@ function getStableStreamEnv(md: MarkdownIt, env: Record<string, unknown>) {
   return stableEnv
 }
 
-function isPlainObject(value: unknown) {
-  if (!value || typeof value !== 'object')
-    return false
-
-  const proto = Object.getPrototypeOf(value)
-  return proto === Object.prototype || proto === null
-}
-
-function copyCloneableOwnDataProperties(source: object, target: Record<PropertyKey, unknown>, seen: WeakMap<object, unknown>) {
-  for (const key of Reflect.ownKeys(source)) {
-    const descriptor = Object.getOwnPropertyDescriptor(source, key)
-    if (!descriptor || !('value' in descriptor))
-      continue
-
-    const targetDescriptor = Object.getOwnPropertyDescriptor(target, key)
-    if (targetDescriptor && (!('value' in targetDescriptor) || targetDescriptor.writable === false))
-      continue
-
-    target[key] = safeCloneTokenField(descriptor.value, seen)
-  }
-}
-
-function safeCloneTokenField<T>(value: T, seen = new WeakMap<object, unknown>()): T {
-  if (!value || typeof value !== 'object')
-    return value
-
-  const object = value as object
-  const existing = seen.get(object)
-  if (existing)
-    return existing as T
-
-  if (Array.isArray(value)) {
-    const cloned: unknown[] = []
-    seen.set(object, cloned)
-    for (const item of value)
-      cloned.push(safeCloneTokenField(item, seen))
-    return cloned as T
-  }
-
-  if (value instanceof Map) {
-    const cloned = new Map()
-    seen.set(object, cloned)
-    for (const [key, item] of value)
-      cloned.set(safeCloneTokenField(key, seen), safeCloneTokenField(item, seen))
-    return cloned as T
-  }
-
-  if (value instanceof Set) {
-    const cloned = new Set()
-    seen.set(object, cloned)
-    for (const item of value)
-      cloned.add(safeCloneTokenField(item, seen))
-    return cloned as T
-  }
-
-  if (value instanceof Date) {
-    const cloned = new Date(value.getTime())
-    seen.set(object, cloned)
-    return cloned as T
-  }
-
-  if (value instanceof RegExp) {
-    const cloned = new RegExp(value.source, value.flags)
-    cloned.lastIndex = value.lastIndex
-    seen.set(object, cloned)
-    return cloned as T
-  }
-
-  if (typeof URL !== 'undefined' && value instanceof URL) {
-    const cloned = new URL(value.href)
-    seen.set(object, cloned)
-    copyCloneableOwnDataProperties(object, cloned as unknown as Record<PropertyKey, unknown>, seen)
-    return cloned as T
-  }
-
-  if (typeof URLSearchParams !== 'undefined' && value instanceof URLSearchParams) {
-    const cloned = new URLSearchParams(value.toString())
-    seen.set(object, cloned)
-    copyCloneableOwnDataProperties(object, cloned as unknown as Record<PropertyKey, unknown>, seen)
-    return cloned as T
-  }
-
-  if (value instanceof Error) {
-    let cloned: Error
-    const ErrorCtor = value.constructor as new (message?: string) => Error
-    try {
-      cloned = new ErrorCtor(value.message)
-    }
-    catch {
-      cloned = new Error(value.message)
-    }
-    Object.setPrototypeOf(cloned, Object.getPrototypeOf(value))
-    seen.set(object, cloned)
-    copyCloneableOwnDataProperties(object, cloned as unknown as Record<PropertyKey, unknown>, seen)
-    return cloned as T
-  }
-
-  if (typeof Promise !== 'undefined' && value instanceof Promise) {
-    seen.set(object, value)
-    return value
-  }
-
-  if (typeof Node !== 'undefined' && value instanceof Node) {
-    seen.set(object, value)
-    return value
-  }
-
-  if (!isPlainObject(value)) {
-    const cloned = Object.create(Object.getPrototypeOf(value)) as Record<PropertyKey, unknown>
-    seen.set(object, cloned)
-    copyCloneableOwnDataProperties(object, cloned, seen)
-    return cloned as T
-  }
-
-  const cloned: Record<string, unknown> = {}
-  seen.set(object, cloned)
-
-  const record = value as Record<string, unknown>
-  for (const key of Object.keys(record))
-    cloned[key] = safeCloneTokenField(record[key], seen)
-
-  return cloned as T
-}
-
-function cloneMarkdownToken(token: Token, cloneObjectFields = true): Token {
-  if (!cloneObjectFields)
-    return cloneTokenWithMutableChildren(token as unknown as MarkdownToken) as unknown as Token
-
-  const cloned = Object.create(Object.getPrototypeOf(token)) as Token
-  const seen = new WeakMap<object, unknown>()
-
-  for (const key of Reflect.ownKeys(token as unknown as object)) {
-    const descriptor = Object.getOwnPropertyDescriptor(token, key)
-    if (!descriptor)
-      continue
-
-    if (!('value' in descriptor)) {
-      Object.defineProperty(cloned, key, descriptor)
-      continue
-    }
-
-    const value = descriptor.value
-    let clonedValue = value
-
-    if (key === 'attrs' && Array.isArray(value)) {
-      clonedValue = value.map(attr => [...attr] as [string, string])
-    }
-    else if (key === 'map' && Array.isArray(value)) {
-      clonedValue = [...value] as [number, number]
-    }
-    else if (key === 'children' && Array.isArray(value)) {
-      clonedValue = value.map(child => cloneMarkdownToken(child, cloneObjectFields))
-    }
-    else if (cloneObjectFields && value && typeof value === 'object') {
-      clonedValue = safeCloneTokenField(value, seen)
-    }
-
-    Object.defineProperty(cloned, key, {
-      ...descriptor,
-      value: clonedValue,
-    })
-  }
-
-  return cloned
-}
-
-function cloneMarkdownTokens(tokens: Token[], cloneObjectFields = true) {
-  return tokens.map(token => cloneMarkdownToken(token, cloneObjectFields))
-}
-
 function shouldUseTopLevelStreamParse(md: MarkdownIt, options: ParseOptions) {
   const internalOptions = options as InternalParseOptions
   const stream = md.stream
@@ -835,133 +676,6 @@ function appendedChunkMayAffectTolerantMathBoundary(previousSource: string, appe
     return true
 
   return false
-}
-
-function isEscapedDelimiterAt(source: string, index: number) {
-  let cursor = index - 1
-  let backslashes = 0
-  while (cursor >= 0 && source[cursor] === '\\') {
-    backslashes++
-    cursor--
-  }
-  return backslashes % 2 === 1
-}
-
-function isIndentWhitespace(ch: string) {
-  return ch === ' ' || ch === '\t'
-}
-
-function advanceMarkdownIndentColumn(column: number, ch: string) {
-  return ch === ' ' ? column + 1 : column + 4 - (column % 4)
-}
-
-function getMarkdownIndent(line: string) {
-  let index = 0
-  let column = 0
-
-  while (index < line.length && isIndentWhitespace(line[index])) {
-    column = advanceMarkdownIndentColumn(column, line[index])
-    index++
-  }
-
-  return { index, column }
-}
-
-function consumeMarkdownIndent(line: string) {
-  const indent = getMarkdownIndent(line)
-  return indent.column > 3 ? null : indent
-}
-
-function parseMarkdownFenceMarker(line: string) {
-  const indent = consumeMarkdownIndent(line)
-  if (!indent)
-    return null
-
-  const index = indent.index
-  const markerChar = line[index]
-  if (markerChar !== '`' && markerChar !== '~')
-    return null
-
-  let markerEnd = index
-  while (markerEnd < line.length && line[markerEnd] === markerChar)
-    markerEnd++
-
-  const markerLen = markerEnd - index
-  if (markerLen < 3)
-    return null
-
-  const rest = line.slice(markerEnd)
-  if (markerChar === '`' && rest.includes('`'))
-    return null
-
-  return { markerChar: markerChar as '`' | '~', markerLen, rest }
-}
-
-function stripMarkdownListPrefix(line: string) {
-  const indent = consumeMarkdownIndent(line)
-  if (!indent)
-    return null
-
-  const rest = line.slice(indent.index)
-  const marker = /^(?:[-+*]|\d{1,9}[.)])(?=[\t ]|$)/.exec(rest)?.[0]
-  if (!marker)
-    return null
-
-  let index = indent.index + marker.length
-  let column = indent.column + marker.length
-  if (!isIndentWhitespace(line[index]))
-    return null
-
-  while (index < line.length && isIndentWhitespace(line[index])) {
-    column = advanceMarkdownIndentColumn(column, line[index])
-    index++
-  }
-
-  return {
-    content: line.slice(index),
-    contentIndent: column,
-  }
-}
-
-function stripMarkdownBlockquotePrefix(line: string) {
-  let rest = line
-  let saw = false
-
-  while (true) {
-    const indent = consumeMarkdownIndent(rest)
-    if (!indent)
-      return saw ? rest : null
-
-    let index = indent.index
-    if (rest[index] !== '>')
-      return saw ? rest : null
-
-    saw = true
-    index++
-    if (rest[index] === ' ' || rest[index] === '\t')
-      index++
-    rest = rest.slice(index)
-  }
-}
-
-function matchMarkdownFenceMarker(line: string) {
-  const direct = parseMarkdownFenceMarker(line)
-  if (direct)
-    return { ...direct, inBlockquote: false, inList: false, listIndent: 0 }
-
-  const quoted = stripMarkdownBlockquotePrefix(line)
-  const quotedMarker = quoted == null ? null : parseMarkdownFenceMarker(quoted)
-  if (quotedMarker)
-    return { ...quotedMarker, inBlockquote: true, inList: false, listIndent: 0 }
-
-  const listed = stripMarkdownListPrefix(line)
-  if (!listed)
-    return null
-
-  const listedMarker = parseMarkdownFenceMarker(listed.content)
-  return listedMarker == null
-    ? null
-    : { ...listedMarker, inBlockquote: false, inList: true, listIndent: listed.contentIndent }
 }
 
 function isInsideOpenMarkdownFenceBeforeOffset(markdown: string, offset: number) {
@@ -1329,31 +1043,6 @@ function getStreamingAdmonitionOpenTailReplacement(markdown: string, customHtmlT
     return null
 
   return `${markdown.slice(0, match.index)}${separator}`
-}
-
-function countRepeatedChar(source: string, index: number, ch: string) {
-  let end = index
-  while (end < source.length && source[end] === ch)
-    end++
-  return end - index
-}
-
-function findCodeSpanCloseIndex(line: string, start: number, markerLen: number) {
-  let index = start
-
-  while (index < line.length) {
-    const next = line.indexOf('`', index)
-    if (next === -1)
-      return -1
-
-    const runLen = countRepeatedChar(line, next, '`')
-    if (runLen === markerLen)
-      return next
-
-    index = next + runLen
-  }
-
-  return -1
 }
 
 function resetExplicitBracketFenceContext(context: ExplicitBracketMathContext) {
@@ -1839,18 +1528,6 @@ function parseTopLevelTokens(
   const cloned = cloneMarkdownTokens(tokens, true)
   addTiming(timing, 'tokenCloneMs', getParserNow() - startedAt)
   return cloned
-}
-
-export function buildAllowedHtmlTagSet(options?: ParseOptions) {
-  const custom = options?.customHtmlTags
-  if (!Array.isArray(custom) || custom.length === 0)
-    return STANDARD_HTML_TAGS
-  const set = new Set<string>(STANDARD_HTML_TAGS)
-  for (const name of normalizeCustomHtmlTags(custom)) {
-    if (name)
-      set.add(name)
-  }
-  return set
 }
 
 function stringifyInlineNodeRaw(node: ParsedNode) {
@@ -2899,128 +2576,6 @@ function stripDanglingHtmlLikeTail(markdown: string) {
   if (!isLikelyHtmlTagPrefix(tail))
     return s
   return s.slice(0, lastLt)
-}
-
-function createSourceLineMapper(source: string, parsedSource: string) {
-  if (source === parsedSource)
-    return undefined
-
-  const sourceLines = source.split(/\r?\n/)
-  const parsedLines = parsedSource.split(/\r?\n/)
-  const mappedLines: Array<{ startLine: number, endLine: number }> = []
-  let sourceCursor = 0
-
-  for (let parsedLine = 0; parsedLine < parsedLines.length; parsedLine++) {
-    const line = parsedLines[parsedLine] ?? ''
-
-    if (sourceLines[sourceCursor] === line) {
-      mappedLines[parsedLine] = {
-        startLine: sourceCursor,
-        endLine: sourceCursor + 1,
-      }
-      sourceCursor++
-      continue
-    }
-
-    const sourceLine = sourceLines[sourceCursor] ?? ''
-    if (line !== '' && sourceLine !== line && sourceLine.startsWith(line)) {
-      let joinedLine = line
-      let splitEnd = -1
-      for (let nextParsedLine = parsedLine + 1; nextParsedLine < parsedLines.length; nextParsedLine++) {
-        joinedLine += parsedLines[nextParsedLine] ?? ''
-        if (joinedLine === sourceLine) {
-          splitEnd = nextParsedLine
-          break
-        }
-        if (!sourceLine.startsWith(joinedLine))
-          break
-      }
-
-      if (splitEnd !== -1) {
-        for (let mappedLine = parsedLine; mappedLine <= splitEnd; mappedLine++) {
-          mappedLines[mappedLine] = {
-            startLine: sourceCursor,
-            endLine: sourceCursor + 1,
-          }
-        }
-        sourceCursor++
-        parsedLine = splitEnd
-        continue
-      }
-
-      mappedLines[parsedLine] = {
-        startLine: sourceCursor,
-        endLine: sourceCursor + 1,
-      }
-      continue
-    }
-
-    let collapsedLine = sourceLines[sourceCursor] ?? ''
-    let collapsedEnd = -1
-    for (let sourceLine = sourceCursor + 1; sourceLine < sourceLines.length; sourceLine++) {
-      collapsedLine += `\\n${sourceLines[sourceLine] ?? ''}`
-      if (collapsedLine === line) {
-        collapsedEnd = sourceLine + 1
-        break
-      }
-      if (!line.startsWith(collapsedLine))
-        break
-    }
-
-    if (collapsedEnd !== -1) {
-      mappedLines[parsedLine] = {
-        startLine: sourceCursor,
-        endLine: collapsedEnd,
-      }
-      sourceCursor = collapsedEnd
-      continue
-    }
-
-    let found = -1
-    if (line !== '') {
-      const searchEnd = Math.min(sourceLines.length, sourceCursor + 80)
-      for (let sourceLine = sourceCursor; sourceLine < searchEnd; sourceLine++) {
-        if (sourceLines[sourceLine] === line) {
-          found = sourceLine
-          break
-        }
-      }
-    }
-
-    if (found !== -1) {
-      mappedLines[parsedLine] = {
-        startLine: found,
-        endLine: found + 1,
-      }
-      sourceCursor = found + 1
-      continue
-    }
-
-    const fallbackLine = Math.min(
-      Math.max(0, sourceLines.length - 1),
-      Math.max(0, sourceCursor - 1),
-    )
-    mappedLines[parsedLine] = {
-      startLine: fallbackLine,
-      endLine: fallbackLine + 1,
-    }
-  }
-
-  return (line: number) => {
-    const index = Number.isFinite(line) ? Math.max(0, Math.trunc(line)) : 0
-    if (index < mappedLines.length)
-      return mappedLines[index] ?? { startLine: 0, endLine: 0 }
-
-    const lastMapped = mappedLines[mappedLines.length - 1] ?? {
-      startLine: Math.max(0, sourceLines.length - 1),
-      endLine: sourceLines.length,
-    }
-    const startLine = Math.min(sourceLines.length, lastMapped.endLine + index - mappedLines.length)
-    return {
-      startLine,
-      endLine: Math.min(sourceLines.length, startLine + 1),
-    }
-  }
 }
 
 function ensureBlankLineBeforeInlineMultilineCustomHtmlBlocks(markdown: string, tags: string[]) {
@@ -4448,7 +4003,7 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
   // their respective plugins. That keeps parsing-time fixes centralized
   // and avoids ad-hoc post-processing here.
   while (i < tokens.length) {
-    const handled = parseCommonBlockToken(tokens, i, linkifyContext.options(), containerTokenHandlers)
+    const handled = parseCommonBlockToken(tokens, i, linkifyContext.options(), containerTokenHandlers, parseInlineTokens)
     if (handled) {
       recordInternalNodeSourceRange(handled[0], tokens[i], options)
       result.push(handled[0])
@@ -4462,7 +4017,7 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
       case 'paragraph_open':
       {
         const paragraphRaw = String(tokens[i + 1]?.content ?? '')
-        const paragraphNode = parseParagraph(tokens, i, linkifyContext.options(paragraphRaw)) as ParsedNode
+        const paragraphNode = parseParagraph(tokens, i, linkifyContext.options(paragraphRaw), parseInlineTokens) as ParsedNode
         if (includeSourceMap)
           applyNodeSourceMap(paragraphNode, token, options)
         const promoted = maybePromoteCustomNodeFromParagraph(paragraphNode, options)
@@ -4484,7 +4039,7 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
 
       case 'bullet_list_open':
       case 'ordered_list_open': {
-        const [listNode, newIndex] = parseList(tokens, i, linkifyContext.options())
+        const [listNode, newIndex] = parseList(tokens, i, linkifyContext.options(), parseInlineTokens)
         if (includeSourceMap)
           applyNodeSourceMap(listNode, token, options)
         recordInternalNodeSourceRange(listNode, token, options)
@@ -4495,7 +4050,7 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
       }
 
       case 'blockquote_open': {
-        const [blockquoteNode, newIndex] = parseBlockquote(tokens, i, linkifyContext.options())
+        const [blockquoteNode, newIndex] = parseBlockquote(tokens, i, linkifyContext.options(), parseInlineTokens)
         if (includeSourceMap)
           applyNodeSourceMap(blockquoteNode, token, options)
         recordInternalNodeSourceRange(blockquoteNode, token, options)
@@ -4611,4 +4166,5 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
   return result
 }
 
+export { buildAllowedHtmlTagSet } from './html-tag-sets'
 export { parseInlineTokens }

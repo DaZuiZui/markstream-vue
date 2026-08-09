@@ -540,7 +540,7 @@ export function parseInlineTokens(
         { type: 's_open', tag: 's', content: '', markup: '~~', info: '', meta: null },
         { type: 'text', tag: '', content: inner, markup: '', info: '', meta: null },
         { type: 's_close', tag: 's', content: '', markup: '~~', info: '', meta: null },
-      ], 0, options)
+      ], 0, parseInlineTokens, options)
 
       resetCurrentTextNode()
       pushNode(node)
@@ -641,7 +641,7 @@ export function parseInlineTokens(
               { type: 'text', tag: '', content: inner, markup: '', info: '', meta: null },
               { type: 'em_close', tag: 'em', content: '', markup: '*', info: '', meta: null },
               { type: 'strong_close', tag: 'strong', content: '', markup: '**', info: '', meta: null },
-            ], 0, raw, options)
+            ], 0, parseInlineTokens, raw, options)
 
             resetCurrentTextNode()
             pushNode(node)
@@ -723,7 +723,7 @@ export function parseInlineTokens(
         { type: 'strong_open', tag: 'strong', content: '', markup: '**', info: '', meta: null },
         { type: 'text', tag: '', content: inner, markup: '', info: '', meta: null },
         { type: 'strong_close', tag: 'strong', content: '', markup: '**', info: '', meta: null },
-      ], 0, raw, options)
+      ], 0, parseInlineTokens, raw, options)
 
       resetCurrentTextNode()
       pushNode(node)
@@ -786,7 +786,7 @@ export function parseInlineTokens(
         { type: 'em_open', tag: 'em', content: '', markup: '*', info: '', meta: null },
         { type: 'text', tag: '', content: emphasisContent, markup: '', info: '', meta: null },
         { type: 'em_close', tag: 'em', content: '', markup: '*', info: '', meta: null },
-      ], 0, options)
+      ], 0, parseInlineTokens, options)
 
       resetCurrentTextNode()
       pushNode(node)
@@ -1094,7 +1094,7 @@ export function parseInlineTokens(
 
       case 'strong_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseStrongToken(tokens, i, token.content, options)
+        const { node, nextIndex } = parseStrongToken(tokens, i, parseInlineTokens, token.content, options)
         pushNode(node)
         i = nextIndex
         break
@@ -1102,7 +1102,7 @@ export function parseInlineTokens(
 
       case 'em_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseEmphasisToken(tokens, i, options)
+        const { node, nextIndex } = parseEmphasisToken(tokens, i, parseInlineTokens, options)
         pushNode(node)
         i = nextIndex
         break
@@ -1110,7 +1110,7 @@ export function parseInlineTokens(
 
       case 's_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseStrikethroughToken(tokens, i, options)
+        const { node, nextIndex } = parseStrikethroughToken(tokens, i, parseInlineTokens, options)
         pushNode(node)
         i = nextIndex
         break
@@ -1118,7 +1118,7 @@ export function parseInlineTokens(
 
       case 'mark_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseHighlightToken(tokens, i, options)
+        const { node, nextIndex } = parseHighlightToken(tokens, i, parseInlineTokens, options)
         pushNode(node)
         i = nextIndex
         break
@@ -1126,7 +1126,7 @@ export function parseInlineTokens(
 
       case 'ins_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseInsertToken(tokens, i, options)
+        const { node, nextIndex } = parseInsertToken(tokens, i, parseInlineTokens, options)
         pushNode(node)
         i = nextIndex
         break
@@ -1134,7 +1134,7 @@ export function parseInlineTokens(
 
       case 'sub_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseSubscriptToken(tokens, i, options)
+        const { node, nextIndex } = parseSubscriptToken(tokens, i, parseInlineTokens, options)
         pushNode(node)
         i = nextIndex
         break
@@ -1142,7 +1142,7 @@ export function parseInlineTokens(
 
       case 'sup_open': {
         resetCurrentTextNode()
-        const { node, nextIndex } = parseSuperscriptToken(tokens, i, options)
+        const { node, nextIndex } = parseSuperscriptToken(tokens, i, parseInlineTokens, options)
         pushNode(node)
         i = nextIndex
         break
@@ -1481,7 +1481,7 @@ export function parseInlineTokens(
       return
 
     if (shouldTreatLinkOpenAsTextInEscapedOuterImageTail()) {
-      const { node, nextIndex } = parseLinkToken(tokens, i, options)
+      const { node, nextIndex } = parseLinkToken(tokens, i, parseInlineTokens, options)
       const text = String(node.text || node.href || '')
       pushText(text, text)
       i = nextIndex
@@ -1492,7 +1492,7 @@ export function parseInlineTokens(
     resetCurrentTextNode()
     // 直接使用 parseLinkToken 来解析链接及其子节点，这能正确处理包含 code_inline 等复杂内容的链接
     const linkStartIndex = i
-    const { node, nextIndex } = parseLinkToken(tokens, i, options)
+    const { node, nextIndex } = parseLinkToken(tokens, i, parseInlineTokens, options)
     i = nextIndex
 
     const linkText = node.text || node.href || ''
@@ -1571,7 +1571,7 @@ export function parseInlineTokens(
     if (token.markup !== 'linkify')
       return false
 
-    const { node, nextIndex } = parseLinkToken(tokens, i, options)
+    const { node, nextIndex } = parseLinkToken(tokens, i, parseInlineTokens, options)
     if (!recoverMarkdownImageFromLoadingImageTailLink(node, nextIndex))
       return false
 
@@ -1885,7 +1885,7 @@ export function parseInlineTokens(
     let loading = true
 
     if (nextToken?.type === 'link_open') {
-      const { node, nextIndex } = parseLinkToken(tokens, i + 1, options)
+      const { node, nextIndex } = parseLinkToken(tokens, i + 1, parseInlineTokens, options)
       href = node.href
       title = node.title
       loading = true
@@ -2014,22 +2014,22 @@ export function parseInlineTokens(
         })
         if (type === 1) {
           newTokens.push({ type: 'em_close', tag: 'em', nesting: -1 })
-          const { node } = parseEmphasisToken(newTokens, 0, options)
+          const { node } = parseEmphasisToken(newTokens, 0, parseInlineTokens, options)
           pushNode(node)
         }
         else if (type === 2) {
           newTokens.push({ type: 'strong_close', tag: 'strong', nesting: -1 })
-          const { node } = parseStrongToken(newTokens, 0, undefined, options)
+          const { node } = parseStrongToken(newTokens, 0, parseInlineTokens, undefined, options)
           pushNode(node)
         }
         else if (type === 3) {
           newTokens.push({ type: 'em_close', tag: 'em', nesting: -1 })
           newTokens.push({ type: 'strong_close', tag: 'strong', nesting: -1 })
-          const { node } = parseStrongToken(newTokens, 0, undefined, options)
+          const { node } = parseStrongToken(newTokens, 0, parseInlineTokens, undefined, options)
           pushNode(node)
         }
         else {
-          const { node } = parseEmphasisToken(newTokens, 0, options)
+          const { node } = parseEmphasisToken(newTokens, 0, parseInlineTokens, options)
           pushNode(node)
         }
       }
