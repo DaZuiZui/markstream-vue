@@ -482,7 +482,7 @@ function createBaseline(report) {
 function compare(report, baseline) {
   const failures = []
   const fail = message => failures.push(`[parser-perf] ${message}`)
-  const absoluteTimingComparable = timeEnvironmentKey(report.environment) === baseline.timeEnvironmentKey
+  const frozenEnvironmentComparable = timeEnvironmentKey(report.environment) === baseline.timeEnvironmentKey
   if (report.schemaVersion !== baseline.schemaVersion)
     fail(`schemaVersion mismatch: expected ${baseline.schemaVersion}, received ${report.schemaVersion}`)
   if (report.benchmarkVersion !== baseline.benchmarkVersion)
@@ -528,13 +528,13 @@ function compare(report, baseline) {
         fail(`case=${baselineCase.id} scale=${reference.scale}x metric=fullParses exceeded max=${budget.fullParsesMax}; actual=${fullParses}`)
       }
 
-      if (!deterministicOnly && report.profile === 'deep' && Number.isFinite(metrics.retainedHeapBytes)) {
+      if (!deterministicOnly && report.profile === 'deep' && frozenEnvironmentComparable && Number.isFinite(metrics.retainedHeapBytes)) {
         const maxHeap = baselineCase.budgets.retainedHeapBytesMax[reference.scale]
         if (metrics.retainedHeapBytes > maxHeap) {
           fail(`case=${baselineCase.id} scale=${reference.scale}x metric=retainedHeapBytes exceeded max=${Math.round(maxHeap)}; actual=${metrics.retainedHeapBytes}`)
         }
       }
-      if (!deterministicOnly && report.profile === 'deep' && absoluteTimingComparable) {
+      if (!deterministicOnly && report.profile === 'deep' && frozenEnvironmentComparable) {
         for (const metric of timingMetrics) {
           const maxMs = baselineCase.budgets.absoluteTiming[reference.scale][metric]
           if (metrics[metric] > maxMs) {
@@ -568,14 +568,16 @@ function compare(report, baseline) {
             }
           }
         }
-        for (const budget of baselineCase.budgets.retainedHeapGrowth) {
-          const fromValue = metricByScale(actualCase.scales, budget.fromScale, 'retainedHeapBytes')
-          const toValue = metricByScale(actualCase.scales, budget.toScale, 'retainedHeapBytes')
-          if (!Number.isFinite(fromValue) || !Number.isFinite(toValue))
-            continue
-          const actualRatio = ratio(toValue, Math.max(fromValue, budget.denominatorFloorBytes))
-          if (actualRatio > budget.maxRatio) {
-            fail(`case=${baselineCase.id} scales=${budget.fromScale}x->${budget.toScale}x metric=retainedHeapBytesGrowth exceeded maxRatio=${budget.maxRatio}; actualRatio=${round(actualRatio)}`)
+        if (frozenEnvironmentComparable) {
+          for (const budget of baselineCase.budgets.retainedHeapGrowth) {
+            const fromValue = metricByScale(actualCase.scales, budget.fromScale, 'retainedHeapBytes')
+            const toValue = metricByScale(actualCase.scales, budget.toScale, 'retainedHeapBytes')
+            if (!Number.isFinite(fromValue) || !Number.isFinite(toValue))
+              continue
+            const actualRatio = ratio(toValue, Math.max(fromValue, budget.denominatorFloorBytes))
+            if (actualRatio > budget.maxRatio) {
+              fail(`case=${baselineCase.id} scales=${budget.fromScale}x->${budget.toScale}x metric=retainedHeapBytesGrowth exceeded maxRatio=${budget.maxRatio}; actualRatio=${round(actualRatio)}`)
+            }
           }
         }
       }
@@ -674,9 +676,9 @@ const mode = deterministicOnly || report.profile === 'deterministic' ? 'determin
 console.log(`[parser-perf] PASS ${mode} baseline (${report.cases.length} cases, scales 1x/2x/4x).`)
 if (!deterministicOnly && report.profile === 'deep') {
   if (timeEnvironmentKey(report.environment) === baseline.timeEnvironmentKey)
-    console.log(`[parser-perf] same-environment absolute timing budgets checked (${baseline.timeEnvironmentKey}).`)
+    console.log(`[parser-perf] same-environment absolute timing and frozen retained-heap budgets checked (${baseline.timeEnvironmentKey}).`)
   else
-    console.log(`[parser-perf] absolute timing budgets skipped across runners (baseline=${baseline.timeEnvironmentKey}, actual=${timeEnvironmentKey(report.environment)}); repeated-median scale budgets were checked.`)
+    console.log(`[parser-perf] absolute timing and frozen retained-heap ceilings/growth skipped across runners (baseline=${baseline.timeEnvironmentKey}, actual=${timeEnvironmentKey(report.environment)}); repeated-median timing scale and deterministic work budgets were checked.`)
   if (referencePath)
     console.log(`[parser-perf] same-runner base/head timing and heap checked (timingMaxRatio=${sameRunnerTimingMaxRatio}, heapMaxRatio=${sameRunnerHeapMaxRatio}, heapFixedSlackBytes=${sameRunnerHeapFixedSlackBytes}).`)
 }

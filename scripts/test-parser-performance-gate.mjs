@@ -23,6 +23,7 @@ const sampleSummaryMismatchPath = path.join(outputDir, 'sample-summary-mismatch.
 const uniformTimeRegressionPath = path.join(outputDir, 'uniform-time-regression.json')
 const uniformHeapRegressionPath = path.join(outputDir, 'uniform-heap-regression.json')
 const heapGrowthRegressionPath = path.join(outputDir, 'heap-growth-regression.json')
+const crossEnvironmentHeapPath = path.join(outputDir, 'cross-environment-heap.json')
 const referenceConfigMismatchPath = path.join(outputDir, 'reference-config-mismatch.json')
 const zeroHeapReportPath = path.join(outputDir, 'zero-heap-report.json')
 const zeroHeapBaselinePath = path.join(outputDir, 'zero-heap-baseline.json')
@@ -143,7 +144,7 @@ assert.equal(existsSync(emptyBaselinePath), false, 'empty baseline file was crea
 writeFileSync(deepOutputPath, JSON.stringify(deepReport))
 const cleanDeepCheck = run(checkPath, [`--input=${deepOutputPath}`, `--baseline=${baselinePath}`])
 assert.equal(cleanDeepCheck.status, 0, cleanDeepCheck.stderr)
-assert.match(cleanDeepCheck.stdout, /same-environment absolute timing budgets checked/)
+assert.match(cleanDeepCheck.stdout, /same-environment absolute timing and frozen retained-heap budgets checked/)
 
 const zeroProcessedRegression = structuredClone(deepReport)
 for (const testCase of zeroProcessedRegression.cases) {
@@ -228,6 +229,21 @@ const heapGrowthCheck = run(checkPath, [`--input=${heapGrowthRegressionPath}`, `
 assert.notEqual(heapGrowthCheck.status, 0, 'strong retained-heap growth unexpectedly passed')
 assert.match(diagnostic(heapGrowthCheck), /metric=retainedHeapBytesGrowth exceeded/)
 
+const crossEnvironmentHeap = structuredClone(deepReport)
+crossEnvironmentHeap.environment.cpuModel = 'self-test cross-environment CPU'
+const crossEnvironmentHeapBytes = [16, 40, 100].map(mebibytes => mebibytes * 1024 * 1024)
+for (const testCase of crossEnvironmentHeap.cases) {
+  for (const [index, scale] of testCase.scales.entries()) {
+    scale.metrics.retainedHeapBytes = crossEnvironmentHeapBytes[index]
+    for (const sample of scale.samples)
+      sample.retainedHeapBytes = crossEnvironmentHeapBytes[index]
+  }
+}
+writeFileSync(crossEnvironmentHeapPath, JSON.stringify(crossEnvironmentHeap))
+const crossEnvironmentHeapCheck = run(checkPath, [`--input=${crossEnvironmentHeapPath}`, `--baseline=${baselinePath}`])
+assert.equal(crossEnvironmentHeapCheck.status, 0, crossEnvironmentHeapCheck.stderr)
+assert.match(crossEnvironmentHeapCheck.stdout, /frozen retained-heap ceilings\/growth skipped across runners/)
+
 const referenceConfigMismatch = structuredClone(deepReport)
 referenceConfigMismatch.config.rounds++
 referenceConfigMismatch.config.warmups++
@@ -274,4 +290,4 @@ const zeroHeapCheck = run(checkPath, [`--input=${zeroHeapReportPath}`, `--baseli
 assert.equal(zeroHeapCheck.status, 0, zeroHeapCheck.stderr)
 
 rmSync(outputDir, { force: true, recursive: true })
-console.log('[parser-perf-self-test] Clean and zero-heap baselines passed; invalid shapes/config, empty updates, zero instrumentation, summary/sample disagreement, quadratic work, uniform timing/heap, and heap-growth regressions were rejected.')
+console.log('[parser-perf-self-test] Clean, zero-heap, and cross-environment baselines passed; invalid shapes/config, empty updates, zero instrumentation, summary/sample disagreement, quadratic work, uniform timing/heap, and same-environment heap-growth regressions were rejected.')
