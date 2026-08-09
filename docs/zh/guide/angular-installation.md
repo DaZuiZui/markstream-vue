@@ -43,7 +43,7 @@ import 'katex/dist/katex.min.css'
 | D2 图表 | `@terrastruct/d2` |
 | AntV infographic block | `@antv/infographic` |
 
-增强代码块使用可选的对等依赖 `stream-diffs`。未安装时会回退渲染普通 `<pre>`。代码与 diff 选项使用 `stream-diffs` 内置默认值，主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 控制。
+增强代码块使用可选的对等依赖 `stream-diffs`。未安装时会回退渲染普通 `<pre>`。代码与 diff 选项使用 `stream-diffs` 内置默认值，主题通过 `darkTheme` / `lightTheme` / `themes` 控制。
 
 一次性安装：
 

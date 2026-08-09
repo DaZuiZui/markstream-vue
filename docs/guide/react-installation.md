@@ -31,7 +31,7 @@ markstream-react supports various features through optional peer dependencies. I
 | D2 Diagrams | `@terrastruct/d2` | `pnpm add @terrastruct/d2` |
 | Math Rendering (KaTeX) | `katex` | `pnpm add katex` |
 
-Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Code and diff options use `stream-diffs` built-in defaults, and theming is controlled through `theme` / `darkTheme` / `lightTheme` / `themes`.
+Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Code and diff options use `stream-diffs` built-in defaults, and theming is controlled through `darkTheme` / `lightTheme` / `themes`.
 
 ## Optional: off-thread workers in Vite / Vite-compatible bundlers
 
@@ -117,7 +117,7 @@ setCustomComponents({
 })
 ```
 
-Theming is controlled through the `theme` / `darkTheme` / `lightTheme` / `themes` props.
+Theming is controlled through the `darkTheme` / `lightTheme` / `themes` props.
 
 #### Mermaid Diagrams
 

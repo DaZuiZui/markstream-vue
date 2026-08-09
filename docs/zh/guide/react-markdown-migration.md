@@ -227,7 +227,7 @@ export function Article({ markdown }: { markdown: string }) {
 pnpm add stream-diffs
 ```
 
-主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 控制，代码与 diff 选项使用 `stream-diffs` 内置默认值。
+主题通过 `darkTheme` / `lightTheme` / `themes` 控制，代码与 diff 选项使用 `stream-diffs` 内置默认值。
 
 ## 迁移插件逻辑
 

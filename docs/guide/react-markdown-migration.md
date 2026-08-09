@@ -235,7 +235,7 @@ To use the enhanced code block runtime, install the optional peer:
 pnpm add stream-diffs
 ```
 
-Theming is controlled through `theme` / `darkTheme` / `lightTheme` / `themes`, and code/diff options use `stream-diffs` built-in defaults.
+Theming is controlled through `darkTheme` / `lightTheme` / `themes`, and code/diff options use `stream-diffs` built-in defaults.
 
 ## Migrating plugin logic
 

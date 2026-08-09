@@ -189,7 +189,7 @@ markstream-vue2 supports various features through optional peer dependencies. In
 | D2 Diagrams | `@terrastruct/d2` | `pnpm add @terrastruct/d2` |
 | Math Rendering (KaTeX) | `katex` | `pnpm add katex` |
 
-Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Code and diff options use `stream-diffs` built-in defaults, and theming is controlled through `theme` / `darkTheme` / `lightTheme` / `themes`.
+Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Code and diff options use `stream-diffs` built-in defaults, and theming is controlled through `darkTheme` / `lightTheme` / `themes`.
 
 ## Vue 2.6.x Setup
 
@@ -389,7 +389,7 @@ import { setCustomComponents } from 'markstream-vue2'
 setCustomComponents({ code_block: MyCodeBlock })
 ```
 
-Theming is controlled through the `theme` / `darkTheme` / `lightTheme` / `themes` props.
+Theming is controlled through the `darkTheme` / `lightTheme` / `themes` props.
 
 #### Mermaid Diagrams
 

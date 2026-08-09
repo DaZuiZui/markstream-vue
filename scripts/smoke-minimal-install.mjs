@@ -285,6 +285,7 @@ function ensureOptionalPeersAbsent() {
     'katex',
     '@terrastruct/d2',
     '@antv/infographic',
+    'stream-diffs',
     'vue-i18n',
   ]) {
     if (existsSync(join(tmp, 'node_modules', pkg)))
@@ -398,6 +399,7 @@ try {
       '@terrastruct/d2': '>=0.1.33',
       'katex': '>=0.16.22',
       'mermaid': '>=11',
+      'stream-diffs': '>=0.0.2',
       'vue-i18n': '>=9',
     })
   }

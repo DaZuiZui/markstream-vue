@@ -31,7 +31,7 @@ markstream-react 通过可选的对等依赖支持各种功能。只安装你需
 | D2 图表 | `@terrastruct/d2` | `pnpm add @terrastruct/d2` |
 | 数学公式渲染（KaTeX） | `katex` | `pnpm add katex` |
 
-增强代码块使用可选的对等依赖 `stream-diffs`。未安装时会回退渲染普通 `<pre>`。代码与 diff 选项使用 `stream-diffs` 内置默认值，主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 控制。
+增强代码块使用可选的对等依赖 `stream-diffs`。未安装时会回退渲染普通 `<pre>`。代码与 diff 选项使用 `stream-diffs` 内置默认值，主题通过 `darkTheme` / `lightTheme` / `themes` 控制。
 
 ## 可选：在 Vite / Vite 兼容打包器中启用线程外 Worker
 
@@ -117,7 +117,7 @@ setCustomComponents({
 })
 ```
 
-主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 属性控制。
+主题通过 `darkTheme` / `lightTheme` / `themes` 属性控制。
 
 #### Mermaid 图表
 

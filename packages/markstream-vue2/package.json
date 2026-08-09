@@ -138,9 +138,6 @@
     "stream-diffs": {
       "optional": true
     },
-    "stream-markdown": {
-      "optional": true
-    },
     "vue-i18n": {
       "optional": true
     }

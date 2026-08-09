@@ -183,7 +183,7 @@ export default defineComponent({
 pnpm add stream-diffs
 ```
 
-增强代码块（`CodeBlockNode` 运行时）使用 `stream-diffs` 内置的代码与 diff 默认配置，主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 控制。未安装 `stream-diffs` 时，代码块会回退渲染普通 `<pre>`。
+增强代码块（`CodeBlockNode` 运行时）使用 `stream-diffs` 内置的代码与 diff 默认配置，主题通过 `darkTheme` / `lightTheme` / `themes` 控制。未安装 `stream-diffs` 时，代码块会回退渲染普通 `<pre>`。
 
 ```vue
 <script>

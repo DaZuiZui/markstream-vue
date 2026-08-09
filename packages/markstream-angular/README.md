@@ -57,23 +57,17 @@ class CodeBlockComponent {
     raw: 'const answer = 42',
   }
 
-  // fontSize / lineHeight / tabSize also drive the streaming <pre> fallback so
-  // the enhanced surface swaps in without a visual jump.
   props = {
     isDark: true,
-    showLineNumbers: true,
-    fontSize: 14,
-    lineHeight: 21,
-    tabSize: 4,
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-    wordWrap: 'off',
     darkTheme: 'vitesse-dark',
-    MAX_HEIGHT: 640,
+    lightTheme: 'vitesse-light',
+    themes: ['vitesse-dark', 'vitesse-light'],
+    stream: true,
   }
 }
 ```
 
-Component options go through the `props` input: `isDark`, `showLineNumbers`, `darkTheme` / `lightTheme`, `loading`, `stream`. Diff blocks are driven by the stream-diffs adapter options (`renderSideBySide`, `diffHunkActionsOnHover`, `onDiffHunkAction`).
+Component state and themes go through the `props` input: `isDark`, `darkTheme` / `lightTheme` / `themes`, `loading`, `stream`. Code and diff options use the `stream-diffs` built-in defaults and are not configurable per block.
 
 ## Quick Start
 
