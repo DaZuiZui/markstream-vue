@@ -228,6 +228,16 @@ function summarizeSamples(samples) {
   }
 }
 
+function crossVersionInstrumentationOptions(metrics) {
+  // This collector runs unchanged against both the comparison-base dist and head.
+  return {
+    reuseStableTopLevelNodes: true,
+    parserMetrics: metrics,
+    __reuseStableTopLevelNodes: true,
+    __timing: metrics,
+  }
+}
+
 async function runSample(parser, definition, scale, sampleIndex) {
   const { getMarkdown, parseMarkdownToStructure } = parser
   const source = createSource(definition, scale)
@@ -251,8 +261,7 @@ async function runSample(parser, definition, scale, sampleIndex) {
     const nodes = parseMarkdownToStructure(current, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      ...crossVersionInstrumentationOptions(timing),
     })
     commitDurations.push(performance.now() - startedAt)
     processedTokenCount += Number(timing.processTokensInputTokens || 0)
@@ -273,8 +282,7 @@ async function runSample(parser, definition, scale, sampleIndex) {
   const finalNodes = parseMarkdownToStructure(source, md, {
     final: true,
     streamParse: true,
-    __reuseStableTopLevelNodes: true,
-    __timing: finalTiming,
+    ...crossVersionInstrumentationOptions(finalTiming),
   })
   const finalFlushMs = performance.now() - finalStartedAt
   const streamStats = md.stream?.stats?.() ?? null

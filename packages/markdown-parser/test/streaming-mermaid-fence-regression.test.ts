@@ -52,7 +52,7 @@ describe('streaming mermaid fence boundaries', () => {
       const nodes = parseMarkdownToStructure(chunk, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       } as any)
       const blocks = codeBlocks(nodes)
 

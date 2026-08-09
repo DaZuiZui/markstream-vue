@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { getMarkdown, parseMarkdownToStructure, processTokens } from '../src'
+import { getMarkdown, parseInlineTokens, parseMarkdownToStructure, processTokens } from '../src'
+import { processTokensWithContext } from '../src/parser/nodes/token-to-nodes'
+import { createParseContext } from '../src/parser/parse-context'
 
 describe('token-to-node pipeline', () => {
   it('keeps token hooks before final loading cleanup and the node hook', () => {
@@ -89,13 +91,14 @@ describe('token-to-node pipeline', () => {
 
   it('keeps root token raw text and source maps intact', () => {
     const source = 'alpha\nbeta'
-    const nodes = processTokens([
+    const nodes = processTokensWithContext([
       { type: 'text', content: 'beta', raw: 'beta', map: [1, 2] } as any,
-    ], {
+    ], createParseContext({
       includeSourceMap: true,
-      __sourceMarkdown: source,
-      __sourceLineMapper: (line: number) => ({ startLine: line, endLine: line + 1 }),
-    } as any) as any[]
+    }, {
+      sourceMarkdown: source,
+      sourceLineMapper: (line: number) => ({ startLine: line, endLine: line + 1 }),
+    }), parseInlineTokens) as any[]
 
     expect(nodes).toMatchObject([{
       type: 'paragraph',

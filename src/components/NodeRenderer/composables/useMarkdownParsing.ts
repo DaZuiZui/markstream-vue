@@ -1240,13 +1240,11 @@ export function useMarkdownParsing(
       && !hasExternalNodeMutationBoundary
     const parseOptionsForCall = {
       ...mergedParseOptions.value,
-      __reuseStableTopLevelNodes: reuseStableTopLevelNodes,
-      ...(parserHasCustomExtensions ? { __disableStreamParse: true } : {}),
-      ...(parserTiming ? { __timing: parserTiming } : {}),
+      reuseStableTopLevelNodes,
+      ...(parserTiming ? { parserMetrics: parserTiming } : {}),
     } as RendererParseOptions & {
-      __disableStreamParse?: boolean
-      __reuseStableTopLevelNodes: boolean
-      __timing?: ParserTimingMetrics
+      reuseStableTopLevelNodes: boolean
+      parserMetrics?: ParserTimingMetrics
     }
 
     const nextParsed = parseMarkdownToStructure(

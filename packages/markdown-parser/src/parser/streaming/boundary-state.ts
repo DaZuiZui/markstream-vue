@@ -1,4 +1,4 @@
-import type { MarkdownIt } from '../../markdown-it-types'
+import type { ExplicitBracketMathContext, ExplicitBracketMathStreamState, ParserRuntime } from '../runtime'
 import { normalizeCustomHtmlTags } from '../../customHtmlTags'
 import { STANDARD_BLOCK_HTML_TAGS } from '../../htmlTags'
 import { findTagCloseIndexOutsideQuotes } from '../../htmlTagUtils'
@@ -19,42 +19,8 @@ import {
   stripMarkdownListPrefix,
 } from '../markdown-context'
 
-interface ExplicitBracketMathContext {
-  fenceChar: '`' | '~' | ''
-  fenceInBlockquote: boolean
-  fenceInList: boolean
-  fenceLen: number
-  fenceListIndent: number
-  inDollarMath: boolean
-  inFence: boolean
-  inMath: boolean
-  listContentIndent: number | null
-  dollarMathOpenOffset: number | null
-  mathOpenOffset: number | null
-}
-
-interface ExplicitBracketMathStreamState {
-  committedContext: ExplicitBracketMathContext
-  context: ExplicitBracketMathContext
-  lineBuffer: string
-}
-
-const tolerantMathBoundaryStreamCache = new WeakMap<object, {
-  explicitBracketMath: ExplicitBracketMathStreamState
-  source: string
-  key: string | null
-  pendingCandidate: boolean
-}>()
-const pendingExplicitMathTailCache = new WeakMap<object, {
-  source: string
-  state: ExplicitBracketMathStreamState
-}>()
-
 const TOLERANT_BOUNDARY_SPLIT_OPENERS = ['$', '\\[']
 const STREAMING_ADMONITION_OPEN_RE = /(^|\r?\n)[\t ]*:::[\t ]*(?:warning|info|note|tip|danger|caution|error)(?=[\t ]|\r?\n|$)[^\r\n]*(?:\r?\n[\t ]*)*$/
-export function clearTolerantMathBoundaryStreamCache(md: MarkdownIt) {
-  tolerantMathBoundaryStreamCache.delete(md as unknown as object)
-}
 
 function createExplicitBracketMathContext(): ExplicitBracketMathContext {
   return {
@@ -77,17 +43,17 @@ function cloneExplicitBracketMathContext(context: ExplicitBracketMathContext): E
 }
 
 function setTolerantMathBoundaryStreamCache(
-  md: MarkdownIt,
+  runtime: ParserRuntime,
   source: string,
   key: string | null,
   explicitBracketMath: ExplicitBracketMathStreamState = scanExplicitBracketMathStreamState(source).state,
 ) {
-  tolerantMathBoundaryStreamCache.set(md as unknown as object, {
+  runtime.tolerantMathBoundary = {
     explicitBracketMath,
     source,
     key,
     pendingCandidate: key === null && mayContainTolerantMathBlockBoundaryOpener(source),
-  })
+  }
 }
 
 function sourceEndsWithSplitTolerantBoundaryPrefix(source: string) {
@@ -569,12 +535,12 @@ function scanLineForExplicitBracketMathState(
   return closedOpenMath
 }
 
-export function stripPendingExplicitMathTail(markdown: string, md: MarkdownIt) {
+export function stripPendingExplicitMathTail(markdown: string, runtime: ParserRuntime, useCache = true) {
+  const md = runtime.markdownIt
   if (!hasMarkstreamMathPlugin(md))
     return markdown
 
-  const owner = md as unknown as object
-  const previous = pendingExplicitMathTailCache.get(owner)
+  const previous = useCache ? runtime.pendingExplicitMathTail : undefined
   const state = previous?.source === markdown
     ? previous.state
     : previous && markdown.startsWith(previous.source)
@@ -584,7 +550,8 @@ export function stripPendingExplicitMathTail(markdown: string, md: MarkdownIt) {
         previous.source.length - previous.state.lineBuffer.length,
       ).state
       : scanExplicitBracketMathStreamState(markdown).state
-  pendingExplicitMathTailCache.set(owner, { source: markdown, state })
+  if (useCache)
+    runtime.pendingExplicitMathTail = { source: markdown, state }
 
   const { context } = state
   const openOffset = context.inMath
@@ -759,7 +726,8 @@ function updateExplicitBracketMathStreamState(
   )
 }
 
-export function syncTolerantMathBoundaryStreamCache(md: MarkdownIt, source: string) {
+export function syncTolerantMathBoundaryStreamCache(runtime: ParserRuntime, source: string) {
+  const md = runtime.markdownIt
   if (!hasMarkstreamMathPlugin(md))
     return
 
@@ -767,8 +735,7 @@ export function syncTolerantMathBoundaryStreamCache(md: MarkdownIt, source: stri
   if (typeof stream?.reset !== 'function')
     return
 
-  const owner = md as unknown as object
-  const previous = tolerantMathBoundaryStreamCache.get(owner)
+  const previous = runtime.tolerantMathBoundary
 
   if (previous?.source === source)
     return
@@ -805,15 +772,15 @@ export function syncTolerantMathBoundaryStreamCache(md: MarkdownIt, source: stri
   const sourceWasReplaced = previous ? !sourceExtendsPrevious : false
 
   if (previous && (sourceWasReplaced || previous.key !== nextKey || completesExplicitBracketMathClose))
-    stream.reset()
+    runtime.resetStreamOnly()
   else if (!previous && nextKey)
-    stream.reset()
+    runtime.resetStreamOnly()
 
-  setTolerantMathBoundaryStreamCache(md, source, nextKey, nextExplicitBracketMath)
+  setTolerantMathBoundaryStreamCache(runtime, source, nextKey, nextExplicitBracketMath)
 }
 
-export function shouldUseSyncParseForPendingTolerantMathBoundary(md: MarkdownIt) {
-  const cache = tolerantMathBoundaryStreamCache.get(md as unknown as object)
+export function shouldUseSyncParseForPendingTolerantMathBoundary(runtime: ParserRuntime) {
+  const cache = runtime.tolerantMathBoundary
   return typeof cache?.key === 'string' && cache.key.startsWith('pending:')
 }
 

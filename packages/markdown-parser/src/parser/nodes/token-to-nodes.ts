@@ -1,5 +1,7 @@
-import type { InternalParseOptions, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
+import type { MarkdownToken, ParsedNode, ParseOptions } from '../../types'
 import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
+import type { ParseContext } from '../parse-context'
+import type { ParserRuntime } from '../runtime'
 import { normalizeCustomHtmlTags } from '../../customHtmlTags'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 import { parseCommonBlockToken } from '../node-parsers/block-token-parser'
@@ -16,14 +18,11 @@ type ParsedNodeWithFields = ParsedNode & {
   tag?: unknown
 }
 
-const internalNodeSourceRanges = new WeakMap<object, { start: number, end: number }>()
-const sourceLineOffsetsCache = new WeakMap<object, number[]>()
-
-function recordInternalNodeSourceRange(node: ParsedNode, token: MarkdownToken | undefined, options?: ParseOptions) {
+function recordInternalNodeSourceRange(node: ParsedNode, token: MarkdownToken | undefined, options: ParseContext) {
   const map = token?.map
-  const internalOptions = options as InternalParseOptions | undefined
-  const source = internalOptions?.__sourceMarkdown
-  if (!Array.isArray(map) || map.length < 2 || typeof source !== 'string' || !options)
+  const source = options.sourceMarkdown
+  const runtime = options.runtime
+  if (!Array.isArray(map) || map.length < 2 || typeof source !== 'string' || !runtime)
     return
 
   const startLine = Number(map[0])
@@ -31,24 +30,24 @@ function recordInternalNodeSourceRange(node: ParsedNode, token: MarkdownToken | 
   if (!Number.isFinite(startLine) || !Number.isFinite(endLine))
     return
 
-  let offsets = sourceLineOffsetsCache.get(options)
+  let offsets = options.sourceLineOffsets
   if (!offsets) {
     offsets = [0]
     for (let i = 0; i < source.length; i++) {
       if (source[i] === '\n')
         offsets.push(i + 1)
     }
-    sourceLineOffsetsCache.set(options, offsets)
+    options.sourceLineOffsets = offsets
   }
 
-  internalNodeSourceRanges.set(node, {
+  runtime.nodeSourceRanges.set(node, {
     start: offsets[Math.max(0, Math.trunc(startLine))] ?? source.length,
     end: offsets[Math.max(0, Math.trunc(endLine))] ?? source.length,
   })
 }
 
-export function getInternalNodeSourceRange(node: ParsedNode) {
-  return internalNodeSourceRanges.get(node)
+export function getInternalNodeSourceRange(node: ParsedNode, runtime: ParserRuntime) {
+  return runtime.nodeSourceRanges.get(node)
 }
 
 function getNodeFields(node: ParsedNode) {
@@ -152,7 +151,7 @@ function maybePromoteCustomNodeFromParagraph(node: ParsedNode, options?: ParseOp
 // Process markdown-it tokens into our structured format
 export function processTokensWithContext(
   tokens: MarkdownToken[],
-  options: ParseOptions | undefined,
+  options: ParseContext,
   parseInlineTokens: ParseInlineTokensFn,
 ): ParsedNode[] {
   // Defensive: ensure tokens is an array
@@ -161,7 +160,7 @@ export function processTokensWithContext(
 
   const result: ParsedNode[] = []
   const linkifyContext = createLinkifyDemotionContextTracker(options)
-  const seedRaws = (options as InternalParseOptions | undefined)?.__linkifyDemotionSeed
+  const seedRaws = options.linkifyDemotionSeed
   if (Array.isArray(seedRaws) && seedRaws.length) {
     // Replay the reused prefix node raws into the demotion tracker. This is a
     // top-level-node granularity approximation: a full parse remembers raws at

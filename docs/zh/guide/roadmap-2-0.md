@@ -21,7 +21,15 @@ description: markstream-vue 2.0.0 路线图与任务清单。跟踪 2.0 的破�
 - [x] 清理 playground（依赖、vite 配置、sandbox 页面）— `2.0.0-remove-monaco` 分支
 - [x] 更新文档（en + zh）、LLM 文档、包描述 — `2.0.0-remove-monaco` 分支
 
-## 目标 2：2.0.0 发布验证
+## 目标 2：Parser 可靠性与可维护性
+
+2.0 的中性 parser 工作与渲染器移除独立跟踪，主任务见 [issue #625](https://github.com/Simon-He95/markstream-vue/issues/625)，内部 runtime 所有权与 reset 生命周期见 [issue #633](https://github.com/Simon-He95/markstream-vue/issues/633)。
+
+### Parser options 迁移
+
+2.0 移除了此前从包根入口导出的 parser-only options 接口。应用代码应统一使用 `ParseOptions` 描述解析配置。原先未文档化的结构复用与计时采集字段现已正式命名为 `reuseStableTopLevelNodes` 与 `parserMetrics`；其余 cursor、fragment 与 stream-control 标志全部保持内部实现，不提供公开替代项。`ParserRuntime` 与 `ParseContext` 只是内部细节，不是 Session API。
+
+## 目标 3：2.0.0 发布验证
 
 在发布前跑通常规发布门禁。
 
@@ -31,7 +39,7 @@ description: markstream-vue 2.0.0 路线图与任务清单。跟踪 2.0 的破�
 - [ ] 收敛 `check:peer-deps` 工作区根目录可选 peer
 - [ ] 版本号提升到 2.0.0 并编写 release notes
 
-## 目标 3：运行时视觉验证
+## 目标 4：运行时视觉验证
 
 在真实浏览器中验证 stream-diffs 交接（目前迁移仅通过单测/类型检查验证）。
 
@@ -39,7 +47,7 @@ description: markstream-vue 2.0.0 路线图与任务清单。跟踪 2.0 的破�
 - [ ] `test:e2e:octane-playground` 在 stream-diffs 选择器下通过
 - [ ] svelte 在 `.is-diff .code-block-body` 上的 diff 颜色映射
 
-## 目标 4：遗留清理（低优先）
+## 目标 5：遗留清理（低优先）
 
 目标 1 中刻意未纳入的小型一致性清理。
 

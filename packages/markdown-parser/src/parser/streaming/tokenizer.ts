@@ -1,18 +1,16 @@
 import type { MarkdownIt, Token } from '../../markdown-it-types'
-import type { InternalParseOptions, ParseOptions } from '../../types'
+import type { ParseOptions } from '../../types'
+import type { ParseContext } from '../parse-context'
+import type { ParserRuntime } from '../runtime'
 import {
   hasMarkstreamMathPlugin,
   mayContainTolerantMathBlockBoundaryOpener,
 } from '../../plugins/math'
 import { cloneMarkdownTokens } from '../token-clone'
 import {
-  clearTolerantMathBoundaryStreamCache,
   shouldUseSyncParseForPendingTolerantMathBoundary,
   syncTolerantMathBoundaryStreamCache,
 } from './boundary-state'
-
-const streamParseEnvCache = new WeakMap<object, Map<string, Record<string, unknown>>>()
-const topLevelStreamParseMode = new WeakMap<object, string>()
 
 interface TokenizerTimingCallbacks {
   recordTokenCloneMs?: (durationMs: number) => void
@@ -24,19 +22,12 @@ function getParserNow() {
     : Date.now()
 }
 
-function getStableStreamEnv(md: MarkdownIt, env: Record<string, unknown>) {
-  const mdKey = md as unknown as object
-  let byMode = streamParseEnvCache.get(mdKey)
-  if (!byMode) {
-    byMode = new Map()
-    streamParseEnvCache.set(mdKey, byMode)
-  }
-
+function getStableStreamEnv(runtime: ParserRuntime, env: Record<string, unknown>) {
   const modeKey = env.__markstreamFinal === true ? 'final' : 'streaming'
-  let stableEnv = byMode.get(modeKey)
+  let stableEnv = runtime.streamParseEnvs.get(modeKey)
   if (!stableEnv) {
     stableEnv = {}
-    byMode.set(modeKey, stableEnv)
+    runtime.streamParseEnvs.set(modeKey, stableEnv)
   }
 
   for (const key of Object.keys(stableEnv)) {
@@ -47,36 +38,35 @@ function getStableStreamEnv(md: MarkdownIt, env: Record<string, unknown>) {
   return stableEnv
 }
 
-export function shouldUseTopLevelStreamParse(md: MarkdownIt, options: ParseOptions) {
-  const internalOptions = options as InternalParseOptions
+export function shouldUseTopLevelStreamParse(runtime: ParserRuntime, options: ParseContext) {
+  const md = runtime.markdownIt
   const stream = md.stream
   const streamParse = options.streamParse ?? 'auto'
-  return internalOptions.__disableStreamParse !== true
-    && (md as unknown as Record<string, unknown>).__markstreamHasCustomParserExtensions !== true
+  return options.disableStreamParse !== true
+    && (md as unknown as Record<string, unknown>).__markstreamHasCustomParserExtensions === false
     && (streamParse === true || (streamParse === 'auto' && options.final !== true))
     && stream?.enabled === true
     && typeof stream.parse === 'function'
 }
 
-function shouldResetTopLevelStreamCacheForFinalAutoParse(md: MarkdownIt, options: ParseOptions) {
-  const internalOptions = options as InternalParseOptions
+function shouldResetTopLevelStreamCacheForFinalAutoParse(runtime: ParserRuntime, options: ParseContext) {
+  const md = runtime.markdownIt
   const streamParse = options.streamParse ?? 'auto'
   const stream = md.stream
 
   return options.final === true
     && streamParse === 'auto'
-    && internalOptions.__disableStreamParse !== true
-    && (md as unknown as Record<string, unknown>).__markstreamHasCustomParserExtensions !== true
+    && options.disableStreamParse !== true
+    && (md as unknown as Record<string, unknown>).__markstreamHasCustomParserExtensions === false
     && stream?.enabled === true
     && typeof stream.reset === 'function'
 }
 
-export function resetTopLevelTokenizerForFinalAutoParse(md: MarkdownIt, options: ParseOptions) {
-  if (!shouldResetTopLevelStreamCacheForFinalAutoParse(md, options))
+export function resetTopLevelTokenizerForFinalAutoParse(runtime: ParserRuntime, options: ParseContext) {
+  if (!shouldResetTopLevelStreamCacheForFinalAutoParse(runtime, options))
     return false
 
-  md.stream!.reset!()
-  clearTolerantMathBoundaryStreamCache(md)
+  runtime.resetForFinalAutoParse()
   return true
 }
 
@@ -142,41 +132,43 @@ function shouldFallbackDuplicateTolerantMathStreamTokens(
     && hasAdjacentDuplicateParagraphTokenTriplet(tokens)
 }
 
-export function getTopLevelStreamParseMode(md: MarkdownIt) {
-  return topLevelStreamParseMode.get(md as unknown as object)
+export function getTopLevelStreamParseMode(runtime: ParserRuntime) {
+  return runtime.topLevelStreamParseMode
 }
 
 export function parseTopLevelTokens(
-  md: MarkdownIt,
+  runtime: ParserRuntime,
   source: string,
   env: Record<string, unknown>,
-  options: ParseOptions,
+  options: ParseContext,
   timingCallbacks?: TokenizerTimingCallbacks,
 ) {
-  const owner = md as unknown as object
+  const md = runtime.markdownIt
   if (options.customHtmlTags?.length)
     env.__markstreamCustomHtmlTags = options.customHtmlTags
 
-  if (!shouldUseTopLevelStreamParse(md, options)) {
-    topLevelStreamParseMode.set(owner, 'sync')
+  if (!shouldUseTopLevelStreamParse(runtime, options)) {
+    if (!options.isFragment)
+      runtime.topLevelStreamParseMode = 'sync'
     return md.parse(source, env)
   }
 
-  syncTolerantMathBoundaryStreamCache(md, source)
-  if (shouldUseSyncParseForPendingTolerantMathBoundary(md)) {
-    topLevelStreamParseMode.set(owner, 'sync')
+  syncTolerantMathBoundaryStreamCache(runtime, source)
+  if (shouldUseSyncParseForPendingTolerantMathBoundary(runtime)) {
+    runtime.topLevelStreamParseMode = 'sync'
     return md.parse(source, env)
   }
 
-  const tokens = md.stream!.parse!(source, getStableStreamEnv(md, env))
+  runtime.markStreamParseStarted()
+  const tokens = md.stream!.parse!(source, getStableStreamEnv(runtime, env))
   if (shouldFallbackDuplicateTolerantMathStreamTokens(md, source, tokens)) {
-    md.stream?.reset?.()
-    topLevelStreamParseMode.set(owner, 'sync')
+    runtime.resetStreamOnly()
+    runtime.topLevelStreamParseMode = 'sync'
     return md.parse(source, env)
   }
 
   const stats = md.stream?.stats?.() as { lastMode?: string } | undefined
-  topLevelStreamParseMode.set(owner, stats?.lastMode ?? 'stream')
+  runtime.topLevelStreamParseMode = stats?.lastMode ?? 'stream'
 
   if (!shouldCloneTopLevelStreamTokens(options))
     return tokens
