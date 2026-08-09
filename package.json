@@ -354,6 +354,7 @@
     "rollup": "^3.30.0",
     "rollup-plugin-dts": "^5.3.1",
     "rollup-plugin-visualizer": "^6.0.11",
+    "semver": "^7.8.5",
     "stream-diffs": "latest",
     "stream-markdown": "latest",
     "streamdown": "2.5.0",
