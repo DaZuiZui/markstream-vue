@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import ts from 'typescript'
 
 const root = process.cwd()
-const dtsPath = join(root, 'packages', 'markdown-parser', 'dist', 'index.d.ts')
+const dtsPath = resolve(root, readArg('--dts') ?? join('packages', 'markdown-parser', 'dist', 'index.d.ts'))
 const snapshotPath = join(root, 'packages', 'markdown-parser', 'test', 'public-api.snapshot.txt')
 const shouldUpdate = process.argv.includes('--update')
 const shouldPrint = process.argv.includes('--print')
@@ -25,7 +25,7 @@ const compilerOptions = {
   types: [],
 }
 const exports = collectPublicApiExports(dtsPath, compilerOptions)
-const nextSnapshot = `${exports.map(item => item.line).join('\n')}\n`
+const nextSnapshot = createDeclarationSnapshot(dtsPath)
 
 if (shouldPrint) {
   process.stdout.write(nextSnapshot)
@@ -52,7 +52,31 @@ if (!snapshotMatches) {
 }
 
 if (snapshotMatches)
-  console.log(`[parser-public-api] ${exports.length} exports match ${relative(root, snapshotPath)}.`)
+  console.log(`[parser-public-api] ${exports.length} exports and declaration shapes match ${relative(root, snapshotPath)}.`)
+
+function readArg(name) {
+  const prefix = `${name}=`
+  const equalsValue = process.argv.find(argument => argument.startsWith(prefix))
+  if (equalsValue)
+    return equalsValue.slice(prefix.length)
+  const index = process.argv.indexOf(name)
+  return index >= 0 ? process.argv[index + 1] : undefined
+}
+
+function createDeclarationSnapshot(entryPath) {
+  const sourceFile = ts.createSourceFile(
+    entryPath,
+    readFileSync(entryPath, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  )
+  const printer = ts.createPrinter({
+    newLine: ts.NewLineKind.LineFeed,
+    removeComments: true,
+  })
+  return normalizeSnapshot(printer.printFile(sourceFile))
+}
 
 function collectPublicApiExports(entryPath, options) {
   const host = ts.createCompilerHost(options, true)
@@ -104,7 +128,7 @@ function formatSnapshotDiff(currentSnapshot, nextSnapshot) {
   const nextLines = new Set(nextSnapshot.trim().split('\n').filter(Boolean))
   const added = [...nextLines].filter(line => !currentLines.has(line)).sort()
   const removed = [...currentLines].filter(line => !nextLines.has(line)).sort()
-  const sections = ['[parser-public-api] Export snapshot changed. Run pnpm test:api:parser:update to accept an intentional change.']
+  const sections = ['[parser-public-api] DTS snapshot changed. Run pnpm test:api:parser:update to accept an intentional change.']
 
   if (added.length)
     sections.push(`\nAdded:\n${added.map(line => `+ ${line}`).join('\n')}`)
