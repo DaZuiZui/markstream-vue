@@ -435,27 +435,22 @@ interface ParseOptions {
     customHtmlTags?: readonly string[];
     validateLink?: (url: string) => boolean;
     includeSourceMap?: boolean;
+    reuseStableTopLevelNodes?: boolean;
+    parserMetrics?: {
+        tokenCloneMs?: number;
+        processTokensInputTokens?: number;
+        processTokensReusedTopLevelNodes?: number;
+        processTokensMs?: number;
+        safeMarkdownMs?: number;
+        tokenizeMs?: number;
+        htmlBlockPassesMs?: number;
+        parseMarkdownToStructureTotalMs?: number;
+    };
     debug?: boolean;
 }
-interface InternalParseOptions extends ParseOptions {
-    __customHtmlBlockCursor?: number;
-    __disableStreamParse?: boolean;
-    __disableStructuredReuse?: boolean;
-    __insideStrong?: boolean;
-    __reuseStableTopLevelNodes?: boolean;
-    __linkifyDemotionContext?: {
-        filename?: boolean;
-        explicitFilename?: boolean;
-        marketTicker?: boolean;
-    };
-    __linkifyDemotionSeed?: string[];
-    __markdownIt?: MarkdownIt;
-    __sourceLineMapper?: (line: number) => MarkdownNodeSourceMap;
-    __sourceMarkdown?: string;
-}
 declare function parseInlineTokens(tokens: MarkdownToken[], raw?: string, pPreToken?: MarkdownToken, options?: ParseOptions): ParsedNode[];
-declare function parseMarkdownToStructure(markdown: string, md: MarkdownIt, options?: ParseOptions): ParsedNode[];
 declare function processTokens(tokens: MarkdownToken[], options?: ParseOptions): ParsedNode[];
+declare function parseMarkdownToStructure(markdown: string, md: MarkdownIt, options?: ParseOptions): ParsedNode[];
 interface MathOptions {
     commands?: readonly string[];
     escapeExclamation?: boolean;
@@ -735,4 +730,4 @@ interface GetMarkdownOptions extends FactoryOptions {
     i18n?: ((key: string) => string) | Record<string, string>;
 }
 declare function getMarkdown(msgId?: string, options?: GetMarkdownOptions): MarkdownIt;
-export { AdmonitionNode, BLOCKED_HTML_TAGS, BLOCKED_HTML_TAG_NAMES, BLOCK_HTML_TAG_NAMES, BaseNode, BlockquoteNode, CheckboxInputNode, CheckboxNode, CodeBlockNode, CustomComponentAttrs, CustomComponentNode, CustomComponents, DANGEROUS_HTML_ATTRS, DANGEROUS_HTML_ATTR_NAMES, DefinitionItemNode, DefinitionListNode, ESCAPED_TEX_BRACE_COMMANDS, EXTENDED_STANDARD_HTML_TAGS, EXTENDED_STANDARD_HTML_TAG_NAMES, EmojiNode, EmphasisNode, FootnoteAnchorNode, FootnoteNode, FootnoteReferenceNode, GetMarkdownOptions, HardBreakNode, HeadingNode, HighlightNode, HtmlBlockNode, HtmlInlineNode, HtmlPolicy, HtmlPropValue, HtmlToken, INLINE_HTML_TAG_NAMES, ImageNode, InlineCodeNode, InlineNode, InsertNode, InternalParseOptions, KATEX_COMMANDS, LinkNode, ListItemNode, ListNode, type MarkdownIt, MarkdownNodeSourceMap, MarkdownPluginRegistration, MarkdownRender, MarkdownToken, MarkdownTokenLite, MarkdownTokenMeta, MathBlockNode, MathInlineNode, type MathOptions, MermaidBlockNode, NON_STRUCTURING_HTML_TAGS, NON_STRUCTURING_HTML_TAG_NAMES, ParagraphNode, ParseOptions, ParsedNode, PostTransformNodesHook, ReferenceNode, SAFE_ALLOWED_HTML_TAGS, STANDARD_BLOCK_HTML_TAGS, STANDARD_HTML_TAGS, SVG_HTML_TAG_NAMES, StrikethroughNode, StrongNode, SubscriptNode, SuperscriptNode, TEX_BRACE_COMMANDS, TableCellNode, TableNode, TableRowNode, TextNode, ThematicBreakNode, TransformTokensHook, URL_HTML_ATTRS, URL_HTML_ATTR_NAMES, UnknownNode, VOID_HTML_TAGS, VOID_HTML_TAG_NAMES, VmrContainerNode, applyContainers, applyMath, clearRegisteredMarkdownPlugins, convertHtmlAttrsToProps, convertHtmlPropValue, findMatchingClose, getHtmlTagFromContent, getMarkdown, hasCompleteHtmlTagContent, hasCustomHtmlComponents, isBrokenMermaidSvg, isCustomHtmlComponentTag, isHtmlLikeTagName, isHtmlTagBlocked, isHtmlTagHardBlocked, isMathLike, isUnsafeHtmlUrl, mergeCustomHtmlTags, normalizeCustomHtmlTagName, normalizeCustomHtmlTags, normalizeStandaloneBackslashT, parseFenceToken, parseInlineTokens, parseMarkdownToStructure, processTokens, registerMarkdownPlugin, resolveCustomHtmlTags, sanitizeHtmlAttrs, sanitizeHtmlContent, sanitizeHtmlTokenAttrs, sanitizeImageSrc, sanitizeMermaidSvg, setDefaultMathOptions, shouldOpenLinkInNewTab, shouldRenderUnknownHtmlTagAsText, stripCustomHtmlWrapper, stripHtmlControlAndWhitespace, toSafeMermaidSvgMarkup, toSafeSvgElement, tokenAttrsToRecord, tokenizeHtml };
+export { AdmonitionNode, BLOCKED_HTML_TAGS, BLOCKED_HTML_TAG_NAMES, BLOCK_HTML_TAG_NAMES, BaseNode, BlockquoteNode, CheckboxInputNode, CheckboxNode, CodeBlockNode, CustomComponentAttrs, CustomComponentNode, CustomComponents, DANGEROUS_HTML_ATTRS, DANGEROUS_HTML_ATTR_NAMES, DefinitionItemNode, DefinitionListNode, ESCAPED_TEX_BRACE_COMMANDS, EXTENDED_STANDARD_HTML_TAGS, EXTENDED_STANDARD_HTML_TAG_NAMES, EmojiNode, EmphasisNode, FootnoteAnchorNode, FootnoteNode, FootnoteReferenceNode, GetMarkdownOptions, HardBreakNode, HeadingNode, HighlightNode, HtmlBlockNode, HtmlInlineNode, HtmlPolicy, HtmlPropValue, HtmlToken, INLINE_HTML_TAG_NAMES, ImageNode, InlineCodeNode, InlineNode, InsertNode, KATEX_COMMANDS, LinkNode, ListItemNode, ListNode, type MarkdownIt, MarkdownNodeSourceMap, MarkdownPluginRegistration, MarkdownRender, MarkdownToken, MarkdownTokenLite, MarkdownTokenMeta, MathBlockNode, MathInlineNode, type MathOptions, MermaidBlockNode, NON_STRUCTURING_HTML_TAGS, NON_STRUCTURING_HTML_TAG_NAMES, ParagraphNode, ParseOptions, ParsedNode, PostTransformNodesHook, ReferenceNode, SAFE_ALLOWED_HTML_TAGS, STANDARD_BLOCK_HTML_TAGS, STANDARD_HTML_TAGS, SVG_HTML_TAG_NAMES, StrikethroughNode, StrongNode, SubscriptNode, SuperscriptNode, TEX_BRACE_COMMANDS, TableCellNode, TableNode, TableRowNode, TextNode, ThematicBreakNode, TransformTokensHook, URL_HTML_ATTRS, URL_HTML_ATTR_NAMES, UnknownNode, VOID_HTML_TAGS, VOID_HTML_TAG_NAMES, VmrContainerNode, applyContainers, applyMath, clearRegisteredMarkdownPlugins, convertHtmlAttrsToProps, convertHtmlPropValue, findMatchingClose, getHtmlTagFromContent, getMarkdown, hasCompleteHtmlTagContent, hasCustomHtmlComponents, isBrokenMermaidSvg, isCustomHtmlComponentTag, isHtmlLikeTagName, isHtmlTagBlocked, isHtmlTagHardBlocked, isMathLike, isUnsafeHtmlUrl, mergeCustomHtmlTags, normalizeCustomHtmlTagName, normalizeCustomHtmlTags, normalizeStandaloneBackslashT, parseFenceToken, parseInlineTokens, parseMarkdownToStructure, processTokens, registerMarkdownPlugin, resolveCustomHtmlTags, sanitizeHtmlAttrs, sanitizeHtmlContent, sanitizeHtmlTokenAttrs, sanitizeImageSrc, sanitizeMermaidSvg, setDefaultMathOptions, shouldOpenLinkInNewTab, shouldRenderUnknownHtmlTagAsText, stripCustomHtmlWrapper, stripHtmlControlAndWhitespace, toSafeMermaidSvgMarkup, toSafeSvgElement, tokenAttrsToRecord, tokenizeHtml };

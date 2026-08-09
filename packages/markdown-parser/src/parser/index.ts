@@ -1,6 +1,7 @@
 import type { MarkdownIt } from '../markdown-it-types'
-import type { InternalParseOptions, MarkdownToken, ParsedNode, ParseOptions } from '../types'
+import type { MarkdownToken, ParsedNode, ParseOptions } from '../types'
 import type { HtmlStructureContext } from './html/structure'
+import type { ParseContext } from './parse-context'
 import { parseStandaloneHtmlDocument } from './html/source-scanner'
 import {
   combineStructuredDetailsHtmlBlocks,
@@ -12,32 +13,18 @@ import { parseInlineTokens } from './inline-parsers'
 import { createSourceMapFromOffsets } from './node-source-map'
 import { applyPostTransformNodes, finalizeHtmlBlockLoading } from './nodes/finalize-nodes'
 import { getInternalNodeSourceRange, processTokensWithContext } from './nodes/token-to-nodes'
+import { createParseContext, ensureParseContext } from './parse-context'
 import { processTopLevelTokensWithReuse } from './reuse/structured-node-reuse'
+import { getParserRuntime } from './runtime'
 import { createSourceLineMapper } from './source-line-mapper'
-import { clearSafeMarkdownCache, getSafeMarkdown } from './streaming/safe-markdown'
+import { getSafeMarkdown } from './streaming/safe-markdown'
 import {
   parseTopLevelTokens,
   resetTopLevelTokenizerForFinalAutoParse,
   shouldUseTopLevelStreamParse,
 } from './streaming/tokenizer'
 
-interface ParseTimingMetrics {
-  tokenCloneMs?: number
-  processTokensInputTokens?: number
-  processTokensReusedTopLevelNodes?: number
-  processTokensMs?: number
-  /** Wall time of the streaming-safe markdown pre-processing chain. */
-  safeMarkdownMs?: number
-  /** Wall time of markdown-it tokenization (stream or sync). */
-  tokenizeMs?: number
-  /** Wall time of the top-level html_block merge/combine/structure passes. */
-  htmlBlockPassesMs?: number
-  parseMarkdownToStructureTotalMs?: number
-}
-
-type TimedParseOptions = ParseOptions & {
-  __timing?: ParseTimingMetrics
-}
+type ParseTimingMetrics = NonNullable<ParseOptions['parserMetrics']>
 
 function getParserNow() {
   return typeof performance !== 'undefined'
@@ -53,7 +40,7 @@ function addTiming(metrics: ParseTimingMetrics | undefined, key: keyof ParseTimi
 }
 
 function getParseTiming(options: ParseOptions) {
-  return (options as TimedParseOptions).__timing
+  return options.parserMetrics
 }
 
 function finishTimedParse<T extends ParsedNode[]>(result: T, timing: ParseTimingMetrics | undefined, startedAt: number) {
@@ -73,25 +60,45 @@ function finishParsedNodes<T extends ParsedNode[]>(
 }
 
 export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): ParsedNode[] {
-  return processTokensWithContext(tokens, options, parseInlineTokens)
+  return processTokensWithContext(tokens, ensureParseContext(options), parseInlineTokens)
 }
 
-function processTokensWithTiming(tokens: MarkdownToken[], options: ParseOptions | undefined, timing: ParseTimingMetrics | undefined) {
+function processTokensWithTiming(tokens: MarkdownToken[], options: ParseContext, timing: ParseTimingMetrics | undefined) {
   if (!timing)
-    return processTokens(tokens, options)
+    return processTokensWithContext(tokens, options, parseInlineTokens)
 
   addTiming(timing, 'processTokensInputTokens', tokens.length)
   const startedAt = getParserNow()
-  const result = processTokens(tokens, options)
+  const result = processTokensWithContext(tokens, options, parseInlineTokens)
   addTiming(timing, 'processTokensMs', getParserNow() - startedAt)
   return result
 }
 
-export function parseMarkdownToStructure(
-  markdown: string,
-  md: MarkdownIt,
-  options: ParseOptions = {},
-): ParsedNode[] {
+function resolveValidateLink(md: MarkdownIt, options: ParseOptions) {
+  const mdAny = md as {
+    options?: { validateLink?: (url: string) => boolean }
+    validateLink?: (url: string) => boolean
+    __markstreamOriginalValidateLink?: (url: string) => boolean
+  }
+  const directValidateLink = typeof mdAny.validateLink === 'function'
+    && mdAny.__markstreamOriginalValidateLink
+    && mdAny.validateLink !== mdAny.__markstreamOriginalValidateLink
+    ? mdAny.validateLink
+    : undefined
+  return options.validateLink
+    ?? directValidateLink
+    ?? mdAny.options?.validateLink
+    ?? (typeof mdAny.validateLink === 'function' ? mdAny.validateLink : undefined)
+}
+
+function parseMarkdownWithContext(markdown: string, inputContext: ParseContext): ParsedNode[] {
+  const runtime = inputContext.runtime!
+  const md = inputContext.markdownIt!
+  const options: ParseContext = {
+    ...inputContext,
+    customHtmlBlockCursor: 0,
+    sourceLineOffsets: undefined,
+  }
   const timing = getParseTiming(options)
   const tokenizerTiming = timing
     ? { recordTokenCloneMs: (durationMs: number) => addTiming(timing, 'tokenCloneMs', durationMs) }
@@ -101,14 +108,10 @@ export function parseMarkdownToStructure(
   // Ensure markdown is a string — guard against null/undefined inputs from callers
   // todo: 下面的特殊 math 其实应该更精确匹配到() 或者 $ $ 或者 \[ \] 内部的内容
   const sourceMarkdown = (markdown ?? '').toString()
-  if (resetTopLevelTokenizerForFinalAutoParse(md, options)) {
-    // The safe-markdown cache is owned by the top-level streaming session;
-    // a final auto-parse ends that session, so drop the retained source +
-    // transform (the next stream parse starts a fresh document).
-    clearSafeMarkdownCache(md)
-  }
+  if (!options.isFragment)
+    resetTopLevelTokenizerForFinalAutoParse(runtime, options)
 
-  const safeMarkdown = getSafeMarkdown(md, sourceMarkdown, isFinal, options)
+  const safeMarkdown = getSafeMarkdown(runtime, sourceMarkdown, isFinal, options)
 
   if (timing)
     addTiming(timing, 'safeMarkdownMs', getParserNow() - parseStartedAt)
@@ -116,9 +119,9 @@ export function parseMarkdownToStructure(
   const standaloneHtmlDocument = parseStandaloneHtmlDocument(safeMarkdown)
   if (standaloneHtmlDocument) {
     if (options.includeSourceMap) {
-      const sourceMapOptions: InternalParseOptions = {
+      const sourceMapOptions: ParseContext = {
         ...options,
-        __sourceLineMapper: createSourceLineMapper(sourceMarkdown, safeMarkdown),
+        sourceLineMapper: createSourceLineMapper(sourceMarkdown, safeMarkdown),
       }
       standaloneHtmlDocument[0].sourceMap = createSourceMapFromOffsets(safeMarkdown, 0, safeMarkdown.length, sourceMapOptions)
     }
@@ -127,8 +130,8 @@ export function parseMarkdownToStructure(
     // instrumentation, but preserve the full-document html_block shape.
     const preHook = options.preTransformTokens
     const postHook = options.postTransformTokens
-    if (shouldUseTopLevelStreamParse(md, options) || typeof preHook === 'function' || typeof postHook === 'function') {
-      const rawTokens = parseTopLevelTokens(md, safeMarkdown, { __markstreamFinal: isFinal }, options, tokenizerTiming) as unknown as MarkdownToken[]
+    if (shouldUseTopLevelStreamParse(runtime, options) || typeof preHook === 'function' || typeof postHook === 'function') {
+      const rawTokens = parseTopLevelTokens(runtime, safeMarkdown, { __markstreamFinal: isFinal }, options, tokenizerTiming) as unknown as MarkdownToken[]
       const hookedTokens = typeof preHook === 'function' ? (preHook(rawTokens) || rawTokens) : rawTokens
       if (typeof postHook === 'function')
         postHook(hookedTokens)
@@ -138,7 +141,7 @@ export function parseMarkdownToStructure(
 
   // Get tokens from markdown-it
   const tokenizeStartedAt = timing ? getParserNow() : 0
-  const tokens = parseTopLevelTokens(md, safeMarkdown, { __markstreamFinal: isFinal }, options, tokenizerTiming)
+  const tokens = parseTopLevelTokens(runtime, safeMarkdown, { __markstreamFinal: isFinal }, options, tokenizerTiming)
   if (timing)
     addTiming(timing, 'tokenizeMs', getParserNow() - tokenizeStartedAt)
   // Defensive: ensure tokens is an array
@@ -156,34 +159,15 @@ export function parseMarkdownToStructure(
   // Note: markdown-it's `html_block` token.content can be normalized in ways
   // that drop some original lines. Keep the original source around so block
   // parsers can reconstruct raw slices using token.map when needed.
-  // Respect link validation from the md instance so customMarkdownIt(md) with
-  // md.set({ validateLink }) is applied when we emit link nodes (tokens may
-  // bypass the tokenizer's link rule, e.g. synthetic links from fixLinkTokens).
-  const mdAny = md as {
-    options?: { validateLink?: (url: string) => boolean }
-    validateLink?: (url: string) => boolean
-    __markstreamOriginalValidateLink?: (url: string) => boolean
-  }
-  const directValidateLink = typeof mdAny.validateLink === 'function'
-    && mdAny.__markstreamOriginalValidateLink
-    && mdAny.validateLink !== mdAny.__markstreamOriginalValidateLink
-    ? mdAny.validateLink
-    : undefined
-  const validateLink = options.validateLink
-    ?? directValidateLink
-    ?? mdAny.options?.validateLink
-    ?? (typeof mdAny.validateLink === 'function' ? mdAny.validateLink : undefined)
-  const internalOptions: InternalParseOptions = {
+  const internalOptions: ParseContext = {
     ...options,
-    validateLink,
-    __markdownIt: md,
-    __sourceLineMapper: options.includeSourceMap === true
+    sourceLineMapper: options.includeSourceMap === true
       ? createSourceLineMapper(sourceMarkdown, safeMarkdown)
       : undefined,
-    __sourceMarkdown: safeMarkdown,
-    __customHtmlBlockCursor: 0,
+    sourceMarkdown: safeMarkdown,
+    customHtmlBlockCursor: 0,
   }
-  let result = processTopLevelTokensWithReuse(md, safeMarkdown, transformedTokens, internalOptions, {
+  let result = processTopLevelTokensWithReuse(runtime, safeMarkdown, transformedTokens, internalOptions, {
     processTokens: (nextTokens, nextOptions) => processTokensWithTiming(nextTokens, nextOptions, timing),
     recordReusedTopLevelNodes: count => addTiming(timing, 'processTokensReusedTopLevelNodes', count),
   })
@@ -198,9 +182,9 @@ export function parseMarkdownToStructure(
       const first = (postResult as unknown[])[0] as unknown
       const firstType = (first as Record<string, unknown>)?.type
       if (first && typeof firstType === 'string') {
-        const postProcessOptions: InternalParseOptions = {
+        const postProcessOptions: ParseContext = {
           ...internalOptions,
-          __customHtmlBlockCursor: 0,
+          customHtmlBlockCursor: 0,
         }
         result = processTokensWithTiming(postResult as unknown as MarkdownToken[], postProcessOptions, timing)
       }
@@ -214,9 +198,9 @@ export function parseMarkdownToStructure(
   if (hasTopLevelHtmlBlock(result)) {
     const htmlPassesStartedAt = timing ? getParserNow() : 0
     const htmlStructureContext: HtmlStructureContext = {
-      getInternalNodeSourceRange,
+      getInternalNodeSourceRange: node => getInternalNodeSourceRange(node, runtime),
       markdownIt: md,
-      parseFragment: (fragment, fragmentOptions) => parseMarkdownToStructure(fragment, md, fragmentOptions),
+      parseFragment: (fragment, fragmentOptions) => parseMarkdownWithContext(fragment, fragmentOptions),
     }
     result = mergeSplitTopLevelHtmlBlocks(result, isFinal, safeMarkdown, htmlStructureContext, internalOptions)
     result = combineStructuredDetailsHtmlBlocks(result, safeMarkdown, htmlStructureContext, internalOptions, isFinal)[0]
@@ -234,6 +218,41 @@ export function parseMarkdownToStructure(
     console.log('Parsed Markdown Tree Structure:', result)
   }
   return finishTimedParse(result, timing, parseStartedAt)
+}
+
+export function parseMarkdownToStructure(
+  markdown: string,
+  md: MarkdownIt,
+  options: ParseOptions = {},
+): ParsedNode[] {
+  const sourceMarkdown = (markdown ?? '').toString()
+  const runtime = getParserRuntime(md)
+  const validateLink = resolveValidateLink(md, options)
+  const context = createParseContext(options, {
+    markdownIt: md,
+    runtime,
+    validateLink,
+  })
+  const mdState = md as unknown as Record<string, unknown>
+  runtime.beginRootParse(sourceMarkdown, {
+    customHtmlTags: (options.customHtmlTags ?? []).join('\0'),
+    hasCustomParserExtensions: mdState.__markstreamHasCustomParserExtensions === true,
+    includeSourceMap: options.includeSourceMap === true,
+    postTransformNodes: options.postTransformNodes,
+    postTransformTokens: options.postTransformTokens,
+    preTransformTokens: options.preTransformTokens,
+    requireClosingStrong: options.requireClosingStrong,
+    reuseStableTopLevelNodes: options.reuseStableTopLevelNodes === true,
+    streamParse: options.streamParse,
+    validateLink,
+  })
+
+  try {
+    return parseMarkdownWithContext(sourceMarkdown, context)
+  }
+  finally {
+    runtime.finishRootParse(options.final === true)
+  }
 }
 
 export { buildAllowedHtmlTagSet } from './html-tag-sets'

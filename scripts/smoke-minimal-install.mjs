@@ -321,6 +321,23 @@ function writeNodeNoDomTypecheckConfig() {
     },
     include: ['node-no-dom.ts'],
   }, null, 2)}\n`)
+  writeProjectFile('tsconfig.internal-parser-surface.json', `${JSON.stringify({
+    compilerOptions: {
+      target: 'ES2020',
+      module: 'ESNext',
+      moduleResolution: 'Bundler',
+      lib: ['ES2020', 'DOM', 'DOM.Iterable'],
+      strict: true,
+      skipLibCheck: true,
+      noEmit: true,
+      types: [],
+      baseUrl: '.',
+      paths: {
+        'stream-markdown-parser': [relative(smokeRoot, parserTypes).replace(/\\/g, '/')],
+      },
+    },
+    include: ['internal-parser-surface.ts'],
+  }, null, 2)}\n`)
 }
 
 try {
@@ -375,6 +392,7 @@ try {
     packageManager: pkg.packageManager,
     scripts: {
       'build': 'vite build',
+      'typecheck:internal-parser-surface': 'tsc -p tsconfig.internal-parser-surface.json',
       'typecheck:node-no-dom': 'tsc -p tsconfig.node-no-dom.json',
     },
     dependencies: {
@@ -436,6 +454,7 @@ try {
   ].join('\n')
   writeProjectFile('src/App.vue', `<script setup lang="ts">\nconst content = ${JSON.stringify(smokeMarkdown)}\n</script>\n\n<template>\n  <MarkdownRender :content="content" :final="true" :render-code-blocks-as-pre="true" />\n  <MarkdownRender :content="content" :final="true" />\n</template>\n`)
   writeProjectFile('node-no-dom.ts', `import { parseMarkdownToStructure, sanitizeMermaidSvg, toSafeMermaidSvgMarkup, toSafeSvgElement } from 'stream-markdown-parser'\n\nvoid parseMarkdownToStructure\nvoid sanitizeMermaidSvg\nvoid toSafeMermaidSvgMarkup\nvoid toSafeSvgElement\n`)
+  writeProjectFile('internal-parser-surface.ts', `import type { ParseOptions as ParserParseOptions } from 'stream-markdown-parser'\nimport type { ParseOptions as RootParseOptions } from 'markstream-vue'\nimport type { ParseOptions as UtilsParseOptions } from 'markstream-vue/utils'\n// @ts-expect-error The parser-only options type was removed from the packed parser package.\nimport type { InternalParseOptions as ParserRemovedOptions } from 'stream-markdown-parser'\n// @ts-expect-error ParserRuntime is internal to the packed parser package.\nimport type { ParserRuntime as ParserLeakedRuntime } from 'stream-markdown-parser'\n// @ts-expect-error ParseContext is internal to the packed parser package.\nimport type { ParseContext as ParserLeakedContext } from 'stream-markdown-parser'\n// @ts-expect-error The parser-only options type is not re-exported by the packed root package.\nimport type { InternalParseOptions as RootRemovedOptions } from 'markstream-vue'\n// @ts-expect-error ParserRuntime is not re-exported by the packed root package.\nimport type { ParserRuntime as RootLeakedRuntime } from 'markstream-vue'\n// @ts-expect-error ParseContext is not re-exported by the packed root package.\nimport type { ParseContext as RootLeakedContext } from 'markstream-vue'\n// @ts-expect-error The parser-only options type is not re-exported by the packed utils entry.\nimport type { InternalParseOptions as UtilsRemovedOptions } from 'markstream-vue/utils'\n// @ts-expect-error ParserRuntime is not re-exported by the packed utils entry.\nimport type { ParserRuntime as UtilsLeakedRuntime } from 'markstream-vue/utils'\n// @ts-expect-error ParseContext is not re-exported by the packed utils entry.\nimport type { ParseContext as UtilsLeakedContext } from 'markstream-vue/utils'\n\nconst parserMetrics: NonNullable<ParserParseOptions['parserMetrics']> = {}\nconst parserOptions: ParserParseOptions = { final: true, reuseStableTopLevelNodes: true, parserMetrics }\nconst rootOptions: RootParseOptions = { final: true, reuseStableTopLevelNodes: true, parserMetrics }\nconst utilsOptions: UtilsParseOptions = { final: true, reuseStableTopLevelNodes: true, parserMetrics }\nvoid [parserOptions, rootOptions, utilsOptions]\n`)
   const ssrMarkdown = [
     '~~~ts',
     'console.log(1)',
@@ -443,7 +462,7 @@ try {
     '',
     '<a href="javascript:alert(1)">bad</a>',
   ].join('\n')
-  writeProjectFile('ssr-import.mjs', `import { existsSync } from 'node:fs'\nimport { fileURLToPath } from 'node:url'\nimport { createSSRApp, defineComponent, h } from 'vue'\nimport { renderToString } from '@vue/server-renderer'\nimport MarkdownRender, { MarkdownRender as NamedMarkdownRender, VueRendererMarkdown } from 'markstream-vue'\n\nconst mod = await import('markstream-vue')\nif (!mod.default || !mod.MarkdownRender || !NamedMarkdownRender)\n  throw new Error('Root package import did not expose MarkdownRender')\n\nfor (const cssSpecifier of ['markstream-vue/index.css', 'markstream-vue/index.tailwind.css', 'markstream-vue/index.px.css']) {\n  const cssUrl = import.meta.resolve(cssSpecifier)\n  if (!existsSync(fileURLToPath(cssUrl)))\n    throw new Error(\`\${cssSpecifier} export did not resolve to a file\`)\n}\n\nawait import('markstream-vue/workers/katexWorkerClient')\nawait import('markstream-vue/workers/mermaidWorkerClient')\nawait import('markstream-vue/workers/katexCdnWorker')\nawait import('markstream-vue/workers/mermaidCdnWorker')\n\nfor (const workerSpecifier of ['markstream-vue/workers/katexRenderer.worker', 'markstream-vue/workers/mermaidParser.worker']) {\n  const workerUrl = import.meta.resolve(workerSpecifier)\n  if (!existsSync(fileURLToPath(workerUrl)))\n    throw new Error(\`\${workerSpecifier} export did not resolve to a packed file\`)\n}\n\nconst tailwind = await import('markstream-vue/tailwind')\nif (typeof tailwind.default !== 'string' || !tailwind.default.includes('markstream-vue'))\n  throw new Error('Tailwind export did not expose the generated safelist')\n\nconst ThinkingNode = defineComponent({\n  name: 'SsrSmokeThinkingNode',\n  setup(_, { slots }) {\n    return () => h('aside', { 'data-ssr-smoke-thinking': '1' }, slots.default?.() ?? [])\n  },\n})\n\nconst app = createSSRApp({\n  render: () => h(MarkdownRender, {\n    content: ${JSON.stringify(`${ssrMarkdown}\\n\\n<thinking>ssr app component</thinking>`)},\n    final: true,\n  }),\n})\napp.use(VueRendererMarkdown, { components: { thinking: ThinkingNode } })\n\nfor (const name of ['MarkdownRender', 'NodeRenderer', 'Tooltip']) {\n  if (!app.component(name)) {\n    throw new Error('VueRendererMarkdown did not register global component: ' + name)\n  }\n}\n\nconst html = await renderToString(app)\n\nif (!html || !html.includes('console.log'))\n  throw new Error('SSR render did not include code content')\n\nif (!html.includes('data-ssr-smoke-thinking'))\n  throw new Error('SSR app-scoped custom component did not render')\n\nif (/javascript:alert/i.test(html))\n  throw new Error('SSR render kept unsafe javascript URL')\n`)
+  writeProjectFile('ssr-import.mjs', `import { existsSync } from 'node:fs'\nimport { fileURLToPath } from 'node:url'\nimport { createSSRApp, defineComponent, h } from 'vue'\nimport { renderToString } from '@vue/server-renderer'\nimport MarkdownRender, { MarkdownRender as NamedMarkdownRender, VueRendererMarkdown } from 'markstream-vue'\n\nconst mod = await import('markstream-vue')\nif (!mod.default || !mod.MarkdownRender || !NamedMarkdownRender)\n  throw new Error('Root package import did not expose MarkdownRender')\n\nconst utils = await import('markstream-vue/utils')\nfor (const [entry, module] of [['root', mod], ['utils', utils]]) {\n  for (const internalExport of ['ParserRuntime', 'getParserRuntime', 'disposeParserRuntime', 'ParseContext', 'createParseContext']) {\n    if (internalExport in module)\n      throw new Error(\`Packed \${entry} entry leaked internal parser export: \${internalExport}\`)\n  }\n}\n\nfor (const cssSpecifier of ['markstream-vue/index.css', 'markstream-vue/index.tailwind.css', 'markstream-vue/index.px.css']) {\n  const cssUrl = import.meta.resolve(cssSpecifier)\n  if (!existsSync(fileURLToPath(cssUrl)))\n    throw new Error(\`\${cssSpecifier} export did not resolve to a file\`)\n}\n\nawait import('markstream-vue/workers/katexWorkerClient')\nawait import('markstream-vue/workers/mermaidWorkerClient')\nawait import('markstream-vue/workers/katexCdnWorker')\nawait import('markstream-vue/workers/mermaidCdnWorker')\n\nfor (const workerSpecifier of ['markstream-vue/workers/katexRenderer.worker', 'markstream-vue/workers/mermaidParser.worker']) {\n  const workerUrl = import.meta.resolve(workerSpecifier)\n  if (!existsSync(fileURLToPath(workerUrl)))\n    throw new Error(\`\${workerSpecifier} export did not resolve to a packed file\`)\n}\n\nconst tailwind = await import('markstream-vue/tailwind')\nif (typeof tailwind.default !== 'string' || !tailwind.default.includes('markstream-vue'))\n  throw new Error('Tailwind export did not expose the generated safelist')\n\nconst ThinkingNode = defineComponent({\n  name: 'SsrSmokeThinkingNode',\n  setup(_, { slots }) {\n    return () => h('aside', { 'data-ssr-smoke-thinking': '1' }, slots.default?.() ?? [])\n  },\n})\n\nconst app = createSSRApp({\n  render: () => h(MarkdownRender, {\n    content: ${JSON.stringify(`${ssrMarkdown}\\n\\n<thinking>ssr app component</thinking>`)},\n    final: true,\n  }),\n})\napp.use(VueRendererMarkdown, { components: { thinking: ThinkingNode } })\n\nfor (const name of ['MarkdownRender', 'NodeRenderer', 'Tooltip']) {\n  if (!app.component(name)) {\n    throw new Error('VueRendererMarkdown did not register global component: ' + name)\n  }\n}\n\nconst html = await renderToString(app)\n\nif (!html || !html.includes('console.log'))\n  throw new Error('SSR render did not include code content')\n\nif (!html.includes('data-ssr-smoke-thinking'))\n  throw new Error('SSR app-scoped custom component did not render')\n\nif (/javascript:alert/i.test(html))\n  throw new Error('SSR render kept unsafe javascript URL')\n`)
 
   writeProjectFile('ssr-default-install.mjs', `import { createSSRApp, h } from 'vue'\nimport MarkdownRender, { MarkdownRender as NamedMarkdownRender } from 'markstream-vue'\n\nconst mod = await import('markstream-vue')\n\nif (mod.default !== mod.MarkdownRender || MarkdownRender !== NamedMarkdownRender)\n  throw new Error('Root default export must be the same component as named MarkdownRender')\n\nif (!mod.VueRendererMarkdown || typeof mod.VueRendererMarkdown.install !== 'function')\n  throw new Error('Root package import did not expose VueRendererMarkdown as a Vue plugin')\n\nconst app = createSSRApp({ render: () => h('div') })\napp.use(MarkdownRender)\n\nfor (const name of ['MarkdownRender', 'NodeRenderer']) {\n  if (!app.component(name))\n    throw new Error('MarkdownRender default install did not register global component: ' + name)\n}\n`)
 
@@ -452,6 +471,7 @@ try {
     ensureOptionalPeersAbsent()
   writeNodeNoDomTypecheckConfig()
   run('pnpm', ['run', 'typecheck:node-no-dom'], { cwd: tmp })
+  run('pnpm', ['run', 'typecheck:internal-parser-surface'], { cwd: tmp })
   run('pnpm', ['run', 'build'], { cwd: tmp })
   run('pnpm', ['run', 'ssr:import'], { cwd: tmp })
   run('node', ['ssr-default-install.mjs'], { cwd: tmp })

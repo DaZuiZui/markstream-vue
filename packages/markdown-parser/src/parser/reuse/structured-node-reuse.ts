@@ -1,22 +1,9 @@
-import type { MarkdownIt, Token } from '../../markdown-it-types'
-import type { InternalParseOptions, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
+import type { Token } from '../../markdown-it-types'
+import type { MarkdownToken, ParsedNode, ParseOptions } from '../../types'
+import type { ParseContext } from '../parse-context'
+import type { ParserRuntime, StructuredStreamRuntimeState } from '../runtime'
 import { isCacheStableLinkValidator, readSyntheticLinkOrigin } from '../../plugins/linkTokenMetadata'
 import { getTopLevelStreamParseMode, shouldUseTopLevelStreamParse } from '../streaming/tokenizer'
-
-interface StructuredStreamCacheEntry {
-  groupBoundaries: StructuredStreamGroupBoundary[]
-  source: string
-  nodes: ParsedNode[]
-  stableGroupCount: number
-  requireClosingStrong: boolean | undefined
-  validateLink: ParseOptions['validateLink']
-}
-
-interface StructuredStreamGroupBoundary {
-  firstToken: MarkdownToken
-  lastToken: MarkdownToken
-  tokenCount: number
-}
 
 interface ReusableTopLevelTokenGroups {
   mixed: boolean
@@ -24,11 +11,10 @@ interface ReusableTopLevelTokenGroups {
 }
 
 interface StructuredNodeReuseCallbacks {
-  processTokens: (tokens: MarkdownToken[], options: InternalParseOptions) => ParsedNode[]
+  processTokens: (tokens: MarkdownToken[], options: ParseContext) => ParsedNode[]
   recordReusedTopLevelNodes?: (count: number) => void
 }
 
-const structuredStreamCache = new WeakMap<object, StructuredStreamCacheEntry>()
 const REUSABLE_INLINE_TOKEN_TYPES = new Set([
   'code_inline',
   'em_close',
@@ -195,7 +181,7 @@ function sourceEndsWithBlankLine(source: string) {
 }
 
 function canReuseStructuredStreamNodes(options: ParseOptions) {
-  return (options as InternalParseOptions).__reuseStableTopLevelNodes === true
+  return options.reuseStableTopLevelNodes === true
     && options.final !== true
     && !options.preTransformTokens
     && !options.postTransformTokens
@@ -271,7 +257,7 @@ function isSameTokenShapeForReuse(left: Token | MarkdownToken | undefined, right
 }
 
 function updateStructuredStreamCache(
-  md: MarkdownIt,
+  runtime: ParserRuntime,
   source: string,
   tokens: MarkdownToken[],
   groups: ReusableTopLevelTokenGroups,
@@ -280,7 +266,7 @@ function updateStructuredStreamCache(
 ) {
   const groupStarts = groups.starts
   if (groupStarts.length === 0 || nodes.length !== groupStarts.length) {
-    structuredStreamCache.delete(md as unknown as object)
+    runtime.structuredStream = undefined
     return
   }
 
@@ -293,7 +279,7 @@ function updateStructuredStreamCache(
     }
   })
 
-  structuredStreamCache.set(md as unknown as object, {
+  runtime.structuredStream = {
     groupBoundaries,
     source,
     nodes,
@@ -302,11 +288,11 @@ function updateStructuredStreamCache(
       : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1),
     requireClosingStrong: options.requireClosingStrong,
     validateLink: options.validateLink,
-  })
+  }
 }
 
 function hasStableStructuredStreamGroupBoundaries(
-  previous: StructuredStreamCacheEntry,
+  previous: StructuredStreamRuntimeState,
   tokens: MarkdownToken[],
   groupStarts: number[],
   stableGroupCount: number,
@@ -344,15 +330,14 @@ function hasStableStructuredStreamGroupBoundaries(
 }
 
 export function processTopLevelTokensWithReuse(
-  md: MarkdownIt,
+  runtime: ParserRuntime,
   source: string,
   tokens: MarkdownToken[],
-  options: InternalParseOptions,
+  options: ParseContext,
   callbacks: StructuredNodeReuseCallbacks,
 ) {
-  const owner = md as unknown as object
-  const structuredReuseDisabled = (options as InternalParseOptions).__disableStructuredReuse === true
-  const reuseEnabled = shouldUseTopLevelStreamParse(md, options)
+  const structuredReuseDisabled = options.disableStructuredReuse
+  const reuseEnabled = shouldUseTopLevelStreamParse(runtime, options)
     && canReuseStructuredStreamNodes(options)
 
   if (!reuseEnabled) {
@@ -360,7 +345,7 @@ export function processTopLevelTokensWithReuse(
     // the same md instance and must not evict the top-level document's
     // structured reuse cache.
     if (!structuredReuseDisabled)
-      structuredStreamCache.delete(owner)
+      runtime.structuredStream = undefined
     return callbacks.processTokens(tokens, options)
   }
 
@@ -369,13 +354,13 @@ export function processTopLevelTokensWithReuse(
 
   const groups = getReusableTopLevelTokenGroups(tokens, options.validateLink)
   if (!groups) {
-    structuredStreamCache.delete(owner)
+    runtime.structuredStream = undefined
     return callbacks.processTokens(tokens, options)
   }
 
   const groupStarts = groups.starts
-  const previous = structuredStreamCache.get(owner)
-  const mode = getTopLevelStreamParseMode(md)
+  const previous = runtime.structuredStream
+  const mode = getTopLevelStreamParseMode(runtime)
   const stableGroupCount = previous && groups.mixed
     ? Math.min(previous.stableGroupCount, Math.max(0, previous.groupBoundaries.length - 1))
     : previous?.stableGroupCount ?? 0
@@ -395,21 +380,21 @@ export function processTopLevelTokensWithReuse(
       // Replay the reused prefix node raws into the tail's linkify demotion
       // tracker so tail linkify decisions see the same accumulated context a
       // full parse would have produced.
-      __linkifyDemotionSeed: previous.nodes
+      linkifyDemotionSeed: previous.nodes
         .slice(0, stableGroupCount)
         .map(node => String((node as Record<string, unknown>).raw ?? '')),
-    } as InternalParseOptions)
+    } as ParseContext)
     const expectedTailNodes = groupStarts.length - stableGroupCount
 
     if (tailNodes.length === expectedTailNodes) {
       const result = previous.nodes.slice(0, stableGroupCount).concat(tailNodes)
       callbacks.recordReusedTopLevelNodes?.(stableGroupCount)
-      updateStructuredStreamCache(md, source, tokens, groups, result, options)
+      updateStructuredStreamCache(runtime, source, tokens, groups, result, options)
       return result
     }
   }
 
   const result = callbacks.processTokens(tokens, options)
-  updateStructuredStreamCache(md, source, tokens, groups, result, options)
+  updateStructuredStreamCache(runtime, source, tokens, groups, result, options)
   return result
 }

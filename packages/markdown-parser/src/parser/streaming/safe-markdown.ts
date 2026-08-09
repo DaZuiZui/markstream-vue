@@ -1,5 +1,5 @@
-import type { MarkdownIt } from '../../markdown-it-types'
-import type { ParseOptions } from '../../types'
+import type { ParseContext } from '../parse-context'
+import type { ParserRuntime } from '../runtime'
 import {
   createLatexSplitMathScanner,
   getStreamingAdmonitionOpenTailReplacement,
@@ -10,35 +10,14 @@ import { normalizeStreamingCustomHtmlSource } from './custom-html-preprocess'
 const SAFE_MARKDOWN_WINDOW_MARGIN = 1024
 const SAFE_MARKDOWN_WINDOW_OVERLAP = 16
 /**
- * Cached streaming safe-markdown transform, keyed by the md instance.
+ * Cached streaming safe-markdown transform, owned by the parser runtime.
  *
- * The cache is owned by the TOP-LEVEL document stream: fragment parses
- * (e.g. `<details>` / custom html children, `__disableStructuredReuse`)
- * share the md instance and may overwrite the entry — benign, because the
- * transforms are deterministic functions of the source text, and the fast
- * path additionally guards with `mode` + `startsWith(previous.source)`, so
- * a stale/foreign entry either re-produces the identical transform or falls
- * back to a full-document transform.
- *
- * Memory: holds the full raw source + transformed output (~2-3x the document
- * size) per md instance for the instance lifetime; WeakMap-keyed so it is
- * collected with the instance. Cleared on the final auto-parse reset.
+ * Fragment parses bypass this top-level cache and use a full transform.
  */
-const safeMarkdownCache = new WeakMap<object, {
-  source: string
-  safeMarkdown: string
-  mode: string
-}>()
-
-export function clearSafeMarkdownCache(md: MarkdownIt) {
-  safeMarkdownCache.delete(md as unknown as object)
-}
-
 function transformStreamingSafeMarkdown(
   source: string,
   isFinal: boolean,
-  md: MarkdownIt,
-  options: ParseOptions,
+  options: ParseContext,
 ) {
   // Reconstruct transport-split LaTeX commands ONLY inside open math contexts
   // ($...$ / $$...$$ / \[...\]). The previous version rewrote every soft line
@@ -130,10 +109,9 @@ function transformStreamingSafeMarkdown(
   return safeMarkdown
 }
 
-export function getSafeMarkdown(md: MarkdownIt, sourceMarkdown: string, isFinal: boolean, options: ParseOptions) {
-  const owner = md as unknown as object
+export function getSafeMarkdown(runtime: ParserRuntime, sourceMarkdown: string, isFinal: boolean, options: ParseContext) {
   const mode = `${isFinal ? 'final' : 'stream'}:${(options.customHtmlTags ?? []).join(',')}`
-  const previous = safeMarkdownCache.get(owner)
+  const previous = options.isFragment ? undefined : runtime.safeMarkdown
 
   let safeMarkdown: string
   if (
@@ -157,7 +135,7 @@ export function getSafeMarkdown(md: MarkdownIt, sourceMarkdown: string, isFinal:
     // diverge and silently dropped/repeated chars at the seam.
     const windowStart = Math.max(0, previous.source.length - SAFE_MARKDOWN_WINDOW_MARGIN - SAFE_MARKDOWN_WINDOW_OVERLAP)
     const window = sourceMarkdown.slice(windowStart)
-    const transformed = transformStreamingSafeMarkdown(window, isFinal, md, options)
+    const transformed = transformStreamingSafeMarkdown(window, isFinal, options)
     // Overlap verification: the part of the window that overlaps the previous
     // source (its first `previous.source.length - windowStart` chars) must be
     // byte-identical to the previous safe markdown tail. A re-transform of
@@ -171,10 +149,10 @@ export function getSafeMarkdown(md: MarkdownIt, sourceMarkdown: string, isFinal:
       && transformed.slice(0, overlapLength) === previous.safeMarkdown.slice(-overlapLength)
     safeMarkdown = overlapOk
       ? previous.safeMarkdown.slice(0, previous.safeMarkdown.length - overlapLength) + transformed
-      : transformStreamingSafeMarkdown(sourceMarkdown, isFinal, md, options)
+      : transformStreamingSafeMarkdown(sourceMarkdown, isFinal, options)
   }
   else {
-    safeMarkdown = transformStreamingSafeMarkdown(sourceMarkdown, isFinal, md, options)
+    safeMarkdown = transformStreamingSafeMarkdown(sourceMarkdown, isFinal, options)
   }
 
   // The tolerant-math boundary scan carries incremental fence/math state in
@@ -182,8 +160,9 @@ export function getSafeMarkdown(md: MarkdownIt, sourceMarkdown: string, isFinal:
   // (not a tail window) — otherwise pre-window math openers would be
   // invisible and ambiguous tails would not be hidden.
   if (!isFinal)
-    safeMarkdown = stripPendingExplicitMathTail(safeMarkdown, md)
+    safeMarkdown = stripPendingExplicitMathTail(safeMarkdown, runtime, !options.isFragment)
 
-  safeMarkdownCache.set(owner, { source: sourceMarkdown, safeMarkdown, mode })
+  if (!options.isFragment)
+    runtime.safeMarkdown = { source: sourceMarkdown, safeMarkdown, mode }
   return safeMarkdown
 }

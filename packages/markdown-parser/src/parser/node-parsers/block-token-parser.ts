@@ -1,4 +1,4 @@
-import type { AdmonitionNode, InternalParseOptions, MarkdownToken, ParagraphNode, ParsedNode, ParseOptions, VmrContainerNode } from '../../types'
+import type { AdmonitionNode, MarkdownToken, ParagraphNode, ParsedNode, ParseOptions, VmrContainerNode } from '../../types'
 import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import { escapeTagForRegExp, findTagCloseIndexOutsideQuotes } from '../../htmlTagUtils'
 import { normalizeCustomTag } from '../customHtmlTags'
@@ -6,6 +6,7 @@ import { buildAllowedHtmlTagSet } from '../html-tag-sets'
 import { parseFenceToken } from '../inline-parsers/fence-parser'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 import { applyNodeSourceMap, applyNodeSourceMapRange, createSourceMapFromOffsets } from '../node-source-map'
+import { isParseContext } from '../parse-context'
 import { parseBlockquote } from './blockquote-parser'
 import { parseCodeBlock } from './code-block-parser'
 import { parseDefinitionList } from './definition-list-parser'
@@ -58,7 +59,7 @@ function getHtmlTagSets(customTags?: readonly string[]) {
 function parseVmrContainer(
   tokens: MarkdownToken[],
   index: number,
-  options: InternalParseOptions | undefined,
+  options: ParseOptions | undefined,
   parseInlineTokens: ParseInlineTokensFn,
 ): [VmrContainerNode, number] {
   const openToken = tokens[index]
@@ -363,7 +364,7 @@ function lineToIndex(source: string, line: number) {
 export function parseBasicBlockToken(
   tokens: MarkdownToken[],
   index: number,
-  options: InternalParseOptions | undefined,
+  options: ParseOptions | undefined,
   parseInlineTokens: ParseInlineTokensFn,
 ): [ParsedNode, number] | null {
   const token = tokens[index]
@@ -419,8 +420,9 @@ export function parseBasicBlockToken(
         const tag = htmlBlockNode.tag
         // markdown-it can normalize html_block token.content and lose original lines.
         // Re-extract the next full <tag>...</tag> block from the original source.
-        const source = String((options)?.__sourceMarkdown ?? '')
-        const cursor = Number((options)?.__customHtmlBlockCursor ?? 0)
+        const context = isParseContext(options) ? options : undefined
+        const source = String(context?.sourceMarkdown ?? '')
+        const cursor = Number(context?.customHtmlBlockCursor ?? 0)
 
         // If markdown-it provides a source map for this token, prefer anchoring the
         // re-extraction to that line range. This avoids accidentally matching an
@@ -431,8 +433,8 @@ export function parseBasicBlockToken(
         const searchStart = Math.max(clampNonNegative(cursor), clampNonNegative(mappedLineStart))
 
         const fromSource = findNextCustomHtmlBlockFromSource(source, tag, searchStart)
-        if (fromSource && options)
-          (options).__customHtmlBlockCursor = fromSource.end
+        if (fromSource && context)
+          context.customHtmlBlockCursor = fromSource.end
 
         const rawHtml = String(fromSource?.raw ?? htmlBlockNode.raw ?? '')
 

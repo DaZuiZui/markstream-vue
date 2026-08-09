@@ -240,7 +240,7 @@ async function runFixture(parser, fixture, seed) {
     const streamOptions = { ...fixture.options, final: action.final, streamParse: true }
     const reuseOptions = {
       ...streamOptions,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     }
     const cold = parseMarkdownToStructure(source, coldMarkdown, coldOptions)
     const streamed = parseMarkdownToStructure(source, streamMarkdown, streamOptions)

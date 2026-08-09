@@ -1,9 +1,12 @@
 import type { MarkdownIt, Token } from '../../markdown-it-types'
-import type { HtmlBlockNode, InternalParseOptions, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
+import type { HtmlBlockNode, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
+import type { ParseContext } from '../parse-context'
 import { NON_STRUCTURING_HTML_TAGS } from '../../htmlTags'
 import { findTagCloseIndexOutsideQuotes, parseTagAttrs } from '../../htmlTagUtils'
+import { isCacheStableLinkValidator } from '../../plugins/linkTokenMetadata'
 import { parseHtmlBlock } from '../node-parsers/html-block-parser'
 import { createSourceMapFromOffsets } from '../node-source-map'
+import { createChildParseContext } from '../parse-context'
 import {
   buildHtmlBlockContent,
   canFindNodeRawAfterSourceIndex,
@@ -24,17 +27,8 @@ type ParsedNodeWithFields = ParsedNode & {
 export interface HtmlStructureContext {
   getInternalNodeSourceRange: (node: ParsedNode) => { start: number, end: number } | undefined
   markdownIt: MarkdownIt
-  parseFragment: (fragment: string, options: InternalParseOptions) => ParsedNode[]
+  parseFragment: (fragment: string, options: ParseContext) => ParsedNode[]
 }
-
-const siblingHtmlChildrenCache = new WeakMap<object, {
-  blocks: string[]
-  children: ParsedNode[][]
-  customHtmlTags: string
-  final: boolean
-  requireClosingStrong: boolean | undefined
-  validateLink: ParseOptions['validateLink']
-}>()
 
 function isDetailsOpenHtmlBlock(node: ParsedNode): node is HtmlBlockNode {
   if (node.type !== 'html_block')
@@ -52,14 +46,18 @@ function isDetailsCloseHtmlBlock(node: ParsedNode): node is HtmlBlockNode {
   return /^\s*<\/details\b/i.test(raw)
 }
 
-function buildDetailsChildParseOptions(options: ParseOptions, final: boolean): InternalParseOptions {
-  return {
+function buildDetailsChildParseOptions(options: ParseContext, final: boolean): ParseContext {
+  const childOptions: ParseOptions = {
     final,
-    __disableStreamParse: true,
     requireClosingStrong: options.requireClosingStrong,
     customHtmlTags: options.customHtmlTags,
     validateLink: options.validateLink,
   }
+  return createChildParseContext(options, childOptions, {
+    disableStreamParse: true,
+    disableStructuredReuse: true,
+    isFragment: true,
+  })
 }
 
 const STRUCTURED_HTML_WRAPPER_BLOCK_TYPES = new Set([
@@ -138,29 +136,24 @@ function splitSiblingHtmlBlockFragments(fragment: string) {
 function parseDetailsFragmentChildren(
   fragment: string,
   context: HtmlStructureContext,
-  options: ParseOptions,
+  options: ParseContext,
 ) {
   if (!fragment.trim())
     return []
 
-  const internalOptions: InternalParseOptions = {
-    ...(options as InternalParseOptions),
-    __disableStreamParse: true,
-    __disableStructuredReuse: true,
-  }
-
-  return context.parseFragment(fragment, internalOptions)
+  return context.parseFragment(fragment, options)
 }
 
 function parseSiblingHtmlBlockChildren(
   blocks: string[],
   context: HtmlStructureContext,
-  options: ParseOptions,
+  options: ParseContext,
   final: boolean,
+  useCache: boolean,
 ) {
   const customHtmlTags = options.customHtmlTags?.join('\0') ?? ''
-  const cacheOwner = context.markdownIt as unknown as object
-  const previous = siblingHtmlChildrenCache.get(cacheOwner)
+  const runtime = options.runtime
+  const previous = useCache ? runtime?.siblingHtmlChildren : undefined
   const canReuse = previous
     && previous.final === final
     && previous.customHtmlTags === customHtmlTags
@@ -173,14 +166,16 @@ function parseSiblingHtmlBlockChildren(
     return parseDetailsFragmentChildren(block, context, options)
   })
 
-  siblingHtmlChildrenCache.set(cacheOwner, {
-    blocks,
-    children,
-    customHtmlTags,
-    final,
-    requireClosingStrong: options.requireClosingStrong,
-    validateLink: options.validateLink,
-  })
+  if (useCache && runtime) {
+    runtime.siblingHtmlChildren = {
+      blocks,
+      children,
+      customHtmlTags,
+      final,
+      requireClosingStrong: options.requireClosingStrong,
+      validateLink: options.validateLink,
+    }
+  }
 
   return children.flat()
 }
@@ -188,7 +183,7 @@ function parseSiblingHtmlBlockChildren(
 export function structureGenericHtmlBlockChildren(
   nodes: ParsedNode[],
   context: HtmlStructureContext,
-  options: ParseOptions,
+  options: ParseContext,
   final: boolean,
 ): ParsedNode[] {
   return nodes.map((node) => {
@@ -220,8 +215,14 @@ export function structureGenericHtmlBlockChildren(
 
     const childOptions = buildDetailsChildParseOptions(options, final)
     const siblingHtmlBlocks = hasClose ? null : splitSiblingHtmlBlockFragments(innerRaw)
+    const useSiblingCache = !options.isFragment
+      && typeof options.preTransformTokens !== 'function'
+      && typeof options.postTransformTokens !== 'function'
+      && typeof options.postTransformNodes !== 'function'
+      && (context.markdownIt as unknown as Record<string, unknown>).__markstreamHasCustomParserExtensions === false
+      && isCacheStableLinkValidator(options.validateLink)
     const children = siblingHtmlBlocks
-      ? parseSiblingHtmlBlockChildren(siblingHtmlBlocks, context, childOptions, final)
+      ? parseSiblingHtmlBlockChildren(siblingHtmlBlocks, context, childOptions, final, useSiblingCache)
       : parseDetailsFragmentChildren(innerRaw, context, childOptions)
     if (!shouldStructureGenericHtmlBlockChildren(innerRaw, children))
       return node
@@ -244,7 +245,7 @@ export function hasTopLevelHtmlBlock(nodes: ParsedNode[]) {
 function parseSummaryChildren(
   fragment: string,
   context: HtmlStructureContext,
-  options: ParseOptions,
+  options: ParseContext,
 ) {
   const children = parseDetailsFragmentChildren(fragment, context, options)
   const onlyChild = children[0] as ParsedNode & { children?: ParsedNode[] } | undefined
@@ -256,7 +257,7 @@ function parseSummaryChildren(
 function buildStructuredSummaryNode(
   summaryRaw: string,
   context: HtmlStructureContext,
-  options: ParseOptions,
+  options: ParseContext,
 ) {
   const summaryNode = parseHtmlBlock({ content: summaryRaw } as MarkdownToken) as ParsedNode & Record<string, unknown>
   const openEnd = findTagCloseIndexOutsideQuotes(summaryRaw)
@@ -276,7 +277,7 @@ function buildStructuredSummaryNode(
 function buildDetailsPrefixChildren(
   openRaw: string,
   context: HtmlStructureContext,
-  options: ParseOptions,
+  options: ParseContext,
 ) {
   const openEnd = findTagCloseIndexOutsideQuotes(openRaw)
   if (openEnd === -1)
@@ -304,7 +305,7 @@ export function combineStructuredDetailsHtmlBlocks(
   nodes: ParsedNode[],
   source: string,
   context: HtmlStructureContext,
-  options: ParseOptions,
+  options: ParseContext,
   final: boolean,
   sourceCursor = 0,
 ): [ParsedNode[], number] {
@@ -444,7 +445,7 @@ export function mergeSplitTopLevelHtmlBlocks(
   final: boolean,
   source: string,
   context: HtmlStructureContext,
-  options?: ParseOptions,
+  options?: ParseContext,
 ) {
   if (!source)
     return nodes

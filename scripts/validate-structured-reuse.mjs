@@ -72,8 +72,8 @@ async function validate(corpusId, filePath) {
     const nodes = parseMarkdownToStructure(current, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: commitTiming,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: commitTiming,
     })
     const cold = parseMarkdownToStructure(current, coldMd, { final: false, streamParse: false })
     if (!nodesEqual(nodes, cold)) {
@@ -93,8 +93,8 @@ async function validate(corpusId, filePath) {
   const finalNodes = parseMarkdownToStructure(current, md, {
     final: true,
     streamParse: true,
-    __reuseStableTopLevelNodes: true,
-    __timing: finalTiming,
+    reuseStableTopLevelNodes: true,
+    parserMetrics: finalTiming,
   })
   const finalCold = parseMarkdownToStructure(current, coldMd, { final: true, streamParse: false })
   let finalMismatches = 0
