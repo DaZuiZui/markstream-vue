@@ -1,11 +1,12 @@
-import type { AdmonitionNode, InternalParseOptions, MarkdownToken, ParagraphNode, ParsedNode, ParseOptions, VmrContainerNode } from '../../types'
+import type { AdmonitionNode, MarkdownToken, ParagraphNode, ParsedNode, ParseOptions, VmrContainerNode } from '../../types'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import { escapeTagForRegExp, findTagCloseIndexOutsideQuotes } from '../../htmlTagUtils'
 import { normalizeCustomTag } from '../customHtmlTags'
-import { buildAllowedHtmlTagSet } from '../index'
-import { parseInlineTokens } from '../inline-parsers'
+import { buildAllowedHtmlTagSet } from '../html-tag-sets'
 import { parseFenceToken } from '../inline-parsers/fence-parser'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 import { applyNodeSourceMap, applyNodeSourceMapRange, createSourceMapFromOffsets } from '../node-source-map'
+import { isParseContext } from '../parse-context'
 import { parseBlockquote } from './blockquote-parser'
 import { parseCodeBlock } from './code-block-parser'
 import { parseDefinitionList } from './definition-list-parser'
@@ -58,7 +59,8 @@ function getHtmlTagSets(customTags?: readonly string[]) {
 function parseVmrContainer(
   tokens: MarkdownToken[],
   index: number,
-  options?: InternalParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [VmrContainerNode, number] {
   const openToken = tokens[index]
 
@@ -119,7 +121,7 @@ function parseVmrContainer(
       || tokens[j].type === 'ordered_list_open'
     ) {
       // Handle list tokens
-      const [listNode, newIndex] = parseList(tokens, j, linkifyContext.options())
+      const [listNode, newIndex] = parseList(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (options?.includeSourceMap)
         applyNodeSourceMap(listNode, tokens[j], options)
       children.push(listNode)
@@ -128,7 +130,7 @@ function parseVmrContainer(
     }
     else if (tokens[j].type === 'blockquote_open') {
       // Handle blockquote tokens
-      const [blockquoteNode, newIndex] = parseBlockquote(tokens, j, linkifyContext.options())
+      const [blockquoteNode, newIndex] = parseBlockquote(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (options?.includeSourceMap)
         applyNodeSourceMap(blockquoteNode, tokens[j], options)
       children.push(blockquoteNode)
@@ -137,7 +139,7 @@ function parseVmrContainer(
     }
     else {
       // Handle other basic block tokens (heading, code_block, fence, etc.)
-      const handled = parseBasicBlockToken(tokens, j, linkifyContext.options())
+      const handled = parseBasicBlockToken(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (handled) {
         children.push(handled[0])
         linkifyContext.remember(handled[0].raw)
@@ -362,13 +364,14 @@ function lineToIndex(source: string, line: number) {
 export function parseBasicBlockToken(
   tokens: MarkdownToken[],
   index: number,
-  options?: InternalParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [ParsedNode, number] | null {
   const token = tokens[index]
   const includeSourceMap = options?.includeSourceMap === true
   switch (token.type) {
     case 'heading_open': {
-      const node = parseHeading(tokens, index, options)
+      const node = parseHeading(tokens, index, options, parseInlineTokens)
       if (includeSourceMap)
         applyNodeSourceMap(node, token, options)
       return [node, index + 3]
@@ -417,8 +420,9 @@ export function parseBasicBlockToken(
         const tag = htmlBlockNode.tag
         // markdown-it can normalize html_block token.content and lose original lines.
         // Re-extract the next full <tag>...</tag> block from the original source.
-        const source = String((options)?.__sourceMarkdown ?? '')
-        const cursor = Number((options)?.__customHtmlBlockCursor ?? 0)
+        const context = isParseContext(options) ? options : undefined
+        const source = String(context?.sourceMarkdown ?? '')
+        const cursor = Number(context?.customHtmlBlockCursor ?? 0)
 
         // If markdown-it provides a source map for this token, prefer anchoring the
         // re-extraction to that line range. This avoids accidentally matching an
@@ -429,8 +433,8 @@ export function parseBasicBlockToken(
         const searchStart = Math.max(clampNonNegative(cursor), clampNonNegative(mappedLineStart))
 
         const fromSource = findNextCustomHtmlBlockFromSource(source, tag, searchStart)
-        if (fromSource && options)
-          (options).__customHtmlBlockCursor = fromSource.end
+        if (fromSource && context)
+          context.customHtmlBlockCursor = fromSource.end
 
         const rawHtml = String(fromSource?.raw ?? htmlBlockNode.raw ?? '')
 
@@ -495,21 +499,21 @@ export function parseBasicBlockToken(
     }
 
     case 'table_open': {
-      const [tableNode, newIndex] = parseTable(tokens, index, options)
+      const [tableNode, newIndex] = parseTable(tokens, index, options, parseInlineTokens)
       if (includeSourceMap)
         applyNodeSourceMap(tableNode, token, options)
       return [tableNode, newIndex]
     }
 
     case 'dl_open': {
-      const [definitionListNode, newIndex] = parseDefinitionList(tokens, index, options)
+      const [definitionListNode, newIndex] = parseDefinitionList(tokens, index, options, parseInlineTokens)
       if (includeSourceMap)
         applyNodeSourceMap(definitionListNode, token, options)
       return [definitionListNode, newIndex]
     }
 
     case 'footnote_open': {
-      const [footnoteNode, newIndex] = parseFootnote(tokens, index, options)
+      const [footnoteNode, newIndex] = parseFootnote(tokens, index, options, parseInlineTokens)
       if (includeSourceMap)
         applyNodeSourceMap(footnoteNode, token, options)
       return [footnoteNode, newIndex]
@@ -531,25 +535,28 @@ export function parseBasicBlockToken(
 type ContainerParser = (
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ) => [AdmonitionNode, number]
 
 type ContainerMatcher = (
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ) => [AdmonitionNode, number] | null
 
 export function parseCommonBlockToken(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
-  handlers?: {
+  options: ParseOptions | undefined,
+  handlers: {
     parseContainer?: ContainerParser
     matchAdmonition?: ContainerMatcher
-  },
+  } | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [ParsedNode, number] | null {
-  const basicResult = parseBasicBlockToken(tokens, index, options)
+  const basicResult = parseBasicBlockToken(tokens, index, options, parseInlineTokens)
   if (basicResult)
     return basicResult
 
@@ -564,7 +571,7 @@ export function parseCommonBlockToken(
     case 'container_caution_open':
     case 'container_error_open': {
       if (handlers?.parseContainer) {
-        const result = handlers.parseContainer(tokens, index, options)
+        const result = handlers.parseContainer(tokens, index, options, parseInlineTokens)
         if (includeSourceMap)
           applyPairedBlockSourceMap(result[0], token, tokens[result[1] - 1], options)
         return result
@@ -574,7 +581,7 @@ export function parseCommonBlockToken(
 
     case 'container_open': {
       if (handlers?.matchAdmonition) {
-        const result = handlers.matchAdmonition(tokens, index, options)
+        const result = handlers.matchAdmonition(tokens, index, options, parseInlineTokens)
         if (result) {
           if (includeSourceMap)
             applyPairedBlockSourceMap(result[0], token, tokens[result[1] - 1], options)
@@ -585,7 +592,7 @@ export function parseCommonBlockToken(
     }
 
     case 'vmr_container_open': {
-      const result = parseVmrContainer(tokens, index, options)
+      const result = parseVmrContainer(tokens, index, options, parseInlineTokens)
       if (includeSourceMap)
         applyPairedBlockSourceMap(result[0], token, tokens[result[1] - 1], options)
       return result

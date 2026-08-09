@@ -1,7 +1,9 @@
-import type { InternalParseOptions, MarkdownToken, ParsedNode, ParseOptions, StrongNode } from '../../types'
-import { parseInlineTokens } from '../index'
-
-const ESCAPED_PUNCTUATION_RE = /\\([\\()[\]`$|*_\-!])/g
+import type { MarkdownToken, ParsedNode, ParseOptions, StrongNode } from '../../types'
+import type { ParseContext } from '../parse-context'
+import type { ParseInlineTokensFn } from './inline-parser-types'
+import { ensureParseContext } from '../parse-context'
+import { ESCAPED_PUNCTUATION_RE } from './literal-text-helpers'
+import { collectDelimitedInlineTokens } from './token-range'
 
 function resolveInnerRaw(raw: string | undefined, strongText: string) {
   if (!raw)
@@ -24,6 +26,7 @@ function resolveInnerRaw(raw: string | undefined, strongText: string) {
 export function parseStrongToken(
   tokens: MarkdownToken[],
   startIndex: number,
+  parseInlineTokens: ParseInlineTokensFn,
   raw?: string,
   options?: ParseOptions,
 ): {
@@ -31,31 +34,17 @@ export function parseStrongToken(
   nextIndex: number
 } {
   const children: ParsedNode[] = []
-  let strongText = ''
-  let i = startIndex + 1
-  const innerTokens: MarkdownToken[] = []
-
-  // Process tokens between strong_open and strong_close
-  // 这里可能会遇到多个 strong_open, 需要记录嵌套层级
-  let openCount = 1
-  while (i < tokens.length) {
-    if (tokens[i].type === 'strong_close') {
-      if (openCount === 1)
-        break
-      openCount--
-    }
-    if (tokens[i].type === 'strong_open') {
-      openCount++
-    }
-    strongText += String(tokens[i].content ?? '')
-    innerTokens.push(tokens[i])
-    i++
-  }
+  const { content: strongText, innerTokens, nextIndex } = collectDelimitedInlineTokens(
+    tokens,
+    startIndex,
+    'strong_close',
+    'strong_open',
+  )
 
   // Parse inner tokens to handle nested elements
-  const innerOptions: InternalParseOptions = {
-    ...(options),
-    __insideStrong: true,
+  const innerOptions: ParseContext = {
+    ...ensureParseContext(options),
+    insideStrong: true,
   }
   children.push(...parseInlineTokens(innerTokens, resolveInnerRaw(raw, strongText), undefined, innerOptions))
 
@@ -64,9 +53,6 @@ export function parseStrongToken(
     children,
     raw: `**${String(strongText)}**`,
   }
-
-  // Skip to after strong_close
-  const nextIndex = i < tokens.length ? i + 1 : tokens.length
 
   return { node, nextIndex }
 }

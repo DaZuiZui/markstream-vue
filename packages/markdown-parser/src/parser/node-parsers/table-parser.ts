@@ -1,14 +1,15 @@
 import type {
-  InternalParseOptions,
   MarkdownToken,
   ParseOptions,
   TableCellNode,
   TableNode,
   TableRowNode,
 } from '../../types'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import type { LinkifyDemotionContext } from '../linkifyHeuristics'
-import { parseInlineTokens } from '../inline-parsers'
+import type { ParseContext } from '../parse-context'
 import { inferLinkifyDemotionContext } from '../linkifyHeuristics'
+import { ensureParseContext } from '../parse-context'
 
 // Extract alignment from attrs (e.g. ['style','text-align:left'])
 function extractAlign(attrs: MarkdownToken['attrs']): 'left' | 'right' | 'center' | undefined {
@@ -55,21 +56,23 @@ function parseOptionsForTableCell(
   if (!hasTableCellContext(cellContext))
     return options
 
-  const inheritedContext = (options as InternalParseOptions | undefined)?.__linkifyDemotionContext
+  const parseContext = ensureParseContext(options)
+  const inheritedContext = parseContext.linkifyDemotionContext
   return {
-    ...options,
-    __linkifyDemotionContext: {
+    ...parseContext,
+    linkifyDemotionContext: {
       filename: inheritedContext?.filename || cellContext?.filename,
       explicitFilename: inheritedContext?.explicitFilename || cellContext?.explicitFilename,
       marketTicker: inheritedContext?.marketTicker || cellContext?.marketTicker,
     },
-  } as InternalParseOptions
+  } as ParseContext
 }
 
 export function parseTable(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [TableNode, number] {
   let j = index + 1
   let headerRow: TableRowNode | null = null

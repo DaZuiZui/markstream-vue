@@ -1,4 +1,6 @@
-import type { InternalParseOptions, ParseOptions } from '../types'
+import type { ParseOptions } from '../types'
+import type { ParseContext } from './parse-context'
+import { ensureParseContext } from './parse-context'
 
 const FILENAMEISH_EXTENSION_RE = /\.([a-z0-9]{1,15})$/i
 const FILENAMEISH_SEGMENT_RE = /[_()[\]{}<>]/u
@@ -185,15 +187,16 @@ function withLinkifyDemotionContext(options: ParseOptions | undefined, context?:
   if (!hasLinkifyDemotionContext(context))
     return options
 
-  const inheritedContext = (options as InternalParseOptions | undefined)?.__linkifyDemotionContext
+  const parseContext = ensureParseContext(options)
+  const inheritedContext = parseContext.linkifyDemotionContext
   return {
-    ...options,
-    __linkifyDemotionContext: {
+    ...parseContext,
+    linkifyDemotionContext: {
       filename: inheritedContext?.filename || context?.filename,
       explicitFilename: inheritedContext?.explicitFilename || context?.explicitFilename,
       marketTicker: inheritedContext?.marketTicker || context?.marketTicker,
     },
-  } as InternalParseOptions
+  } as ParseContext
 }
 
 function inferNextBlockLinkifyContext(raw?: string) {

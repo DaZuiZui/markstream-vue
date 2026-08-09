@@ -1,5 +1,5 @@
 import type { AdmonitionNode, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
-import { parseInlineTokens } from '../inline-parsers'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 import { applyNodeSourceMap } from '../node-source-map'
 import { parseBasicBlockToken } from './block-token-parser'
@@ -10,7 +10,8 @@ export function parseAdmonition(
   tokens: MarkdownToken[],
   index: number,
   match: RegExpExecArray,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [AdmonitionNode, number] {
   const kind = String(match[1] ?? 'note')
   const title = String(match[2] ?? (kind.charAt(0).toUpperCase() + kind.slice(1)))
@@ -38,7 +39,7 @@ export function parseAdmonition(
       tokens[j].type === 'bullet_list_open'
       || tokens[j].type === 'ordered_list_open'
     ) {
-      const [listNode, newIndex] = parseList(tokens, j, linkifyContext.options())
+      const [listNode, newIndex] = parseList(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (options?.includeSourceMap)
         applyNodeSourceMap(listNode, tokens[j], options)
       admonitionChildren.push(listNode)
@@ -46,7 +47,7 @@ export function parseAdmonition(
       j = newIndex
     }
     else if (tokens[j].type === 'blockquote_open') {
-      const [blockquoteNode, newIndex] = parseBlockquote(tokens, j, linkifyContext.options())
+      const [blockquoteNode, newIndex] = parseBlockquote(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (options?.includeSourceMap)
         applyNodeSourceMap(blockquoteNode, tokens[j], options)
       admonitionChildren.push(blockquoteNode)
@@ -54,7 +55,7 @@ export function parseAdmonition(
       j = newIndex
     }
     else {
-      const handled = parseBasicBlockToken(tokens, j, linkifyContext.options())
+      const handled = parseBasicBlockToken(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (handled) {
         admonitionChildren.push(handled[0])
         linkifyContext.remember(handled[0].raw)

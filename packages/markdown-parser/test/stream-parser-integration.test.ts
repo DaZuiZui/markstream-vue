@@ -89,8 +89,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     parseMarkdownToStructure(markdown, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
 
     for (let index = 40; index < 160; index++) {
@@ -98,8 +98,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       parseMarkdownToStructure(markdown, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
-        __timing: timing,
+        reuseStableTopLevelNodes: true,
+        parserMetrics: timing,
       } as any)
     }
 
@@ -134,7 +134,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     parseMarkdownToStructure(source, md, {
       final: true,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
 
     expect(eligibilityScans).toBe(0)
@@ -150,15 +150,15 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const first = parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     const timing: { processTokensReusedTopLevelNodes?: number } = {}
     const source = `${base}Appended paragraph with [another link](/guide/next)\n\n`
     const second = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
 
     expect(second).toEqual(parseMarkdownToStructure(source, coldMd, {
@@ -180,7 +180,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       final: false,
       streamParse: true,
       validateLink: allowLinks,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     const timing: { processTokensReusedTopLevelNodes?: number } = {}
     const source = `${base}Appended paragraph.\n\n`
@@ -188,8 +188,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       final: false,
       streamParse: true,
       validateLink: denyLinks,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
 
     expect(second).toEqual(parseMarkdownToStructure(source, coldMd, {
@@ -211,7 +211,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       final: false,
       streamParse: true,
       validateLink,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
 
     allowLinks = false
@@ -221,8 +221,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       final: false,
       streamParse: true,
       validateLink,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
 
     expect(second).toEqual(parseMarkdownToStructure(source, coldMd, {
@@ -254,7 +254,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const first = parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     const inline = (md as any).stream.peek().find((token: any) => token.type === 'inline')
     const synthetic = inline?.children?.find((token: any) => token.type === 'link')
@@ -263,8 +263,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const second = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
 
     expect(readSyntheticLinkOrigin(synthetic)).toBe('explicit')
@@ -313,15 +313,15 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const first = parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     const timing: { processTokensReusedTopLevelNodes?: number } = {}
     const source = `${base}Appended paragraph.\n\n`
     const second = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
     const synthetic = (md as any).stream.peek().find((token: any) => token.type === 'inline')?.children?.[0]
 
@@ -361,15 +361,15 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const first = parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     const timing: { processTokensReusedTopLevelNodes?: number } = {}
     const source = `${base}Appended paragraph.\n\n`
     const second = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
 
     expect(second).toEqual(parseMarkdownToStructure(source, coldMd, {
@@ -395,8 +395,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       const streamed = parseMarkdownToStructure(source, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
-        __timing: timing,
+        reuseStableTopLevelNodes: true,
+        parserMetrics: timing,
       } as any)
       const cold = parseMarkdownToStructure(source, coldMd, {
         final: false,
@@ -417,7 +417,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     expect(parseMarkdownToStructure(source, md, {
       final: true,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)).toEqual(parseMarkdownToStructure(source, coldMd, {
       final: true,
       streamParse: false,
@@ -431,15 +431,15 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const first = parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     const timing: { processTokensReusedTopLevelNodes?: number } = {}
     const source = `${base}[target]: https://example.com\n`
     const second = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
 
     expect(second).toEqual(parseMarkdownToStructure(source, coldMd, {
@@ -468,8 +468,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       const streamed = parseMarkdownToStructure(source, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
-        __timing: timing,
+        reuseStableTopLevelNodes: true,
+        parserMetrics: timing,
       } as any)
       const cold = parseMarkdownToStructure(source, coldMd, {
         final: false,
@@ -504,8 +504,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       const streamed = parseMarkdownToStructure(source, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
-        __timing: timing,
+        reuseStableTopLevelNodes: true,
+        parserMetrics: timing,
       } as any)
       const cold = parseMarkdownToStructure(source, coldMd, {
         final: false,
@@ -531,7 +531,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
 
     for (const char of tail) {
@@ -539,7 +539,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       const streamed = parseMarkdownToStructure(source, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       } as any)
       const cold = parseMarkdownToStructure(source, coldMd, {
         final: false,
@@ -552,7 +552,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const nodes = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     expect(nodes.at(-1)?.type).toBe(expectedType)
   })
@@ -563,14 +563,14 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const first = parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     const timing: { processTokensReusedTopLevelNodes?: number } = {}
     const second = parseMarkdownToStructure(`${base}- one\n- two\n\n`, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
 
     expect(second[0]).toBe(first[0])
@@ -585,12 +585,12 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     parseMarkdownToStructure(`${base}foo.md\n\n`, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
 
     const source = `${base}foo.md\n\nbar.md\n\n`
@@ -601,8 +601,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const streamed = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any) as any[]
     const cold = parseMarkdownToStructure(
       source,
@@ -637,7 +637,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       const streamed = parseMarkdownToStructure(source, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       } as any)
       const cold = parseMarkdownToStructure(source, coldMd, {
         final: false,
@@ -662,7 +662,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const streamed = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
     const timing: {
       processTokensInputTokens?: number
@@ -670,8 +670,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     } = {}
     const finalNodes = parseMarkdownToStructure(source, md, {
       final: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
     const coldFinal = parseMarkdownToStructure(
       source,
@@ -700,13 +700,13 @@ describe('parseMarkdownToStructure stream parser integration', () => {
       parseMarkdownToStructure(source, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
-        __timing: timing,
+        reuseStableTopLevelNodes: true,
+        parserMetrics: timing,
       } as any)
       parseMarkdownToStructure(source, baselineMd, {
         final: false,
         streamParse: true,
-        __timing: baselineTiming,
+        parserMetrics: baselineTiming,
       } as any)
     }
 
@@ -733,7 +733,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const streamed = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __timing: timing,
+      parserMetrics: timing,
     } as any) as any[]
     const cold = parseMarkdownToStructure(
       source,
@@ -782,7 +782,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
 
     const source = base + appended
@@ -793,8 +793,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const streamed = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
     } as any)
     const cold = parseMarkdownToStructure(
       source,
@@ -823,7 +823,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     parseMarkdownToStructure(base, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any)
 
     const source = `${base}Transformed append.\n\n`
@@ -835,8 +835,8 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const streamed = parseMarkdownToStructure(source, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
-      __timing: timing,
+      reuseStableTopLevelNodes: true,
+      parserMetrics: timing,
       preTransformTokens(tokens) {
         transformCalls++
         return tokens
@@ -1329,7 +1329,7 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     const timing: { tokenCloneMs?: number } = {}
     const nodes = parseMarkdownToStructure(buildLargeAppendFriendlyDoc(40), md, {
       streamParse: true,
-      __timing: timing,
+      parserMetrics: timing,
     } as any) as any[]
 
     expect(nodes).toHaveLength(40)

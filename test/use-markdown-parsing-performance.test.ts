@@ -757,7 +757,7 @@ describe('useMarkdownParsing performance behavior', () => {
     const content = ref(`${buildParagraphs(40)}\n\n`)
     const customComponents = ref<Record<string, unknown>>({ paragraph: {} })
     const props = reactive({
-      parseOptions: { __reuseStableTopLevelNodes: true } as any,
+      parseOptions: { reuseStableTopLevelNodes: true } as any,
     } as NodeRendererProps)
     const scope = effectScope()
     const state = scope.run(() => useMarkdownParsing(props, {
@@ -1830,7 +1830,7 @@ stable tail
       parseMarkdownToStructureTotalMs?: number
     } = {}
 
-    parseMarkdownToStructure(content, md, { streamParse: true, __timing: timing } as any)
+    parseMarkdownToStructure(content, md, { streamParse: true, parserMetrics: timing } as any)
     const before = md.stream?.stats?.() as {
       appendHits?: number
       tailHits?: number
@@ -1840,7 +1840,7 @@ stable tail
 
     parseMarkdownToStructure(`${content}Appended paragraph with [tail](https://example.com/tail) and **strong** text.\n\n`, md, {
       streamParse: true,
-      __timing: timing,
+      parserMetrics: timing,
     } as any)
 
     const after = md.stream?.stats?.() as typeof before

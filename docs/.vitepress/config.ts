@@ -180,6 +180,7 @@ const englishGuideSidebar = [
     items: [
       { text: 'API Overview', link: '/guide/api' },
       { text: 'Performance', link: '/guide/performance' },
+      { text: 'Parser Performance Baseline', link: '/guide/parser-performance-baseline' },
       { text: '1.0 Benchmark Report', link: '/guide/benchmark-1-0' },
       { text: '2.0.0 Roadmap', link: '/guide/roadmap-2-0' },
       { text: '1.0 Release Readiness', link: '/guide/release-1-0' },
@@ -298,6 +299,7 @@ const chineseGuideSidebar = [
       { text: 'API 总览', link: '/zh/guide/api' },
       { text: '搜索', link: '/zh/guide/search' },
       { text: '性能', link: '/zh/guide/performance' },
+      { text: '解析器性能基线', link: '/zh/guide/parser-performance-baseline' },
       { text: '1.0 Benchmark 报告', link: '/zh/guide/benchmark-1-0' },
       { text: '2.0.0 路线图', link: '/zh/guide/roadmap-2-0' },
       { text: '1.0 发布就绪', link: '/zh/guide/release-1-0' },

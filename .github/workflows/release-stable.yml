@@ -66,6 +66,10 @@ jobs:
         if: ${{ steps.meta.outputs.pkg == 'markstream-vue' }}
         run: pnpm release:verify
 
+      - name: Run parser release verification
+        if: ${{ steps.meta.outputs.pkg == 'stream-markdown-parser' }}
+        run: pnpm verify:parser-release
+
       - name: Build package for npm
         if: ${{ steps.meta.outputs.pkg != 'markstream-vue' }}
         env:

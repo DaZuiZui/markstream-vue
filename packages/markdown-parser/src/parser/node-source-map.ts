@@ -1,11 +1,12 @@
-import type { InternalParseOptions, MarkdownNodeSourceMap, MarkdownToken, ParsedNode, ParseOptions } from '../types'
+import type { MarkdownNodeSourceMap, MarkdownToken, ParsedNode, ParseOptions } from '../types'
+import { isParseContext } from './parse-context'
 
 function mapSourceLineRange(
   startLine: number,
   endLine: number,
   options?: ParseOptions,
 ): MarkdownNodeSourceMap {
-  const mapper = (options as InternalParseOptions | undefined)?.__sourceLineMapper
+  const mapper = isParseContext(options) ? options.sourceLineMapper : undefined
   if (!mapper) {
     return {
       startLine,
