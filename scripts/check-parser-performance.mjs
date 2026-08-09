@@ -491,7 +491,7 @@ function createBaseline(report) {
     )]))
     const retainedHeapBytesMax = Object.fromEntries(referenceScales.map((item) => {
       const retained = Number(item.metrics.retainedHeapBytes || 0)
-      return [item.scale, Math.max(8 * 1024 * 1024, retained * 3 + 2 * 1024 * 1024)]
+      return [item.scale, retained * 3 + 2 * 1024 * 1024]
     }))
     const retainedHeapGrowth = [
       [1, 2],
