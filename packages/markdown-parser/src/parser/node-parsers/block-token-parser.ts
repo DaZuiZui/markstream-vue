@@ -1,7 +1,7 @@
 import type { AdmonitionNode, InternalParseOptions, MarkdownToken, ParagraphNode, ParsedNode, ParseOptions, VmrContainerNode } from '../../types'
 import { escapeTagForRegExp, findTagCloseIndexOutsideQuotes } from '../../htmlTagUtils'
 import { normalizeCustomTag } from '../customHtmlTags'
-import { buildAllowedHtmlTagSet } from '../index'
+import { buildAllowedHtmlTagSet } from '../html-tag-sets'
 import { parseInlineTokens } from '../inline-parsers'
 import { parseFenceToken } from '../inline-parsers/fence-parser'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'

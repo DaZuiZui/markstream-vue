@@ -2,7 +2,7 @@ import type { InlineCodeNode, MarkdownToken, ParsedNode } from '../../types'
 import { VOID_HTML_TAGS } from '../../htmlTags'
 import { parseTagAttrs } from '../../htmlTagUtils'
 import { normalizeCustomTag } from '../customHtmlTags'
-import { buildAllowedHtmlTagSet } from '../index'
+import { buildAllowedHtmlTagSet } from '../html-tag-sets'
 
 type ParseInlineTokensFn = (
   tokens: MarkdownToken[],

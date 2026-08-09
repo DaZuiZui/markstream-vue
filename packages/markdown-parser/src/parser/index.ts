@@ -1,7 +1,7 @@
 import type { MarkdownIt, Token } from '../markdown-it-types'
 import type { HtmlBlockNode, InternalParseOptions, MarkdownToken, ParsedNode, ParseOptions } from '../types'
 import { normalizeCustomHtmlTags } from '../customHtmlTags'
-import { NON_STRUCTURING_HTML_TAGS, STANDARD_BLOCK_HTML_TAGS, STANDARD_HTML_TAGS, VOID_HTML_TAGS } from '../htmlTags'
+import { NON_STRUCTURING_HTML_TAGS, STANDARD_BLOCK_HTML_TAGS, VOID_HTML_TAGS } from '../htmlTags'
 import { escapeTagForRegExp, findTagCloseIndexOutsideQuotes, parseTagAttrs } from '../htmlTagUtils'
 import { isMathLike } from '../plugins/isMathLike'
 import { isCacheStableLinkValidator, readSyntheticLinkOrigin } from '../plugins/linkTokenMetadata'
@@ -1839,18 +1839,6 @@ function parseTopLevelTokens(
   const cloned = cloneMarkdownTokens(tokens, true)
   addTiming(timing, 'tokenCloneMs', getParserNow() - startedAt)
   return cloned
-}
-
-export function buildAllowedHtmlTagSet(options?: ParseOptions) {
-  const custom = options?.customHtmlTags
-  if (!Array.isArray(custom) || custom.length === 0)
-    return STANDARD_HTML_TAGS
-  const set = new Set<string>(STANDARD_HTML_TAGS)
-  for (const name of normalizeCustomHtmlTags(custom)) {
-    if (name)
-      set.add(name)
-  }
-  return set
 }
 
 function stringifyInlineNodeRaw(node: ParsedNode) {
@@ -4611,4 +4599,5 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
   return result
 }
 
+export { buildAllowedHtmlTagSet } from './html-tag-sets'
 export { parseInlineTokens }
