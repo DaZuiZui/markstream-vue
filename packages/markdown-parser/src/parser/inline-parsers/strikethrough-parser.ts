@@ -4,11 +4,12 @@ import type {
   ParseOptions,
   StrikethroughNode,
 } from '../../types'
-import { parseInlineTokens } from '../index'
+import type { ParseInlineTokensFn } from './inline-parser-types'
 
 export function parseStrikethroughToken(
   tokens: MarkdownToken[],
   startIndex: number,
+  parseInlineTokens: ParseInlineTokensFn,
   options?: ParseOptions,
 ): {
   node: StrikethroughNode

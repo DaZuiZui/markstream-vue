@@ -1,9 +1,10 @@
 import type { HighlightNode, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
-import { parseInlineTokens } from '../index'
+import type { ParseInlineTokensFn } from './inline-parser-types'
 
 export function parseHighlightToken(
   tokens: MarkdownToken[],
   startIndex: number,
+  parseInlineTokens: ParseInlineTokensFn,
   options?: ParseOptions,
 ): {
   node: HighlightNode

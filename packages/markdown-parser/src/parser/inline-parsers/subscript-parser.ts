@@ -1,9 +1,10 @@
 import type { MarkdownToken, ParsedNode, ParseOptions, SubscriptNode } from '../../types'
-import { parseInlineTokens } from '../index'
+import type { ParseInlineTokensFn } from './inline-parser-types'
 
 export function parseSubscriptToken(
   tokens: MarkdownToken[],
   startIndex: number,
+  parseInlineTokens: ParseInlineTokensFn,
   options?: ParseOptions,
 ): {
   node: SubscriptNode

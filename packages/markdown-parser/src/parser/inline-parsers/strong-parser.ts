@@ -1,5 +1,5 @@
 import type { InternalParseOptions, MarkdownToken, ParsedNode, ParseOptions, StrongNode } from '../../types'
-import { parseInlineTokens } from '../index'
+import type { ParseInlineTokensFn } from './inline-parser-types'
 
 const ESCAPED_PUNCTUATION_RE = /\\([\\()[\]`$|*_\-!])/g
 
@@ -24,6 +24,7 @@ function resolveInnerRaw(raw: string | undefined, strongText: string) {
 export function parseStrongToken(
   tokens: MarkdownToken[],
   startIndex: number,
+  parseInlineTokens: ParseInlineTokensFn,
   raw?: string,
   options?: ParseOptions,
 ): {

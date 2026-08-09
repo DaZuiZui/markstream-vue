@@ -1,15 +1,9 @@
 import type { InlineCodeNode, MarkdownToken, ParsedNode } from '../../types'
+import type { ParseInlineTokensFn } from './inline-parser-types'
 import { VOID_HTML_TAGS } from '../../htmlTags'
 import { parseTagAttrs } from '../../htmlTagUtils'
 import { normalizeCustomTag } from '../customHtmlTags'
 import { buildAllowedHtmlTagSet } from '../html-tag-sets'
-
-type ParseInlineTokensFn = (
-  tokens: MarkdownToken[],
-  raw?: string,
-  pPreToken?: MarkdownToken,
-  options?: { requireClosingStrong?: boolean, customHtmlTags?: readonly string[] },
-) => ParsedNode[]
 
 interface TagSetCacheEntry {
   customTagSet: Set<string> | null
