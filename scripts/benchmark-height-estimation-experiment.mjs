@@ -111,14 +111,13 @@ function startDevServer(port) {
   }
 }
 
-async function runScenario(page, codeRendererMode, width) {
-  return page.evaluate(async ({ codeRendererMode, width }) => {
+async function runScenario(page, width) {
+  return page.evaluate(async (width) => {
     const api = window.__heightEstimationExperiment
     if (!api)
       throw new Error('Missing __heightEstimationExperiment API.')
 
     await api.setSourceMode('nodes')
-    await api.setCodeRendererMode(codeRendererMode)
     await api.setLoadingPhase(false)
     await api.setPaneWidth(width)
     await api.waitUntilReady()
@@ -139,7 +138,7 @@ async function runScenario(page, codeRendererMode, width) {
     })
 
     return {
-      codeRendererMode,
+      renderer: 'stream-diffs',
       width,
       summary,
       benchmarks: {
@@ -147,11 +146,11 @@ async function runScenario(page, codeRendererMode, width) {
         skipMeasuredSimpleText,
       },
     }
-  }, { codeRendererMode, width })
+  }, width)
 }
 
 function assertScenario(result) {
-  const id = `${result.codeRendererMode}/${result.width}`
+  const id = `stream-diffs/${result.width}`
   const { allNodes, skipMeasuredSimpleText } = result.benchmarks ?? {}
   if (!(allNodes?.nodeCount >= 1000))
     throw new Error(`[${id}] Benchmark node count is too low.`)
@@ -184,21 +183,16 @@ async function run() {
     await page.goto(`http://${host}:${port}/height-estimation-experiment`, { waitUntil: 'load' })
 
     const scenarios = []
-    for (const codeRendererMode of ['markdown', 'monaco']) {
-      for (const width of [520, 1280])
-        scenarios.push(await runScenario(page, codeRendererMode, width))
-    }
+    for (const width of [520, 1280])
+      scenarios.push(await runScenario(page, width))
 
     for (const scenario of scenarios)
       assertScenario(scenario)
 
-    const report = {
-      markdown: {},
-      monaco: {},
-    }
+    const report = {}
 
     for (const scenario of scenarios)
-      report[scenario.codeRendererMode][scenario.width] = scenario
+      report[scenario.width] = scenario
 
     console.log(JSON.stringify(report, null, 2))
     await browser.close()

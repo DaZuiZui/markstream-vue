@@ -16,6 +16,7 @@ interface StreamMonacoHelpers {
   safeClean: ReturnType<typeof vi.fn>
   refreshDiffPresentation: ReturnType<typeof vi.fn>
   setTheme: ReturnType<typeof vi.fn>
+  whenVisualReady?: ReturnType<typeof vi.fn>
 }
 
 function getStreamMonacoHelpers(): StreamMonacoHelpers {
@@ -43,6 +44,7 @@ function resetStreamMonacoHelpers() {
   helpers.safeClean.mockReset().mockImplementation(() => {})
   helpers.refreshDiffPresentation.mockReset().mockImplementation(() => {})
   helpers.setTheme.mockReset().mockImplementation(async () => {})
+  delete helpers.whenVisualReady
 }
 
 async function flushReact() {
@@ -367,6 +369,64 @@ describe('markstream-react codeBlockNode theme updates', () => {
       resolveCreateDiffEditor?.()
     })
     await flushReact()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('reveals a partial diff after a queued update produces a visible surface', async () => {
+    const helpers = getStreamMonacoHelpers()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    let editorHost: HTMLElement | null = null
+    let shell: HTMLElement | null = null
+
+    helpers.whenVisualReady = vi.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true)
+    helpers.createDiffEditor.mockImplementation(async (element: HTMLElement) => {
+      editorHost = element
+      shell = document.createElement('div')
+      shell.className = 'stream-diffs-shell'
+      element.appendChild(shell)
+    })
+    helpers.updateDiff.mockImplementation(async () => {
+      if (!shell)
+        return
+      setElementRect(shell, { top: 0, bottom: 200, height: 200 })
+      const pre = document.createElement('pre')
+      pre.dataset.diff = ''
+      pre.textContent = '- "version": "1.0.0"\n+ "version": "2.0.0"'
+      shell.appendChild(pre)
+    })
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        node: {
+          type: 'code_block',
+          language: 'json',
+          code: '{',
+          diff: true,
+          originalCode: '{',
+          updatedCode: '{',
+          raw: '```diff json\n{\n```',
+        },
+        loading: true,
+        stream: true,
+        showHeader: false,
+      }))
+    })
+    await waitForCallCount(helpers.createDiffEditor, 1)
+    await waitForCallCount(helpers.updateDiff, 1)
+    await waitForEditorVisible(() => editorHost)
+
+    expect(helpers.whenVisualReady.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(shell?.getBoundingClientRect().height).toBe(200)
+    expect(shell?.querySelector('pre[data-diff]')?.textContent).toContain('"version": "2.0.0"')
+    expect(editorHost?.dataset.markstreamEnhanced).toBe('true')
+    expect(host.querySelector('.code-fallback-plain')).toBeNull()
 
     await act(async () => {
       root.unmount()

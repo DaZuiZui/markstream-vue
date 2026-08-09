@@ -209,7 +209,7 @@ function classifyRequest(url, counts) {
     counts.image += 1
   if (/\/components\/CodeBlockNode/i.test(url))
     counts.codeComponentModules += 1
-  if (/stream-diffs|node_modules\/monaco-editor/i.test(url))
+  if (/stream-diffs/i.test(url))
     counts.codeRuntimeModules += 1
   if (/\/components\/(?:MathBlockNode|MathInlineNode)/i.test(url))
     counts.mathComponentModules += 1

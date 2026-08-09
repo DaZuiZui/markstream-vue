@@ -134,10 +134,12 @@ export function resolveLanguageId(lang?: string | null): string {
   switch (canonical) {
     case 'plain':
       return 'plaintext'
-    case 'jsx':
-      return 'javascript'
-    case 'tsx':
-      return 'typescript'
+    case 'shell':
+      return 'zsh'
+    case 'objectivec':
+      return 'objective-c'
+    case 'objectivecpp':
+      return 'objective-cpp'
     default:
       return canonical
   }

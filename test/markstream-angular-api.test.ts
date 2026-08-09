@@ -23,6 +23,7 @@ import {
 import {
   getLanguageIcon,
   normalizeLanguageIdentifier,
+  resolveLanguageId,
 } from '../packages/markstream-angular/src/utils/languageIcon'
 import { buildKaTeXCDNWorkerSource } from '../packages/markstream-angular/src/workers/katexCdnWorker'
 import { buildMermaidCDNWorkerSource } from '../packages/markstream-angular/src/workers/mermaidCdnWorker'
@@ -30,6 +31,9 @@ import { buildMermaidCDNWorkerSource } from '../packages/markstream-angular/src/
 describe('markstream-angular api parity helpers', () => {
   it('uses the Vue 3 Material language icons by default', () => {
     expect(normalizeLanguageIdentifier('ts:example.ts')).toBe('typescript')
+    expect(resolveLanguageId('bash')).toBe('zsh')
+    expect(resolveLanguageId('jsx')).toBe('jsx')
+    expect(resolveLanguageId('tsx')).toBe('tsx')
     expect(getLanguageIcon('ts')).toContain('fill="#0288d1"')
     expect(getLanguageIcon('ts')).toContain('viewBox="0 0 16 16"')
     expect(getLanguageIcon('javascript')).toContain('fill="#ffca28"')

@@ -42,6 +42,21 @@ const baselineId = 'height-estimation-baseline'
 const experimentId = 'height-estimation-experiment'
 const referenceId = 'height-estimation-reference'
 
+setHeightEstimationExperiment(experimentId, {
+  enabled: true,
+  textEstimation: true,
+  codeBlockEstimation: true,
+  restore: true,
+  diagnostics: true,
+})
+setHeightEstimationExperiment(referenceId, {
+  enabled: true,
+  textEstimation: false,
+  codeBlockEstimation: false,
+  restore: true,
+  diagnostics: true,
+})
+
 const sourceMode = ref<SourceMode>('nodes')
 const paneWidthPx = ref(520)
 const loadingPhase = ref(false)
@@ -435,7 +450,22 @@ async function waitUntilReady(timeoutMs = 45000) {
   while (Date.now() - startedAt < timeoutMs) {
     const current = await refreshReports()
     const referenceCodeBlocks = current.reference?.nodes.filter(node => node.type === 'code_block') ?? []
-    const referenceCodeBlocksReady = referenceCodeBlocks.every(node => typeof node.measuredHeight === 'number' && node.measuredHeight > 0)
+    const referenceCodeBlocksReady = referenceCodeBlocks.length > 0 && referenceCodeBlocks.every((node) => {
+      const slot = referencePaneRef.value?.querySelector(`[data-node-index="${node.index}"]`) as HTMLElement | null
+      const measuredHeight = node.measuredHeight
+      if (!slot || typeof measuredHeight !== 'number' || measuredHeight <= 0)
+        return false
+      if (Math.abs(measuredHeight - slot.offsetHeight) > 1)
+        return false
+      if (loadingPhase.value)
+        return true
+
+      const block = slot.querySelector('.code-block-container') as HTMLElement | null
+      const surface = block?.querySelector('.stream-diffs-shell') as HTMLElement | null
+      const surfaceRect = surface?.getBoundingClientRect()
+      return block?.dataset.markstreamEnhancementState === 'ready'
+        && Boolean(surfaceRect && surfaceRect.width > 0 && surfaceRect.height > 0)
+    })
     const widthsAligned = current.baseline
       && current.experiment
       && current.reference
@@ -605,14 +635,6 @@ watch(
 )
 
 onMounted(() => {
-  setHeightEstimationExperiment(experimentId, {
-    enabled: true,
-    textEstimation: true,
-    codeBlockEstimation: true,
-    restore: true,
-    diagnostics: true,
-  })
-
   const api = {
     waitUntilReady,
     refreshReports,
@@ -643,6 +665,7 @@ onBeforeUnmount(() => {
   if ((window as any).__heightEstimationExperiment)
     delete (window as any).__heightEstimationExperiment
   clearHeightEstimationExperiment(experimentId)
+  clearHeightEstimationExperiment(referenceId)
   for (const id of [baselineId, experimentId, referenceId])
     removeCustomComponents(id)
 })

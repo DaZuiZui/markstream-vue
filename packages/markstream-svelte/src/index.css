@@ -1608,7 +1608,6 @@ body > div[id^="dmermaid-"] {
 .markstream-svelte .code-block-body {
   position: relative;
   display: grid;
-  min-height: 96px;
   min-width: 0;
   overflow: hidden;
   background: var(--markstream-code-fallback-bg, var(--code-bg));
@@ -1673,10 +1672,6 @@ body > div[id^="dmermaid-"] {
 
 .markstream-svelte .code-action-btn:disabled:hover {
   background: transparent;
-}
-
-.markstream-svelte .code-editor-container {
-  min-height: 96px;
 }
 
 .markstream-svelte .code-editor-container.is-hidden {

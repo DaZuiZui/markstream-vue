@@ -242,7 +242,7 @@ html.dark,
 .chat-wrapper {
   position: relative;
   z-index: 1;
-  height: 100vh;
+  min-height: 100vh;
   padding: 20px;
   display: flex;
   align-items: center;
@@ -258,7 +258,7 @@ html.dark,
   position: relative;
   width: 100%;
   max-width: 960px;
-  height: calc(100vh - 40px);
+  min-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -506,10 +506,10 @@ html.dark,
   flex: 1;
   display: flex;
   flex-direction: column-reverse;
-  overflow-y: auto;
+  overflow-y: visible;
   overflow-anchor: none;
   scroll-behavior: smooth;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
 }
 
 .chat-messages > .markdown-renderer {
@@ -776,7 +776,7 @@ html.dark,
   }
 
   .chat-container {
-    height: calc(100vh - 20px);
+    min-height: calc(100vh - 20px);
     border-radius: 18px;
   }
 

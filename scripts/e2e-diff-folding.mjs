@@ -192,11 +192,37 @@ function resolveChromeLaunchOptions() {
 
 async function waitForHiddenRegions(page, timeout = 20000) {
   await page.waitForFunction(() => {
-    const hiddenTexts = Array.from(document.querySelectorAll('.diff-hidden-lines'))
-      .map(el => (el.textContent ?? '').trim())
-      .filter(Boolean)
-    return hiddenTexts.some(text => /hidden lines|unchanged|unmodified/i.test(text))
+    return Array.from(document.querySelectorAll('.code-block-container.is-diff diffs-container'))
+      .some(host => Array.from(host.shadowRoot?.querySelectorAll('[data-unmodified-lines]') ?? [])
+        .some(label => /unmodified lines|unchanged|hidden lines/i.test(label.textContent ?? '')))
   }, { timeout })
+}
+
+async function waitForHomeDiff(page, timeout = 90000) {
+  await page.waitForSelector('.code-block-container.is-diff[data-markstream-enhanced="true"] .stream-diffs-shell', { timeout })
+  await page.waitForFunction(() => {
+    return document.querySelector('.chat-header__meta-pill')?.textContent?.trim() === 'Ready'
+  }, undefined, { timeout })
+}
+
+async function collectExpandState(page, surfaceIndex) {
+  return page.evaluate((surfaceIndex) => {
+    const surface = document.querySelectorAll('.code-block-container.is-diff diffs-container')[surfaceIndex]
+    const root = surface?.shadowRoot
+    const hiddenTexts = Array.from(root?.querySelectorAll('[data-unmodified-lines]') ?? [])
+      .map(element => (element.textContent ?? '').trim())
+      .filter(Boolean)
+    const hiddenLineTotal = hiddenTexts.reduce((total, value) => {
+      const count = Number.parseInt(value.match(/\d+/)?.[0] ?? '0', 10)
+      return total + (Number.isFinite(count) ? count : 0)
+    }, 0)
+    return {
+      hiddenRegionCount: hiddenTexts.length,
+      hiddenLineTotal,
+      visibleLineCount: root?.querySelectorAll('[data-line-type]').length ?? 0,
+      surfaceHeightPx: surface instanceof HTMLElement ? surface.getBoundingClientRect().height : 0,
+    }
+  }, surfaceIndex)
 }
 
 async function collectResult(page, name, extra = {}) {
@@ -217,27 +243,17 @@ async function collectResult(page, name, extra = {}) {
     const roundPx = (value) => {
       return Math.round(value * 100) / 100
     }
-    const parsePx = (value) => {
-      const n = Number.parseFloat(String(value ?? ''))
-      return Number.isFinite(n) ? n : null
-    }
-    const diffEditors = Array.from(document.querySelectorAll('.monaco-diff-editor'))
-    const hiddenTexts = Array.from(document.querySelectorAll('.diff-hidden-lines'))
-      .map(el => (el.textContent ?? '').trim())
-      .filter(Boolean)
-
-    const originalVisibleLines = document.querySelectorAll('.editor.original .view-line').length
-    const modifiedVisibleLines = document.querySelectorAll('.editor.modified .view-line').length
-    const bodyText = document.body.textContent ?? ''
-    const diffEditorMetrics = diffEditors.map((editorEl, index) => {
-      const editorRect = editorEl.getBoundingClientRect()
-      const host = editorEl.closest('.code-editor-container')
-      const hostStyle = host instanceof HTMLElement ? window.getComputedStyle(host) : null
-      const editorHiddenTexts = Array.from(editorEl.querySelectorAll('.diff-hidden-lines'))
-        .map(el => (el.textContent ?? '').trim())
+    const diffSurfaces = Array.from(document.querySelectorAll('.code-block-container.is-diff diffs-container'))
+    const surfaceMetrics = diffSurfaces.map((surface, index) => {
+      const root = surface.shadowRoot
+      const pre = root?.querySelector('pre[data-diff]')
+      const shell = surface.closest('.stream-diffs-shell')
+      const host = surface.closest('.code-editor-container')
+      const hiddenRegionTexts = Array.from(root?.querySelectorAll('[data-unmodified-lines]') ?? [])
+        .map(element => (element.textContent ?? '').trim())
         .filter(Boolean)
       const foldButtonCandidates = Array.from(
-        editorEl.querySelectorAll('.markstream-inline-fold-proxy, .diff-hidden-lines a'),
+        root?.querySelectorAll('[data-expand-button]') ?? [],
       )
       const foldButton
         = foldButtonCandidates.find(candidate => isVisibleButton(candidate))
@@ -245,21 +261,18 @@ async function collectResult(page, name, extra = {}) {
           ?? null
       const foldButtonRect = foldButton?.getBoundingClientRect?.() ?? null
       const hostHeightPx = host instanceof HTMLElement ? roundPx(host.getBoundingClientRect().height) : null
-      const hostMaxHeightPx = parsePx(hostStyle?.maxHeight)
-      const hostOverflow = hostStyle?.overflow ?? null
+      const shellHeightPx = shell instanceof HTMLElement ? roundPx(shell.getBoundingClientRect().height) : null
+      const surfaceHeightPx = surface instanceof HTMLElement ? roundPx(surface.getBoundingClientRect().height) : null
 
       return {
         index,
-        isSideBySide: editorEl.classList.contains('side-by-side'),
-        foldButtonKind: foldButton?.classList.contains('markstream-inline-fold-proxy') ? 'proxy' : (foldButton ? 'native' : null),
-        hiddenRegionTexts: editorHiddenTexts,
+        diffType: pre?.getAttribute('data-diff-type') ?? null,
+        hiddenRegionTexts,
         hostHeightPx,
-        hostInlineHeight: host instanceof HTMLElement ? host.style.height : '',
-        hostMaxHeightPx,
-        hostInlineMaxHeight: host instanceof HTMLElement ? host.style.maxHeight : '',
-        hostOverflow,
-        hostOverflowY: hostStyle?.overflowY ?? null,
-        editorHeightPx: roundPx(editorEl.getBoundingClientRect().height),
+        shellHeightPx,
+        surfaceHeightPx,
+        deletionVisibleLines: root?.querySelectorAll('[data-deletions] [data-content] [data-line-type]').length ?? 0,
+        additionVisibleLines: root?.querySelectorAll('[data-additions] [data-content] [data-line-type]').length ?? 0,
         foldButtonRect: foldButtonRect
           ? {
               x: roundPx(foldButtonRect.x),
@@ -271,33 +284,29 @@ async function collectResult(page, name, extra = {}) {
         foldButtonVisible: !!(foldButtonRect
           && foldButtonRect.width >= 16
           && foldButtonRect.height >= 16
-          && foldButtonRect.left >= editorRect.left - 1
-          && foldButtonRect.right <= editorRect.right + 1
-          && foldButtonRect.top >= editorRect.top - 1
-          && foldButtonRect.bottom <= editorRect.bottom + 1),
-        hostShrunkAfterFolding: editorHiddenTexts.length > 0
-          ? !!(hostHeightPx != null && hostMaxHeightPx != null && hostHeightPx + 1 < hostMaxHeightPx && hostOverflow !== 'auto')
-          : null,
+          && isVisibleButton(foldButton)),
+        surfaceFitsHost: hostHeightPx != null
+          && shellHeightPx != null
+          && surfaceHeightPx != null
+          && Math.abs(hostHeightPx - shellHeightPx) <= 2
+          && Math.abs(shellHeightPx - surfaceHeightPx) <= 2,
       }
     })
-    const foldedMetrics = diffEditorMetrics.filter(metric => metric.hiddenRegionTexts.length > 0)
-    const inlineMetrics = foldedMetrics.filter(metric => metric.isSideBySide === false)
-    const foldedHostShrinks = foldedMetrics.length > 0 && foldedMetrics.every(metric => metric.hostShrunkAfterFolding === true)
-    const inlineFoldButtonVisible = inlineMetrics.length > 0 && inlineMetrics.every(metric => metric.foldButtonVisible === true)
+    const hiddenRegionTexts = surfaceMetrics.flatMap(metric => metric.hiddenRegionTexts)
+    const foldedMetrics = surfaceMetrics.filter(metric => metric.hiddenRegionTexts.length > 0)
 
     return {
       name,
       ...extra,
-      diffEditors: diffEditors.length,
-      hiddenRegionCount: hiddenTexts.length,
-      hiddenRegionTexts: hiddenTexts,
-      hasHiddenRegionText: hiddenTexts.some(text => /hidden lines|unchanged|unmodified/i.test(text)),
-      bodyContainsHiddenLinesText: /hidden lines|unchanged|unmodified/i.test(bodyText),
-      originalVisibleLines,
-      modifiedVisibleLines,
-      foldedHostShrinks,
-      inlineFoldButtonVisible,
-      diffEditorMetrics,
+      diffSurfaces: diffSurfaces.length,
+      hiddenRegionCount: hiddenRegionTexts.length,
+      hiddenRegionTexts,
+      hasHiddenRegionText: hiddenRegionTexts.some(text => /unmodified lines|unchanged|hidden lines/i.test(text)),
+      deletionVisibleLines: surfaceMetrics.reduce((total, metric) => total + metric.deletionVisibleLines, 0),
+      additionVisibleLines: surfaceMetrics.reduce((total, metric) => total + metric.additionVisibleLines, 0),
+      foldingControlsVisible: foldedMetrics.length > 0 && foldedMetrics.every(metric => metric.foldButtonVisible),
+      surfacesFitHosts: surfaceMetrics.length > 0 && surfaceMetrics.every(metric => metric.surfaceFitsHost),
+      surfaceMetrics,
     }
   }, { name, extra })
 }
@@ -309,7 +318,7 @@ async function runControlledScenario(context, baseUrl) {
   const url = `${baseUrl}/test#data=raw:${encodeURIComponent(markdown)}`
 
   await page.goto(url, { waitUntil: 'networkidle' })
-  await page.waitForSelector('.monaco-diff-editor', { timeout: 20000 })
+  await page.waitForSelector('.code-block-container.is-diff[data-markstream-enhanced="true"] .stream-diffs-shell', { timeout: 20000 })
   await waitForHiddenRegions(page)
   await page.waitForTimeout(500)
 
@@ -327,13 +336,15 @@ async function runControlledScenario(context, baseUrl) {
 async function runHomeScenario(context, baseUrl) {
   const page = await context.newPage()
   const url = `${baseUrl}/`
-  const diffEditor = page.locator('.monaco-diff-editor').last()
 
   await page.goto(url, { waitUntil: 'networkidle' })
-  await page.waitForSelector('.monaco-diff-editor', { timeout: 30000 })
-  await diffEditor.scrollIntoViewIfNeeded()
+  await waitForHomeDiff(page)
+  await page.evaluate(() => {
+    const blocks = document.querySelectorAll('.code-block-container.is-diff')
+    blocks[blocks.length - 1]?.scrollIntoView({ block: 'center' })
+  })
   await page.waitForTimeout(500)
-  await waitForHiddenRegions(page, 30000)
+  await waitForHiddenRegions(page, 90000)
   await page.waitForTimeout(800)
 
   const result = await collectResult(page, 'index-route', { url })
@@ -344,26 +355,55 @@ async function runHomeScenario(context, baseUrl) {
 async function runHomeInlineScenario(context, baseUrl) {
   const page = await context.newPage()
   const url = `${baseUrl}/`
-  const diffEditor = page.locator('.monaco-diff-editor').last()
 
   await page.setViewportSize({ width: 430, height: 900 })
   await page.goto(url, { waitUntil: 'networkidle' })
-  await page.waitForSelector('.monaco-diff-editor', { timeout: 30000 })
-  await diffEditor.scrollIntoViewIfNeeded()
-  await waitForHiddenRegions(page, 30000)
+  await waitForHomeDiff(page)
+  await page.evaluate(() => {
+    const blocks = document.querySelectorAll('.code-block-container.is-diff')
+    blocks[blocks.length - 1]?.scrollIntoView({ block: 'center' })
+  })
+  await waitForHiddenRegions(page, 90000)
   await page.waitForTimeout(800)
 
   const initial = await collectResult(page, 'index-route-inline', { url })
-  const foldButton = page.locator('.markstream-inline-fold-proxy:visible, .diff-hidden-lines a:visible').first()
+  const foldButton = page.locator('diffs-container [data-expand-button]:visible').first()
+  const surfaceIndex = await foldButton.evaluate((button) => {
+    const root = button.getRootNode()
+    const surface = root instanceof ShadowRoot ? root.host : null
+    return Array.from(document.querySelectorAll('.code-block-container.is-diff diffs-container')).indexOf(surface)
+  })
+  const beforeExpand = await collectExpandState(page, surfaceIndex)
   await foldButton.click()
-  await page.waitForFunction(() => document.querySelectorAll('.diff-hidden-lines').length === 0, { timeout: 10000 })
-  const afterExpandHiddenRegionCount = await page.locator('.diff-hidden-lines').count()
+  await page.waitForFunction(({ surfaceIndex, beforeExpand }) => {
+    const surface = document.querySelectorAll('.code-block-container.is-diff diffs-container')[surfaceIndex]
+    const root = surface?.shadowRoot
+    const hiddenTexts = Array.from(root?.querySelectorAll('[data-unmodified-lines]') ?? [])
+      .map(element => (element.textContent ?? '').trim())
+      .filter(Boolean)
+    const hiddenLineTotal = hiddenTexts.reduce((total, value) => {
+      const count = Number.parseInt(value.match(/\d+/)?.[0] ?? '0', 10)
+      return total + (Number.isFinite(count) ? count : 0)
+    }, 0)
+    const visibleLineCount = root?.querySelectorAll('[data-line-type]').length ?? 0
+    const surfaceHeightPx = surface instanceof HTMLElement ? surface.getBoundingClientRect().height : 0
+    return hiddenTexts.length < beforeExpand.hiddenRegionCount
+      || hiddenLineTotal < beforeExpand.hiddenLineTotal
+      || visibleLineCount > beforeExpand.visibleLineCount
+      || surfaceHeightPx > beforeExpand.surfaceHeightPx + 1
+  }, { surfaceIndex, beforeExpand }, { timeout: 10000 })
+  const afterExpand = await collectExpandState(page, surfaceIndex)
+  const afterExpandChanged = afterExpand.hiddenRegionCount < beforeExpand.hiddenRegionCount
+    || afterExpand.hiddenLineTotal < beforeExpand.hiddenLineTotal
+    || afterExpand.visibleLineCount > beforeExpand.visibleLineCount
+    || afterExpand.surfaceHeightPx > beforeExpand.surfaceHeightPx + 1
 
   await page.close()
   return {
     ...initial,
-    afterExpandHiddenRegionCount,
-    afterExpandFoldCleared: afterExpandHiddenRegionCount === 0,
+    beforeExpand,
+    afterExpand,
+    afterExpandChanged,
   }
 }
 
@@ -402,7 +442,9 @@ async function run() {
       localStorage.setItem('vmr-settings-stream-chunk-size', '16')
       localStorage.setItem('vmr-settings-stream-chunk-size-min', '16')
       localStorage.setItem('vmr-settings-stream-chunk-size-max', '16')
-      localStorage.setItem('vmr-test-render-mode', 'monaco')
+      localStorage.setItem('vmr-settings-stream-burstiness', '0')
+      localStorage.setItem('vmr-settings-smooth-streaming', 'false')
+      localStorage.setItem('vmr-test-render-mode', 'stream-diffs')
       localStorage.setItem('vmr-test-code-stream', 'false')
       localStorage.setItem('vmr-test-viewport-priority', 'false')
       localStorage.setItem('vmr-test-batch-rendering', 'false')
@@ -417,12 +459,16 @@ async function run() {
     await browser.close()
 
     const ok = controlled.hasHiddenRegionText && controlled.hiddenRegionCount > 0
+      && controlled.foldingControlsVisible
+      && controlled.deletionVisibleLines > 0
+      && controlled.additionVisibleLines > 0
       && home.hasHiddenRegionText && home.hiddenRegionCount > 0
-      && home.foldedHostShrinks
+      && home.foldingControlsVisible
+      && home.surfacesFitHosts
       && homeInline.hasHiddenRegionText && homeInline.hiddenRegionCount > 0
-      && homeInline.inlineFoldButtonVisible
-      && homeInline.afterExpandFoldCleared
-      && home.diffEditors === 1
+      && homeInline.foldingControlsVisible
+      && homeInline.afterExpandChanged
+      && home.diffSurfaces === 1
 
     const result = {
       ok,

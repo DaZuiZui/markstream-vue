@@ -49,9 +49,9 @@ describe('stream-diffs-only code block loader', () => {
     vi.doMock('stream-diffs', () => runtimeModule({ runtime: 'stream-diffs' }))
 
     const loader = await getLoader(loaderPath, exportName)
-    const mod = await loader()
-    expect(mod).not.toBeNull()
-    expect(mod?.useMonaco?.()).toEqual({ runtime: 'stream-diffs' })
+    const modules = await Promise.all([loader(), loader()])
+    expect(modules.every(Boolean)).toBe(true)
+    expect(modules[0]?.useMonaco?.()).toEqual({ runtime: 'stream-diffs' })
   })
 
   it.each(LOADERS)('%s loader returns null when stream-diffs is absent', async (_name, loaderPath, exportName) => {
@@ -62,5 +62,46 @@ describe('stream-diffs-only code block loader', () => {
     const loader = await getLoader(loaderPath, exportName)
     const mod = await loader()
     expect(mod).toBeNull()
+  })
+
+  it('keeps concurrent React callers behind the runtime preload', async () => {
+    let releasePreload: (() => void) | undefined
+    const preload = vi.fn(() => new Promise<void>((resolve) => {
+      releasePreload = resolve
+    }))
+    const runtime = {
+      useMonaco: () => ({ runtime: 'stream-diffs' }),
+      preloadStreamDiffsWorkers: preload,
+    }
+    vi.doMock('stream-diffs', () => runtime)
+
+    const loader = await getLoader('../../packages/markstream-react/src/components/CodeBlockNode/monaco.ts', 'getStreamDiffsRuntime')
+    const first = loader()
+    await vi.waitFor(() => expect(preload).toHaveBeenCalledTimes(1))
+
+    let secondSettled = false
+    const second = loader().then((module) => {
+      secondSettled = true
+      return module
+    })
+    await Promise.resolve()
+    expect(secondSettled).toBe(false)
+
+    releasePreload?.()
+    const modules = await Promise.all([first, second])
+    expect(modules.every(Boolean)).toBe(true)
+  })
+
+  it('does not cache the React runtime when preload fails', async () => {
+    vi.doMock('stream-diffs', () => ({
+      useMonaco: () => ({ runtime: 'stream-diffs' }),
+      preloadStreamDiffsWorkers: vi.fn(async () => {
+        throw new Error('worker preload failed')
+      }),
+    }))
+
+    const loader = await getLoader('../../packages/markstream-react/src/components/CodeBlockNode/monaco.ts', 'getStreamDiffsRuntime')
+    await expect(loader()).resolves.toBeNull()
+    await expect(loader()).resolves.toBeNull()
   })
 })

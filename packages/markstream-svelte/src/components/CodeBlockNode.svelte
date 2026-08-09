@@ -536,6 +536,11 @@ ${configuredUnsafeCSS}`.trim()
         await Promise.resolve(helpers.updateCode(code, monacoLanguage))
         scheduleEditorTokenization()
       }
+      if (!editorReady && await prepareEditorHandoff(desiredKind, lifecycleId)) {
+        editorRevealed = true
+        fallbackRetired = true
+        editorReady = true
+      }
       queueThemeSync()
       applyEditorOptions()
       scheduleEditorHeightSync()
@@ -587,9 +592,8 @@ ${configuredUnsafeCSS}`.trim()
 
   async function prepareEditorHandoff(kind: 'single' | 'diff', creationId: number) {
     await tick()
-    // Time-box the handoff: if visual readiness can't be confirmed (e.g. a
-    // hidden/zero-size container), reveal the editor anyway once its DOM is
-    // mounted so the block never strands in the pre-fallback forever.
+    // Streaming updates retry this gate, so keep the fallback until the live
+    // surface has positive geometry.
     const deadline = Date.now() + 1500
     let attempt = 0
     while (Date.now() < deadline && attempt < 30) {
@@ -604,7 +608,7 @@ ${configuredUnsafeCSS}`.trim()
         return isEditorVisuallyReady(kind)
       }
     }
-    return !!(mounted && editorHost && lifecycleId === creationId && hasRenderedEditorDom(kind))
+    return !!(mounted && editorHost && lifecycleId === creationId && isEditorVisuallyReady(kind))
   }
 
   async function recreateEditor(kind: 'single' | 'diff') {

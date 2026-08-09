@@ -27,11 +27,13 @@ const LANGUAGE_ALIAS_MAP: Record<string, string> = {
   'mjs': 'javascript',
   'plaintext': 'plain',
   'py': 'python',
+  'bash': 'shell',
   'sh': 'shell',
   'shellscript': 'shell',
   'text': 'plain',
   'ts': 'typescript',
   'tsx': 'tsx',
+  'zsh': 'shell',
 }
 
 const LANGUAGE_LABEL_MAP: Record<string, string> = {
@@ -96,10 +98,12 @@ export function resolveLanguageId(lang?: string | null): string {
     return 'plaintext'
   if (canonical === 'plain')
     return 'plaintext'
-  if (canonical === 'jsx')
-    return 'javascript'
-  if (canonical === 'tsx')
-    return 'typescript'
+  if (canonical === 'shell')
+    return 'zsh'
+  if (canonical === 'objectivec')
+    return 'objective-c'
+  if (canonical === 'objectivecpp')
+    return 'objective-cpp'
   return canonical
 }
 

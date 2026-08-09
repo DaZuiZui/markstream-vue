@@ -1151,10 +1151,20 @@ ${configuredUnsafeCSS}`.trim()
       }
       catch {}
 
+      const editorHost = editorHostRef.current
+      if (editorHost?.getAttribute('data-markstream-enhanced') !== 'true') {
+        const visuallyReady = await waitForEditorVisualReady(editorHost, helpers.whenVisualReady)
+        if (visuallyReady) {
+          applyEditorHeight(expanded)
+          setEditorReady(true)
+        }
+      }
+
       scheduleEditorHeightSync(expanded)
     }
     void run()
   }, [
+    applyEditorHeight,
     canonicalLanguage,
     codeLanguage,
     collapsed,

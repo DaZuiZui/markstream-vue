@@ -1638,9 +1638,9 @@ async function runVirtualTimelineZeroDiffCodeBlockStateProbe(page, port, ensureS
 
     const bad = samples.find(sample =>
       sample.probes.some(probe =>
-        // Forbidden third state: fallback gone, Monaco not visible, and not enhanced.
+        // Forbidden third state: fallback gone, stream-diffs not visible, and not enhanced.
         // A hidden editor host alone is still a blank visible shell.
-        !probe.enhanced && !probe.fallbackVisible && !probe.monacoVisible,
+        !probe.enhanced && !probe.fallbackVisible && !probe.diffSurfaceVisible,
       ),
     )
 
@@ -1664,7 +1664,7 @@ async function runVirtualTimelineZeroDiffCodeBlockStateProbe(page, port, ensureS
 
   assert(
     !result.bad,
-    'diff CodeBlockNode exposed an intermediate plain Monaco state between pre fallback and highlighted editor',
+    'diff CodeBlockNode exposed an intermediate blank state between pre fallback and stream-diffs',
     result,
   )
 

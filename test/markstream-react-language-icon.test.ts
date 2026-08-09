@@ -7,11 +7,15 @@ import {
   languageMap,
   normalizeLanguageIdentifier,
   preloadExtendedLanguageIcons,
+  resolveLanguageId,
 } from '../packages/markstream-react/src/utils/languageIcon'
 
 describe('markstream-react Vue 3 code header parity', () => {
   it('uses the Vue 3 Material language icons by default', async () => {
     expect(normalizeLanguageIdentifier('ts:example.ts')).toBe('typescript')
+    expect(resolveLanguageId('bash')).toBe('zsh')
+    expect(resolveLanguageId('jsx')).toBe('jsx')
+    expect(resolveLanguageId('tsx')).toBe('tsx')
     expect(getLanguageIcon('ts')).toContain('fill="#0288d1"')
     expect(getLanguageIcon('ts')).toContain('viewBox="0 0 16 16"')
     expect(getLanguageIcon('javascript')).toContain('fill="#ffca28"')

@@ -111,14 +111,13 @@ function startDevServer(port) {
   }
 }
 
-async function runScenario(page, sourceMode, codeRendererMode) {
-  return page.evaluate(async ({ sourceMode, codeRendererMode }) => {
+async function runScenario(page, sourceMode) {
+  return page.evaluate(async (sourceMode) => {
     const api = window.__heightEstimationExperiment
     if (!api)
       throw new Error('Missing __heightEstimationExperiment API.')
 
     await api.setSourceMode(sourceMode)
-    await api.setCodeRendererMode(codeRendererMode)
     await api.waitUntilReady()
 
     const summaryInitial = api.getSummary()
@@ -130,7 +129,6 @@ async function runScenario(page, sourceMode, codeRendererMode) {
 
     return {
       sourceMode,
-      codeRendererMode,
       summaryInitial,
       summaryFinal,
       restore,
@@ -138,7 +136,7 @@ async function runScenario(page, sourceMode, codeRendererMode) {
       resize,
       reports: api.getReports(),
     }
-  }, { sourceMode, codeRendererMode })
+  }, sourceMode)
 }
 
 function absoluteOrNull(value) {
@@ -146,7 +144,7 @@ function absoluteOrNull(value) {
 }
 
 function assertScenario(result) {
-  const id = `${result.sourceMode}/${result.codeRendererMode}`
+  const id = result.sourceMode
   const summary = result.summaryFinal
   if (!summary)
     throw new Error(`[${id}] Missing summary.`)
@@ -202,10 +200,8 @@ async function run() {
     await page.goto(`http://${host}:${port}/height-estimation-experiment`, { waitUntil: 'load' })
 
     const scenarios = []
-    for (const sourceMode of ['nodes', 'content']) {
-      for (const codeRendererMode of ['markdown', 'monaco'])
-        scenarios.push(await runScenario(page, sourceMode, codeRendererMode))
-    }
+    for (const sourceMode of ['nodes', 'content'])
+      scenarios.push(await runScenario(page, sourceMode))
 
     for (const scenario of scenarios) {
       try {
@@ -215,7 +211,6 @@ async function run() {
         console.error('[e2e-height-estimation-experiment] scenario failure')
         console.error(JSON.stringify({
           sourceMode: scenario.sourceMode,
-          codeRendererMode: scenario.codeRendererMode,
           summaryInitial: scenario.summaryInitial,
           summaryFinal: scenario.summaryFinal,
           restore: scenario.restore,
@@ -226,9 +221,9 @@ async function run() {
       }
     }
 
-    const report = { nodes: {}, content: {} }
+    const report = {}
     for (const scenario of scenarios) {
-      report[scenario.sourceMode][scenario.codeRendererMode] = {
+      report[scenario.sourceMode] = {
         initial: scenario.summaryInitial,
         final: scenario.summaryFinal,
         restore: scenario.restore,

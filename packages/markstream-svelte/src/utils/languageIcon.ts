@@ -167,10 +167,12 @@ export function resolveLanguageId(lang?: string | null): string {
     return 'plaintext'
   if (canonical === 'plain')
     return 'plaintext'
-  if (canonical === 'jsx')
-    return 'javascript'
-  if (canonical === 'tsx')
-    return 'typescript'
+  if (canonical === 'shell')
+    return 'zsh'
+  if (canonical === 'objectivec')
+    return 'objective-c'
+  if (canonical === 'objectivecpp')
+    return 'objective-cpp'
   return canonical
 }
 

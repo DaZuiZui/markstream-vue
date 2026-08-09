@@ -241,7 +241,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
     wrapper.unmount()
   })
 
-  it('passes active themes and syntax languages to stream-monaco legacy', async () => {
+  it('passes active themes and syntax languages to stream-diffs', async () => {
     const helpers = getStreamMonacoHelpers()
 
     const wrapper = mount(CodeBlockNode as any, {
@@ -271,7 +271,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
     expect(options.padding).toEqual({ top: 8, bottom: 8 })
     expect(options.tabSize).toBe(4)
     expect(options.themes).toEqual(['vitesse-dark', 'vitesse-light'])
-    expect(options.languages).toEqual(expect.arrayContaining(['tsx', 'typescript', 'plaintext']))
+    expect(options.languages).toEqual(expect.arrayContaining(['tsx', 'plaintext']))
 
     wrapper.unmount()
   })
