@@ -4,6 +4,20 @@ import { inferLinkifyDemotionContext, isDecodedFromRawPunycode, shouldDemoteFile
 import { ensureParseContext } from '../parse-context'
 import { cloneTokenWithMutableChildren } from '../token-copy'
 import { parseCheckboxInputToken, parseCheckboxToken } from './checkbox-parser'
+import {
+  countUnescapedAsterisks,
+  findLiteralIntrawordAsteriskRunPairEnd,
+  findNextStrongClose,
+  findNextUnescapedAsterisk,
+  findNextUnescapedEmphasisClose,
+  findTripleAsteriskClose,
+  getAsteriskRunInfo,
+  isEmphasisOpenDelimiter,
+  isStrongOpenDelimiter,
+  isTripleAsteriskInnerText,
+  isWordChar,
+  isWordOnly,
+} from './delimiter-helpers'
 import { parseEmojiToken } from './emoji-parser'
 import { parseEmphasisToken } from './emphasis-parser'
 import { parseFenceToken } from './fence-parser'
@@ -15,6 +29,23 @@ import { parseImageToken } from './image-parser'
 import { parseInlineCodeToken } from './inline-code-parser'
 import { parseInsertToken } from './insert-parser'
 import { parseLinkToken } from './link-parser'
+import {
+  decodeVisibleTextFromRaw,
+  ESCAPED_PUNCTUATION_RE,
+  getInlineTextMarkerFlags,
+  hasEscapedMarkup,
+  INLINE_CANDIDATE_MARKERS,
+  INLINE_TEXT_MARKER_BACKSLASH,
+  INLINE_TEXT_MARKER_BACKTICK,
+  INLINE_TEXT_MARKER_BANG,
+  INLINE_TEXT_MARKER_CLOSE_BRACKET,
+  INLINE_TEXT_MARKER_DOLLAR,
+  INLINE_TEXT_MARKER_OPEN_BRACKET,
+  INLINE_TEXT_MARKER_OPEN_PAREN,
+  isEscapedVisibleChar,
+  recoverTrailingMarkdownLinkLabel,
+  stripTrailingMidStateMarker,
+} from './literal-text-helpers'
 import { parseMathInlineToken } from './math-inline-parser'
 import { parseReferenceToken } from './reference-parser'
 import { parseStrikethroughToken } from './strikethrough-parser'
@@ -27,399 +58,16 @@ import { parseTextToken } from './text-parser'
 const STRIKETHROUGH_RE = /[^~]*~{2,}[^~]+/
 const HAS_STRONG_RE = /\*\*/
 const INLINE_REPARSE_MARKER_RE = /[[_*^~]/
-const ESCAPED_PUNCTUATION_RE = /\\([\\()[\]`$|*_\-!])/g
-const ESCAPABLE_PUNCTUATION = new Set(['\\', '(', ')', '[', ']', '`', '$', '|', '*', '_', '-', '!'])
-const WHITESPACE_RE = /\s/u
-const ASCII_PUNCTUATION_RE = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/
-const UNICODE_PUNCTUATION_RE = /\p{P}/u
-const CJK_OPENING_PUNCTUATION_RE = /^[《「『【〔〖〘〚〈（［｛“‘﹁﹃﹙﹛﹝]$/u
-const CJK_CLOSING_PUNCTUATION_RE = /^[》」』】〕〗〙〛〉）］｝”’﹂﹄﹚﹜﹞]$/u
 
 // Helper: detect likely URLs/hrefs (autolinks). Extracted so the
 // detection logic is easy to tweak and test.
 const AUTOLINK_PROTOCOL_RE = /^(?:https?:\/\/|mailto:|ftp:\/\/)/i
 const AUTOLINK_GENERIC_RE = /:\/\//
-const INLINE_TEXT_MARKER_BACKSLASH = 1
-const INLINE_TEXT_MARKER_ASTERISK = 2
-const INLINE_TEXT_MARKER_UNDERSCORE = 4
-const INLINE_TEXT_MARKER_TILDE = 8
-const INLINE_TEXT_MARKER_BACKTICK = 16
-const INLINE_TEXT_MARKER_OPEN_BRACKET = 32
-const INLINE_TEXT_MARKER_CLOSE_BRACKET = 64
-const INLINE_TEXT_MARKER_BANG = 128
-const INLINE_TEXT_MARKER_DOLLAR = 256
-const INLINE_TEXT_MARKER_PIPE = 512
-const INLINE_TEXT_MARKER_OPEN_PAREN = 1024
-const INLINE_CANDIDATE_MARKERS = INLINE_TEXT_MARKER_ASTERISK
-  | INLINE_TEXT_MARKER_UNDERSCORE
-  | INLINE_TEXT_MARKER_TILDE
-  | INLINE_TEXT_MARKER_BACKTICK
-  | INLINE_TEXT_MARKER_OPEN_BRACKET
-  | INLINE_TEXT_MARKER_BANG
-  | INLINE_TEXT_MARKER_DOLLAR
-  | INLINE_TEXT_MARKER_PIPE
-  | INLINE_TEXT_MARKER_OPEN_PAREN
-
-function getInlineTextMarkerFlags(content: string) {
-  let flags = 0
-  for (let index = 0; index < content.length; index++) {
-    switch (content.charCodeAt(index)) {
-      case 33:
-        flags |= INLINE_TEXT_MARKER_BANG
-        break
-      case 36:
-        flags |= INLINE_TEXT_MARKER_DOLLAR
-        break
-      case 40:
-        flags |= INLINE_TEXT_MARKER_OPEN_PAREN
-        break
-      case 42:
-        flags |= INLINE_TEXT_MARKER_ASTERISK
-        break
-      case 91:
-        flags |= INLINE_TEXT_MARKER_OPEN_BRACKET
-        break
-      case 92:
-        flags |= INLINE_TEXT_MARKER_BACKSLASH
-        break
-      case 93:
-        flags |= INLINE_TEXT_MARKER_CLOSE_BRACKET
-        break
-      case 95:
-        flags |= INLINE_TEXT_MARKER_UNDERSCORE
-        break
-      case 96:
-        flags |= INLINE_TEXT_MARKER_BACKTICK
-        break
-      case 124:
-        flags |= INLINE_TEXT_MARKER_PIPE
-        break
-      case 126:
-        flags |= INLINE_TEXT_MARKER_TILDE
-        break
-    }
-  }
-  return flags
-}
-
-function countUnescapedAsterisks(str: string): number {
-  let count = 0
-  let i = 0
-  while (i < str.length) {
-    if (str[i] === '\\' && i + 1 < str.length && str[i + 1] === '*') {
-      i += 2 // skip escaped asterisk
-      continue
-    }
-    if (str[i] === '*')
-      count++
-    i++
-  }
-  return count
-}
-
-function findNextUnescapedAsterisk(rawContent: string | undefined, startContentIndex = 0): number {
-  if (!rawContent)
-    return -1
-
-  let contentIndex = 0
-
-  for (let rawIndex = 0; rawIndex < rawContent.length; rawIndex++) {
-    const char = rawContent[rawIndex]
-    const nextChar = rawContent[rawIndex + 1]
-
-    if (char === '\\' && nextChar && ESCAPABLE_PUNCTUATION.has(nextChar)) {
-      if (nextChar === '*' && contentIndex >= startContentIndex) {
-        contentIndex++
-        rawIndex++
-        continue
-      }
-
-      contentIndex++
-      rawIndex++
-      continue
-    }
-
-    if (char === '*' && contentIndex >= startContentIndex)
-      return contentIndex
-
-    contentIndex++
-  }
-
-  return -1
-}
-
-function isWhitespaceChar(ch?: string) {
-  return !!ch && WHITESPACE_RE.test(ch)
-}
-
-function isPunctuationChar(ch?: string) {
-  return !!ch && (ASCII_PUNCTUATION_RE.test(ch) || UNICODE_PUNCTUATION_RE.test(ch))
-}
-
-function isCjkOpeningPunctuation(ch?: string, previous?: string) {
-  return !!ch
-    && !!previous
-    && /^\p{Script=Han}$/u.test(previous)
-    && CJK_OPENING_PUNCTUATION_RE.test(ch)
-}
-
-function isCjkClosingPunctuation(ch?: string, next?: string) {
-  return !!ch
-    && !!next
-    && /^[\p{L}\p{N}]$/u.test(next)
-    && CJK_CLOSING_PUNCTUATION_RE.test(ch)
-}
-
-function isEmphasisOpenDelimiter(content: string, index: number) {
-  const prev = index > 0 ? content[index - 1] : undefined
-  const next = content[index + 1]
-
-  if (!next || isWhitespaceChar(next))
-    return false
-
-  return !(isPunctuationChar(next) && !isCjkOpeningPunctuation(next, prev) && !!prev && !isWhitespaceChar(prev) && !isPunctuationChar(prev))
-}
-
-function isEmphasisCloseDelimiter(content: string, index: number) {
-  const prev = index > 0 ? content[index - 1] : undefined
-  const next = content[index + 1]
-
-  if (!prev || isWhitespaceChar(prev))
-    return false
-
-  return !(isPunctuationChar(prev) && !isCjkClosingPunctuation(prev, next) && !!next && !isWhitespaceChar(next) && !isPunctuationChar(next))
-}
-
-function findNextUnescapedEmphasisClose(
-  rawContent: string | undefined,
-  content: string,
-  startContentIndex = 0,
-) {
-  let searchIndex = startContentIndex
-  let sawInvalidClose = false
-
-  while (searchIndex < content.length) {
-    const closeIndex = rawContent
-      ? findNextUnescapedAsterisk(rawContent, searchIndex)
-      : content.indexOf('*', searchIndex)
-
-    if (closeIndex === -1)
-      break
-
-    if (isEmphasisCloseDelimiter(content, closeIndex))
-      return { index: closeIndex, sawInvalidClose }
-
-    sawInvalidClose = true
-    searchIndex = closeIndex + 1
-  }
-
-  return { index: -1, sawInvalidClose }
-}
-
-function isStrongOpenDelimiter(content: string, index: number) {
-  const prev = index > 0 ? content[index - 1] : undefined
-  const next = content[index + 2]
-
-  if (!next || isWhitespaceChar(next))
-    return false
-
-  return !(isPunctuationChar(next) && !isCjkOpeningPunctuation(next, prev) && !!prev && !isWhitespaceChar(prev) && !isPunctuationChar(prev))
-}
-
-function isStrongCloseDelimiter(content: string, index: number) {
-  const prev = index > 0 ? content[index - 1] : undefined
-  const next = content[index + 2]
-
-  if (!prev || isWhitespaceChar(prev))
-    return false
-
-  return !(isPunctuationChar(prev) && !isCjkClosingPunctuation(prev, next) && !!next && !isWhitespaceChar(next) && !isPunctuationChar(next))
-}
-
-function findNextStrongClose(content: string, startContentIndex = 0) {
-  let searchIndex = startContentIndex
-  let sawInvalidClose = false
-
-  while (searchIndex < content.length) {
-    const closeIndex = content.indexOf('**', searchIndex)
-    if (closeIndex === -1)
-      break
-
-    if (isStrongCloseDelimiter(content, closeIndex))
-      return { index: closeIndex, sawInvalidClose }
-
-    sawInvalidClose = true
-    searchIndex = closeIndex + 2
-  }
-
-  return { index: -1, sawInvalidClose }
-}
-
-function decodeVisibleTextFromRaw(rawText: string) {
-  let output = ''
-  let index = 0
-
-  while (index < rawText.length) {
-    if (rawText[index] !== '\\') {
-      output += rawText[index]
-      index++
-      continue
-    }
-
-    let slashCount = 0
-    while (index + slashCount < rawText.length && rawText[index + slashCount] === '\\')
-      slashCount++
-
-    const nextChar = rawText[index + slashCount]
-    output += '\\'.repeat(Math.floor(slashCount / 2))
-
-    if (slashCount % 2 === 1) {
-      if (nextChar && ESCAPABLE_PUNCTUATION.has(nextChar)) {
-        output += nextChar
-        index += slashCount + 1
-        continue
-      }
-
-      output += '\\'
-    }
-
-    index += slashCount
-  }
-
-  return output
-}
-
-function getRawIndexForVisibleIndex(rawText: string, visibleIndex: number) {
-  let outputIndex = 0
-
-  for (let rawIndex = 0; rawIndex < rawText.length; rawIndex++) {
-    const char = rawText[rawIndex]
-    const nextChar = rawText[rawIndex + 1]
-
-    if (char === '\\' && nextChar && ESCAPABLE_PUNCTUATION.has(nextChar)) {
-      if (outputIndex === visibleIndex)
-        return rawIndex + 1
-      outputIndex++
-      rawIndex++
-      continue
-    }
-
-    if (outputIndex === visibleIndex)
-      return rawIndex
-
-    outputIndex++
-  }
-
-  return -1
-}
-
-function isEscapedVisibleChar(rawText: string, visibleIndex: number, expectedChar?: string) {
-  const rawIndex = getRawIndexForVisibleIndex(rawText, visibleIndex)
-  if (rawIndex === -1)
-    return false
-  if (expectedChar && rawText[rawIndex] !== expectedChar)
-    return false
-
-  let slashCount = 0
-  for (let i = rawIndex - 1; i >= 0 && rawText[i] === '\\'; i--)
-    slashCount++
-
-  return slashCount % 2 === 1
-}
-
-const WORD_CHAR_RE = /[\p{L}\p{N}]/u
-const WORD_ONLY_RE = /^[\p{L}\p{N}]+$/u
-
-function isWordChar(ch?: string) {
-  if (!ch)
-    return false
-  return WORD_CHAR_RE.test(ch)
-}
-
-function isWordOnly(text: string) {
-  if (!text)
-    return false
-  return WORD_ONLY_RE.test(text)
-}
-
-function getAsteriskRunInfo(content: string, start: number) {
-  let end = start
-  while (end < content.length && content[end] === '*')
-    end++
-  const prev = start > 0 ? content[start - 1] : undefined
-  const next = end < content.length ? content[end] : undefined
-  return {
-    len: end - start,
-    prev,
-    next,
-    intraword: isWordChar(prev) && isWordChar(next),
-  }
-}
-
-function findLiteralIntrawordAsteriskRunPairEnd(content: string) {
-  const runs: Array<{ start: number, end: number }> = []
-
-  for (let index = 0; index < content.length;) {
-    if (content[index] !== '*') {
-      index++
-      continue
-    }
-
-    const info = getAsteriskRunInfo(content, index)
-    const end = index + info.len
-    if (info.len >= 2 && info.intraword)
-      runs.push({ start: index, end })
-    index = end
-  }
-
-  for (let index = 0; index < runs.length - 1; index++) {
-    const current = runs[index]
-    const next = runs[index + 1]
-    const inner = content.slice(current.end, next.start)
-    if (!isWordOnly(inner))
-      return next.end
-  }
-
-  return -1
-}
-
-function isTripleAsteriskInnerText(text: string) {
-  return !!text && text.trim() === text && /^[\p{L}\p{N}\s]+$/u.test(text)
-}
-
-function findTripleAsteriskClose(content: string, start: number) {
-  let searchIndex = start
-
-  while (searchIndex < content.length) {
-    const index = content.indexOf('***', searchIndex)
-    if (index === -1)
-      return -1
-
-    const info = getAsteriskRunInfo(content, index)
-    if (info.len >= 3)
-      return index
-
-    searchIndex = index + info.len
-  }
-
-  return -1
-}
 
 export function isLikelyUrl(href?: string) {
   if (!href)
     return false
   return AUTOLINK_PROTOCOL_RE.test(href) || AUTOLINK_GENERIC_RE.test(href)
-}
-
-function recoverTrailingMarkdownLinkLabel(raw?: string, href?: string) {
-  if (!raw || !href)
-    return null
-
-  const match = raw.match(/\[([^\]\n]+)\]\(([^)]*)$/)
-  if (!match)
-    return null
-
-  return match[2] === href ? match[1] : null
 }
 
 // Process inline tokens (for text inside paragraphs, headings, etc.)
@@ -980,10 +628,6 @@ export function parseInlineTokens(
       pushNode(node)
   }
 
-  function hasEscapedMarkup(token: MarkdownToken, escapedPrefix: string) {
-    return String(token.markup ?? '').startsWith(escapedPrefix)
-  }
-
   function stripTrailingLoadingParenMathOpener(token: MarkdownToken) {
     if (!currentTextNode || token.loading !== true || token.markup !== '\\(\\)')
       return
@@ -1015,22 +659,6 @@ export function parseInlineTokens(
       && tokens[i + 3]?.type === 'link_close'
       && tokens[i + 4]?.type === 'text'
       && String(tokens[i + 4]?.content ?? '').startsWith(')')
-  }
-
-  function stripTrailingMidStateMarker(content: string, token: MarkdownToken, markerFlags = getInlineTextMarkerFlags(content)) {
-    let nextContent = content
-    const rawTokenContent = String(token.content ?? '')
-
-    if ((markerFlags & INLINE_TEXT_MARKER_BACKSLASH) !== 0 && nextContent.endsWith('\\') && !hasEscapedMarkup(token, '\\\\') && !rawTokenContent.endsWith('\\\\'))
-      nextContent = nextContent.slice(0, -1)
-
-    if ((markerFlags & INLINE_TEXT_MARKER_OPEN_PAREN) !== 0 && nextContent.endsWith('(') && !hasEscapedMarkup(token, '\\(') && !rawTokenContent.endsWith('\\('))
-      nextContent = nextContent.slice(0, -1)
-
-    if ((markerFlags & INLINE_TEXT_MARKER_ASTERISK) !== 0 && /\*+$/.test(nextContent) && !hasEscapedMarkup(token, '\\*') && !rawTokenContent.endsWith('\\*'))
-      nextContent = nextContent.replace(/\*+$/, '')
-
-    return nextContent
   }
 
   while (i < tokens.length) {
