@@ -13,6 +13,14 @@ function token(type: string, content = '', extra: Partial<MarkdownToken> = {}): 
   return { type, content, ...extra } as MarkdownToken
 }
 
+function deepFreeze(value: unknown): void {
+  if (!value || typeof value !== 'object' || Object.isFrozen(value))
+    return
+  for (const child of Object.values(value))
+    deepFreeze(child)
+  Object.freeze(value)
+}
+
 describe('parseInlineTokens dispatcher characterization', () => {
   it('keeps the exact public four-argument helper signature', () => {
     expectTypeOf(parseInlineTokens).toEqualTypeOf<PublicParseInlineTokens>()
@@ -109,5 +117,58 @@ describe('parseInlineTokens dispatcher characterization', () => {
         loading: false,
       }],
     }])
+  })
+
+  it.each([
+    {
+      name: 'loading image tail',
+      raw: '![alt](https://images.example/a.png) sentinel',
+      tokens: [
+        token('text', '![alt]('),
+        token('link', '', {
+          href: 'https://images.example/a.png',
+          text: 'https://images.example/a.png',
+          title: null,
+          loading: true,
+        } as Partial<MarkdownToken>),
+        token('text', ') sentinel'),
+      ],
+      expected: { type: 'image', src: 'https://images.example/a.png', alt: 'alt', loading: true },
+    },
+    {
+      name: 'markdown link tail',
+      raw: '[label](https://example.com) sentinel',
+      tokens: [
+        token('text', '[label]('),
+        token('link_open', '', { attrs: [['href', 'https://example.com']], markup: 'linkify' }),
+        token('text', 'https://example.com'),
+        token('link_close', '', { markup: 'linkify' }),
+        token('text', ') sentinel'),
+      ],
+      expected: { type: 'link', href: 'https://example.com', text: 'label', loading: false },
+    },
+  ])('copy-on-write preserves frozen input tokens for $name', ({ expected, raw, tokens }) => {
+    const before = JSON.stringify(tokens)
+    deepFreeze(tokens)
+
+    const nodes = parseInlineTokens(tokens, raw, undefined, { final: false })
+
+    expect(JSON.stringify(tokens)).toBe(before)
+    expect(nodes[0]).toMatchObject(expected)
+    expect(nodes.filter(node => node.type === 'text' && node.content === ' sentinel')).toHaveLength(1)
+  })
+
+  it('uses the third argument for list-item checkbox context without skipping the sentinel', () => {
+    const nodes = parseInlineTokens(
+      [token('text', '[x]'), token('text', ' sentinel')],
+      '[x] sentinel',
+      token('list_item_open'),
+      { final: false },
+    )
+
+    expect(nodes).toMatchObject([
+      { type: 'checkbox_input', checked: true, raw: '[x]' },
+      { type: 'text', content: ' sentinel', raw: ' sentinel' },
+    ])
   })
 })
