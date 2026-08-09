@@ -24,6 +24,7 @@ const sampleSummaryMismatchPath = path.join(outputDir, 'sample-summary-mismatch.
 const jitPhaseReportPath = path.join(outputDir, 'jit-phase-report.json')
 const missingHeapDiagnosticsPath = path.join(outputDir, 'missing-heap-diagnostics.json')
 const forgedHeapDiagnosticsPath = path.join(outputDir, 'forged-heap-diagnostics.json')
+const overCeilingHeapPath = path.join(outputDir, 'over-ceiling-heap.json')
 const uniformTimeRegressionPath = path.join(outputDir, 'uniform-time-regression.json')
 const uniformHeapRegressionPath = path.join(outputDir, 'uniform-heap-regression.json')
 const heapGrowthRegressionPath = path.join(outputDir, 'heap-growth-regression.json')
@@ -110,6 +111,7 @@ assert.match(diagnostic(invalidReportCheck), /Parser performance report invalid 
 
 const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'))
 assert.ok(baseline.cases.every(testCase => Object.values(testCase.budgets.work).every(work => work.processedTokenCountMin > 0)))
+assert.equal(baseline.environment.heapExecution?.mode, 'jitless-child-process-v1')
 const invalidBaseline = structuredClone(baseline)
 delete invalidBaseline.cases[0].budgets.work[1].processedTokenCountMax
 writeFileSync(invalidBaselinePath, JSON.stringify(invalidBaseline))
@@ -188,7 +190,22 @@ writeFileSync(sameMethodBaselinePath, JSON.stringify(sameMethodBaseline))
 const cleanDeepCheck = run(checkPath, [`--input=${deepOutputPath}`, `--baseline=${baselinePath}`])
 assert.equal(cleanDeepCheck.status, 0, cleanDeepCheck.stderr)
 assert.match(cleanDeepCheck.stdout, /same-environment absolute timing budgets checked/)
-assert.match(cleanDeepCheck.stdout, /frozen retained-heap ceilings\/growth skipped because measurement modes differ/)
+assert.match(cleanDeepCheck.stdout, /same-environment frozen retained-heap budgets checked/)
+
+const overCeilingHeap = structuredClone(deepReport)
+for (const testCase of overCeilingHeap.cases) {
+  const baselineCase = baseline.cases.find(item => item.id === testCase.id)
+  for (const scale of testCase.scales) {
+    const retainedHeapBytes = baselineCase.budgets.retainedHeapBytesMax[scale.scale] + 1
+    scale.metrics.retainedHeapBytes = retainedHeapBytes
+    for (const sample of scale.samples)
+      setSampleRetainedHeap(sample, retainedHeapBytes)
+  }
+}
+writeFileSync(overCeilingHeapPath, JSON.stringify(overCeilingHeap))
+const overCeilingHeapCheck = run(checkPath, [`--input=${overCeilingHeapPath}`, `--baseline=${baselinePath}`])
+assert.notEqual(overCeilingHeapCheck.status, 0, 'retained heap above the frozen ceiling unexpectedly passed without a same-runner reference')
+assert.match(diagnostic(overCeilingHeapCheck), /metric=retainedHeapBytes exceeded max=/)
 
 const jitPhaseReport = structuredClone(deepReport)
 for (const testCase of jitPhaseReport.cases) {
@@ -379,4 +396,4 @@ assert.notEqual(actualHeapRegressionCheck.status, 0, 'strongly retained heap in 
 assert.match(diagnostic(actualHeapRegressionCheck), /metric=retainedHeapBytes exceeded same-runner reference/)
 
 rmSync(outputDir, { force: true, recursive: true })
-console.log('[parser-perf-self-test] Clean jitless, JIT-phase, zero-heap, and cross-environment paths passed; invalid diagnostics/shapes/config, zero instrumentation, summary/sample disagreement, quadratic work, uniform timing/heap, real heap retention, and same-environment heap-growth regressions were rejected.')
+console.log('[parser-perf-self-test] Clean jitless, JIT-phase, zero-heap, and cross-environment paths passed; invalid diagnostics/shapes/config, zero instrumentation, summary/sample disagreement, quadratic work, frozen heap ceilings, uniform timing/heap, real heap retention, and same-environment heap-growth regressions were rejected.')
