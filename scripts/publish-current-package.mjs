@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { resolvePublishedDistTag } from './resolve-dist-tag.mjs'
+import { resolveDistTag, resolvePublishedDistTag } from './resolve-dist-tag.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(__dirname, '..')
@@ -86,7 +86,9 @@ const packageDir = path.dirname(packageJsonPath)
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
 const dryRunPublishArgs = args.dryRun ? ['--dry-run', '--ignore-scripts'] : []
 const pnpmDryRunPublishArgs = args.dryRun ? [...dryRunPublishArgs, '--no-git-checks'] : []
-const distTag = resolvePublishedDistTag(packageJson.name, packageJson.version)
+const distTag = args.dryRun
+  ? resolveDistTag(packageJson.version)
+  : resolvePublishedDistTag(packageJson.name, packageJson.version)
 const distTagArgs = ['--tag', distTag]
 
 console.log(`[publish-current] ${packageJson.name}@${packageJson.version} (${distTagArgs.join(' ')})`)
