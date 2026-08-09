@@ -5,7 +5,7 @@ import type {
   ParsedNode,
   ParseOptions,
 } from '../../types'
-import { parseInlineTokens } from '../inline-parsers'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 import { applyNodeSourceMap } from '../node-source-map'
 import { cloneTokenWithMutableChildren } from '../token-copy'
@@ -105,7 +105,8 @@ function needsListParagraphTokenPatch(token: MarkdownToken) {
 export function parseList(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [ListNode, number] {
   const token = tokens[index]
   const listItems: ListItemNode[] = []
@@ -150,7 +151,7 @@ export function parseList(
         }
         else if (tokens[k].type === 'blockquote_open') {
           // Parse blockquote within list item
-          const [blockquoteNode, newIndex] = parseBlockquote(tokens, k, linkifyContext.options())
+          const [blockquoteNode, newIndex] = parseBlockquote(tokens, k, linkifyContext.options(), parseInlineTokens)
           itemChildren.push(blockquoteNode)
           linkifyContext.remember(blockquoteNode.raw)
           k = newIndex
@@ -159,13 +160,13 @@ export function parseList(
           tokens[k].type === 'bullet_list_open'
           || tokens[k].type === 'ordered_list_open'
         ) {
-          const [nestedListNode, newIndex] = parseList(tokens, k, linkifyContext.options())
+          const [nestedListNode, newIndex] = parseList(tokens, k, linkifyContext.options(), parseInlineTokens)
           itemChildren.push(nestedListNode)
           linkifyContext.remember(nestedListNode.raw)
           k = newIndex
         }
         else {
-          const handled = parseCommonBlockToken(tokens, k, linkifyContext.options(), containerTokenHandlers)
+          const handled = parseCommonBlockToken(tokens, k, linkifyContext.options(), containerTokenHandlers, parseInlineTokens)
           if (handled) {
             itemChildren.push(handled[0])
             linkifyContext.remember(handled[0].raw)

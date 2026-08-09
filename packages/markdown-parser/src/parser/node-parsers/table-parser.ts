@@ -6,8 +6,8 @@ import type {
   TableNode,
   TableRowNode,
 } from '../../types'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import type { LinkifyDemotionContext } from '../linkifyHeuristics'
-import { parseInlineTokens } from '../inline-parsers'
 import { inferLinkifyDemotionContext } from '../linkifyHeuristics'
 
 // Extract alignment from attrs (e.g. ['style','text-align:left'])
@@ -69,7 +69,8 @@ function parseOptionsForTableCell(
 export function parseTable(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [TableNode, number] {
   let j = index + 1
   let headerRow: TableRowNode | null = null

@@ -4003,7 +4003,7 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
   // their respective plugins. That keeps parsing-time fixes centralized
   // and avoids ad-hoc post-processing here.
   while (i < tokens.length) {
-    const handled = parseCommonBlockToken(tokens, i, linkifyContext.options(), containerTokenHandlers)
+    const handled = parseCommonBlockToken(tokens, i, linkifyContext.options(), containerTokenHandlers, parseInlineTokens)
     if (handled) {
       recordInternalNodeSourceRange(handled[0], tokens[i], options)
       result.push(handled[0])
@@ -4017,7 +4017,7 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
       case 'paragraph_open':
       {
         const paragraphRaw = String(tokens[i + 1]?.content ?? '')
-        const paragraphNode = parseParagraph(tokens, i, linkifyContext.options(paragraphRaw)) as ParsedNode
+        const paragraphNode = parseParagraph(tokens, i, linkifyContext.options(paragraphRaw), parseInlineTokens) as ParsedNode
         if (includeSourceMap)
           applyNodeSourceMap(paragraphNode, token, options)
         const promoted = maybePromoteCustomNodeFromParagraph(paragraphNode, options)
@@ -4039,7 +4039,7 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
 
       case 'bullet_list_open':
       case 'ordered_list_open': {
-        const [listNode, newIndex] = parseList(tokens, i, linkifyContext.options())
+        const [listNode, newIndex] = parseList(tokens, i, linkifyContext.options(), parseInlineTokens)
         if (includeSourceMap)
           applyNodeSourceMap(listNode, token, options)
         recordInternalNodeSourceRange(listNode, token, options)
@@ -4050,7 +4050,7 @@ export function processTokens(tokens: MarkdownToken[], options?: ParseOptions): 
       }
 
       case 'blockquote_open': {
-        const [blockquoteNode, newIndex] = parseBlockquote(tokens, i, linkifyContext.options())
+        const [blockquoteNode, newIndex] = parseBlockquote(tokens, i, linkifyContext.options(), parseInlineTokens)
         if (includeSourceMap)
           applyNodeSourceMap(blockquoteNode, token, options)
         recordInternalNodeSourceRange(blockquoteNode, token, options)

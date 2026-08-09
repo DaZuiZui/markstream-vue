@@ -5,13 +5,14 @@ import type {
   ParsedNode,
   ParseOptions,
 } from '../../types'
-import { parseInlineTokens } from '../inline-parsers'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 
 export function parseDefinitionList(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [DefinitionListNode, number] {
   const items: DefinitionItemNode[] = []
   let j = index + 1

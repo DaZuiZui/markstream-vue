@@ -1,10 +1,11 @@
 import type { HeadingNode, MarkdownToken, ParseOptions } from '../../types'
-import { parseInlineTokens } from '../inline-parsers'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 
 export function parseHeading(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): HeadingNode {
   const token = tokens[index]
   const attrs = token.attrs
