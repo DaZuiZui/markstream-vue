@@ -1,5 +1,6 @@
 import type { HighlightNode, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
 import type { ParseInlineTokensFn } from './inline-parser-types'
+import { collectDelimitedInlineTokens } from './token-range'
 
 export function parseHighlightToken(
   tokens: MarkdownToken[],
@@ -11,16 +12,7 @@ export function parseHighlightToken(
   nextIndex: number
 } {
   const children: ParsedNode[] = []
-  let markText = ''
-  let i = startIndex + 1
-  const innerTokens: MarkdownToken[] = []
-
-  // Process tokens between mark_open and mark_close
-  while (i < tokens.length && tokens[i].type !== 'mark_close') {
-    markText += String(tokens[i].content ?? '')
-    innerTokens.push(tokens[i])
-    i++
-  }
+  const { content: markText, innerTokens, nextIndex } = collectDelimitedInlineTokens(tokens, startIndex, 'mark_close')
 
   // Parse inner tokens to handle nested elements
   children.push(...parseInlineTokens(innerTokens, undefined, undefined, options))
@@ -30,9 +22,6 @@ export function parseHighlightToken(
     children,
     raw: `==${markText}==`,
   }
-
-  // Skip to after mark_close
-  const nextIndex = i < tokens.length ? i + 1 : tokens.length
 
   return { node, nextIndex }
 }

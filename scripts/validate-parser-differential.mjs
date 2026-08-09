@@ -66,6 +66,25 @@ const fixtures = [
     restartSource: '1. restarted\n2. stable\n\n```js\nconsole.log(1)\n```\n',
     options: { requireClosingStrong: true },
   },
+  {
+    id: 'inline-dispatcher-heavy',
+    seed: 63401,
+    source: [
+      '## Inline dispatcher 中🙂',
+      '',
+      '前缀 **strong [link `code` 与 $x_1$](https://example.com/a_(b)) 后缀**，再接 *强调*、~~删除~~、==高亮==、++插入++、H~2~O 与 x^2^。',
+      '',
+      '转义：\\*literal\\* \\[not link\\] \\$not math\\$ \\`not code\\`。',
+      '',
+      '[![alt *字*](https://images.example/complete.png "图")](https://example.com/outer)',
+      '',
+      '[![流式图片](https://images.example/loading.png)](https://example.com/loading',
+      '',
+      '未完成：**strong [label](https://example.com/path 与 `code',
+    ].join('\n'),
+    restartSource: '重启：**[新链接 \\*字\\* 与 `code`](https://example.com/restart)**，以及 $a+b$。\n',
+    options: { requireClosingStrong: true },
+  },
 ]
 
 function readArg(name) {

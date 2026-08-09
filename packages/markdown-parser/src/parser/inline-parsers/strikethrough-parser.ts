@@ -5,6 +5,7 @@ import type {
   StrikethroughNode,
 } from '../../types'
 import type { ParseInlineTokensFn } from './inline-parser-types'
+import { collectDelimitedInlineTokens } from './token-range'
 
 export function parseStrikethroughToken(
   tokens: MarkdownToken[],
@@ -16,16 +17,7 @@ export function parseStrikethroughToken(
   nextIndex: number
 } {
   const children: ParsedNode[] = []
-  let sText = ''
-  let i = startIndex + 1
-  const innerTokens: MarkdownToken[] = []
-
-  // Process tokens between s_open and s_close
-  while (i < tokens.length && tokens[i].type !== 's_close') {
-    sText += String(tokens[i].content ?? '')
-    innerTokens.push(tokens[i])
-    i++
-  }
+  const { content: sText, innerTokens, nextIndex } = collectDelimitedInlineTokens(tokens, startIndex, 's_close')
 
   // Parse inner tokens to handle nested elements
   children.push(...parseInlineTokens(innerTokens, undefined, undefined, options))
@@ -35,9 +27,6 @@ export function parseStrikethroughToken(
     children,
     raw: `~~${sText}~~`,
   }
-
-  // Skip to after s_close
-  const nextIndex = i < tokens.length ? i + 1 : tokens.length
 
   return { node, nextIndex }
 }

@@ -1,5 +1,6 @@
 import type { MarkdownToken, ParsedNode, ParseOptions, SubscriptNode } from '../../types'
 import type { ParseInlineTokensFn } from './inline-parser-types'
+import { collectDelimitedInlineTokens } from './token-range'
 
 export function parseSubscriptToken(
   tokens: MarkdownToken[],
@@ -11,16 +12,7 @@ export function parseSubscriptToken(
   nextIndex: number
 } {
   const children: ParsedNode[] = []
-  let subText = ''
-  let i = startIndex + 1
-  const innerTokens: MarkdownToken[] = []
-
-  // Process tokens between sub_open and sub_close (if applicable)
-  while (i < tokens.length && tokens[i].type !== 'sub_close') {
-    subText += String(tokens[i].content ?? '')
-    innerTokens.push(tokens[i])
-    i++
-  }
+  const { content: subText, innerTokens, nextIndex } = collectDelimitedInlineTokens(tokens, startIndex, 'sub_close')
 
   // Parse inner tokens to handle nested elements
   children.push(...parseInlineTokens(innerTokens, undefined, undefined, options))
@@ -41,9 +33,6 @@ export function parseSubscriptToken(
         ],
     raw: `~${display}~`,
   }
-
-  // Skip to after sub_close
-  const nextIndex = i < tokens.length ? i + 1 : tokens.length
 
   return { node, nextIndex }
 }
