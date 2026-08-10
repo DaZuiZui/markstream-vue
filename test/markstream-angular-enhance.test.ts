@@ -146,7 +146,7 @@ describe('markstream-angular enhanceRenderedHtml', () => {
     expect(monacoUseMonacoOptions[0]).toMatchObject({
       disableFileHeader: true,
     })
-    expect(monacoUseMonacoOptions[0]?.unsafeCSS).toContain('--diffs-min-number-column-width-default: 4ch !important')
+    expect(monacoUseMonacoOptions[0]?.unsafeCSS).toContain('--diffs-min-number-column-width-default: 2ch !important')
     expect(monacoUseMonacoOptions[1]).toMatchObject({
       fontSize: 15,
       lineHeight: 24,
