@@ -3,8 +3,8 @@ import { ESCAPABLE_PUNCTUATION } from './literal-text-helpers'
 const WHITESPACE_RE = /\s/u
 const ASCII_PUNCTUATION_RE = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/
 const UNICODE_PUNCTUATION_RE = /\p{P}/u
-const CJK_OPENING_PUNCTUATION_RE = /^[《「『【〔〖〘〚〈（［｛“‘﹁﹃﹙﹛﹝]$/u
-const CJK_CLOSING_PUNCTUATION_RE = /^[》」』】〕〗〙〛〉）］｝”’﹂﹄﹚﹜﹞]$/u
+const CJK_OPENING_PUNCTUATION_RE = /^[\x22\x27《「『【〔〖〘〚〈（［｛“‘﹁﹃﹙﹛﹝]$/u
+const CJK_CLOSING_PUNCTUATION_RE = /^[\x22\x27》」』】〕〗〙〛〉）］｝”’﹂﹄﹚﹜﹞]$/u
 
 export function countUnescapedAsterisks(str: string): number {
   let count = 0
