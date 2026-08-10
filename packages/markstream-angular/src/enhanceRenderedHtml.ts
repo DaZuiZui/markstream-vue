@@ -647,7 +647,7 @@ async function renderMonaco(
     const configuredUnsafeCSS = typeof options.monacoOptions?.unsafeCSS === 'string'
       ? options.monacoOptions.unsafeCSS
       : ''
-    const runtimeUnsafeCSS = `[data-file], [data-diff] { --diffs-min-number-column-width-default: 4ch !important; }
+    const runtimeUnsafeCSS = `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
 ${configuredUnsafeCSS}`.trim()
     const helpers = monacoModule.useMonaco({
       themes: ['vitesse-dark', 'vitesse-light'],
