@@ -1,3 +1,12 @@
+---
+title: 代码块 Runtime
+description: 说明 markstream-vue 的代码块 Runtime，介绍 CodeBlockNode 使用的可选 stream-diffs runtime 及 stream-monaco 自动回退机制。
+keywords:
+  - 代码块 Runtime
+  - stream-diffs
+  - Monaco
+---
+
 # 代码块 Runtime
 
 本页说明 `CodeBlockNode` 使用的可选 `stream-diffs` runtime。2.0 移除了旧的 Monaco 选项 API 与 `stream-monaco` 回退：`stream-diffs` 是唯一增强型代码块 surface，代码与 diff 行为使用其内置默认值。

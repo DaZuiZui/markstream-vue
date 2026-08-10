@@ -1,5 +1,10 @@
 ---
-description: Run, compare, and deliberately refresh the parser performance baseline.
+title: Parser Performance Baseline
+description: Run, compare, and deliberately refresh the parser performance baseline, including the versioned JSON report and the fixed-corpus regression gate.
+keywords:
+  - parser performance baseline
+  - parser regression gate
+  - streaming parser benchmark
 ---
 
 # Parser Performance Baseline
