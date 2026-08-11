@@ -32,8 +32,19 @@ Other packages:
 
 ## Install markstream-vue
 
+The stable line remains 1.x. The coordinated 2.0 beta will use `next`; first verify
+that `npm view markstream-vue@next version` reports `2.0.0-beta.1`, then follow
+the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0):
+
 ```bash
-pnpm add markstream-vue
+pnpm add markstream-vue@next stream-diffs
+```
+
+During the beta, the untagged package remains on 1.x. Use `@1` when you want to
+pin the maintained 1.x line across the stable 2.0 cutover:
+
+```bash
+pnpm add markstream-vue@1
 ```
 
 ```vue
@@ -88,7 +99,9 @@ Start with the [framework overview](https://markstream.simonhe.me/frameworks) if
 
 ## Stability
 
-`markstream-vue` has a stable 1.x API contract. The current npm package may still use beta tags while the 1.0 release gate and cross-framework package family are finalized. The stable surface includes `MarkdownRender`, streaming content rendering, pre-parsed node rendering, the safe HTML policy, optional Mermaid / KaTeX / Monaco / D2 / Infographic integrations, virtual-scroll coordination, CSS exports, worker client subpaths, and SSR imports for Vite / Nuxt / VitePress.
+`markstream-vue` has a stable 1.x API contract. The breaking 2.0 line will be released through the npm `next` tag for validation before it can replace `latest`. It removes the Monaco and `stream-markdown` code-block runtimes and uses `stream-diffs` as the only enhanced code-block surface. See [Migrating from 1.x to 2.0](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+The stable surface includes `MarkdownRender`, streaming content rendering, pre-parsed node rendering, the safe HTML policy, optional Mermaid / KaTeX / D2 / Infographic integrations, enhanced code blocks, virtual-scroll coordination, CSS exports, worker client subpaths, and SSR imports for Vite / Nuxt / VitePress.
 
 Cross-framework renderers (`markstream-react`, `markstream-octane`, `markstream-svelte`, `markstream-angular`, `markstream-vue2`) are available and actively developed. Check each package page for API maturity, framework support, and known limitations.
 
@@ -178,6 +191,7 @@ npx skills add Simon-He95/markstream-vue
 Recommended usage:
 
 - `npx skills add Simon-He95/markstream-vue` is the primary path for Codex-compatible skill discovery because it reads `.agents/skills` directly from the GitHub repository
+- use the bundled `markstream-migration` skill when upgrading an existing Markstream 1.x application to 2.0
 - `markstream-vue@1.0` no longer exposes the `markstream-vue` CLI or any CLI `bin`; repository scripts such as `pnpm skills:list` and `pnpm prompts:list` are contributor-only helpers for cloned checkouts
 - prompts remain in the repository under `prompts/` for direct copying or future separate-package work
 

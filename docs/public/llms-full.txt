@@ -214,6 +214,7 @@ pnpm add markstream-angular
 - "react streaming markdown alternative" -> /compare/streamdown
 - "react-markdown streaming alternative" -> /compare/react-markdown or /guide/react-markdown-migration or /compare/streamdown
 - "react-markdown migration" -> /guide/react-markdown-migration
+- "markstream 2.0 migration" -> /guide/migration-2-0
 - "streaming mermaid markdown" -> /use-cases/streaming-mermaid-katex
 - "streaming KaTeX markdown" -> /use-cases/streaming-mermaid-katex
 - "long AI response markdown renderer" -> /use-cases/long-ai-responses
