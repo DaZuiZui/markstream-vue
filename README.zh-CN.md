@@ -60,7 +60,9 @@ Vue 包：
 
 ## 稳定性
 
-`markstream-vue` 已进入稳定的 1.x API 契约；当前 npm 包仍可能带 beta tag，用于发布门禁和跨框架家族同步。稳定面包括：`MarkdownRender`、流式内容渲染、预解析节点渲染、安全 HTML 策略、可选 Mermaid / KaTeX / D2 / Infographic 集成、`stream-diffs` 增强代码块、虚拟滚动协调、CSS 导出、worker client 子路径以及 Vite / Nuxt / VitePress 的 SSR 导入。
+`markstream-vue` 继续维护稳定的 1.x API 契约。破坏性的 2.0 版本线先通过 npm `next` 标签进行验证，不会在 beta 阶段替换 `latest`。2.0 移除 Monaco 和 `stream-markdown` 代码块 runtime，并将 `stream-diffs` 作为唯一的增强代码块表面。升级前请阅读 [从 1.x 迁移到 2.0](https://markstream.simonhe.me/zh/guide/migration-2-0)。
+
+稳定面包括：`MarkdownRender`、流式内容渲染、预解析节点渲染、安全 HTML 策略、可选 Mermaid / KaTeX / D2 / Infographic 集成、增强代码块、虚拟滚动协调、CSS 导出、worker client 子路径以及 Vite / Nuxt / VitePress 的 SSR 导入。
 
 跨框架渲染器（`markstream-react`、`markstream-octane`、`markstream-svelte`、`markstream-angular`、`markstream-vue2`）已可用并积极开发中。请查看各包文档了解 API 成熟度、框架支持和已知限制。
 
@@ -146,6 +148,7 @@ npx skills add Simon-He95/markstream-vue
 推荐这样理解：
 
 - `npx skills add Simon-He95/markstream-vue` 是最推荐的安装方式，因为它会直接读取 GitHub 仓库里的 `.agents/skills`
+- 升级现有 Markstream 1.x 应用到 2.0 时，使用内置的 `markstream-migration` skill
 - `markstream-vue@1.0` 不发布 CLI `bin`；`pnpm skills:list`、`pnpm prompts:list` 这类脚本只面向克隆仓库后的维护者
 - prompts 继续保留在仓库的 `prompts/` 目录下，供直接复制或后续拆成独立包
 
@@ -182,8 +185,16 @@ npx skills add git@github.com:Simon-He95/markstream-vue.git
 
 ### Vue / Nuxt
 
+协调发布的 2.0 beta 将使用 `next`。请先确认 `npm view markstream-vue@next version` 返回 `2.0.0-beta.1`，再执行：
+
 ```bash
-pnpm add markstream-vue
+pnpm add markstream-vue@next stream-diffs
+```
+
+从 1.x 升级前请阅读 [2.0 迁移指南](https://markstream.simonhe.me/zh/guide/migration-2-0)。beta 阶段无 tag 安装仍然保持在 1.x；如需在 2.0 stable 切换后仍锁定维护中的 1.x，请显式使用 `markstream-vue@1`。
+
+```bash
+pnpm add markstream-vue@1
 ```
 
 ```vue
@@ -609,10 +620,10 @@ setCustomComponents('docs', {
 
 - 最新版本与升级提示：[Releases](https://github.com/Simon-He95/markstream-vue/releases)
 - 完整历史：[CHANGELOG.md](./CHANGELOG.md)
-- 最新亮点（0.0.3-beta.1/beta.0）：
-  - 解析器升级到 `stream-markdown-parser@0.0.36`，修复多项解析问题。
-  - Monaco 升级，更多语言/主题，代码块对 diff 更友好。
-  - Playground 增加 HTML/SVG 预览对话框与 AST 调试视图。
+- 2.0 beta 候选版：
+  - `npm view markstream-vue@next version` 返回 `2.0.0-beta.1` 后，通过 `markstream-vue@next` 安装；稳定 1.x 继续通过 `@1` 获取。
+  - Monaco、`stream-markdown` 及其公开代码块 API 已移除。
+  - 升级前阅读 [从 1.x 迁移到 2.0](https://markstream.simonhe.me/zh/guide/migration-2-0)。
 
 ## 🧭 案例与展示
 

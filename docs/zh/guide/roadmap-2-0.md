@@ -19,7 +19,7 @@ keywords:
 
 - [x] 移除 `monacoOptions` / `codeBlockMonacoOptions` 与全部 `CodeBlockMonaco*` 参数/API（无替代；diff 选项回退 stream-diffs 内置默认值）
 - [x] 删除 `stream-markdown` 的 `MarkdownCodeBlockNode` 组件及其样式
-- [x] `codeRenderer` 取值 `'monaco'` → `'stream-diffs'`；删除 `'shiki'` / `'markdown'` 渲染器类型
+- [x] `codeRenderer` 取值 `'monaco'` → `'stream-diffs'`；删除 `'shiki'` 渲染器类型
 - [x] 公共标识符去 Monaco 命名（`CodeBlockTheme`、`resolveLanguageId`、`getStreamDiffsRuntime`）
 - [x] vue2 / react / svelte / angular / octane 迁移到仅 stream-diffs
 - [x] 更新测试与快照；全量测试通过（313 文件 / 2684 用例）
@@ -46,7 +46,15 @@ keywords:
 - [x] 收敛 `check:peer-deps` 工作区根目录可选 peer
 - [x] 准备协调一致的 `2.0.0-beta.1` 包版本、release notes 与 [2.0 迁移指南](/zh/guide/migration-2-0)；先发布 beta 完成验证，再将同一版本矩阵提升到稳定版
 
-发布维护者切换步骤（需要 npm maintainer 权限）：首个 beta 前先运行 `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next` 保留当前预发布；2.0 stable 前运行 `npm dist-tag add markstream-vue@1.0.9 legacy` 保留当前稳定版。`release:family:preflight` 会在发布任何包之前检查全部候选 dist-tag；别名缺失时会给出所需命令并失败关闭。
+### 发布维护者交接
+
+以下 registry 操作需要 npm maintainer 权限；在对应发布完成验证前保持未完成状态：
+
+- [ ] 首个 beta 前运行 `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next`，保留当前预发布。
+- [ ] 运行 `pnpm release:family:preflight`，发布协调 beta 家族，并对已发布包完成真实安装验证。
+- [ ] 2.0 stable 前先读取 `npm view markstream-vue@latest version`，确认它仍是 1.x，再执行 `release:family:preflight` 针对该实时版本输出的准确 `npm dist-tag add` 命令。
+
+`release:family:preflight` 会在发布任何包之前检查全部候选 dist-tag；别名缺失时会给出所需命令并失败关闭。
 
 ## 目标 4：运行时视觉验证
 

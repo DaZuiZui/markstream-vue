@@ -4,6 +4,14 @@ React/Next.js streaming Markdown renderer for AI chat, SSE/WebSocket output, lon
 
 `markstream-react` is the React renderer in the Markstream family. It renders raw Markdown strings with `content`, and it can also accept pre-parsed `nodes` when a worker or store already owns parsing.
 
+The coordinated 2.0 family beta will use `markstream-react@next`. Before installing, verify that `npm view markstream-react@next version` reports `0.1.0-beta.1`. It removes the Monaco and Shiki code-block APIs in favor of `stream-diffs`; read the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+```bash
+pnpm add markstream-react@next stream-diffs
+```
+
+This beta requires both `react` and `react-dom` 18 or newer.
+
 ## Install
 
 ```bash

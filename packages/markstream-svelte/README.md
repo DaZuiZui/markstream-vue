@@ -1,6 +1,12 @@
 # markstream-svelte
 
-Svelte 5 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, custom components, Mermaid, KaTeX, Monaco, D2, and Infographic.
+Svelte 5 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, custom components, Mermaid, KaTeX, stream-diffs code blocks, D2, and Infographic.
+
+The coordinated 2.0 family beta will use `markstream-svelte@next`. Before installing, verify that `npm view markstream-svelte@next version` reports `0.1.0-beta.1`. It removes the former Monaco code-block API in favor of `stream-diffs`; read the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+```bash
+pnpm add markstream-svelte@next svelte@^5 stream-diffs
+```
 
 ## When to use it
 

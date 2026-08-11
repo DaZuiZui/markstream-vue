@@ -2,6 +2,14 @@
 
 Angular 20+ standalone component for streaming Markdown: AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, Mermaid, KaTeX, streaming code blocks, D2, infographic blocks, custom HTML tags, and cross-framework playground parity.
 
+The coordinated 2.0 family beta will use `markstream-angular@next`. Before installing, verify that `npm view markstream-angular@next version` reports `0.1.0-beta.1`. It removes the former Monaco code-block API in favor of `stream-diffs`; read the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+```bash
+pnpm add markstream-angular@next stream-diffs
+```
+
+Run this in an existing Angular 20+ application. Keep `@angular/core`, `@angular/common`, the compiler, and platform packages on the same Angular version line.
+
 ## When to use it
 
 Use `markstream-angular` when Markdown streams from an LLM, SSE, or WebSocket into an Angular 20+ standalone app.
@@ -14,7 +22,7 @@ This package is currently alpha. Treat it as a streaming Markdown integration su
 ## Install
 
 ```bash
-pnpm add markstream-angular @angular/core @angular/common
+pnpm add markstream-angular
 ```
 
 Optional peer dependencies:

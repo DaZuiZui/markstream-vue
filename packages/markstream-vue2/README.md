@@ -7,6 +7,16 @@ Vue 2.6 / 2.7 compatibility renderer for legacy Vue 2 apps that need streaming M
 
 For Vue 3 or new Vue/Nuxt projects, use `markstream-vue` instead.
 
+The coordinated 2.0 family beta will use `markstream-vue2@next`. Before installing, verify that `npm view markstream-vue2@next version` reports `0.1.0-beta.1`. It removes the Monaco and Shiki code-block APIs in favor of `stream-diffs`; read the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+```bash
+# Vue 2.7
+pnpm add markstream-vue2@next stream-diffs
+
+# Vue 2.6 (also register the plugin with Vue.use)
+pnpm add markstream-vue2@next stream-diffs @vue/composition-api
+```
+
 ## Install
 
 ```bash

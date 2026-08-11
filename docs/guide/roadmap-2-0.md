@@ -20,7 +20,7 @@ Tracked in [issue #615](https://github.com/Simon-He95/markstream-vue/issues/615)
 
 - [x] Remove `monacoOptions` / `codeBlockMonacoOptions` and all `CodeBlockMonaco*` params/APIs (no replacement; diff options fall back to stream-diffs built-in defaults)
 - [x] Delete the `stream-markdown` `MarkdownCodeBlockNode` component and its styles
-- [x] Rename `codeRenderer` value `'monaco'` → `'stream-diffs'`; drop the `'shiki'` / `'markdown'` renderer kinds
+- [x] Rename `codeRenderer` value `'monaco'` → `'stream-diffs'`; drop the `'shiki'` renderer kind
 - [x] Rename public identifiers to drop Monaco naming (`CodeBlockTheme`, `resolveLanguageId`, `getStreamDiffsRuntime`)
 - [x] Migrate vue2 / react / svelte / angular / octane to stream-diffs only
 - [x] Update tests and snapshots; full suite green (313 files / 2684 tests)
@@ -47,7 +47,15 @@ Get the breaking release through the normal release gates before publishing.
 - [x] Reconcile `check:peer-deps` for workspace-root optional peers
 - [x] Prepare coordinated `2.0.0-beta.1` package versions, release notes, and the [2.0 migration guide](/guide/migration-2-0); publish the beta before promoting the same matrix to stable versions
 
-Release-operator cutover (requires npm maintainer credentials): before the first beta, preserve the current prerelease with `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next`. Before stable 2.0, preserve the current stable with `npm dist-tag add markstream-vue@1.0.9 legacy`. `release:family:preflight` checks every candidate dist-tag before any package is published and fails with the required command if an alias is missing.
+### Release-operator handoff
+
+These registry operations require npm maintainer credentials and remain incomplete until the corresponding publication is verified:
+
+- [ ] Before the first beta, preserve the current prerelease with `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next`.
+- [ ] Run `pnpm release:family:preflight`, publish the coordinated beta family, and verify real installs of the published packages.
+- [ ] Before stable 2.0, read `npm view markstream-vue@latest version`, verify that it is still a 1.x version, and run the exact `npm dist-tag add` command printed by `release:family:preflight` for that live version.
+
+`release:family:preflight` checks every candidate dist-tag before any package is published and fails with the required command if an alias is missing.
 
 ## Goal 4: Runtime visual verification
 

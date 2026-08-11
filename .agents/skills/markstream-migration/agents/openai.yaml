@@ -1,4 +1,4 @@
 interface:
   display_name: Markstream Migration
-  short_description: Audit and migrate existing Markdown rendering to Markstream
-  default_prompt: "Use $markstream-migration to audit this repository's current Markdown renderer and migrate it to the appropriate Markstream package."
+  short_description: Adopt Markstream or upgrade markstream-vue 1.x to 2.x
+  default_prompt: "Use $markstream-migration to inspect this repository, choose between adopting Markstream from another renderer and upgrading markstream-vue 1.x to 2.x, then apply the matching migration checklist and validate the result."
