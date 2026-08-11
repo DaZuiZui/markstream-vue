@@ -343,7 +343,7 @@ export interface NodeRendererProps {
   /** Global tooltip toggle for link/code-block renderers (default: true) */
   showTooltips?: boolean
   /**
-   * Theme names or theme objects preloaded for stream-diffs-backed code blocks.
+   * Theme-name tuple ordered as `[dark, light]` for stream-diffs-backed code blocks.
    */
   themes?: CodeBlockThemes
   /** Forces dark mode for built-in renderers such as Mermaid, D2, KaTeX, and code blocks. */

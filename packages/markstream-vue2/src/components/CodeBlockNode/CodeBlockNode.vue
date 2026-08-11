@@ -123,6 +123,7 @@ let cleanupEditor: () => void = () => {}
 let safeClean = () => {}
 let refreshDiffPresentation: () => void = () => {}
 let createEditorPromise: Promise<void> | null = null
+let editorCreationGeneration = 0
 let detectLanguage: (code: string) => string = () => String(props.node.language ?? 'plaintext')
 let setTheme: (theme: any) => Promise<void> = async () => {}
 let whenRuntimeVisualReady: (() => Promise<boolean>) | null = null
@@ -886,8 +887,8 @@ function setAutomaticLayout(expanded: boolean) {
   catch {}
 }
 
-async function runEditorCreation(el: HTMLElement) {
-  if (!createEditor)
+async function runEditorCreation(el: HTMLElement, generation: number) {
+  if (!createEditor || isUnmounted || generation !== editorCreationGeneration)
     return
 
   syncRuntimeOptions()
@@ -902,6 +903,8 @@ async function runEditorCreation(el: HTMLElement) {
   else {
     await createEditor(el as HTMLElement, props.node.code, languageId.value)
   }
+  if (isUnmounted || generation !== editorCreationGeneration)
+    return
 
   const editor = isDiff.value ? getDiffEditorView() : getEditorView()
   if (typeof resolvedRuntimeOptions.value?.fontSize === 'number') {
@@ -926,12 +929,18 @@ async function runEditorCreation(el: HTMLElement) {
 
   if (props.loading === false) {
     await nextTick()
+    if (isUnmounted || generation !== editorCreationGeneration)
+      return
     safeRaf(() => {
+      if (isUnmounted || generation !== editorCreationGeneration)
+        return
       scheduleEditorVisualSync()
     })
   }
 
   const visuallyReady = await waitForEditorVisualReady()
+  if (isUnmounted || generation !== editorCreationGeneration)
+    return
   if (visuallyReady && !isCollapsed.value && !isExpanded.value) {
     // Lock the hidden host to the committed Shadow DOM surface before removing
     // the pre fallback. Height and visibility then change in one Vue update.
@@ -948,14 +957,17 @@ function ensureEditorCreation(el: HTMLElement) {
 
   editorCreated.value = true
   editorReady.value = false
+  const generation = editorCreationGeneration
   const pending = (async () => {
-    await runEditorCreation(el)
+    await runEditorCreation(el, generation)
   })()
 
-  createEditorPromise = pending.finally(() => {
-    createEditorPromise = null
+  const tracked = pending.finally(() => {
+    if (createEditorPromise === tracked)
+      createEditorPromise = null
   })
-  return createEditorPromise
+  createEditorPromise = tracked
+  return tracked
 }
 
 // 延迟创建编辑器：仅在可见且准备就绪时创建，避免无意义的初始化
@@ -975,7 +987,17 @@ const stopCreateEditorWatch = watch(
     if (!creation)
       return
 
-    await creation
+    const generation = editorCreationGeneration
+    try {
+      await creation
+    }
+    catch (error) {
+      if (!isUnmounted && generation === editorCreationGeneration)
+        throw error
+      return
+    }
+    if (isUnmounted || generation !== editorCreationGeneration)
+      return
 
     stopCreateEditorWatch()
   },
@@ -1003,6 +1025,7 @@ watch(
 
     try {
       editorCreated.value = false
+      editorCreationGeneration += 1
       createEditorPromise = null
       safeClean()
       await nextTick()
@@ -1346,6 +1369,7 @@ watch(
 
     try {
       editorCreated.value = false
+      editorCreationGeneration += 1
       createEditorPromise = null
       safeClean()
       if (createRuntimeHelpersFactory)
@@ -1372,6 +1396,7 @@ watch(
       return
     try {
       editorCreated.value = false
+      editorCreationGeneration += 1
       createEditorPromise = null
       safeClean()
       if (createRuntimeHelpersFactory)
@@ -1419,6 +1444,8 @@ function stopExpandAutoResize() {
 
 onUnmounted(() => {
   isUnmounted = true
+  editorCreationGeneration += 1
+  createEditorPromise = null
   // Ensure any RAF loops are stopped and editor resources are released
   stopExpandAutoResize()
   if (deferredEditorVisualSyncRafId != null) {

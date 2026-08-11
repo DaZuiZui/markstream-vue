@@ -129,7 +129,7 @@ function renderCustomCodeBlockComponent(
   return Octane.createElement(component, {
     key,
     node,
-    loading: Boolean(node.loading),
+    loading: Boolean(node.loading) || ctx.final === false,
     stream: ctx.codeBlockStream,
     customId: ctx.customId,
     isDark: ctx.isDark,
@@ -299,7 +299,7 @@ function renderCodeBlock(
   return Octane.createElement(MonacoCodeBlockNode, {
     key,
     node,
-    loading: Boolean(node.loading),
+    loading: Boolean(node.loading) || ctx.final === false,
     stream: ctx.codeBlockStream,
     themes: ctx.codeBlockThemes?.themes,
     darkTheme: ctx.codeBlockThemes?.darkTheme,

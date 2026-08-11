@@ -155,14 +155,11 @@ const isDark = useDark() // Ref<boolean> 响应式系统/主题偏好
 const toggleDark = useToggle(isDark)
 const content = '# 示例\n\n```js\nconsole.log("深色模式")\n```'
 
-// 可用主题（必须包含你想要使用的主题）
+// 深色/浅色主题对
 const themes = [
   'vitesse-dark',
   'vitesse-light',
-  'github-dark',
-  'github-light',
-  // ... 更多主题
-]
+] as const
 </script>
 
 <template>
@@ -211,10 +208,7 @@ const content = '# 示例\n\n```js\nconsole.log("深色模式")\n```'
 const themes = [
   'vitesse-dark',
   'vitesse-light',
-  'github-dark',
-  'github-light',
-  // ... 更多主题
-]
+] as const
 </script>
 
 <template>
@@ -245,7 +239,7 @@ const themes = [
 
 使用 `{ light, dark }` 配对时，组件根据 `isDark` prop 自动切换。
 
-`themes` prop 用于注册可用主题，以便运行时可以按需懒加载它们。
+`themes` prop 只接受一个 `[深色, 浅色]` 二元主题对。
 
 > **向后兼容：** `darkTheme` / `lightTheme` props 仍然可用但已废弃。推荐使用统一的 `theme` prop。
 
@@ -255,7 +249,7 @@ const themes = [
 |------|---------------------|-------------------|
 | `isDark` | 直接传给 `<CodeBlockNode :is-dark="isDark" />` | 通过 `<MarkdownRender :is-dark="isDark" />` 传入并自动转发 |
 | 主题 | `:theme="{ light: 'vitesse-light', dark: 'vitesse-dark' }"` | `:code-block-dark-theme="'vitesse-dark'"` `:code-block-light-theme="'vitesse-light'"` (兼容) |
-| 主题列表 | `:themes="['vitesse-dark', 'vitesse-light', ...]"` | `:themes="['vitesse-dark', 'vitesse-light', ...]"` |
+| 深色/浅色主题对 | `:themes="['vitesse-dark', 'vitesse-light']"` | `:themes="['vitesse-dark', 'vitesse-light']"` |
 
 ## 注意事项
 

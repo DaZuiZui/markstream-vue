@@ -310,6 +310,46 @@ describe('codeBlockNode final Diffs gate', () => {
     wrapper.unmount()
   })
 
+  it('restores the default font size when codeBlockOptions.fontSize is removed', async () => {
+    const runtime = helpers()
+    const createdTypography: Array<{ fontSize: number, lineHeight: number }> = []
+    runtime.createEditor.mockImplementation(async (container: HTMLElement) => {
+      const options = runtime.useMonaco.mock.calls.at(-1)?.[0]
+      createdTypography.push({ fontSize: options?.fontSize, lineHeight: options?.lineHeight })
+      installFinalDiffsDom(container)
+    })
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const value = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        codeBlockOptions: { fontSize: 16 },
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createEditor).toHaveBeenCalledTimes(1))
+    expect(createdTypography[0]).toEqual({ fontSize: 16, lineHeight: 24 })
+
+    let resolveVisualReady!: (ready: boolean) => void
+    runtime.whenVisualReady = vi.fn(() => new Promise<boolean>((resolve) => {
+      resolveVisualReady = resolve
+    }))
+    await wrapper.setProps({ codeBlockOptions: {} })
+    await vi.waitFor(() => {
+      expect(runtime.useMonaco).toHaveBeenCalledTimes(2)
+      expect(runtime.createEditor).toHaveBeenCalledTimes(2)
+    })
+
+    expect(createdTypography[1]).toEqual({ fontSize: 12, lineHeight: 18 })
+    expect((wrapper.get('pre.code-pre-fallback').element as HTMLElement).style.fontSize).toBe('12px')
+
+    resolveVisualReady(true)
+    wrapper.unmount()
+  })
+
   it('lets the direct showLineNumbers prop override neutral options on enhanced surfaces', async () => {
     const runtime = helpers()
     const mountBlock = (showLineNumbers: boolean, disableLineNumbers: boolean) => mount(DeferredCodeBlockNode, {

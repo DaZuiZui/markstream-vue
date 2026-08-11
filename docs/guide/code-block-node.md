@@ -149,14 +149,11 @@ const isDark = useDark() // Ref<boolean> reactive to system/theme preference
 const toggleDark = useToggle(isDark)
 const content = '# Example\n\n```js\nconsole.log("dark mode")\n```'
 
-// Available themes (must include the themes you want to use)
+// Dark/light theme pair
 const themes = [
   'vitesse-dark',
   'vitesse-light',
-  'github-dark',
-  'github-light',
-  // ... more themes
-]
+] as const
 </script>
 
 <template>
@@ -205,10 +202,7 @@ const content = '# Example\n\n```js\nconsole.log("dark mode")\n```'
 const themes = [
   'vitesse-dark',
   'vitesse-light',
-  'github-dark',
-  'github-light',
-  // ... more themes
-]
+] as const
 </script>
 
 <template>
@@ -239,7 +233,7 @@ The `theme` prop accepts either a fixed theme or a light/dark pair:
 
 When using a `{ light, dark }` pair, the component automatically switches based on the `isDark` prop.
 
-The `themes` prop registers the available themes so the runtime can lazy-load them on demand.
+The `themes` prop accepts exactly a `[dark, light]` pair.
 
 > **Backward compatibility:** `darkTheme` / `lightTheme` props still work but are deprecated. Prefer the unified `theme` prop.
 
@@ -249,7 +243,7 @@ The `themes` prop registers the available themes so the runtime can lazy-load th
 |------|---------------------|-------------------|
 | `isDark` | Passed directly to `<CodeBlockNode :is-dark="isDark" />` | Passed via `<MarkdownRender :is-dark="isDark" />` and automatically forwarded |
 | Theme | `:theme="{ light: 'vitesse-light', dark: 'vitesse-dark' }"` | `:code-block-dark-theme="'vitesse-dark'"` `:code-block-light-theme="'vitesse-light'"` (legacy) |
-| Themes list | `:themes="['vitesse-dark', 'vitesse-light', ...]"` | `:themes="['vitesse-dark', 'vitesse-light', ...]"` |
+| Dark/light themes | `:themes="['vitesse-dark', 'vitesse-light']"` | `:themes="['vitesse-dark', 'vitesse-light']"` |
 
 ## Notes
 - The CodeBlock header API is documented in `docs/guide/codeblock-header.md` (examples for replacing header and custom loading placeholder).

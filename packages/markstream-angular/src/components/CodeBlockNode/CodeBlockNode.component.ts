@@ -712,21 +712,28 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
     if (this.syncPromise)
       return this.syncPromise
 
-    this.syncPromise = (async () => {
+    const activeHelpers = this.helpers
+    let operationId = this.lifecycleId
+    const pending = (async () => {
       try {
-        const desiredKind = this.isDiff && typeof this.helpers?.createDiffEditor === 'function' ? 'diff' : 'single'
+        const desiredKind = this.isDiff && typeof activeHelpers.createDiffEditor === 'function' ? 'diff' : 'single'
         const desiredStreamMode = false
         if (
           this.editorKind !== desiredKind
           || this.editorStreamMode !== desiredStreamMode
           || !this.hasRenderedEditorDom(desiredKind)
         ) {
+          operationId += 1
           await this.recreateEditor(desiredKind, desiredStreamMode)
         }
         else {
           await this.updateEditor()
         }
-        await Promise.resolve(this.helpers?.setTheme?.(this.resolvedIsDark ? this.resolvedDarkTheme : this.resolvedLightTheme))
+        if (this.destroyed || this.lifecycleId !== operationId || this.helpers !== activeHelpers)
+          return
+        await Promise.resolve(activeHelpers.setTheme?.(this.resolvedIsDark ? this.resolvedDarkTheme : this.resolvedLightTheme))
+        if (this.destroyed || this.lifecycleId !== operationId || this.helpers !== activeHelpers)
+          return
         this.applyEditorFontSize()
         const creationId = this.lifecycleId
         if (!await this.prepareEditorHandoff(desiredKind, creationId))
@@ -735,17 +742,20 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
         this.scheduleDeferredHeightSync()
       }
       catch {
-        this.useFallback = true
-        this.editorReady = false
-        this.cleanupEditor()
-      }
-      finally {
-        this.syncPromise = null
-        this.cdr.markForCheck()
+        if (!this.destroyed && this.lifecycleId === operationId && this.helpers === activeHelpers) {
+          this.useFallback = true
+          this.editorReady = false
+          this.cleanupEditor()
+        }
       }
     })()
-
-    return this.syncPromise
+    const tracked = pending.finally(() => {
+      if (this.syncPromise === tracked)
+        this.syncPromise = null
+      this.cdr.markForCheck()
+    })
+    this.syncPromise = tracked
+    return tracked
   }
 
   private async ensureHelpers() {
@@ -754,8 +764,11 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
     if (this.createPromise)
       return this.createPromise
 
-    this.createPromise = (async () => {
+    const creationId = this.lifecycleId
+    const pending = (async () => {
       const monacoModule = await getUseMonaco()
+      if (this.destroyed || this.lifecycleId !== creationId)
+        return
       if (!monacoModule || typeof monacoModule.useMonaco !== 'function') {
         this.useFallback = true
         return
@@ -766,12 +779,17 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
       this.runtimeOptions = options
       this.helpers = monacoModule.useMonaco(options)
     })()
-
+    const tracked = pending.finally(() => {
+      if (this.createPromise === tracked)
+        this.createPromise = null
+    })
+    this.createPromise = tracked
     try {
-      await this.createPromise
+      await tracked
     }
-    finally {
-      this.createPromise = null
+    catch (error) {
+      if (!this.destroyed && this.lifecycleId === creationId)
+        throw error
     }
   }
 
@@ -809,6 +827,11 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
         }
       : userOptions
     const configuredUnsafeCSS = typeof nativeOptions.unsafeCSS === 'string' ? nativeOptions.unsafeCSS : ''
+    const runtimeFontSize = readPositiveCodeMetric(this.fontSize) ?? defaultCodeFontSize
+    const runtimeLineHeight = readPositiveCodeMetric(this.resolvedCodeBlockOptions?.lineHeight)
+      ?? (runtimeFontSize === defaultCodeFontSize
+        ? defaultCodeLineHeight
+        : Math.max(12, Math.round(runtimeFontSize * 1.5)))
 
     return {
       overflow: 'wrap',
@@ -816,8 +839,8 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
       stream: false,
       MAX_HEIGHT: this.resolvedCodeBlockOptions?.maxHeight ?? defaultMaxEditorHeight,
       fontFamily: this.resolvedCodeBlockOptions?.fontFamily ?? defaultCodeFontFamily,
-      fontSize: this.fontSize,
-      lineHeight: this.resolvedCodeBlockOptions?.lineHeight ?? defaultCodeLineHeight,
+      fontSize: runtimeFontSize,
+      lineHeight: runtimeLineHeight,
       disableLineNumbers: !this.resolvedShowLineNumbers,
       themes: [...this.resolvedThemes],
       theme: this.resolvedIsDark ? this.resolvedDarkTheme : this.resolvedLightTheme,
@@ -1042,10 +1065,13 @@ ${configuredUnsafeCSS}`.trim(),
     if (configured)
       return configured
     const fromState = Number(this.fontSize)
-    if (Number.isFinite(fromState) && fromState > 0)
-      return Math.max(12, Math.round(fromState * 1.35))
+    if (Number.isFinite(fromState) && fromState > 0) {
+      return fromState === defaultCodeFontSize
+        ? defaultCodeLineHeight
+        : Math.max(12, Math.round(fromState * 1.5))
+    }
 
-    return 18
+    return defaultCodeLineHeight
   }
 
   private resolveMaxHeight() {
@@ -1087,6 +1113,7 @@ ${configuredUnsafeCSS}`.trim(),
 
   private disposeRuntimeHelpers() {
     this.lifecycleId += 1
+    this.syncPromise = null
     this.cleanupEditor()
     this.helpers = null
     this.runtimeOptions = null

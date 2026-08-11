@@ -114,7 +114,7 @@ export interface NodeRendererProps {
   infographicProps?: Partial<Omit<InfographicBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   /** Global tooltip toggle for link/code-block renderers (default: true) */
   showTooltips?: boolean
-  /** Theme names or theme objects preloaded for enhanced code blocks. */
+  /** Theme-name tuple ordered as `[dark, light]` for enhanced code blocks. */
   themes?: CodeBlockThemes
   isDark?: boolean
   customId?: string

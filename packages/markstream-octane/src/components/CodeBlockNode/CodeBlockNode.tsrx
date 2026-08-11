@@ -2,7 +2,7 @@ import type { VisibilityHandle } from '../../context/viewportPriority.tsrx'
 import type { CodeBlockNodeProps } from '../../types/component-props'
 import type { OctaneRefObject, OctaneStyle } from '../../types/octane'
 import * as Octane from 'octane'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'octane'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'octane'
 import { useViewportPriority } from '../../context/viewportPriority.tsrx'
 import { useSafeI18n } from '../../i18n/useSafeI18n'
 import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonTooltip'
@@ -10,6 +10,8 @@ import { getLanguageIcon, languageMap, normalizeLanguageIdentifier, resolveLangu
 import { HtmlPreviewFrame } from './HtmlPreviewFrame.tsrx'
 import { getStreamDiffsRuntime } from './monaco'
 import { PreCodeNode } from './PreCodeNode.tsrx'
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 export interface CodeBlockPreviewPayload {
   node: CodeBlockNodeProps['node']
@@ -369,6 +371,12 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     ? showLineNumbers
     : resolvedOptions.disableLineNumbers !== true
   const showLineNumbersIdentityRef = useRef(resolvedShowLineNumbers)
+  const previousConfiguredFontSize = Number(codeBlockOptionsIdentityRef.current?.fontSize)
+  const configuredFontSize = Number(codeBlockOptions?.fontSize)
+  const configuredFontSizeRemoved = codeBlockOptionsIdentityRef.current !== codeBlockOptions
+    && Number.isFinite(previousConfiguredFontSize)
+    && previousConfiguredFontSize > 0
+    && (!Number.isFinite(configuredFontSize) || configuredFontSize <= 0)
 
   const getMaxHeightValue = useCallback((): number => {
     const raw = resolvedOptions.maxHeight ?? defaultCodeBlockMaxHeight
@@ -377,12 +385,13 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     return defaultCodeBlockMaxHeight
   }, [resolvedOptions.maxHeight])
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const configured = Number(resolvedOptions.fontSize)
-    if (!Number.isFinite(configured) || configured <= 0)
-      return
-    setDefaultFontSize(configured)
-    setFontSize(configured)
+    const nextFontSize = Number.isFinite(configured) && configured > 0
+      ? configured
+      : defaultPreFallbackFontSize
+    setDefaultFontSize(nextFontSize)
+    setFontSize(nextFontSize)
   }, [resolvedOptions.fontSize])
 
   const applyEditorHeight = useCallback((nextExpanded: boolean) => {
@@ -666,7 +675,9 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
 
   const preFallbackMetrics = useMemo(() => {
     const raw = resolvedOptions as Record<string, unknown> | null | undefined
-    const resolvedFontSize = readPositiveNumber(raw?.fontSize) ?? fontSize ?? defaultPreFallbackFontSize
+    const resolvedFontSize = readPositiveNumber(raw?.fontSize)
+      ?? (configuredFontSizeRemoved ? defaultPreFallbackFontSize : fontSize)
+      ?? defaultPreFallbackFontSize
     const resolvedLineHeight = readPositiveNumber(raw?.lineHeight)
       ?? (resolvedFontSize === defaultPreFallbackFontSize
         ? defaultPreFallbackLineHeight
@@ -685,7 +696,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
       paddingTop: padding.top,
       tabSize,
     }
-  }, [fontSize, node.diff, resolvedOptions])
+  }, [configuredFontSizeRemoved, fontSize, node.diff, resolvedOptions])
 
   const preFallbackDiffInline = useMemo(() => {
     if (!node.diff)
@@ -890,7 +901,17 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     return String(node.language || codeLanguage || detectedLanguage || 'plaintext')
   }, [codeLanguage, detectedLanguage, node.language])
   const canonicalLanguage = useMemo(() => normalizeLanguageIdentifier(rawLanguage), [rawLanguage])
-  const languageId = useMemo(() => resolveLanguageId(canonicalLanguage), [canonicalLanguage])
+  const shouldUseStreamingPlaintext = useMemo(() => {
+    const token = rawLanguage.trim().split(/\s+/)[0]?.split(':')[0]?.toLowerCase() || ''
+    const normalized = normalizeLanguageIdentifier(token)
+    if (!token || Object.prototype.hasOwnProperty.call(languageMap, normalized))
+      return false
+    return Object.keys(languageMap).some(candidate => candidate.startsWith(token))
+  }, [rawLanguage])
+  const languageId = useMemo(
+    () => shouldUseStreamingPlaintext ? 'plaintext' : resolveLanguageId(canonicalLanguage),
+    [canonicalLanguage, shouldUseStreamingPlaintext],
+  )
   const isPlainTextLanguage = useMemo(() => languageId === 'plaintext', [languageId])
   const languageIcon = useMemo(
     () => getLanguageIcon(canonicalLanguage),
@@ -1075,7 +1096,11 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
             const view = editorKindRef.current === 'diff'
               ? helpers.getDiffEditorView?.()
               : helpers.getEditorView?.()
-            view?.updateOptions?.({ fontSize: initialFontSize, automaticLayout: false })
+            const initialLineHeight = readPositiveNumber(resolvedOptions.lineHeight)
+              ?? (initialFontSize === defaultPreFallbackFontSize
+                ? defaultPreFallbackLineHeight
+                : Math.max(12, Math.round(initialFontSize * 1.5)))
+            view?.updateOptions?.({ fontSize: initialFontSize, lineHeight: initialLineHeight, automaticLayout: false })
           }
           catch {}
         }
@@ -1215,7 +1240,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
 
     const newCode = getDisplayCode(node.diff ? (node.updatedCode ?? node.code) : node.code)
     const run = async () => {
-      let langToken = codeLanguage
+      let langToken = normalizeLanguageIdentifier(node.language) || codeLanguage
       if (!langToken && detectLanguageRef.current) {
         try {
           langToken = normalizeLanguageIdentifier(detectLanguageRef.current(newCode))
@@ -1224,7 +1249,9 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
         }
         catch {}
       }
-      const lang = resolveLanguageId(langToken || canonicalLanguage)
+      const lang = shouldUseStreamingPlaintext
+        ? 'plaintext'
+        : resolveLanguageId(langToken || canonicalLanguage)
 
       if (helpers.createEditor && editorHostRef.current) {
         try {
@@ -1263,9 +1290,11 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     runtimeReady,
     node.code,
     node.diff,
+    node.language,
     node.originalCode,
     node.updatedCode,
     scheduleEditorHeightSync,
+    shouldUseStreamingPlaintext,
     shouldDelayEditor,
     useFallback,
     viewportReady,

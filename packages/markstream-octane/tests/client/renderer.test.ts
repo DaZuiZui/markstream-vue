@@ -162,6 +162,36 @@ describe('markstream-octane client renderer', () => {
     expect(fallback?.style.overflow).toBe('auto')
   })
 
+  it('uses plaintext while a streaming fence language is incomplete', async () => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    const helpers = mockedUseMonaco.getMockImplementation()?.({}) as any
+    mockedUseMonaco.mockClear()
+    helpers.createEditor.mockClear()
+    helpers.updateCode.mockClear()
+    const view = render(NodeRenderer, {
+      props: {
+        ...stableRendererProps,
+        content: '```javasc\nconst value = 1',
+        final: false,
+        codeBlockProps: { showHeader: false },
+      },
+    })
+
+    await waitFor(() => expect(helpers.createEditor).toHaveBeenCalled())
+    expect(helpers.createEditor.mock.calls[0]?.[2]).toBe('plaintext')
+
+    view.rerender({
+      props: {
+        ...stableRendererProps,
+        content: '```javascript\nconst value = 1\n```',
+        final: true,
+        codeBlockProps: { showHeader: false },
+      },
+    })
+    await waitFor(() => expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === 'javascript')).toBe(true))
+    expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === 'javasc')).toBe(false)
+  })
+
   it('recreates the runtime when codeBlockOptions identity changes', async () => {
     const mockedUseMonaco = vi.mocked(useMonaco)
     mockedUseMonaco.mockClear()
@@ -197,6 +227,57 @@ describe('markstream-octane client renderer', () => {
     const options = mockedUseMonaco.mock.calls[1]?.[0] as Record<string, any>
     expect(options.overflow).toBe('wrap')
     expect(options.onLineClick).toBe(secondOnLineClick)
+  })
+
+  it('restores default typography before recreating after fontSize is removed', async () => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    const originalImplementation = mockedUseMonaco.getMockImplementation()
+    const helpers = originalImplementation?.({}) as any
+    let activeOptions: Record<string, any> | undefined
+    const createdTypography: Array<{ fontSize: number, lineHeight: number }> = []
+    const createdFallbackTypography: Array<{ fontSize: string, lineHeight: string }> = []
+    mockedUseMonaco.mockClear()
+    helpers.createEditor.mockClear()
+    mockedUseMonaco.mockImplementation((options) => {
+      activeOptions = options as Record<string, any> | undefined
+      return helpers
+    })
+    helpers.createEditor.mockImplementation(async () => {
+      createdTypography.push({ fontSize: activeOptions?.fontSize, lineHeight: activeOptions?.lineHeight })
+      const fallback = document.querySelector('pre.code-fallback-plain') as HTMLElement | null
+      createdFallbackTypography.push({
+        fontSize: fallback?.style.fontSize ?? '',
+        lineHeight: fallback?.style.lineHeight ?? '',
+      })
+    })
+    const baseProps = {
+      ...stableRendererProps,
+      content: '```ts\nconst value = 1\n```',
+      final: true,
+    }
+    const view = render(NodeRenderer, {
+      props: {
+        ...baseProps,
+        codeBlockOptions: { fontSize: 16 },
+      },
+    })
+    await waitFor(() => expect(helpers.createEditor).toHaveBeenCalledOnce())
+    expect(createdTypography[0]).toEqual({ fontSize: 16, lineHeight: 24 })
+    expect(createdFallbackTypography[0]).toEqual({ fontSize: '16px', lineHeight: '24px' })
+
+    view.rerender({
+      props: {
+        ...baseProps,
+        codeBlockOptions: {},
+      },
+    })
+    await waitFor(() => expect(helpers.createEditor).toHaveBeenCalledTimes(2))
+    expect(createdTypography[1]).toEqual({ fontSize: 12, lineHeight: 18 })
+    expect(createdFallbackTypography[1]).toEqual({ fontSize: '12px', lineHeight: '18px' })
+
+    helpers.createEditor.mockImplementation(async () => {})
+    if (originalImplementation)
+      mockedUseMonaco.mockImplementation(originalImplementation)
   })
 
   it('selects a tuple-only theme by host color mode', async () => {

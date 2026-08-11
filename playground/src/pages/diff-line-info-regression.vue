@@ -6,7 +6,7 @@ type Appearance = 'light' | 'dark'
 
 const isDark = ref(false)
 
-const themes = ['vitesse-dark', 'vitesse-light']
+const themes = ['vitesse-dark', 'vitesse-light'] as const
 
 function buildDiffMarkdown() {
   const original = [

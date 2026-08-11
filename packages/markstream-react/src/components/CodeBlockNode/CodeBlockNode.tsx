@@ -1,6 +1,6 @@
 import type { VisibilityHandle } from '../../context/viewportPriority'
 import type { CodeBlockNodeProps } from '../../types/component-props'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useViewportPriority } from '../../context/viewportPriority'
 import { useSafeI18n } from '../../i18n/useSafeI18n'
 import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonTooltip'
@@ -9,6 +9,8 @@ import { defaultCodeFontSize, readPositiveCodeMetric, resolveCodeTypography } fr
 import { HtmlPreviewFrame } from './HtmlPreviewFrame'
 import { getStreamDiffsRuntime } from './monaco'
 import { PreCodeNode } from './PreCodeNode'
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 export interface CodeBlockPreviewPayload {
   node: CodeBlockNodeProps['node']
@@ -344,6 +346,12 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeReactE
     ? showLineNumbers
     : resolvedRuntimeOptions.disableLineNumbers !== true
   const showLineNumbersIdentityRef = useRef(effectiveShowLineNumbers)
+  const previousConfiguredFontSize = Number(codeBlockOptionsIdentityRef.current?.fontSize)
+  const configuredFontSize = Number(codeBlockOptions?.fontSize)
+  const configuredFontSizeRemoved = codeBlockOptionsIdentityRef.current !== codeBlockOptions
+    && Number.isFinite(previousConfiguredFontSize)
+    && previousConfiguredFontSize > 0
+    && (!Number.isFinite(configuredFontSize) || configuredFontSize <= 0)
 
   const getMaxHeightValue = useCallback((): number => {
     const raw = resolvedRuntimeOptions.maxHeight ?? 500
@@ -352,12 +360,13 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeReactE
     return 500
   }, [resolvedRuntimeOptions.maxHeight])
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const configured = Number(resolvedRuntimeOptions.fontSize)
-    if (!Number.isFinite(configured) || configured <= 0)
-      return
-    setDefaultFontSize(configured)
-    setFontSize(configured)
+    const nextFontSize = Number.isFinite(configured) && configured > 0
+      ? configured
+      : defaultCodeFontSize
+    setDefaultFontSize(nextFontSize)
+    setFontSize(nextFontSize)
   }, [resolvedRuntimeOptions.fontSize])
 
   const applyEditorHeight = useCallback((nextExpanded: boolean) => {
@@ -549,7 +558,10 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeReactE
 
   const preFallbackMetrics = useMemo(() => {
     const raw = resolvedRuntimeOptions as Record<string, unknown> | null | undefined
-    const typography = resolveCodeTypography(resolvedRuntimeOptions, fontSize)
+    const typography = resolveCodeTypography(
+      resolvedRuntimeOptions,
+      configuredFontSizeRemoved ? defaultCodeFontSize : fontSize,
+    )
     const padding = readRuntimePadding(raw?.padding)
     const defaultPadding = node.diff ? 0 : 8
     const hasConfiguredPadding = typeof raw?.padding === 'number'
@@ -563,7 +575,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeReactE
       paddingTop: hasConfiguredPadding ? padding.top : defaultPadding,
       tabSize,
     }
-  }, [fontSize, node.diff, resolvedRuntimeOptions])
+  }, [configuredFontSizeRemoved, fontSize, node.diff, resolvedRuntimeOptions])
 
   const preFallbackDiffInline = useMemo(() => {
     if (!node.diff)

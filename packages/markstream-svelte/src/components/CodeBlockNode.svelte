@@ -440,9 +440,10 @@ ${configuredUnsafeCSS}`.trim(),
     if (ensureRuntimePromise)
       return ensureRuntimePromise
 
-    ensureRuntimePromise = (async () => {
+    const runtimeId = lifecycleId
+    const pending = (async () => {
       const mod = await getStreamDiffsRuntime()
-      if (!mounted)
+      if (!mounted || lifecycleId !== runtimeId)
         return
       if (!mod || typeof mod.useMonaco !== 'function') {
         useFallback = true
@@ -451,11 +452,16 @@ ${configuredUnsafeCSS}`.trim(),
 
       helpers = mod.useMonaco(syncRuntimeOptions())
       await Promise.resolve(helpers.setTheme?.(requestedTheme))
+      if (!mounted || lifecycleId !== runtimeId)
+        return
       lastThemeRequest = requestedTheme
-    })().finally(() => {
-      ensureRuntimePromise = null
+    })()
+    const tracked = pending.finally(() => {
+      if (ensureRuntimePromise === tracked)
+        ensureRuntimePromise = null
     })
-    return ensureRuntimePromise
+    ensureRuntimePromise = tracked
+    return tracked
   }
 
   function queueThemeSync() {
@@ -472,8 +478,16 @@ ${configuredUnsafeCSS}`.trim(),
     if (!mounted || !shouldRender || !editorHost || collapsed || shouldDelayEditor || shouldDeferStreamingLanguage)
       return
 
-    await ensureRuntime()
-    if (!mounted || useFallback || !helpers)
+    const runtimeId = lifecycleId
+    try {
+      await ensureRuntime()
+    }
+    catch (error) {
+      if (mounted && lifecycleId === runtimeId)
+        markEditorFallback(error)
+      return
+    }
+    if (!mounted || lifecycleId !== runtimeId || useFallback || !helpers)
       return
     syncRuntimeOptions()
 
@@ -492,6 +506,7 @@ ${configuredUnsafeCSS}`.trim(),
         return
     }
 
+    const operationId = lifecycleId
     try {
       if (diff && typeof helpers.updateDiff === 'function')
         await Promise.resolve(helpers.updateDiff(originalCode, updatedCode || code, runtimeLanguage))
@@ -509,7 +524,8 @@ ${configuredUnsafeCSS}`.trim(),
       scheduleEditorHeightSync()
     }
     catch (error) {
-      markEditorFallback(error)
+      if (mounted && lifecycleId === operationId)
+        markEditorFallback(error)
     }
   }
 
@@ -578,26 +594,35 @@ ${configuredUnsafeCSS}`.trim(),
     if (!editorHost || !helpers || createEditorPromise)
       return createEditorPromise
 
+    const activeHelpers = helpers
     const creationId = ++lifecycleId
     editorReady = false
-    createEditorPromise = (async () => {
+    const pending = (async () => {
       try {
         cleanupEditor(false)
-        if (!mounted || !editorHost || lifecycleId !== creationId)
+        if (!mounted || !editorHost || lifecycleId !== creationId || helpers !== activeHelpers)
           return
         editorHost.replaceChildren()
         lastLayoutWidth = null
         lastLayoutHeight = null
 
         editorStreamMode = false
-        if (kind === 'diff' && typeof helpers.createDiffEditor === 'function') {
-          await helpers.createDiffEditor(editorHost, originalCode, updatedCode || code, runtimeLanguage)
-          await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, runtimeLanguage))
+        if (kind === 'diff' && typeof activeHelpers.createDiffEditor === 'function') {
+          await activeHelpers.createDiffEditor(editorHost, originalCode, updatedCode || code, runtimeLanguage)
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
+          await Promise.resolve(activeHelpers.updateDiff?.(originalCode, updatedCode || code, runtimeLanguage))
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
           editorKind = 'diff'
         }
         else {
-          await helpers.createEditor(editorHost, code, runtimeLanguage)
-          await Promise.resolve(helpers.updateCode?.(code, runtimeLanguage))
+          await activeHelpers.createEditor(editorHost, code, runtimeLanguage)
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
+          await Promise.resolve(activeHelpers.updateCode?.(code, runtimeLanguage))
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
           editorKind = 'single'
         }
         applyEditorOptions()
@@ -614,15 +639,17 @@ ${configuredUnsafeCSS}`.trim(),
         scheduleEditorHeightSync()
       }
       catch (error) {
-        if (mounted) {
+        if (mounted && lifecycleId === creationId && helpers === activeHelpers) {
           markEditorFallback(error)
         }
       }
-    })().finally(() => {
-      createEditorPromise = null
+    })()
+    const tracked = pending.finally(() => {
+      if (createEditorPromise === tracked)
+        createEditorPromise = null
     })
-
-    return createEditorPromise
+    createEditorPromise = tracked
+    return tracked
   }
 
   function refreshEditorAfterLoadingSettled() {
@@ -683,6 +710,11 @@ ${configuredUnsafeCSS}`.trim(),
   }
 
   function cleanupEditor(disposeHelpers = true) {
+    if (disposeHelpers) {
+      lifecycleId += 1
+      createEditorPromise = null
+      ensureRuntimePromise = null
+    }
     clearEditorHeightSyncBindings()
     cancelEditorHeightSync()
     try {

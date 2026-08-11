@@ -70,6 +70,15 @@ describe('markstream-svelte code block handoff geometry', () => {
     expect(codeBlockSource).toContain('lastRuntimeInstallationConfig !== runtimeInstallationConfig')
   })
 
+  it('invalidates pending editor work before installing replacement runtime options', () => {
+    expect(codeBlockSource).toContain('lifecycleId += 1')
+    expect(codeBlockSource).toContain('createEditorPromise = null')
+    expect(codeBlockSource).toContain('if (createEditorPromise === tracked)')
+    expect(codeBlockSource).toContain('lifecycleId === creationId && helpers === activeHelpers')
+    expect(codeBlockSource).toContain('if (!mounted || lifecycleId !== runtimeId || useFallback || !helpers)')
+    expect(codeBlockSource).toContain('if (mounted && lifecycleId === runtimeId)\n        markEditorFallback(error)')
+  })
+
   it('does not retain a stale static-enhancement handle after a newer render pass', () => {
     expect(nodeRendererSource).toContain('const handle = await enhanceRenderedHtml(rootEl, {')
     expect(nodeRendererSource).toContain(`if (token !== enhancementToken) {

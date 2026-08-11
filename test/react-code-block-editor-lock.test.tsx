@@ -427,6 +427,98 @@ describe('markstream-react codeBlockNode theme updates', () => {
     })
   })
 
+  it('restores the default font size when codeBlockOptions.fontSize is removed', async () => {
+    const helpers = getStreamMonacoHelpers()
+    const createdTypography: Array<{ fontSize: number, lineHeight: number }> = []
+    const createdFallbackTypography: Array<{ fontSize: string, lineHeight: string }> = []
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    let activeOptions: Record<string, any> | undefined
+    helpers.useMonaco.mockImplementation((options: Record<string, any>) => {
+      activeOptions = options
+      return helpers
+    })
+    helpers.createEditor.mockImplementation(async () => {
+      createdTypography.push({ fontSize: activeOptions?.fontSize, lineHeight: activeOptions?.lineHeight })
+      const fallback = host.querySelector('pre.code-fallback-plain') as HTMLElement | null
+      createdFallbackTypography.push({
+        fontSize: fallback?.style.fontSize ?? '',
+        lineHeight: fallback?.style.lineHeight ?? '',
+      })
+    })
+    const root = createRoot(host)
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'const value = 1',
+      raw: '```ts\nconst value = 1\n```',
+    }
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        node,
+        loading: false,
+        showHeader: true,
+        showCopyButton: false,
+        showExpandButton: false,
+        showPreviewButton: false,
+        showCollapseButton: false,
+        codeBlockOptions: { fontSize: 16 },
+      }))
+    })
+    await waitForCallCount(helpers.useMonaco, 1)
+    await waitForCallCount(helpers.createEditor, 1)
+    expect(createdTypography[0]).toEqual({ fontSize: 16, lineHeight: 24 })
+    expect(createdFallbackTypography[0]).toEqual({ fontSize: '16px', lineHeight: '24px' })
+    expect((host.querySelector('pre.code-fallback-plain') as HTMLElement | null)?.style.fontSize).toBe('16px')
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        node,
+        loading: false,
+        showHeader: true,
+        showCopyButton: false,
+        showExpandButton: false,
+        showPreviewButton: false,
+        showCollapseButton: false,
+        codeBlockOptions: {},
+      }))
+    })
+    await waitForCallCount(helpers.useMonaco, 2)
+    await waitForCallCount(helpers.createEditor, 2)
+
+    expect(createdTypography[1]).toEqual({ fontSize: 12, lineHeight: 18 })
+    expect(createdFallbackTypography[1]).toEqual({ fontSize: '12px', lineHeight: '18px' })
+    expect((host.querySelector('pre.code-fallback-plain') as HTMLElement | null)?.style.fontSize).toBe('12px')
+
+    const fontButtons = host.querySelectorAll('button.code-action-btn')
+    expect(fontButtons).toHaveLength(3)
+    await act(async () => {
+      (fontButtons[2] as HTMLButtonElement).click()
+    })
+    expect((host.querySelector('pre.code-fallback-plain') as HTMLElement | null)?.style.fontSize).toBe('13px')
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        node,
+        loading: false,
+        showHeader: true,
+        showCopyButton: false,
+        showExpandButton: false,
+        showPreviewButton: false,
+        showCollapseButton: false,
+        codeBlockOptions: { overflow: 'scroll' },
+      }))
+    })
+    await waitForCallCount(helpers.createEditor, 3)
+    expect(createdTypography[2]).toEqual({ fontSize: 13, lineHeight: 20 })
+    expect(createdFallbackTypography[2]).toEqual({ fontSize: '13px', lineHeight: '20px' })
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
   it('recreates the runtime when direct line-number precedence changes', async () => {
     const helpers = getStreamMonacoHelpers()
     const host = document.createElement('div')

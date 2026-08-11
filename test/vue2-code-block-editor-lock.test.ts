@@ -314,6 +314,9 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
     expect(source).toContain('() => [props.loading, viewportReady.value] as const')
     expect(source).toContain('if (loading !== false || !visible || !deferredRuntimeOptionsRecreation)')
     expect(source).toContain('initializeRuntimeHelpers(createRuntimeHelpersFactory)')
+    expect(source).toContain('let editorCreationGeneration = 0')
+    expect(source).toContain('if (createEditorPromise === tracked)')
+    expect(source).toContain('generation !== editorCreationGeneration')
   })
 
   it('updates diff themes without recreating the diff editor when isDark toggles', async () => {

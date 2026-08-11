@@ -3659,6 +3659,20 @@ const monacoStructuralSignature = computed(() => String(editorCreationOptionsRev
 let deferredRuntimeOptionsRecreation = false
 
 watch(
+  () => props.codeBlockOptions?.fontSize,
+  (fontSize) => {
+    const nextFontSize = typeof fontSize === 'number' && Number.isFinite(fontSize) && fontSize > 0
+      ? fontSize
+      : defaultPreFallbackFontSize
+    defaultCodeFontSize.value = nextFontSize
+    codeFontSize.value = nextFontSize
+    measuredEditorFontSize.value = null
+    measuredEditorLineHeight.value = null
+    measuredEditorCharacterWidth.value = null
+  },
+)
+
+watch(
   () => [props.codeBlockOptions, props.showLineNumbers] as const,
   () => {
     editorCreationOptionsRevision.value += 1

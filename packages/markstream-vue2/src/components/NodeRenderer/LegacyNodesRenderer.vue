@@ -65,7 +65,7 @@ const props = withDefaults(defineProps<{
   codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   renderCodeBlocksAsPre?: boolean
-  /** Theme names or theme objects preloaded for enhanced code blocks. */
+  /** Theme-name tuple ordered as `[dark, light]` for enhanced code blocks. */
   themes?: CodeBlockThemes
   isDark?: boolean
   customHtmlTags?: readonly string[]
