@@ -57,7 +57,6 @@ export default defineConfig({
           'katex',
           'mermaid',
           'katex/contrib/mhchem',
-          'stream-markdown',
           'stream-markdown-parser',
           'shiki',
           '@floating-ui/dom',

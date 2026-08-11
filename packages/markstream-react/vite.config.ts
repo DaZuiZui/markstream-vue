@@ -100,7 +100,6 @@ export default defineConfig(({ mode }) => {
           'mermaid',
           'stream-diffs',
           'stream-diffs/markstream',
-          'stream-markdown',
           'stream-markdown-parser',
           'markstream-core',
           '@antv/infographic',
