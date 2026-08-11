@@ -9,7 +9,6 @@ import type {
   MarkstreamVirtualMetrics,
   MarkstreamVirtualScrollOptions,
   MarkstreamVirtualState,
-  NodeRendererCodeRenderer,
   NodeRendererMode,
 } from '../../types/node-renderer-props'
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, provide, reactive, ref, shallowRef, watch } from 'vue'
@@ -263,25 +262,12 @@ function normalizeTimelineMarkdownMode(value: unknown): NodeRendererMode {
     : 'docs'
 }
 
-function normalizeTimelineMarkdownCodeRenderer(
-  value: unknown,
-  mode = normalizeTimelineMarkdownMode(props.markdownMode),
-): NodeRendererCodeRenderer {
-  if (value === 'pre' || value === 'shiki' || value === 'monaco')
-    return value
-
-  return mode === 'docs' ? 'monaco' : 'pre'
-}
-
 const normalizedTimelineMarkdownMode = computed(() => {
   return normalizeTimelineMarkdownMode(props.markdownMode)
 })
 
-const normalizedTimelineMarkdownCodeRenderer = computed(() => {
-  return normalizeTimelineMarkdownCodeRenderer(
-    props.markdownCodeRenderer,
-    normalizedTimelineMarkdownMode.value,
-  )
+const normalizedRenderCodeBlocksAsPre = computed(() => {
+  return props.renderCodeBlocksAsPre === true
 })
 
 const timelineBaseMeasurementKey = computed(() => {
@@ -292,7 +278,8 @@ const timelineBaseMeasurementKey = computed(() => {
 })
 
 const timelineMarkdownMeasurementKey = computed(() => {
-  return `${timelineBaseMeasurementKey.value}\u0001${normalizedTimelineMarkdownMode.value}\u0001${normalizedTimelineMarkdownCodeRenderer.value}`
+  const codeLayout = normalizedRenderCodeBlocksAsPre.value ? 'pre' : 'rich'
+  return `${timelineBaseMeasurementKey.value}\u0001${normalizedTimelineMarkdownMode.value}\u0001${codeLayout}`
 })
 
 class TimelineFenwickTree {
@@ -1168,7 +1155,7 @@ function setItemSize(
     ? restoredFloor
     : Math.ceil(size)
 
-  // Monaco / pre fallback / browser font rounding can differ by exactly 1px.
+  // stream-diffs / pre fallback / browser font rounding can differ by exactly 1px.
   // Treat that as measurement noise; otherwise an item above the current
   // anchor will restore scrollTop by 1px and visibly shimmer on refresh.
   if (
@@ -1522,7 +1509,6 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
   const final = getMarkstreamTimelineItemFinal(item, record.index, props)
   const restoreState = markdownStates.get(record.key)
   const markdownMode = normalizedTimelineMarkdownMode.value
-  const markdownCodeRenderer = normalizedTimelineMarkdownCodeRenderer.value
   const virtualScroll: MarkstreamVirtualScrollOptions = {
     enabled: true,
     sessionKey: getSessionKey(record),
@@ -1541,7 +1527,7 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
     content: getMarkstreamTimelineItemContent(item, record.index, props),
     final,
     mode: markdownMode,
-    codeRenderer: markdownCodeRenderer,
+    renderCodeBlocksAsPre: normalizedRenderCodeBlocksAsPre.value,
     ...(final
       ? {
           nodeVirtual: 'auto' as const,
@@ -1856,8 +1842,8 @@ function isElementVisiblyPainted(el: HTMLElement) {
   return rect.width > 0 && rect.height > 0
 }
 
-function hasVisibleMonacoDom(root: HTMLElement) {
-  return Array.from(root.querySelectorAll<HTMLElement>('.monaco-editor, .monaco-diff-editor'))
+function hasVisibleStreamDiffsDom(root: HTMLElement) {
+  return Array.from(root.querySelectorAll<HTMLElement>('diffs-container, .stream-diffs-shell, .stream-diffs-surface'))
     .some(isElementVisiblyPainted)
 }
 
@@ -1923,8 +1909,8 @@ function hasReadyCodeBlockContent(content: HTMLElement) {
     const hasFallback = hasUsableRestoreFallback(fallback)
 
     // Hidden editor alone is not a visible surface. It is only safe when the
-    // pre fallback is still usable, Monaco is visibly painted, or the block is enhanced.
-    return enhanced || hasFallback || hasVisibleMonacoDom(codeBlock)
+    // pre fallback is still usable, stream-diffs is visibly painted, or the block is enhanced.
+    return enhanced || hasFallback || hasVisibleStreamDiffsDom(codeBlock)
   }
 
   return hasReadyRoutedDiagramContent(content)
@@ -2268,7 +2254,7 @@ function readRestoreViewportSignature() {
       const content = slot.querySelector<HTMLElement>(':scope > .node-content')
       const code = content?.querySelector<HTMLElement>('[data-markstream-code-block="1"]')
       const fallback = content?.querySelector<HTMLElement>('pre.code-pre-fallback')
-      const editor = content?.querySelector<HTMLElement>('.monaco-editor, .monaco-diff-editor')
+      const editor = content?.querySelector<HTMLElement>('diffs-container, .stream-diffs-shell')
 
       return [
         slot.dataset.nodeIndex ?? '',

@@ -354,7 +354,7 @@ async function frameStatsSince(page, stateName, baseline) {
   return frameStatsFromDeltas(await frameDeltasSince(page, stateName, baseline))
 }
 
-async function runScenario(browser, port, mode) {
+async function runScenario(browser, port) {
   const rootSelector = '.preview-surface'
   const sample = process.env.PLAYGROUND_SAMPLE || 'baseline'
   const benchmarkPath = '/test?benchmark=1'
@@ -367,7 +367,6 @@ async function runScenario(browser, port, mode) {
           origin: `http://${host}:${port}`,
           localStorage: [
             { name: 'vmr-test-sample', value: sample },
-            { name: 'vmr-test-render-mode', value: mode },
           ],
         },
       ],
@@ -387,7 +386,6 @@ async function runScenario(browser, port, mode) {
           origin: `http://${host}:${port}`,
           localStorage: [
             { name: 'vmr-test-sample', value: sample },
-            { name: 'vmr-test-render-mode', value: mode },
           ],
         },
       ],
@@ -567,13 +565,13 @@ async function runScenario(browser, port, mode) {
     const allCodeBlocks = Array.from(document.querySelectorAll('.code-block-container'))
     const visibleCodeBlocks = allCodeBlocks.filter(isVisible)
     const diffCodeBlocks = allCodeBlocks.filter(element =>
-      element.classList.contains('is-diff') || Boolean(element.querySelector('.monaco-diff-editor')),
+      element.classList.contains('is-diff') || Boolean(element.querySelector('.stream-diffs-shell .diffs-container')),
     )
     const visibleDiffCodeBlocks = diffCodeBlocks.filter(isVisible)
     const renderedMermaidCount = mermaids.filter(element => element.querySelector('svg')).length
     return {
       sample: localStorage.getItem('vmr-test-sample') ?? 'unknown',
-      mode: localStorage.getItem('vmr-test-render-mode') ?? 'unknown',
+      mode: 'stream-diffs',
       lcpMs: Number(state.lcpMs ?? 0),
       lcpElement: state.lcpElement ?? null,
       cls: Number(state.cls ?? 0),
@@ -690,10 +688,10 @@ function assertScenario(result) {
     throw new Error(`[${result.mode}] Baseline sample should include at least one D2 block.`)
   if (result.visibleFallbackCount !== 0)
     throw new Error(`[${result.mode}] Visible code fallback should be gone after initial settle.`)
-  if (result.sample === 'diff' && result.mode === 'monaco' && !(result.diffCodeBlockCount > 0))
-    throw new Error('[monaco] Diff sample should render at least one Monaco diff block.')
-  if (result.sample === 'diff' && result.mode === 'monaco' && result.visibleDiffFallbackCount !== 0)
-    throw new Error('[monaco] Visible diff fallback should be gone after initial settle.')
+  if (result.sample === 'diff' && result.mode === 'stream-diffs' && !(result.diffCodeBlockCount > 0))
+    throw new Error('[stream-diffs] Diff sample should render at least one stream-diffs diff block.')
+  if (result.sample === 'diff' && result.mode === 'stream-diffs' && result.visibleDiffFallbackCount !== 0)
+    throw new Error('[stream-diffs] Visible diff fallback should be gone after initial settle.')
   const visibleHeavyBlockCount = result.visibleMermaidCount + result.visibleInfographicCount + result.visibleD2Count
   if (visibleHeavyBlockCount > 0) {
     if (result.visibleRenderedMermaidCount !== result.visibleMermaidCount)
@@ -743,15 +741,12 @@ async function run() {
     await waitForPort(port)
     browser = await chromium.launch(resolveChromeLaunchOptions())
 
-    const markdownResult = await runScenario(browser, port, 'markdown')
-    const monacoResult = await runScenario(browser, port, 'monaco')
+    const streamDiffsResult = await runScenario(browser, port)
     results = {
-      markdown: markdownResult,
-      monaco: monacoResult,
+      'stream-diffs': streamDiffsResult,
     }
 
-    assertScenario(markdownResult)
-    assertScenario(monacoResult)
+    assertScenario(streamDiffsResult)
 
     writeJsonResult(results)
 

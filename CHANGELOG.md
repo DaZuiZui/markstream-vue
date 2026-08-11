@@ -1,3 +1,34 @@
+## [2.0.0-beta.1](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@1.1.2-beta.3...markstream-vue@2.0.0-beta.1) (2026-08-11)
+
+### ⚠ Breaking changes
+
+- Remove the Monaco and `stream-markdown` code-block runtimes, their peers, `MarkdownCodeBlockNode`, React / Octane `MarkdownCodeBlockNodeProps`, `ShikiCodeBlockProps`, the top-level `langs` prop, and Monaco-named public types and props.
+- Use `stream-diffs` as the only enhanced code-block surface; without the optional peer, code fences fall back to plain `<pre><code>` rendering.
+- Remove `codeRenderer`, `markdownCodeRenderer`, and the `NodeRendererCodeRenderer` type. Enhanced code blocks use `stream-diffs` automatically; use `renderCodeBlocksAsPre` for plain `<pre><code>` output or `setCustomComponents(customId, { code_block: ... })` for a scoped custom renderer.
+- Replace direct `monacoOptions`, wrapper-level `codeBlockMonacoOptions`, and `CodeBlockMonacoOptions` with the shared `codeBlockOptions` / `CodeBlockOptions` API on direct `CodeBlockNode` and top-level `NodeRenderer` / `MarkdownRender` across Vue 3, React, Octane, Svelte, Angular, and Vue 2. `maxHeight` is a numeric pixel value, and `padding` is one symmetric numeric pixel value rather than separate top and bottom values.
+- Replace string `CodeBlockMonacoTheme` with string `CodeBlockTheme` and `{ dark, light }` theme pairs. Monaco JSON theme objects have no direct rename; register one with `registerCustomTheme` from `stream-diffs/pierre` and pass its name. `themes` is the `[dark, light]` name pair.
+- Replace `resolveMonacoLanguageId` with `resolveLanguageId`. For historical `getUseMonaco` preload usage, use `preloadCodeBlockRuntime`; import advanced controller APIs directly from `stream-diffs` instead of relying on a Markstream raw-runtime getter or copied `StreamDiffs*` types.
+- For consumers that directly used the removed `MarkdownCodeBlockNode`, replace `MarkdownCodeBlockPreviewPayload` with `CodeBlockPreviewPayload`; those handlers now receive `{ node, artifactType, artifactTitle, id }` instead of `{ type, content, title }`. Existing `CodeBlockNode` and `MarkdownRender` handlers already use the common payload.
+- Replace the parser-only `InternalParseOptions` type with the public `ParseOptions` contract.
+
+### Features and reliability
+
+- Complete the parser ownership, leaf-module, reuse, lifecycle, API-snapshot, differential, and performance-gate work tracked by the 2.0 parser epic.
+- Align Vue 3, React, Octane, Svelte, Angular, and Vue 2 code-block rendering on the same `stream-diffs` handoff and plain fallback behavior.
+- During beta validation, keep 1.x stable releases on `latest`, preserve 1.x prereleases on `legacy-next`, and use `next` for 2.x betas. After the stable cutover, use `legacy` / `legacy-next` for 1.x and `latest` / `next` for 2.x.
+
+### Coordinated beta versions
+
+- `stream-markdown-parser@1.2.5-beta.1`
+- `markstream-core@1.1.0-beta.1`
+- `markstream-react@0.1.0-beta.1`
+- `markstream-octane@0.1.0-beta.1`
+- `markstream-svelte@0.1.0-beta.1`
+- `markstream-angular@0.1.0-beta.1`
+- `markstream-vue2@0.1.0-beta.1`
+
+See [Migrating to 2.0](https://markstream.simonhe.me/guide/migration-2-0) for replacements, dependency changes, and the 1.x maintenance policy.
+
 ## [1.0.4-beta.0](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@1.0.3...markstream-vue@1.0.4-beta.0) (2026-06-22)
 
 

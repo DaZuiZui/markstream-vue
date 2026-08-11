@@ -33,8 +33,6 @@ export type { LinkNodeStyleProps } from './components/LinkNode/LinkNode.tsrx'
 export { ListItemNode } from './components/ListItemNode/ListItemNode.tsrx'
 export type { ListItemNodeProps } from './components/ListItemNode/ListItemNode.tsrx'
 export { ListNode } from './components/ListNode/ListNode.tsrx'
-export { MarkdownCodeBlockNode } from './components/MarkdownCodeBlockNode/MarkdownCodeBlockNode.tsrx'
-export type { MarkdownCodeBlockNodeProps } from './components/MarkdownCodeBlockNode/MarkdownCodeBlockNode.tsrx'
 export { MathBlockNode } from './components/MathBlockNode/MathBlockNode.tsrx'
 export { MathInlineNode } from './components/MathInlineNode/MathInlineNode.tsrx'
 export { MermaidBlockNode } from './components/MermaidBlockNode/MermaidBlockNode.tsrx'
@@ -81,20 +79,13 @@ export * from './i18n/useSafeI18n'
 export * from './renderers/renderNode.tsrx'
 export type { NodeRendererCodeBlockProps, NodeRendererProps } from './types'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
-  CodeBlockMonacoLanguage,
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
-  CodeBlockMonacoThemeObject,
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockPreviewPayload,
+  CodeBlockTheme,
+  CodeBlockThemes,
   D2BlockNodeProps,
   ImageNodeProps,
   InfographicBlockNodeProps,
@@ -104,7 +95,6 @@ export type {
   MermaidBlockEvent,
   MermaidBlockNodeProps,
   PreCodeNodeProps,
-  ShikiCodeBlockProps,
 } from './types/component-props'
 export type { NodeComponentProps } from './types/node-component'
 export * from './utils/languageIcon'

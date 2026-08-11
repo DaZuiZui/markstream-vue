@@ -2,6 +2,9 @@ import type { HtmlBlockNode, MarkdownToken } from '../../types'
 import { VOID_HTML_TAGS } from '../../htmlTags'
 import { findTagCloseIndexOutsideQuotes, parseTagAttrs } from '../../htmlTagUtils'
 
+// This token-local matcher starts after a known opening tag and only tracks
+// nested occurrences of that tag. Source recovery must also locate openings
+// and skip comments, CDATA, and raw-text elements, so it uses a separate scanner.
 function findMatchingCloseTagEnd(rawHtml: string, tag: string, startIndex: number) {
   const lowerTag = tag.toLowerCase()
   const openTagRe = new RegExp(String.raw`^<\s*${lowerTag}(?=\s|>|/)`, 'i')

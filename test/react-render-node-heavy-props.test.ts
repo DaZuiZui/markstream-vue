@@ -48,7 +48,6 @@ function CodeBlockForwardingProbe(props: any) {
     'data-dark-theme': String(props.darkTheme ?? ''),
     'data-light-theme': String(props.lightTheme ?? ''),
     'data-themes': Array.isArray(props.themes) ? props.themes.join(',') : '',
-    'data-langs': Array.isArray(props.langs) ? props.langs.join(',') : '',
   })
 }
 
@@ -146,6 +145,82 @@ describe('markstream-react heavy-node prop forwarding', () => {
     expect(Object.prototype.hasOwnProperty.call(serverElement?.props ?? {}, 'constructor')).toBe(false)
   })
 
+  it('forwards top-level codeBlockOptions after the legacy codeBlockProps bag', () => {
+    const codeBlockOptions = {
+      diffStyle: 'unified' as const,
+      fontSize: 16,
+    }
+    const ctx: RenderContext = {
+      ...baseCtx,
+      codeBlockOptions,
+      codeBlockThemes: {
+        darkTheme: 'github-dark',
+        lightTheme: 'github-light',
+        themes: ['github-dark', 'github-light'],
+      },
+      codeBlockProps: {
+        codeBlockOptions: { fontSize: 99 },
+      } as any,
+    }
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'export const value = 1',
+      raw: '```ts\nexport const value = 1\n```',
+    }
+
+    const clientElement = clientRenderNode(node as any, 'client-options', ctx) as any
+    const serverElement = serverRenderNode(node as any, 'server-options', ctx) as any
+
+    expect(clientElement.props.codeBlockOptions).toBe(codeBlockOptions)
+    expect(clientElement.props.darkTheme).toBe('github-dark')
+    expect(clientElement.props.lightTheme).toBe('github-light')
+    expect(serverElement.props.codeBlockOptions).toBe(codeBlockOptions)
+    expect(serverElement.props.darkTheme).toBe('github-dark')
+    expect(serverElement.props.lightTheme).toBe('github-light')
+  })
+
+  it('lets an explicit fallback showLineNumbers prop override codeBlockOptions', () => {
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'const value = 1',
+      raw: '```ts\nconst value = 1\n```',
+    }
+    const renderBoth = (ctx: RenderContext) => [
+      clientRenderNode(node as any, 'client-pre-options', ctx) as any,
+      serverRenderNode(node as any, 'server-pre-options', ctx) as any,
+    ]
+
+    for (const result of renderBoth({ ...baseCtx, renderCodeBlocksAsPre: true })) {
+      expect(result.props.showLineNumbers).toBe(false)
+      expect(result.props.style).toBeUndefined()
+    }
+
+    for (const result of renderBoth({
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { disableLineNumbers: false },
+    }))
+      expect(result.props.showLineNumbers).toBe(true)
+
+    for (const result of renderBoth({
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { disableLineNumbers: false },
+      codeBlockProps: { showLineNumbers: false },
+    }))
+      expect(result.props.showLineNumbers).toBe(false)
+
+    for (const result of renderBoth({
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { disableLineNumbers: true },
+      codeBlockProps: { showLineNumbers: true },
+    }))
+      expect(result.props.showLineNumbers).toBe(true)
+  })
+
   it('injects stable preview height estimates for client Mermaid and Infographic custom renderers', () => {
     const longMermaidCode = 'flowchart TD\nA-->B\nB-->C\nC-->D\nD-->E\nE-->F\nF-->G\nG-->H\nH-->I\nI-->J\nJ-->K\nK-->L\n'
     const infographicCode = ['# Release progress', '- Plan: complete', '- Build: active', '- Verify: pending'].join('\n')
@@ -211,8 +286,8 @@ describe('markstream-react heavy-node prop forwarding', () => {
     expect(genericElement?.props?.ctx?.codeBlockProps).toEqual({ showHeader: false })
   })
 
-  it('forwards top-level Shiki themes and langs through React NodeRenderer custom code_block renderers', () => {
-    const customId = 'react-node-renderer-shiki-forwarding'
+  it('forwards top-level themes through React NodeRenderer custom code_block renderers', () => {
+    const customId = 'react-node-renderer-theme-forwarding'
 
     try {
       setCustomComponents(customId, {
@@ -228,14 +303,12 @@ describe('markstream-react heavy-node prop forwarding', () => {
           codeBlockDarkTheme: 'github-dark',
           codeBlockLightTheme: 'github-light',
           themes: ['github-dark', 'github-light'],
-          langs: ['ts', 'js'],
         }),
       )
 
       expect(html).toContain('data-dark-theme="github-dark"')
       expect(html).toContain('data-light-theme="github-light"')
       expect(html).toContain('data-themes="github-dark,github-light"')
-      expect(html).toContain('data-langs="ts,js"')
     }
     finally {
       removeCustomComponents(customId)
@@ -542,15 +615,7 @@ describe('markstream-react heavy-node prop forwarding', () => {
       ...baseCtx,
       renderCodeBlocksAsPre: true,
       codeBlockProps: { showLineNumbers: true },
-      codeBlockThemes: {
-        monacoOptions: {
-          fontFamily: 'JetBrains Mono',
-          fontSize: 14,
-          lineHeight: 21,
-          padding: { top: 6, bottom: 10 },
-          tabSize: 2,
-        },
-      },
+      codeBlockOptions: { overflow: 'scroll' },
     }
 
     const clientHtml = renderToStaticMarkup(clientRenderNode(node as any, 'client-pre-typography', ctx) as any)
@@ -564,7 +629,19 @@ describe('markstream-react heavy-node prop forwarding', () => {
       expect(html).toContain('padding-top:0px')
       expect(html).toContain('padding-bottom:0px')
       expect(html).toContain('tab-size:2')
+      expect(html).toContain('white-space:pre')
       expect(html).toContain('class="markstream-pre__line-numbers-text">1\n2</span>')
     }
+
+    const wrappedClientHtml = renderToStaticMarkup(clientRenderNode(node as any, 'client-pre-wrap', {
+      ...ctx,
+      codeBlockOptions: { overflow: 'wrap' },
+    }) as any)
+    const wrappedServerHtml = renderToStaticMarkup(serverRenderNode(node as any, 'server-pre-wrap', {
+      ...ctx,
+      codeBlockOptions: { overflow: 'wrap' },
+    }) as any)
+    expect(wrappedClientHtml).toContain('white-space:pre-wrap')
+    expect(wrappedServerHtml).toContain('white-space:pre-wrap')
   })
 })

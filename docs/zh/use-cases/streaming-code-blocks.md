@@ -1,18 +1,17 @@
 ---
 title: 流式代码块渲染
-description: 渲染 LLM token 流中的代码块，支持稳定的未闭合 fence、Monaco 或 Shiki 高亮、diff 感知更新以及移动端友好回退。
+description: 渲染 LLM token 流中的代码块，支持稳定的未闭合 fence、stream-diffs 增强表面、diff 感知更新以及移动端友好回退。
 lastUpdated: 2026-07-01
 keywords:
   - 流式代码块渲染器
   - AI 代码块 Markdown
   - LLM 代码 fence 渲染器
-  - Monaco 流式代码块
-  - Shiki 流式 Markdown
+  - stream-diffs 代码块
 faq:
   - question: 在闭合 fence 到达之前，Markstream 能渲染代码块吗？
     answer: 可以。它在流式期间保持未闭合 fence 可读，当 fence 足够完整时再升级到已配置的代码块渲染器。
-  - question: AI 聊天应用应该对每个代码块都用 Monaco 吗？
-    answer: 不一定。Monaco 适合丰富的交互式代码块；对于只读聊天、移动端 WebView 或严格的包体预算，Shiki 或 pre 渲染可能更好。
+  - question: AI 聊天应用应该对每个代码块都用增强表面吗？
+    answer: 不一定。stream-diffs 适合大型或交互式代码块；对于只读聊天、移动端 WebView 或严格的包体预算，普通 pre 渲染可能更合适。
   - question: 应该如何测试流式代码块？
     answer: 用与生产环境流相同的节奏，测试未闭合 fence、语言标签变化、长代码块、diff fence 和快速 token 更新。
 ---
@@ -36,8 +35,7 @@ export function answer() {
 
 | 渲染器 | 最适合 | 说明 |
 | --- | --- | --- |
-| Monaco `CodeBlockNode` | 交互式或大型代码块 | 更重、类似编辑器，适合丰富的代码 UX |
-| Shiki `MarkdownCodeBlockNode` | 只读的高亮代码 | 比 Monaco 更轻，适合文档和聊天 |
+| `CodeBlockNode`（通过 `stream-diffs`） | 交互式或大型代码块 | 增强 File / FileDiff 表面，支持语法高亮与 diff 交互 |
 | 普通 `pre` | 移动端或严格包体预算 | 最可预测的回退 |
 
 ## 最小 Vue 设置
@@ -63,25 +61,13 @@ defineProps<{
 </template>
 ```
 
-对于轻量级的 Shiki 渲染器，请安装 `stream-markdown`，并将代码块覆盖范围限定到该聊天界面：
+需要语法高亮与 diff 交互的增强表面时，安装可选 peer `stream-diffs`：
 
-```ts
-import { MarkdownCodeBlockNode, setCustomComponents } from 'markstream-vue'
-
-setCustomComponents('chat-code-blocks', {
-  code_block: MarkdownCodeBlockNode,
-})
+```bash
+pnpm add stream-diffs
 ```
 
-```vue
-<MarkdownRender
-  custom-id="chat-code-blocks"
-  mode="chat"
-  :content="content"
-  :final="isDone"
-  :fade="false"
-/>
-```
+安装后，`CodeBlockNode` 会在 fence 足够完整并进入视口时挂载 File 或 FileDiff 表面。受支持的配置来自直接或 renderer 顶层 `codeBlockOptions`。未安装该 peer 时会自动回退为普通 `<pre><code>`。
 
 对于移动端 WebView 或保守的包体，请使用普通 `pre` 渲染：
 
@@ -112,5 +98,6 @@ setCustomComponents('chat-code-blocks', {
 
 - [代码块渲染](/zh/guide/code-blocks)
 - [CodeBlockNode](/zh/guide/code-block-node)
+- [代码块运行时](/zh/guide/code-block-runtime)
 - [AI 聊天流式 Markdown](/zh/use-cases/ai-chat-streaming)
 - [长 AI 回答](/zh/use-cases/long-ai-responses)

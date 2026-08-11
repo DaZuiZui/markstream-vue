@@ -21,7 +21,7 @@
   <text x="508" y="185" fill="#d1fae5" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="800" text-anchor="middle">PLAYGROUND</text>
   <text x="430" y="276" fill="#f8fafc" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="76" font-weight="750">markstream-<tspan fill="url(#msGradText)">vue</tspan></text>
   <text x="432" y="346" fill="#a7f3d0" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="30" font-weight="700">Interactive streaming Markdown demos</text>
-  <text x="432" y="400" fill="#cbd5e1" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="24">Mermaid, KaTeX, Monaco, CDN peers, and test labs</text>
+  <text x="432" y="400" fill="#cbd5e1" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="24">Mermaid, KaTeX, stream-diffs, CDN peers, and test labs</text>
   <g transform="translate(432 456)">
     <rect width="96" height="40" rx="20" fill="#0f2534" stroke="#1f6f6b"/>
     <text x="48" y="25" fill="#d1fae5" font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="700" text-anchor="middle">Live</text>

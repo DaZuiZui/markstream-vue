@@ -95,17 +95,19 @@ export function normalizeLanguageIdentifier(lang?: string | null): string {
   return LANGUAGE_ALIAS_MAP[token] ?? token
 }
 
-export function resolveMonacoLanguageId(lang?: string | null): string {
+export function resolveLanguageId(lang?: string | null): string {
   const canonical = normalizeLanguageIdentifier(lang)
   if (!canonical)
     return 'plaintext'
   switch (canonical) {
     case 'plain':
       return 'plaintext'
-    case 'jsx':
-      return 'javascript'
-    case 'tsx':
-      return 'typescript'
+    case 'shell':
+      return 'zsh'
+    case 'objectivec':
+      return 'objective-c'
+    case 'objectivecpp':
+      return 'objective-cpp'
     default:
       return canonical
   }
@@ -187,4 +189,29 @@ export const languageMap: Record<string, string> = {
   svg: 'SVG',
   mermaid: 'Mermaid',
   d2: 'D2',
+}
+
+const LANGUAGE_PREFIX_CANDIDATES = Array.from(new Set([
+  ...Object.keys(LANGUAGE_ALIAS_MAP),
+  ...Object.values(LANGUAGE_ALIAS_MAP),
+  ...Object.keys(CORE_LANGUAGE_ICON_MAP),
+  ...Object.keys(languageMap),
+  'c',
+  'diff',
+  'go',
+  'java',
+  'php',
+  'ruby',
+  'rust',
+  'sql',
+  'yaml',
+]))
+
+export function isLikelyIncompleteLanguageIdentifier(lang?: string | null): boolean {
+  const token = extractLanguageToken(lang)
+  if (!token)
+    return false
+  if (LANGUAGE_PREFIX_CANDIDATES.includes(token))
+    return false
+  return LANGUAGE_PREFIX_CANDIDATES.some(candidate => candidate.startsWith(token))
 }

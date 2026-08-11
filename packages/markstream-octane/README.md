@@ -1,8 +1,14 @@
 # markstream-octane
 
-Native Octane streaming Markdown renderer for AI chat, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, Shiki, and Monaco.
+Native Octane streaming Markdown renderer for AI chat, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, and stream-diffs enhanced code blocks.
 
 `markstream-octane` is compiled with the Octane compiler and runs on the Octane client and server runtimes. It does not require a React root or React compatibility layer. The published package contains precompiled JavaScript, declarations, styles, and workers, so consumers do not need to compile TSRX from `node_modules`.
+
+The coordinated 2.0 family beta will use `markstream-octane@next`. Before installing, verify that `npm view markstream-octane@next version` reports `0.1.0-beta.1`. It removes the Monaco and Shiki code-block APIs in favor of `stream-diffs`; read the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+```bash
+pnpm add markstream-octane@next octane@^0.1.21 stream-diffs
+```
 
 ## Install
 
@@ -16,12 +22,13 @@ Optional renderer features are peer dependencies. Install only the features used
 
 | Feature | Package |
 | --- | --- |
-| Shiki code blocks | `stream-markdown` |
-| Monaco editor code blocks | `stream-monaco` |
+| Enhanced code blocks | `stream-diffs` |
 | Mermaid diagrams | `mermaid` |
 | KaTeX math | `katex` |
 | D2 diagrams | `@terrastruct/d2` |
 | Infographic blocks | `@antv/infographic` |
+
+Enhanced code blocks resolve to `stream-diffs` automatically. Direct `CodeBlockNode` and top-level `NodeRenderer` both accept the shared `codeBlockOptions` / `CodeBlockOptions` contract; `maxHeight` and the single symmetric `padding` value use numeric CSS pixels. Use `codeBlockProps` for header and toolbar controls. Markstream keeps theme, code/language, streaming state, header, mounting, reveal, and disposal host-owned. Themes are registered names and `themes` is the `[dark, light]` pair. An old Monaco JSON theme is not accepted directly: first convert it to a Shiki `ThemeRegistration`, then call `registerCustomTheme(name, loader)` from `stream-diffs/pierre`; see the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0).
 
 ## Compiler setup
 

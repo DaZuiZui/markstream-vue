@@ -1,41 +1,10 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { defineComponent, h, inject } from 'vue'
 import MermaidBlockNode from '../src/components/MermaidBlockNode'
 import NodeRenderer from '../src/components/NodeRenderer'
 import { removeCustomComponents, setCustomComponents } from '../src/utils/nodeComponents'
 import { flushAll } from './setup/flush-all'
-
-const markdownCodeBlockNodeMock = vi.hoisted(() => ({
-  factory: async () => {
-    const { defineComponent, h } = await import('vue')
-    return {
-      default: defineComponent({
-        name: 'MarkdownCodeBlockNodeProbe',
-        inheritAttrs: false,
-        setup(_, { attrs }) {
-          return () => h('div', {
-            'class': 'code-block-container',
-            'data-has-monaco-options': String(Object.prototype.hasOwnProperty.call(attrs, 'monacoOptions')),
-            'data-langs': JSON.stringify(attrs.langs ?? null),
-          })
-        },
-      }),
-    }
-  },
-}))
-
-vi.mock('../src/components/MarkdownCodeBlockNode', markdownCodeBlockNodeMock.factory)
-vi.mock('../src/components/MarkdownCodeBlockNode/index.ts', markdownCodeBlockNodeMock.factory)
-vi.mock('../src/components/MarkdownCodeBlockNode/MarkdownCodeBlockNode.vue', markdownCodeBlockNodeMock.factory)
-
-beforeAll(async () => {
-  await Promise.all([
-    import('../src/components/MarkdownCodeBlockNode'),
-    import('../src/components/MarkdownCodeBlockNode/index.ts'),
-    import('../src/components/MarkdownCodeBlockNode/MarkdownCodeBlockNode.vue'),
-  ])
-})
 
 const customId = 'vue3-heavy-props-test'
 
@@ -77,6 +46,7 @@ const GenericCodeBlockAttrsProbe = defineComponent({
     node: { type: Object, required: true },
     showHeader: Boolean,
     showLineNumbers: Boolean,
+    codeBlockOptions: Object,
   },
   setup(props, { attrs }) {
     return () => h('div', {
@@ -84,11 +54,9 @@ const GenericCodeBlockAttrsProbe = defineComponent({
       'data-language': String((props.node as any)?.language ?? ''),
       'data-show-header': String(props.showHeader),
       'data-show-line-numbers': String(props.showLineNumbers),
+      'data-code-padding': String((props.codeBlockOptions as any)?.padding ?? ''),
       'data-has-stream': String(Object.prototype.hasOwnProperty.call(attrs, 'stream')),
-      'data-has-monaco-options': String(Object.prototype.hasOwnProperty.call(attrs, 'monacoOptions')),
-      'data-monaco-options': JSON.stringify(attrs.monacoOptions ?? null),
       'data-has-themes': String(Object.prototype.hasOwnProperty.call(attrs, 'themes')),
-      'data-langs': JSON.stringify(attrs.langs ?? null),
     })
   },
 })
@@ -227,7 +195,7 @@ afterEach(() => {
 })
 
 describe('nodeRenderer heavy-node prop forwarding', () => {
-  it('uses lightweight chat mode defaults for code blocks and tooltips', async () => {
+  it('uses the enhanced code block renderer with chat mode defaults', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         mode: 'chat',
@@ -244,8 +212,7 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
 
     await flushAll()
 
-    expect(wrapper.find('pre[data-markstream-pre="1"]').exists()).toBe(true)
-    expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(true)
     expect(wrapper.get('a[href="https://vuejs.org"]').attributes('title')).toBe('https://vuejs.org')
   })
 
@@ -318,10 +285,10 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(wrapper.emitted('copy')).toBeUndefined()
   })
 
-  it('honors explicit pre code renderer in the default mode', async () => {
+  it('honors the explicit plain pre fallback in the default mode', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         nodes: [
           {
             type: 'code_block',
@@ -335,15 +302,47 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
 
     await flushAll()
 
-    expect(wrapper.find('pre[data-markstream-pre="1"]').exists()).toBe(true)
+    const pre = wrapper.get('pre[data-markstream-pre="1"]')
+    expect(pre.attributes('data-markstream-line-numbers')).toBeUndefined()
+    expect((pre.element as HTMLElement).style.whiteSpace).toBe('')
     expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
+  })
+
+  it('uses codeBlockOptions for fallback line numbers unless codeBlockProps overrides them', async () => {
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        renderCodeBlocksAsPre: true,
+        codeBlockOptions: { disableLineNumbers: true },
+        nodes: [{
+          type: 'code_block',
+          language: 'ts',
+          code: 'const value = 1',
+          raw: '```ts\nconst value = 1\n```',
+        }],
+      },
+    })
+
+    await flushAll()
+    expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBeUndefined()
+
+    await wrapper.setProps({ codeBlockOptions: { disableLineNumbers: false }, codeBlockProps: undefined })
+    await flushAll()
+    expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBe('1')
+
+    await wrapper.setProps({ codeBlockProps: { showLineNumbers: false } })
+    await flushAll()
+    expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBeUndefined()
+
+    await wrapper.setProps({ codeBlockOptions: { disableLineNumbers: true } })
+    await wrapper.setProps({ codeBlockProps: { showLineNumbers: true } })
+    await flushAll()
+    expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBe('1')
   })
 
   it('does not leak rich code block props onto the pre renderer', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
-        codeRenderer: 'pre',
-        codeBlockMonacoOptions: { fontSize: 16 },
+        renderCodeBlocksAsPre: true,
         themes: ['vitesse-dark'],
         codeBlockProps: {
           showLineNumbers: true,
@@ -365,7 +364,6 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
 
     const pre = wrapper.get('pre[data-markstream-pre="1"]')
     expect(pre.attributes('data-markstream-line-numbers')).toBe('1')
-    expect(pre.attributes()).not.toHaveProperty('monacooptions')
     expect(pre.attributes()).not.toHaveProperty('themes')
     expect(pre.attributes()).not.toHaveProperty('showcopybutton')
     expect(pre.attributes('style')).toContain('120px')
@@ -379,8 +377,7 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         customId,
-        codeRenderer: 'pre',
-        codeBlockMonacoOptions: { fontSize: 16 },
+        renderCodeBlocksAsPre: true,
         themes: ['vitesse-dark'],
         codeBlockProps: {
           showLineNumbers: true,
@@ -404,145 +401,50 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(probe.attributes('data-show-header')).toBe('false')
     expect(probe.attributes('data-show-line-numbers')).toBe('true')
     expect(probe.attributes('data-has-stream')).toBe('true')
-    expect(probe.attributes('data-has-monaco-options')).toBe('true')
     expect(probe.attributes('data-has-themes')).toBe('true')
   })
 
-  it('does not pass Monaco-only props to the shiki renderer', async () => {
-    const wrapper = mount(NodeRenderer, {
-      props: {
-        codeRenderer: 'shiki',
-        codeBlockMonacoOptions: { fontSize: 18 },
-        nodes: [
-          {
-            type: 'code_block',
-            language: 'ts',
-            code: 'const value = 1',
-            raw: '```ts\nconst value = 1\n```',
-          },
-        ],
-      },
-    })
-
-    await vi.waitFor(() => {
-      expect(wrapper.find('.code-block-container[data-has-monaco-options]').exists()).toBe(true)
-    })
-
-    const shiki = wrapper.get('.code-block-container[data-has-monaco-options]')
-    expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
-    expect(shiki.attributes('data-has-monaco-options')).toBe('false')
-  })
-
-  it('forwards top-level langs to the shiki renderer and lets codeBlockProps override them', async () => {
-    const wrapper = mount(NodeRenderer, {
-      props: {
-        codeRenderer: 'shiki',
-        langs: ['typescript'],
-        nodes: [
-          {
-            type: 'code_block',
-            language: 'ts',
-            code: 'const value = 1',
-            raw: '```ts\nconst value = 1\n```',
-          },
-        ],
-      },
-    })
-
-    await vi.waitFor(() => {
-      expect(wrapper.find('.code-block-container[data-langs]').exists()).toBe(true)
-    })
-
-    expect(wrapper.get('.code-block-container').attributes('data-langs')).toBe('["typescript"]')
-
-    await wrapper.setProps({
-      codeBlockProps: {
-        langs: ['python'],
-      },
-    })
-    await flushAll()
-
-    expect(wrapper.get('.code-block-container').attributes('data-langs')).toBe('["python"]')
-  })
-
-  it('forwards top-level langs to nested shiki renderers', async () => {
+  it('keeps top-level codeBlockOptions authoritative over a nested runtime collision', async () => {
     setCustomComponents(customId, {
-      'answer-box': AnswerBox,
+      code_block: GenericCodeBlockAttrsProbe,
     })
 
     const wrapper = mount(NodeRenderer, {
       props: {
         customId,
-        codeRenderer: 'shiki',
-        langs: ['typescript'],
-        content: [
-          '<answer-box>',
-          '```ts',
-          'console.log(1)',
-          '```',
-          '</answer-box>',
-        ].join('\n'),
-        customHtmlTags: ['answer-box'],
-        final: true,
-        batchRendering: false,
-        deferNodesUntilVisible: false,
-      },
-    })
-
-    await vi.waitFor(() => {
-      expect(wrapper.find('.answer-box .code-block-container[data-langs]').exists()).toBe(true)
-    })
-
-    expect(wrapper.get('.answer-box .code-block-container').attributes('data-langs')).toBe('["typescript"]')
-  })
-
-  it('inherits shiki code rendering for code blocks nested inside list items', async () => {
-    const wrapper = mount(NodeRenderer, {
-      props: {
-        mode: 'chat',
-        codeRenderer: 'shiki',
-        langs: ['typescript'],
+        codeBlockOptions: { padding: 6 },
         codeBlockProps: {
-          langs: ['tsx'],
-        },
-        content: [
-          '1. **step one**',
-          '   - before:',
-          '     ```ts',
-          '     refreshSessionSidecars(sessionId)',
-          '     await syncSessionFromSnapshot(sessionId)',
-          '     ```',
-        ].join('\n'),
-        final: true,
-        batchRendering: false,
+          codeBlockOptions: { padding: 99 },
+        } as any,
+        nodes: [
+          {
+            type: 'code_block',
+            language: 'ts',
+            code: 'const value = 1',
+            raw: '```ts\nconst value = 1\n```',
+          },
+        ],
+        viewportPriority: false,
         deferNodesUntilVisible: false,
+        batchRendering: false,
+        maxLiveNodes: 0,
       },
     })
 
-    await vi.waitFor(() => {
-      expect(wrapper.find('li .code-block-container[data-langs]').exists()).toBe(true)
-    })
+    await flushAll()
 
-    const nestedCodeBlock = wrapper.get('li .code-block-container')
-    expect(nestedCodeBlock.attributes('data-langs')).toBe('["tsx"]')
-    expect(wrapper.find('li [data-markstream-code-block="1"]').exists()).toBe(false)
+    expect(wrapper.get('.generic-code-block-attrs-probe').attributes('data-code-padding')).toBe('6')
   })
 
-  it('forwards Monaco diff options to code blocks nested inside list items', async () => {
+  it('forwards code block options to code blocks nested inside list items', async () => {
     setCustomComponents(customId, {
       code_block: GenericCodeBlockAttrsProbe as any,
     })
 
-    const monacoOptions = {
-      diffWordWrap: 'off',
-      renderSideBySide: true,
-      useInlineViewWhenSpaceIsLimited: false,
-    }
     const wrapper = mount(NodeRenderer, {
       props: {
         customId,
-        codeRenderer: 'monaco',
-        codeBlockMonacoOptions: monacoOptions,
+        renderCodeBlocksAsPre: false,
         codeBlockProps: {
           showHeader: false,
         },
@@ -563,25 +465,18 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
 
     const nestedCodeBlock = wrapper.get('li .generic-code-block-attrs-probe')
     expect(nestedCodeBlock.attributes('data-show-header')).toBe('false')
-    expect(JSON.parse(nestedCodeBlock.attributes('data-monaco-options') ?? 'null')).toEqual(monacoOptions)
   })
 
-  it('forwards Monaco diff options to code blocks rendered inside custom tag slots', async () => {
+  it('forwards code block props to code blocks rendered inside custom tag slots', async () => {
     setCustomComponents(customId, {
       'answer-box': AnswerBox,
       'code_block': GenericCodeBlockAttrsProbe as any,
     })
 
-    const monacoOptions = {
-      diffWordWrap: 'off',
-      renderSideBySide: true,
-      useInlineViewWhenSpaceIsLimited: false,
-    }
     const wrapper = mount(NodeRenderer, {
       props: {
         customId,
-        codeRenderer: 'monaco',
-        codeBlockMonacoOptions: monacoOptions,
+        renderCodeBlocksAsPre: false,
         codeBlockProps: {
           showHeader: false,
         },
@@ -604,37 +499,6 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
 
     const nestedCodeBlock = wrapper.get('.answer-box .generic-code-block-attrs-probe')
     expect(nestedCodeBlock.attributes('data-show-header')).toBe('false')
-    expect(JSON.parse(nestedCodeBlock.attributes('data-monaco-options') ?? 'null')).toEqual(monacoOptions)
-  })
-
-  it('forwards top-level langs to custom code_block renderers without forcing codeRenderer="shiki"', async () => {
-    setCustomComponents(customId, {
-      code_block: GenericCodeBlockAttrsProbe as any,
-    })
-
-    const wrapper = mount(NodeRenderer, {
-      props: {
-        customId,
-        langs: ['typescript'],
-        nodes: [
-          {
-            type: 'code_block',
-            language: 'ts',
-            code: 'const value = 1',
-            raw: '```ts\nconst value = 1\n```',
-          },
-        ],
-        viewportPriority: false,
-        deferNodesUntilVisible: false,
-        batchRendering: false,
-        maxLiveNodes: 0,
-      },
-    })
-
-    for (let attempt = 0; attempt < 10 && !wrapper.find('.generic-code-block-attrs-probe').exists(); attempt++)
-      await flushAll()
-
-    expect(wrapper.get('.generic-code-block-attrs-probe').attributes('data-langs')).toBe('["typescript"]')
   })
 
   it('keeps generic code block props off exact custom mermaid renderers', async () => {
@@ -645,7 +509,6 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         customId,
-        langs: ['mermaid'],
         codeBlockStream: false,
         codeBlockProps: {
           showHeader: true,
@@ -674,7 +537,6 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     const probe = wrapper.get('.generic-code-block-attrs-probe')
     expect(probe.attributes('data-show-header')).toBe('false')
     expect(probe.attributes('data-has-stream')).toBe('false')
-    expect(probe.attributes('data-langs')).toBe('null')
   })
 
   it('does not let codeBlockProps override reserved code block props', async () => {
@@ -723,32 +585,10 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(probe.attributes('data-show-header')).toBe('false')
   })
 
-  it('ignores invalid runtime codeRenderer values', async () => {
+  it('uses codeBlockProps for Mermaid fences in the plain pre fallback', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
-        mode: 'chat',
-        codeRenderer: 'invalid' as any,
-        nodes: [
-          {
-            type: 'code_block',
-            language: 'ts',
-            code: 'const value = 1',
-            raw: '```ts\nconst value = 1\n```',
-          },
-        ],
-      },
-    })
-
-    await flushAll()
-
-    expect(wrapper.find('pre[data-markstream-pre="1"]').exists()).toBe(true)
-    expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
-  })
-
-  it('uses codeBlockProps for Mermaid fences when codeRenderer is pre', async () => {
-    const wrapper = mount(NodeRenderer, {
-      props: {
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         codeBlockProps: {
           showLineNumbers: true,
         },

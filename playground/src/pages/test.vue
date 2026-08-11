@@ -21,13 +21,10 @@ import {
   resolveSandboxSelection,
 
 } from '../../../playground-shared/versionSandbox'
-import CodeBlockNode from '../../../src/components/CodeBlockNode'
-import { getUseMonaco } from '../../../src/components/CodeBlockNode/monaco'
-import MarkdownCodeBlockNode from '../../../src/components/MarkdownCodeBlockNode'
 import { disableKatex, enableKatex, isKatexEnabled } from '../../../src/components/MathInlineNode/katex'
 import { disableMermaid, enableMermaid, isMermaidEnabled } from '../../../src/components/MermaidBlockNode/mermaid'
 import MarkdownRender from '../../../src/components/NodeRenderer'
-import PreCodeNode from '../../../src/components/PreCodeNode'
+import { preloadCodeBlockRuntime } from '../../../src/exports'
 import { setCustomComponents } from '../../../src/utils/nodeComponents'
 import KatexWorker from '../../../src/workers/katexRenderer.worker?worker&inline'
 import { setKaTeXWorker } from '../../../src/workers/katexWorkerClient'
@@ -155,11 +152,6 @@ const STREAM_SLICE_OPTIONS = [
   { value: 'pure-random', label: 'Pure Random' },
   { value: 'boundary-aware', label: 'Boundary Aware' },
 ] as const satisfies ReadonlyArray<{ value: StreamSliceMode, label: string }>
-const RENDER_MODE_OPTIONS = [
-  { value: 'monaco', label: 'stream-diffs' },
-  { value: 'markdown', label: 'MarkdownCodeBlock' },
-  { value: 'pre', label: 'PreCodeNode' },
-] as const satisfies ReadonlyArray<{ value: 'monaco' | 'markdown' | 'pre', label: string }>
 const HTML_POLICY_OPTIONS = [
   { value: 'trusted', label: 'Trusted' },
   { value: 'safe', label: 'Safe' },
@@ -178,13 +170,6 @@ const sandboxFrameworkOptions = testSandboxFrameworks.map(framework => ({
   label: framework.label,
 })) as ReadonlyArray<{ value: SandboxFrameworkId, label: string }>
 
-const diffHideUnchangedRegions = {
-  enabled: true,
-  contextLineCount: 2,
-  minimumLineCount: 4,
-  revealLineCount: 0,
-} as const
-
 function resolveInitialDarkMode() {
   return typeof document !== 'undefined'
     ? document.documentElement.classList.contains('dark')
@@ -201,23 +186,11 @@ function resolveInitialDiffLayoutMode(): DiffLayoutMode {
 }
 
 const diffLayoutMode = useLocalStorage<DiffLayoutMode>('vmr-test-diff-layout-mode', resolveInitialDiffLayoutMode())
-const testPageMonacoOptions = computed(() => {
-  const sideBySide = diffLayoutMode.value === 'side-by-side'
-  return {
-    renderSideBySide: sideBySide,
-    useInlineViewWhenSpaceIsLimited: !sideBySide,
-    maxComputationTime: 0,
-    ignoreTrimWhitespace: false,
-    renderIndicators: true,
-    diffAlgorithm: 'legacy',
-    diffHideUnchangedRegions,
-    hideUnchangedRegions: diffHideUnchangedRegions,
-  } as const
-})
 
 const selectedSampleId = useLocalStorage<SampleId>('vmr-test-sample', 'baseline')
 const input = ref<string>(sampleCards[0].content)
 const isBenchmarkMode = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('benchmark') === '1'
+const renderCodeBlocksAsPre = isBenchmarkMode && new URL(window.location.href).searchParams.get('renderCodeBlocksAsPre') === '1'
 const streamChunkSizeMin = useLocalStorage<number>('vmr-test-stream-chunk-size-min', 2)
 const streamChunkSizeMax = useLocalStorage<number>('vmr-test-stream-chunk-size-max', 7)
 const streamChunkDelayMin = useLocalStorage<number>('vmr-test-stream-delay-min', 14)
@@ -228,7 +201,6 @@ const streamSliceMode = useLocalStorage<StreamSliceMode>('vmr-test-stream-slice-
 const streamDebug = useLocalStorage<boolean>('vmr-test-stream-debug', false)
 const isDark = useLocalStorage<boolean>('vmr-test-dark', resolveInitialDarkMode())
 
-const renderMode = useLocalStorage<'monaco' | 'pre' | 'markdown'>('vmr-test-render-mode', 'monaco')
 const codeBlockStream = useLocalStorage<boolean>('vmr-test-code-stream', true)
 const viewportPriority = useLocalStorage<boolean>('vmr-test-viewport-priority', true)
 const codeBlockViewportRootMargin = useLocalStorage<string>('vmr-test-code-block-viewport-root-margin', '')
@@ -241,7 +213,8 @@ const htmlPolicy = useLocalStorage<HtmlPolicy>('vmr-test-html-policy', 'trusted'
 const testPageCustomHtmlTags = ['think', 'thinking'] as const
 
 if (!isBenchmarkMode)
-  getUseMonaco()
+  void preloadCodeBlockRuntime()
+setCustomComponents({ think: ThinkingNode, thinking: ThinkingNode })
 setKaTeXWorker(new KatexWorker())
 setMermaidWorker(new MermaidWorker())
 
@@ -371,13 +344,6 @@ const streamPresetLabel = computed(() => activeStreamPreset.value?.label ?? 'Cus
 const streamChunkRangeLabel = computed(() => `${normalizedChunkSizeRange.value.min}-${normalizedChunkSizeRange.value.max} 字`)
 const streamDelayRangeLabel = computed(() => `${normalizedChunkDelayRange.value.min}-${normalizedChunkDelayRange.value.max}ms`)
 const streamModeLabel = computed(() => streamTransportMode.value === 'readable-stream' ? 'ReadableStream' : 'Scheduler')
-const renderModeLabel = computed(() => {
-  if (renderMode.value === 'markdown')
-    return 'MarkdownCodeBlock'
-  if (renderMode.value === 'pre')
-    return 'PreCodeNode'
-  return 'stream-diffs'
-})
 const previewDiagramMaxHeight = computed(() => isPreviewFullscreen.value ? 'none' : '500px')
 const previewD2MaxHeight = computed(() => 'none')
 const charCount = computed(() => input.value.length)
@@ -2789,15 +2755,6 @@ watch(isDark, (value) => {
     document.documentElement.classList.toggle('dark', value)
 }, { immediate: true })
 
-watch(() => renderMode.value, (mode) => {
-  if (mode === 'pre')
-    setCustomComponents({ code_block: PreCodeNode, think: ThinkingNode, thinking: ThinkingNode })
-  else if (mode === 'markdown')
-    setCustomComponents({ code_block: MarkdownCodeBlockNode, think: ThinkingNode, thinking: ThinkingNode })
-  else
-    setCustomComponents({ code_block: CodeBlockNode, think: ThinkingNode, thinking: ThinkingNode })
-}, { immediate: true })
-
 watch(mathEnabled, (enabled) => {
   if (enabled)
     enableKatex()
@@ -2847,7 +2804,6 @@ watch(mermaidEnabled, (enabled) => {
           </div>
 
           <div class="hero-panel__status-row">
-            <span class="mini-pill">{{ renderModeLabel }}</span>
             <span class="mini-pill" :class="{ 'mini-pill--active': isStreaming }">
               {{ isStreaming ? 'Streaming' : 'Ready' }}
             </span>
@@ -2936,7 +2892,6 @@ watch(mermaidEnabled, (enabled) => {
                 <span class="mini-pill mini-pill--active">{{ streamPresetLabel }}</span>
                 <span class="mini-pill">{{ streamModeLabel }}</span>
                 <span class="mini-pill">{{ streamSliceMode === 'boundary-aware' ? 'Boundary Aware' : 'Pure Random' }}</span>
-                <span class="mini-pill">{{ renderModeLabel }}</span>
               </div>
 
               <div class="stream-summary__row stream-summary__row--dense">
@@ -3268,8 +3223,8 @@ watch(mermaidEnabled, (enabled) => {
             <header v-if="!isSharePreviewMode" class="workspace-card__head">
               <div>
                 <h2>实时预览</h2>
-                <p>
-                  {{ `当前模式：${renderModeLabel}${isPreviewFullscreen ? ' · 按 Esc 退出全屏' : ''}` }}
+                <p v-if="isPreviewFullscreen">
+                  按 Esc 退出全屏
                 </p>
               </div>
               <div class="workspace-card__head-actions">
@@ -3330,6 +3285,7 @@ watch(mermaidEnabled, (enabled) => {
                     :batch-rendering="previewBatchRendering"
                     :typewriter="typewriter"
                     :code-block-stream="codeBlockStream"
+                    :render-code-blocks-as-pre="renderCodeBlocksAsPre"
                     :max-live-nodes="previewMaxLiveNodes"
                     :live-node-buffer="previewLiveNodeBuffer"
                     :initial-render-batch-size="previewInitialRenderBatchSize"
@@ -3338,7 +3294,6 @@ watch(mermaidEnabled, (enabled) => {
                     :fade="!isBenchmarkMode"
                     code-block-dark-theme="vitesse-dark"
                     code-block-light-theme="vitesse-light"
-                    :code-block-monaco-options="testPageMonacoOptions"
                     :parse-options="previewParseOptions"
                     :debug-performance="isBenchmarkMode"
                   />
@@ -3595,7 +3550,7 @@ watch(mermaidEnabled, (enabled) => {
           <header class="settings-dialog__head">
             <div>
               <h2>流式详细设置</h2>
-              <p>这里调整 transport、窗口、开关项和代码块渲染策略。</p>
+              <p>这里调整 transport、窗口、开关项和 diff 布局。</p>
             </div>
             <button type="button" class="ghost-button" @click="closeStreamSettingsDialog">
               关闭
@@ -3707,12 +3662,6 @@ watch(mermaidEnabled, (enabled) => {
                 <input v-model="streamDebug" type="checkbox">
               </label>
             </div>
-
-            <LabSelect
-              v-model="renderMode"
-              label="代码块模式"
-              :options="RENDER_MODE_OPTIONS"
-            />
 
             <LabSelect
               v-model="diffLayoutMode"

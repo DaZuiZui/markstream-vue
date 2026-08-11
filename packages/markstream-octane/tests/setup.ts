@@ -44,8 +44,8 @@ const editorView = {
   layout: vi.fn(),
 }
 
-const streamMonaco = {
-  useMonaco: vi.fn(),
+const streamDiffs = {
+  createCodeBlockRuntime: vi.fn(),
   createEditor: vi.fn(async () => {}),
   createDiffEditor: vi.fn(async () => {}),
   updateCode: vi.fn(),
@@ -59,11 +59,12 @@ const streamMonaco = {
   setTheme: vi.fn(async () => {}),
 }
 
-streamMonaco.useMonaco.mockImplementation(() => streamMonaco)
+streamDiffs.createCodeBlockRuntime.mockImplementation(() => streamDiffs)
+;(globalThis as any).__streamDiffsHelpers = streamDiffs
 
-vi.mock('stream-monaco', () => ({
-  ...streamMonaco,
-  preloadMonacoWorkers: vi.fn(async () => {}),
+vi.mock('stream-diffs', () => ({
+  ...streamDiffs,
+  preloadStreamDiffs: vi.fn(async () => {}),
   getOrCreateHighlighter: vi.fn(async () => ({
     codeToTokens: vi.fn(() => ({
       tokens: [],
@@ -74,6 +75,12 @@ vi.mock('stream-monaco', () => ({
       grammarState: null,
     })),
   })),
+  detectLanguage: () => 'plaintext',
+}))
+
+vi.mock('stream-diffs/markstream', () => ({
+  ...streamDiffs,
+  preloadStreamDiffs: vi.fn(async () => {}),
   detectLanguage: () => 'plaintext',
 }))
 

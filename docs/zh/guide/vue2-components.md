@@ -18,6 +18,7 @@ markstream-vue2 提供与 markstream-vue 相同强大的组件，但专为 Vue 2
 ```ts
 import type {
   CodeBlockNodeProps,
+  CodeBlockOptions,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
@@ -63,7 +64,7 @@ import type { CodeBlockNode } from 'stream-markdown-parser'
 |------|---------|-------------|
 | `render-code-blocks-as-pre` | `false` | 将非 Mermaid/Infographic/D2 的 `code_block` 渲染为 `<pre><code>` |
 | `code-block-stream` | `true` | 随内容到达流式更新代码块 |
-| `viewport-priority` | `true` | 将 Monaco/Mermaid/D2/KaTeX 等重型工作延迟到接近视口时 |
+| `viewport-priority` | `true` | 将 Mermaid/D2/KaTeX 等重型工作延迟到接近视口时 |
 | `defer-nodes-until-visible` | `true` | 重型节点先占位，接近可视区再渲染（仅非虚拟化模式） |
 | `smooth-streaming` | `'auto'` | 启用内置流式 `content` 更新节奏控制（`boolean | 'auto'`） |
 | `smooth-streaming-options` | - | 微调节奏参数（`SmoothMarkdownStreamOptions`） |
@@ -85,16 +86,16 @@ import type { CodeBlockNode } from 'stream-markdown-parser'
 
 | 属性 | 类型 | 描述 |
 |------|------|-------------|
-| `code-block-dark-theme` | `any` | 转发到每个 `CodeBlockNode` 的 Monaco 深色主题 |
-| `code-block-light-theme` | `any` | 转发到每个 `CodeBlockNode` 的 Monaco 浅色主题 |
-| `code-block-monaco-options` | `Record<string, any>` | 转发到 `stream-monaco` 的选项，包括 `diffHunkActionsOnHover`、`diffHunkHoverHideDelayMs`、`onDiffHunkAction` 这类 diff 悬浮操作配置 |
+| `code-block-dark-theme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的已注册深色主题名称 |
+| `code-block-light-theme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的已注册浅色主题名称 |
 | `code-block-min-width` | `string \| number` | 转发到 `CodeBlockNode` 的最小宽度 |
 | `code-block-max-width` | `string \| number` | 转发到 `CodeBlockNode` 的最大宽度 |
+| `code-block-options` | `CodeBlockOptions` | 转发到每个普通 `CodeBlockNode` 的排版/布局与受支持 File/FileDiff 选项 |
 | `code-block-props` | `Record<string, any>` | 额外转发到每个 `CodeBlockNode` 的 props |
 | `mermaid-props` | `Partial<Omit<MermaidBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 Mermaid 围栏和自定义 `mermaid` 渲染器的 props |
 | `d2-props` | `Partial<Omit<D2BlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 D2 围栏和自定义 `d2` 渲染器的 props |
 | `infographic-props` | `Partial<Omit<InfographicBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 infographic 围栏和自定义 `infographic` 渲染器的 props |
-| `themes` | `string[]` | 转发到 `stream-monaco` 的主题列表 |
+| `themes` | `readonly [string, string]` | 转发到 `CodeBlockNode` 的已注册 `[dark, light]` 主题名称对 |
 
 #### 重型渲染器 props 透传
 
@@ -115,7 +116,7 @@ import type { CodeBlockNode } from 'stream-markdown-parser'
 ```
 
 流式建议：
-- 保持 `viewport-priority` 开启，避免离屏 Mermaid / Monaco / D2 在文字仍在流式更新时继续做后台工作；如果必须立即渲染整篇文档，可以设为 `false`。
+- 保持 `viewport-priority` 开启，避免离屏 Mermaid / D2 在文字仍在流式更新时继续做后台工作；如果必须立即渲染整篇文档，可以设为 `false`。
 - 抖动较大的 SSE 或 AI token 流推荐从 `content` + 内置 `smooth-streaming` 开始。
 - 当已有 worker、store 或自定义 AST 管线负责解析时，使用 `nodes` 模式。
 - Mermaid 常用调优项包括：`renderDebounceMs`、`contentStableDelayMs`、`previewPollDelayMs`、`previewPollMaxDelayMs`、`previewPollMaxAttempts`。
@@ -153,52 +154,9 @@ export default {
 
 ## 代码块组件
 
-### MarkdownCodeBlockNode
-
-使用 Shiki 的轻量级代码高亮。
-
-```vue
-<script>
-import { MarkdownCodeBlockNode } from 'markstream-vue2'
-
-export default {
-  components: { MarkdownCodeBlockNode },
-  data() {
-    return {
-      codeNode: {
-        type: 'code_block',
-        language: 'javascript',
-        code: 'const hello = "world"',
-        raw: 'const hello = "world"'
-      }
-    }
-  },
-  methods: {
-    handleCopy() {
-      alert('代码已复制！')
-    }
-  }
-}
-</script>
-
-<template>
-  <div class="markstream-vue">
-    <MarkdownCodeBlockNode
-      :node="codeNode"
-      :show-copy-button="true"
-      @copy="handleCopy"
-    >
-      <template #header-right>
-        <span class="lang-badge">{{ codeNode.language }}</span>
-      </template>
-    </MarkdownCodeBlockNode>
-  </div>
-</template>
-```
-
 ### CodeBlockNode
 
-功能丰富的 Monaco 驱动代码块。
+功能丰富的代码块，由可选的对等依赖 `stream-diffs` 增强（未安装时会回退渲染普通 `<pre>`）。直接 `CodeBlockNode` 与顶层 `MarkdownRender` 都接收 `codeBlockOptions`。
 
 ```vue
 <script>
@@ -213,6 +171,11 @@ export default {
         language: 'typescript',
         code: 'const greeting: string = "Hello"',
         raw: 'const greeting: string = "Hello"'
+      },
+      codeBlockOptions: {
+        overflow: 'wrap',
+        diffStyle: 'unified',
+        enableLineSelection: true
       }
     }
   },
@@ -231,7 +194,7 @@ export default {
   <div class="markstream-vue">
     <CodeBlockNode
       :node="codeNode"
-      :monaco-options="{ fontSize: 14, theme: 'vs-dark' }"
+      :code-block-options="codeBlockOptions"
       :stream="true"
       @copy="handleCopy"
       @preview-code="handlePreviewCode"
@@ -239,6 +202,8 @@ export default {
   </div>
 </template>
 ```
+
+Markstream 会在 fallback 与最终 surface 之间协调 `fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding` 与 `tabSize`，并转发其他受支持的 File/FileDiff 字段。主题、内容/语言、流式状态、header、挂载、显示与释放仍由宿主管理。
 
 ## 数学组件
 

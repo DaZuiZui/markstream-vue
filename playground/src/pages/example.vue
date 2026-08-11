@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { getUseMonaco } from '../../../src/components/CodeBlockNode/monaco'
-import MarkdownCodeBlockNode from '../../../src/components/MarkdownCodeBlockNode'
+import CodeBlockNode from '../../../src/components/CodeBlockNode'
 import MarkdownRender from '../../../src/components/NodeRenderer'
+import { preloadCodeBlockRuntime } from '../../../src/exports'
 import KatexWorker from '../../../src/workers/katexRenderer.worker?worker&inline'
 import { setKaTeXWorker } from '../../../src/workers/katexWorkerClient'
 import MermaidWorker from '../../../src/workers/mermaidParser.worker?worker&inline'
@@ -12,7 +12,7 @@ import 'katex/dist/katex.min.css'
 // Workers
 setKaTeXWorker(new KatexWorker())
 setMermaidWorker(new MermaidWorker())
-getUseMonaco()
+void preloadCodeBlockRuntime()
 
 const isDark = ref(
   typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -118,8 +118,8 @@ const palette = [
   },
 ]
 
-// Shiki code block node (lightweight, no Monaco)
-const shikiNode = {
+// stream-diffs code block node
+const codeBlockNode = {
   type: 'code_block' as const,
   language: 'typescript',
   code: `import { createApp } from 'vue'
@@ -474,16 +474,16 @@ Term 2
         }"
       />
 
-      <!-- Shiki-rendered code block (lightweight, no Monaco) -->
+      <!-- stream-diffs code block -->
       <h2 class="text-xl font-semibold mt-8 mb-4">
-        Shiki Code Block
+        Code Block
       </h2>
-      <MarkdownCodeBlockNode
-        :node="shikiNode"
+      <CodeBlockNode
+        :node="codeBlockNode"
         :is-dark="isDark"
         :loading="false"
         :stream="false"
-        index-key="shiki-demo"
+        index-key="code-block-demo"
         :show-header="true"
         :show-copy-button="true"
         :show-collapse-button="true"

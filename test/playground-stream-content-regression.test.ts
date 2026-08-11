@@ -94,7 +94,7 @@ describe('playground stream content', () => {
       const nodes = parseMarkdownToStructure(streamContent.slice(0, end), md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       } as any)
       const arrivedHeading = streamContent.slice(headingStart, Math.min(end, headingStart + '矩阵'.length))
       expect(textContent(nodes), `prefix length ${end}`).toContain(arrivedHeading)

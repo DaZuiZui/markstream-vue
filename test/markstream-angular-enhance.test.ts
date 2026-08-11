@@ -2,22 +2,24 @@ import { describe, expect, it, vi } from 'vitest'
 import { enhanceRenderedHtml } from '../packages/markstream-angular/src/enhanceRenderedHtml'
 
 const {
-  monacoCleanup,
-  monacoCreateDiffEditor,
-  monacoCreateEditor,
-  monacoUseMonacoOptions,
+  runtimeCleanup,
+  runtimeCreateDiffEditor,
+  runtimeCreateEditor,
+  runtimeSetTheme,
+  codeBlockRuntimeOptions,
   canParseOffthread,
   findPrefixOffthread,
   mermaidState,
 } = vi.hoisted(() => ({
-  monacoCleanup: vi.fn(),
-  monacoCreateEditor: vi.fn(async (container: HTMLElement, code: string, language: string) => {
-    container.innerHTML = `<div data-monaco="1" data-language="${language}">${code}</div>`
+  runtimeCleanup: vi.fn(),
+  runtimeCreateEditor: vi.fn(async (container: HTMLElement, code: string, language: string) => {
+    container.innerHTML = `<div data-stream-diffs="1" data-language="${language}">${code}</div>`
   }),
-  monacoCreateDiffEditor: vi.fn(async (container: HTMLElement, original: string, modified: string, language: string) => {
-    container.innerHTML = `<div data-monaco-diff="1" data-language="${language}" data-original="${original}" data-modified="${modified}"></div>`
+  runtimeCreateDiffEditor: vi.fn(async (container: HTMLElement, original: string, modified: string, language: string) => {
+    container.innerHTML = `<div data-stream-diffs-diff="1" data-language="${language}" data-original="${original}" data-modified="${modified}"></div>`
   }),
-  monacoUseMonacoOptions: [] as Array<Record<string, unknown>>,
+  runtimeSetTheme: vi.fn(async () => {}),
+  codeBlockRuntimeOptions: [] as Array<Record<string, unknown>>,
   canParseOffthread: vi.fn(async () => true),
   findPrefixOffthread: vi.fn(async () => null),
   mermaidState: { failOnBToC: false },
@@ -84,26 +86,27 @@ vi.mock('../packages/markstream-angular/src/optional/infographic', () => ({
   }),
 }))
 
-vi.mock('../packages/markstream-angular/src/optional/monaco', () => ({
-  getUseMonaco: vi.fn(async () => ({
-    useMonaco: vi.fn((options: Record<string, unknown>) => {
-      monacoUseMonacoOptions.push(options)
+vi.mock('../packages/markstream-angular/src/optional/streamDiffs', () => ({
+  getStreamDiffsRuntime: vi.fn(async () => ({
+    createCodeBlockRuntime: vi.fn((options: Record<string, unknown>) => {
+      codeBlockRuntimeOptions.push(options)
       return {
-        createEditor: monacoCreateEditor,
-        createDiffEditor: monacoCreateDiffEditor,
-        async setTheme() {},
-        cleanupEditor: monacoCleanup,
+        createEditor: runtimeCreateEditor,
+        createDiffEditor: runtimeCreateDiffEditor,
+        setTheme: runtimeSetTheme,
+        cleanupEditor: runtimeCleanup,
       }
     }),
   })),
 }))
 
 describe('markstream-angular enhanceRenderedHtml', () => {
-  it('hydrates math, mermaid, monaco, infographic, and d2 blocks in place', async () => {
-    monacoCleanup.mockReset()
-    monacoCreateEditor.mockClear()
-    monacoCreateDiffEditor.mockClear()
-    monacoUseMonacoOptions.length = 0
+  it('hydrates math, mermaid, stream-diffs, infographic, and d2 blocks in place', async () => {
+    runtimeCleanup.mockReset()
+    runtimeCreateEditor.mockClear()
+    runtimeCreateDiffEditor.mockClear()
+    runtimeSetTheme.mockClear()
+    codeBlockRuntimeOptions.length = 0
     canParseOffthread.mockReset()
     findPrefixOffthread.mockReset()
     canParseOffthread.mockImplementation(async () => true)
@@ -130,47 +133,141 @@ describe('markstream-angular enhanceRenderedHtml', () => {
       isDark: true,
       onCopy,
       showTooltips: true,
-      monacoOptions: {
-        unsafeCSS: '[data-file] { --consumer-angular-gutter: 1; }',
-      },
     })
 
     expect(shell.innerHTML).toContain('class="katex"')
     expect(shell.innerHTML).toContain('class="katex-display"')
     expect(shell.innerHTML).toContain('data-mermaid="1"')
     expect(shell.innerHTML).toContain('markstream-angular-mermaid')
-    expect(shell.innerHTML).toContain('data-monaco="1"')
-    expect(shell.innerHTML).toContain('data-monaco-diff="1"')
-    expect(shell.innerHTML).toContain('data-markstream-monaco-diff="1"')
+    expect(shell.innerHTML).toContain('data-stream-diffs="1"')
+    expect(shell.innerHTML).toContain('data-stream-diffs-diff="1"')
+    expect(shell.innerHTML).toContain('data-markstream-enhanced-diff="1"')
     expect(shell.innerHTML).toContain('data-infographic="1"')
     expect(shell.innerHTML).toContain('data-d2="1"')
     expect(shell.innerHTML).toContain('markstream-angular-enhanced-block__action')
-    expect(monacoCreateDiffEditor).toHaveBeenCalledWith(expect.any(HTMLElement), '{"version":"0.0.49"}', '{"version":"0.0.54-beta.1"}', 'json')
-    expect(monacoUseMonacoOptions[0]).toMatchObject({
+    expect(runtimeCreateDiffEditor).toHaveBeenCalledWith(expect.any(HTMLElement), '{"version":"0.0.49"}', '{"version":"0.0.54-beta.1"}', 'json')
+    expect(codeBlockRuntimeOptions[0]).toMatchObject({
       disableFileHeader: true,
     })
-    expect(monacoUseMonacoOptions[0]?.unsafeCSS).toContain('--diffs-min-number-column-width-default: 2ch !important')
-    expect(monacoUseMonacoOptions[0]?.unsafeCSS).toContain('--consumer-angular-gutter: 1')
-    expect(String(monacoUseMonacoOptions[0]?.unsafeCSS).indexOf('--diffs-min-number-column-width-default'))
-      .toBeLessThan(String(monacoUseMonacoOptions[0]?.unsafeCSS).indexOf('--consumer-angular-gutter'))
-    expect(monacoUseMonacoOptions[1]).toMatchObject({
+    expect(codeBlockRuntimeOptions[0]?.unsafeCSS).toContain('--diffs-min-number-column-width-default: 2ch !important')
+    expect(codeBlockRuntimeOptions[1]).toMatchObject({
       fontSize: 15,
       lineHeight: 24,
       fontFamily: 'Menlo',
-      padding: { top: 12, bottom: 12 },
       disableFileHeader: true,
     })
+    expect(codeBlockRuntimeOptions[1]?.padding).toBeUndefined()
+    expect(shell.querySelectorAll<HTMLElement>('.markstream-angular-enhanced-block__body--code')[1]?.style.getPropertyValue('--diffs-gap-block')).toBe('12px')
 
     const copyButton = shell.querySelector<HTMLButtonElement>('.markstream-angular-enhanced-block__action')
     copyButton?.click()
     expect(onCopy).toHaveBeenCalled()
 
     handle.dispose()
-    expect(monacoCleanup).toHaveBeenCalledTimes(2)
+    expect(runtimeCleanup).toHaveBeenCalledTimes(2)
+  })
+
+  it('cleans up and restores the pre fallback when enhancement is cancelled during editor creation', async () => {
+    runtimeCleanup.mockClear()
+    let cancelled = false
+    runtimeCreateEditor.mockImplementationOnce(async (container: HTMLElement, code: string, language: string) => {
+      container.innerHTML = `<div data-stream-diffs="1" data-language="${language}">${code}</div>`
+      cancelled = true
+    })
+    const root = document.createElement('div')
+    root.innerHTML = '<pre data-markstream-code-block="1" data-markstream-language="ts"><code class="language-ts">const value = 1</code></pre>'
+
+    await enhanceRenderedHtml(root, {
+      codeBlockOptions: { overflow: 'scroll' },
+      final: true,
+      isCancelled: () => cancelled,
+    })
+
+    expect(runtimeCleanup).toHaveBeenCalledTimes(1)
+    expect(root.querySelector('.markstream-angular-enhanced-block')).toBeNull()
+    const fallback = root.querySelector('pre[data-markstream-code-block="1"]') as HTMLElement | null
+    expect(fallback?.textContent).toContain('const value = 1')
+    expect(fallback?.style.whiteSpace).toBe('pre')
+  })
+
+  it('uses component theme precedence in the static code enhancer', async () => {
+    runtimeCleanup.mockClear()
+    runtimeCreateEditor.mockClear()
+    runtimeSetTheme.mockClear()
+    codeBlockRuntimeOptions.length = 0
+    const root = document.createElement('div')
+    const source = Array.from({ length: 20 }, (_, index) => `const value${index} = ${index}`).join('\n')
+    root.innerHTML = `<pre data-markstream-code-block="1" data-markstream-language="ts"><code class="language-ts">${source}</code></pre>`
+
+    const handle = await enhanceRenderedHtml(root, {
+      codeBlockOptions: { maxHeight: 123 },
+      codeBlockProps: {
+        theme: { dark: 'pair-dark', light: 'pair-light' },
+        themes: ['tuple-dark', 'tuple-light'],
+      },
+      codeBlockDarkTheme: 'top-dark',
+      codeBlockLightTheme: 'top-light',
+      final: true,
+      isDark: true,
+      themes: ['top-tuple-dark', 'top-tuple-light'],
+    })
+
+    expect(codeBlockRuntimeOptions[0]).toMatchObject({
+      theme: 'pair-dark',
+      themes: ['tuple-dark', 'tuple-light'],
+    })
+    expect(runtimeSetTheme).toHaveBeenCalledWith('pair-dark')
+    const enhancedBody = root.querySelector<HTMLElement>('.markstream-angular-enhanced-block__body--code')
+    expect(enhancedBody?.style.maxHeight).toBe('123px')
+    expect(enhancedBody?.style.minHeight).toBe('123px')
+    expect(enhancedBody?.style.overflow).toBe('auto')
+    handle.dispose()
+    const fallback = root.querySelector('pre') as HTMLElement | null
+    expect(fallback?.style.maxHeight).toBe('123px')
+    expect(fallback?.style.overflow).toBe('auto')
+
+    codeBlockRuntimeOptions.length = 0
+    runtimeSetTheme.mockClear()
+    const tupleRoot = document.createElement('div')
+    tupleRoot.innerHTML = '<pre data-markstream-code-block="1" data-markstream-language="ts"><code class="language-ts">const tuple = true</code></pre>'
+    const tupleHandle = await enhanceRenderedHtml(tupleRoot, {
+      final: true,
+      isDark: false,
+      themes: ['tuple-dark', 'tuple-light'],
+    })
+    expect(codeBlockRuntimeOptions[0]?.theme).toBe('tuple-light')
+    expect(runtimeSetTheme).toHaveBeenCalledWith('tuple-light')
+    tupleHandle.dispose()
+  })
+
+  it('cleans up and restores the pre fallback when cancelled during theme application', async () => {
+    runtimeCleanup.mockClear()
+    runtimeCreateEditor.mockClear()
+    runtimeSetTheme.mockClear()
+    let cancelled = false
+    let resolveTheme!: () => void
+    runtimeSetTheme.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      resolveTheme = resolve
+    }))
+    const root = document.createElement('div')
+    root.innerHTML = '<pre data-markstream-code-block="1" data-markstream-language="ts"><code class="language-ts">const value = 1</code></pre>'
+
+    const enhancement = enhanceRenderedHtml(root, {
+      final: true,
+      isCancelled: () => cancelled,
+    })
+    await vi.waitFor(() => expect(runtimeSetTheme).toHaveBeenCalledTimes(1))
+    cancelled = true
+    resolveTheme()
+    await enhancement
+
+    expect(runtimeCleanup).toHaveBeenCalledTimes(1)
+    expect(root.querySelector('.markstream-angular-enhanced-block')).toBeNull()
+    expect(root.querySelector('pre[data-markstream-code-block="1"]')?.textContent).toContain('const value = 1')
   })
 
   it('skips heavy code/diagram upgrades while content is still streaming', async () => {
-    monacoCleanup.mockReset()
+    runtimeCleanup.mockReset()
     canParseOffthread.mockReset()
     findPrefixOffthread.mockReset()
     canParseOffthread.mockImplementation(async () => true)
@@ -190,9 +287,9 @@ describe('markstream-angular enhanceRenderedHtml', () => {
 
     expect(shell.innerHTML).toContain('class="katex"')
     expect(shell.innerHTML).toContain('language-ts')
-    expect(shell.innerHTML).not.toContain('data-monaco="1"')
+    expect(shell.innerHTML).not.toContain('data-stream-diffs="1"')
     expect(shell.innerHTML).not.toContain('data-d2="1"')
-    expect(monacoCleanup).not.toHaveBeenCalled()
+    expect(runtimeCleanup).not.toHaveBeenCalled()
   })
 
   it('does not re-render KaTeX from already-rendered output', async () => {

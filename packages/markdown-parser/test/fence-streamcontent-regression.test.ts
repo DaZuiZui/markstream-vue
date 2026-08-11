@@ -155,7 +155,7 @@ describe('parseMarkdownToStructure - list fence html tail (streaming)', () => {
       const streamed = parseMarkdownToStructure(prefix, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       }) as any[]
       const cold = parseMarkdownToStructure(prefix, getMarkdown(`fence-list-html-tail-cold-${end}`), {
         final: false,

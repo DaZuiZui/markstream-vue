@@ -1,6 +1,14 @@
 # markstream-angular — Angular streaming Markdown renderer for AI chat
 
-Angular 20+ standalone component for streaming Markdown: AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, Mermaid, KaTeX, Monaco code blocks, D2, infographic blocks, custom HTML tags, and cross-framework playground parity.
+Angular 20+ standalone component for streaming Markdown: AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, Mermaid, KaTeX, streaming code blocks, D2, infographic blocks, custom HTML tags, and cross-framework playground parity.
+
+The coordinated 2.0 family beta will use `markstream-angular@next`. Before installing, verify that `npm view markstream-angular@next version` reports `0.1.0-beta.1`. It removes the former Monaco code-block API in favor of `stream-diffs`; read the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+```bash
+pnpm add markstream-angular@next stream-diffs
+```
+
+Run this in an existing Angular 20+ application. Keep `@angular/core`, `@angular/common`, the compiler, and platform packages on the same Angular version line.
 
 ## When to use it
 
@@ -14,19 +22,18 @@ This package is currently alpha. Treat it as a streaming Markdown integration su
 ## Install
 
 ```bash
-pnpm add markstream-angular @angular/core @angular/common
+pnpm add markstream-angular
 ```
 
 Optional peer dependencies:
 
-- `stream-diffs` (recommended) for enhanced / streaming code blocks
-- `stream-monaco` for Monaco-powered code blocks (automatic fallback when `stream-diffs` is absent)
+- `stream-diffs` for enhanced / streaming code blocks
 - `mermaid` for Mermaid diagrams
 - `katex` for math rendering
 - `@terrastruct/d2` for D2 diagrams
 - `@antv/infographic` for infographic blocks
 
-Install only the peers your output actually needs. Plain Markdown does not require Mermaid, KaTeX, Monaco, D2, or Infographic.
+Install only the peers your output actually needs. Plain Markdown does not require Mermaid, KaTeX, stream-diffs enhanced code blocks, D2, or Infographic.
 
 Example:
 
@@ -36,10 +43,9 @@ pnpm add stream-diffs mermaid katex @terrastruct/d2 @antv/infographic
 
 ## Enhanced Code Blocks
 
-Code blocks use a dual-runtime loader: `stream-diffs` is preferred, `stream-monaco` is the automatic fallback, and a plain `<pre>` is rendered when neither is installed. Inside `MarkstreamAngularComponent`, code blocks resolve to this runtime automatically; you can also mount the standalone `markstream-angular-code-block-node` component directly:
+Code blocks use `stream-diffs` for enhanced / streaming rendering, with a plain `<pre>` fallback when it is not installed. Inside `MarkstreamAngularComponent`, code blocks resolve to this runtime automatically; you can also mount the standalone `markstream-angular-code-block-node` component directly:
 
 ```ts
-import type { CodeBlockMonacoOptions } from 'markstream-angular'
 import { Component, signal } from '@angular/core'
 import { CodeBlockNode } from 'markstream-angular'
 
@@ -59,26 +65,22 @@ class CodeBlockComponent {
     raw: 'const answer = 42',
   }
 
-  // fontSize / lineHeight / tabSize also drive the streaming <pre> fallback so
-  // the enhanced surface swaps in without a visual jump.
   props = {
     isDark: true,
-    showLineNumbers: true,
-    monacoOptions: {
-      fontSize: 14,
-      lineHeight: 21,
-      tabSize: 4,
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-      wordWrap: 'off',
-      theme: 'vitesse-dark',
-      renderSideBySide: true,
-      MAX_HEIGHT: 640,
-    } as CodeBlockMonacoOptions,
+    darkTheme: 'vitesse-dark',
+    lightTheme: 'vitesse-light',
+    themes: ['vitesse-dark', 'vitesse-light'],
+    codeBlockOptions: {
+      overflow: 'wrap',
+      diffStyle: 'unified',
+      enableLineSelection: true,
+    },
+    stream: true,
   }
 }
 ```
 
-Component options go through the `props` input: `isDark`, `showLineNumbers`, `monacoOptions`, `darkTheme` / `lightTheme`, `loading`, `stream`. `monacoOptions` also covers diff blocks (`renderSideBySide`, `diffHunkActionsOnHover`, `onDiffHunkAction`).
+Direct component state goes through the `props` input. Both direct `CodeBlockNode` props and top-level `MarkstreamAngularComponent` props accept `codeBlockOptions`; it covers host-managed typography/layout and supported File/FileDiff, interaction, annotation, and callback fields. `maxHeight` and the single symmetric `padding` value use numeric CSS pixels. Use `codeBlockProps` for header/toolbar controls. Theme values are registered names and `themes` is the `[dark, light]` pair. An old Monaco JSON theme is not accepted directly: first convert it to a Shiki `ThemeRegistration`, then call `registerCustomTheme(name, loader)` from `stream-diffs/pierre`; see the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0).
 
 ## Quick Start
 
@@ -126,7 +128,6 @@ bootstrapApplication(AppComponent)
 ```ts
 import type {
   AngularRenderContext,
-  CodeBlockMonacoOptions,
   CustomComponentMap,
   MarkstreamAngularComponentProps,
   NodeRendererProps,

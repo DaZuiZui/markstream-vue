@@ -58,12 +58,8 @@ export default defineConfig({
         '@terrastruct/d2',
         'katex/contrib/mhchem',
         'katex/dist/contrib/mhchem',
-        // syntax highlighting / editor libs that previously caused
-        // many language/theme chunks to be emitted
+        // Syntax-highlighting libraries that can emit many language/theme chunks.
         'shiki',
-        'monaco-editor',
-        'monaco-editor-core',
-        'stream-monaco',
         'stream-diffs',
         'stream-markdown',
         'stream-markdown-parser',
@@ -97,7 +93,7 @@ export default defineConfig({
     format: 'es',
     rollupOptions: {
       // Externalize heavy libs in worker bundling as well
-      external: (id: string) => /(?:^|\/)(?:@terrastruct\/d2|mermaid|katex|shiki|monaco-editor|vscode-textmate|vscode-oniguruma)(?:\/|$)/.test(id),
+      external: (id: string) => /(?:^|\/)(?:@terrastruct\/d2|mermaid|katex|shiki|vscode-textmate|vscode-oniguruma)(?:\/|$)/.test(id),
       output: {
         entryFileNames: 'workers/[name].js',
         chunkFileNames: 'workers/[name].js',

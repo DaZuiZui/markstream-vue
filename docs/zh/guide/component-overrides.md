@@ -103,13 +103,16 @@ setCustomComponents('docs', {
 })
 ```
 
-### 示例：把普通代码块切到 `MarkdownCodeBlockNode`
+### 示例：覆盖普通代码块
 
 ```ts twoslash
-import { MarkdownCodeBlockNode, setCustomComponents } from 'markstream-vue'
+import type { Component } from 'vue'
+import { setCustomComponents } from 'markstream-vue'
+
+declare const CustomCodeBlockNode: Component
 
 setCustomComponents('docs', {
-  code_block: MarkdownCodeBlockNode,
+  code_block: CustomCodeBlockNode,
 })
 ```
 
@@ -161,7 +164,7 @@ setCustomComponents('docs', {
 
 另外，渲染器还会按节点类型继续透传一些能力相关 props：
 
-- 普通代码块会拿到 `stream`、`theme`、`darkTheme`、`lightTheme`、`monacoOptions`、`themes`、`minWidth`、`maxWidth`，以及你传给 `codeBlockProps` 的内容（新的推荐字段是 `theme`；`darkTheme` / `lightTheme` 继续保留作兼容）
+- 普通代码块会拿到 `stream`、`theme`、`darkTheme`、`lightTheme`、`themes`、`minWidth`、`maxWidth`、顶层 `codeBlockOptions` object，以及你传给 `codeBlockProps` 的内容（推荐的子组件主题字段是 `theme`；`darkTheme` / `lightTheme` 继续保留作兼容）
 - Mermaid、D2、Infographic 会分别拿到对应的 `mermaidProps`、`d2Props`、`infographicProps`
 - link 和 list 会继承 tooltip / typewriter 相关的上层配置
 

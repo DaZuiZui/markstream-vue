@@ -1,6 +1,12 @@
 # markstream-svelte
 
-Svelte 5 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, custom components, Mermaid, KaTeX, Monaco, D2, and Infographic.
+Svelte 5 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, custom components, Mermaid, KaTeX, stream-diffs code blocks, D2, and Infographic.
+
+The coordinated 2.0 family beta will use `markstream-svelte@next`. Before installing, verify that `npm view markstream-svelte@next version` reports `0.1.0-beta.1`. It removes the former Monaco code-block API in favor of `stream-diffs`; read the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+```bash
+pnpm add markstream-svelte@next svelte@^5 stream-diffs
+```
 
 ## When to use it
 
@@ -31,8 +37,6 @@ pnpm add katex mermaid stream-diffs @terrastruct/d2 @antv/infographic
 ```
 
 `stream-diffs` powers the enhanced code blocks (smaller runtime, no `monaco-editor`).
-If you prefer the legacy Monaco-based rendering, install `stream-monaco` instead;
-it is used automatically as a fallback when `stream-diffs` is absent.
 
 ## Enhanced Code Blocks
 
@@ -40,8 +44,8 @@ it is used automatically as a fallback when `stream-diffs` is absent.
 
 ```svelte
 <script lang="ts">
+  import type { CodeBlockOptions } from 'markstream-svelte'
   import { CodeBlockNode } from 'markstream-svelte'
-  import type { CodeBlockMonacoOptions } from 'markstream-svelte'
 
   const node = {
     type: 'code_block',
@@ -50,24 +54,17 @@ it is used automatically as a fallback when `stream-diffs` is absent.
     raw: 'const answer = 42',
   }
 
-  // fontSize / lineHeight / tabSize also drive the streaming <pre> fallback so
-  // the enhanced surface swaps in without a visual jump.
-  const monacoOptions: CodeBlockMonacoOptions = {
-    fontSize: 14,
-    lineHeight: 21,
-    tabSize: 4,
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-    wordWrap: 'off',
-    theme: 'vitesse-dark',
-    renderSideBySide: true,
-    MAX_HEIGHT: 640,
+  const codeBlockOptions: CodeBlockOptions = {
+    overflow: 'wrap',
+    diffStyle: 'unified',
+    enableLineSelection: true,
   }
 </script>
 
-<CodeBlockNode {node} {monacoOptions} isDark showLineNumbers />
+<CodeBlockNode {node} {codeBlockOptions} isDark showHeader />
 ```
 
-Component-level options: `isDark`, `showLineNumbers` (default `true`), and `monacoOptions` for both single blocks and diff blocks (`renderSideBySide`, `diffHunkActionsOnHover`, `onDiffHunkAction`). When neither `stream-diffs` nor `stream-monaco` is installed, the block renders as a plain `<pre>`.
+Direct `CodeBlockNode` and top-level `MarkdownRender` both accept `codeBlockOptions`. It covers host-managed typography/layout and supported File/FileDiff, interaction, annotation, and callback fields; `maxHeight` and the single symmetric `padding` value use numeric CSS pixels. Use `codeBlockProps` for header/toolbar controls. Theme values are registered names and `themes` is the `[dark, light]` pair. An old Monaco JSON theme is not accepted directly: first convert it to a Shiki `ThemeRegistration`, then call `registerCustomTheme(name, loader)` from `stream-diffs/pierre`; see the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0). When `stream-diffs` is not installed, the block renders as a plain `<pre>`.
 
 ## Basic Usage
 

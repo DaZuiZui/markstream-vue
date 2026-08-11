@@ -98,6 +98,7 @@ export class DynamicNodeHostComponent implements OnChanges, OnDestroy {
       for (const [key, value] of Object.entries(this.inputs))
         setValue(key, value)
     }
+    setValue('codeBlockOptions', this.context?.codeBlockOptions)
 
     componentRef.changeDetectorRef.detectChanges()
   }

@@ -143,9 +143,9 @@ export default defineConfig(({ mode }) => {
       },
       rollupOptions: {
         external: (id: string) => {
-          if (id === 'stream-monaco' || id.startsWith('stream-monaco/'))
+          if (id === 'stream-diffs' || id.startsWith('stream-diffs/'))
             return true
-          if (/node_modules\/stream-monaco(?:\/|$)/.test(id))
+          if (/node_modules\/stream-diffs(?:\/|$)/.test(id))
             return true
           if (id === '@terrastruct/d2' || id.startsWith('@terrastruct/d2/'))
             return true
@@ -166,14 +166,13 @@ export default defineConfig(({ mode }) => {
             'katex',
             'mermaid',
             'katex/contrib/mhchem',
-            'stream-monaco',
+            'stream-diffs',
             'stream-markdown',
             'stream-markdown-parser',
             'markstream-core',
             '@antv/infographic',
             '@terrastruct/d2',
             '@floating-ui/dom',
-            'monaco-editor',
             'shiki',
           ].includes(id)
         },

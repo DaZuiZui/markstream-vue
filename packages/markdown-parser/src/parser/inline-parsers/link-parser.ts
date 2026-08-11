@@ -1,5 +1,6 @@
-import type { InternalParseOptions, LinkNode, MarkdownToken, ParseOptions } from '../../types'
-import { parseInlineTokens } from '../index'
+import type { LinkNode, MarkdownToken, ParseOptions } from '../../types'
+import type { ParseInlineTokensFn } from './inline-parser-types'
+import { isParseContext } from '../parse-context'
 import { cloneTokenWithMutableChildren } from '../token-copy'
 
 type AttrTuple = [string, string]
@@ -45,6 +46,7 @@ function normalizeLinkAttrs(
 export function parseLinkToken(
   tokens: MarkdownToken[],
   startIndex: number,
+  parseInlineTokens: ParseInlineTokensFn,
   options?: ParseOptions,
 ): {
   node: LinkNode
@@ -74,7 +76,7 @@ export function parseLinkToken(
   let childTokens = linkTokens
   const lastLinkToken = linkTokens[linkTokens.length - 1]
   if (
-    (options as InternalParseOptions | undefined)?.__insideStrong
+    (isParseContext(options) && options.insideStrong)
     && lastLinkToken?.type === 'text'
     && String(lastLinkToken.content ?? '').endsWith('**')
     && !linkTokens.some(token => token.type === 'strong_open')

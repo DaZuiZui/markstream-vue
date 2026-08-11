@@ -11,7 +11,7 @@ keywords:
 
 markstream-react 提供与 markstream-vue 相同强大的组件，但专为 React 构建。所有组件都支持 React 18+ 并包含完整的 TypeScript 支持。
 
-根入口、`markstream-react/next`、`markstream-react/server` 现在都会产出独立声明文件。像 `NodeRendererProps`、`NodeRendererCodeBlockProps`、`NodeComponentProps`、`StreamingComponentMap`、`HtmlComponentMap`、`RenderContext`、`RenderNodeFn`、`CustomComponentMap`、`CodeBlockMonacoOptions`、`MarkdownCodeBlockNodeProps`、`ListItemNodeProps`、`HtmlPreviewFrameProps`、`TooltipProps`、`TooltipPlacement`、`LinkNodeStyleProps` 这类共享渲染器与组件类型，都可以直接从你实际使用的入口导入。
+根入口、`markstream-react/next`、`markstream-react/server` 现在都会产出独立声明文件。像 `NodeRendererProps`、`NodeRendererCodeBlockProps`、`NodeComponentProps`、`StreamingComponentMap`、`HtmlComponentMap`、`RenderContext`、`RenderNodeFn`、`CustomComponentMap`、`ListItemNodeProps`、`HtmlPreviewFrameProps`、`TooltipProps`、`TooltipPlacement`、`LinkNodeStyleProps` 这类共享渲染器与组件类型，都可以直接从你实际使用的入口导入。
 ## 主组件：MarkdownRender
 
 在 React 中渲染 markdown 内容的主要组件。
@@ -49,7 +49,7 @@ markstream-react 提供与 markstream-vue 相同强大的组件，但专为 Reac
 |------|---------|-------------|
 | `renderCodeBlocksAsPre` | `false` | 将 `code_block` 渲染为 `<pre><code>`（Mermaid/D2/Infographic 也会随之回退） |
 | `codeBlockStream` | `true` | 随内容到达流式更新代码块 |
-| `viewportPriority` | `true` | 将 Monaco/Mermaid/D2/KaTeX 等重型工作延迟到接近视口时 |
+| `viewportPriority` | `true` | 将 Mermaid/D2/KaTeX 等重型工作延迟到接近视口时 |
 | `deferNodesUntilVisible` | `true` | 重型节点先占位，接近可视区再渲染（仅非虚拟化模式） |
 
 #### 性能（虚拟化与批次渲染）
@@ -71,16 +71,16 @@ markstream-react 提供与 markstream-vue 相同强大的组件，但专为 Reac
 
 | 属性 | 类型 | 描述 |
 |------|------|-------------|
-| `codeBlockDarkTheme` | `CodeBlockMonacoTheme` | 转发到每个 `CodeBlockNode` 的 Monaco 深色主题 |
-| `codeBlockLightTheme` | `CodeBlockMonacoTheme` | 转发到每个 `CodeBlockNode` 的 Monaco 浅色主题 |
-| `codeBlockMonacoOptions` | `CodeBlockMonacoOptions` | 转发到 `stream-monaco` 的选项，包括 `diffHunkActionsOnHover`、`diffHunkHoverHideDelayMs`、`onDiffHunkAction` 这类 diff 悬浮操作配置 |
+| `codeBlockDarkTheme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的已注册深色主题名称 |
+| `codeBlockLightTheme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的已注册浅色主题名称 |
 | `codeBlockMinWidth` | `string \| number` | 转发到 `CodeBlockNode` 的最小宽度 |
 | `codeBlockMaxWidth` | `string \| number` | 转发到 `CodeBlockNode` 的最大宽度 |
-| `codeBlockProps` | `NodeRendererCodeBlockProps` | 额外转发到每个代码块渲染器（`CodeBlockNode` / `MarkdownCodeBlockNode`）的 props |
+| `codeBlockOptions` | `CodeBlockOptions` | 转发到每个普通 `CodeBlockNode` 的中性排版/布局与受支持 File/FileDiff 选项 |
+| `codeBlockProps` | `NodeRendererCodeBlockProps` | 额外转发到每个 `CodeBlockNode` 的 props |
 | `mermaidProps` | `Partial<Omit<MermaidBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 Mermaid 围栏和自定义 `mermaid` 渲染器的 props |
 | `d2Props` | `Partial<Omit<D2BlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 D2 围栏和自定义 `d2` 渲染器的 props |
 | `infographicProps` | `Partial<Omit<InfographicBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 infographic 围栏和自定义 `infographic` 渲染器的 props |
-| `themes` | `CodeBlockMonacoTheme[]` | 转发到 `stream-monaco` 的主题列表 |
+| `themes` | `readonly [CodeBlockTheme, CodeBlockTheme]` | 转发到 `CodeBlockNode` 的已注册 `[dark, light]` 主题名称对 |
 
 #### 重型渲染器 props 透传
 
@@ -101,7 +101,7 @@ markstream-react 提供与 markstream-vue 相同强大的组件，但专为 Reac
 ```
 
 流式建议：
-- 保持 `viewportPriority` 开启，避免离屏 Mermaid / Monaco / D2 在文字仍在流式更新时继续做后台工作；如果必须立即渲染整篇文档，可以设为 `false`。
+- 保持 `viewportPriority` 开启，避免离屏 Mermaid / D2 在文字仍在流式更新时继续做后台工作；如果必须立即渲染整篇文档，可以设为 `false`。
 - 抖动较大的 SSE 或 AI token 流推荐用 `content` + 内置 `smoothStreaming`。
 - 已有 worker、store 或自定义 AST 管线时才用 `nodes`。
 - Mermaid strict mode 现已默认开启。仅在需要宽松 Mermaid HTML-label 行为的可信图表中通过 `mermaidProps` 设置 `{ isStrict: false }`。
@@ -117,7 +117,9 @@ markstream-react 提供与 markstream-vue 相同强大的组件，但专为 Reac
 />
 ```
 
-`NodeRendererCodeBlockProps` 会跟随公开的 `CodeBlockNode` props 结构（去掉 `node`），所以像 `showHeader`、`showFontSizeButtons`、`showTooltips` 这类字段都能直接获得补全，而不需要退回 `any`。
+`CodeBlockOptions` 是直接 `CodeBlockNode` 与 `NodeRenderer` 共享的独立顶层 prop。它包含宿主管理的 `fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`，以及受支持的 `stream-diffs` File/FileDiff、交互、annotation 与 callback 字段。主题、code/language、流式状态、header、挂载/显示时机与释放仍由宿主管理。
+
+`NodeRendererCodeBlockProps` 跟随公开的组件 shell props 结构（去掉 `node` 与 `codeBlockOptions`），所以像 `showHeader`、`showFontSizeButtons`、`showTooltips` 这类字段都能直接获得补全，而不需要退回 `any`。
 
 ```tsx
 import type { NodeRendererCodeBlockProps } from 'markstream-react'
@@ -227,46 +229,14 @@ function App({ content, isDone }: { content: string, isDone: boolean }) {
 
 ## 代码块组件
 
-### MarkdownCodeBlockNode
-
-使用 Shiki 的轻量级代码高亮。
-
-```tsx
-import { MarkdownCodeBlockNode } from 'markstream-react'
-
-function CodeBlock() {
-  const codeNode = {
-    type: 'code_block',
-    language: 'javascript',
-    code: 'const hello = "world"',
-    raw: 'const hello = "world"'
-  }
-
-  const handleCopy = () => {
-    alert('代码已复制！')
-  }
-
-  return (
-    <div className="markstream-react">
-      <MarkdownCodeBlockNode
-        node={codeNode}
-        showCopyButton={true}
-        showCollapseButton={false}
-        onCopy={handleCopy}
-      />
-    </div>
-  )
-}
-```
-
 ### CodeBlockNode
 
-功能丰富的 Monaco 驱动代码块。
+功能丰富的代码块，由可选的对等依赖 `stream-diffs` 增强（未安装时会回退渲染普通 `<pre>`）。直接与 renderer 顶层配置都使用 `codeBlockOptions`。
 
 ```tsx
 import { CodeBlockNode } from 'markstream-react'
 
-function MonacoCodeBlock() {
+function CodeBlock() {
   const codeNode = {
     type: 'code_block',
     language: 'typescript',
@@ -286,7 +256,6 @@ function MonacoCodeBlock() {
     <div className="markstream-react">
       <CodeBlockNode
         node={codeNode}
-        monacoOptions={{ fontSize: 14, theme: 'vs-dark' }}
         stream={true}
         showCollapseButton={false}
         onCopy={handleCopy}

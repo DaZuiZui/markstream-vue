@@ -73,7 +73,7 @@ import { normalizeTypewriterCursorMode } from '../../utils/typewriter'
 import HtmlBlockNode from '../HtmlBlockNode/HtmlBlockNode.vue'
 import HtmlInlineNode from '../HtmlInlineNode/HtmlInlineNode.vue'
 import { createMathBlockMinHeightCache, provideMathBlockMinHeightCache } from '../MathBlockNode/minHeightCache'
-import { CodeBlockNodeAsync, CodeBlockNodeLoading, MathBlockNodeAsync, MathInlineNodeAsync, withViewportDeferredLoading } from './asyncComponent'
+import { CodeBlockNodeAsync, MathBlockNodeAsync, MathInlineNodeAsync, withViewportDeferredLoading } from './asyncComponent'
 import { useBatchRenderingScheduler } from './composables/useBatchRenderingScheduler'
 import { useBatchRenderingState } from './composables/useBatchRenderingState'
 import { useFocusSyncScheduler } from './composables/useFocusSyncScheduler'
@@ -92,7 +92,7 @@ import FallbackComponent from './FallbackComponent.vue'
 import HeightEstimationProbes from './HeightEstimationProbes.vue'
 import { InfographicBlockNodeLoading } from './InfographicBlockNodeLoading'
 import { MermaidBlockNodeLoading } from './MermaidBlockNodeLoading'
-import { normalizeRendererMode, RENDERER_MODE_DEFAULTS, resolveNodeRendererCodeRenderer } from './rendererModeDefaults'
+import { normalizeRendererMode, RENDERER_MODE_DEFAULTS } from './rendererModeDefaults'
 import { buildVirtualMeasurementKey, buildVirtualRendererLayoutKey, stringifyVirtualToken } from './virtualLayoutKey'
 
 type RuntimeCodeBlockNode = ParsedNode & {
@@ -193,11 +193,7 @@ const resolvedMode = computed<NodeRendererMode>(() => normalizeRendererMode(reso
 const resolvedTypewriterCursorMode = computed(() => normalizeTypewriterCursorMode(resolveRendererProp('typewriter')))
 const typewriterEnabled = computed(() => resolvedTypewriterCursorMode.value !== 'off')
 const resolvedDomMode = computed<NodeRendererDomMode>(() => normalizeRendererDomMode(resolveRendererProp('domMode')))
-const resolvedCodeRenderer = computed(() => resolveNodeRendererCodeRenderer({
-  mode: resolvedMode.value,
-  codeRenderer: resolveRendererProp('codeRenderer'),
-  renderCodeBlocksAsPre: resolveRendererProp('renderCodeBlocksAsPre'),
-}))
+const resolvedRenderCodeBlocksAsPre = computed(() => resolveRendererProp('renderCodeBlocksAsPre') === true)
 const resolvedModeDefaults = computed(() => RENDERER_MODE_DEFAULTS[resolvedMode.value])
 const resolvedShowTooltipsProp = computed(() => resolveRendererProp('showTooltips') ?? resolvedModeDefaults.value.showTooltips)
 const resolvedFade = computed(() => resolveRendererProp('fade') ?? resolvedModeDefaults.value.fade)
@@ -228,18 +224,15 @@ const rendererProps = {
   get codeBlockStream() { return resolveRendererProp('codeBlockStream') },
   get codeBlockDarkTheme() { return resolveRendererProp('codeBlockDarkTheme') },
   get codeBlockLightTheme() { return resolveRendererProp('codeBlockLightTheme') },
-  get codeBlockMonacoOptions() { return resolveRendererProp('codeBlockMonacoOptions') },
-  get codeRenderer() { return resolveRendererProp('codeRenderer') },
-  get renderCodeBlocksAsPre() { return resolveRendererProp('renderCodeBlocksAsPre') },
   get codeBlockMinWidth() { return resolveRendererProp('codeBlockMinWidth') },
   get codeBlockMaxWidth() { return resolveRendererProp('codeBlockMaxWidth') },
+  get codeBlockOptions() { return resolveRendererProp('codeBlockOptions') },
   get codeBlockProps() { return resolveRendererProp('codeBlockProps') },
   get mermaidProps() { return resolveRendererProp('mermaidProps') },
   get d2Props() { return resolveRendererProp('d2Props') },
   get infographicProps() { return resolveRendererProp('infographicProps') },
   get showTooltips() { return resolvedShowTooltipsProp.value },
   get themes() { return resolveRendererProp('themes') },
-  get langs() { return resolveRendererProp('langs') },
   get isDark() { return resolveRendererProp('isDark') },
   get customId() { return resolveRendererProp('customId') },
   get indexKey() { return props.indexKey },
@@ -700,21 +693,19 @@ const nestedRendererProps = computed<Partial<NodeRendererProps>>(() => ({
   viewportPriorityOptions: resolvedViewportPriorityOptions.value,
   mode: resolvedMode.value,
   domMode: rendererProps.domMode,
-  codeRenderer: resolvedCodeRenderer.value,
   codeBlockStream: rendererProps.codeBlockStream,
   codeBlockDarkTheme: rendererProps.codeBlockDarkTheme,
   codeBlockLightTheme: rendererProps.codeBlockLightTheme,
-  codeBlockMonacoOptions: rendererProps.codeBlockMonacoOptions,
-  renderCodeBlocksAsPre: rendererProps.renderCodeBlocksAsPre,
+  renderCodeBlocksAsPre: resolvedRenderCodeBlocksAsPre.value,
   codeBlockMinWidth: rendererProps.codeBlockMinWidth,
   codeBlockMaxWidth: rendererProps.codeBlockMaxWidth,
+  codeBlockOptions: rendererProps.codeBlockOptions,
   codeBlockProps: rendererProps.codeBlockProps,
   mermaidProps: rendererProps.mermaidProps,
   d2Props: rendererProps.d2Props,
   infographicProps: rendererProps.infographicProps,
   showTooltips: resolvedShowTooltips.value,
   themes: rendererProps.themes,
-  langs: rendererProps.langs,
   isDark: rendererProps.isDark,
   typewriter: typewriterEnabled.value,
   smoothStreamingOptions: rendererProps.smoothStreamingOptions,
@@ -820,7 +811,7 @@ const virtualizationEnabled = computed(() => {
   return parsedNodes.value.length > maxLiveNodesResolved.value
 })
 const shouldMeasureNodeHeights = computed(() => virtualizationEnabled.value || heightExperimentEnabled.value || virtualScrollEnabled.value)
-// Viewport priority is used to defer heavy work (Monaco/Mermaid/KaTeX) until
+// Viewport priority is used to defer heavy work (stream-diffs/Mermaid/KaTeX) until
 // nodes approach the viewport. Node-level deferral is controlled separately
 // via `deferNodes`.
 const heavyViewportPriorityEnabled = computed(() => rendererProps.viewportPriority !== false)
@@ -1613,30 +1604,9 @@ function setupExperimentResizeObserver() {
   experimentResizeObserver.observe(containerRef.value)
 }
 
-const MarkdownCodeBlockNodeInnerAsync = defineAsyncComponent({
-  loader: async () => {
-    const mod = await import('../MarkdownCodeBlockNode')
-    return mod.default
-  },
-  loadingComponent: CodeBlockNodeLoading,
-  delay: 0,
-  suspensible: false,
-})
-const MarkdownCodeBlockNodeAsync = withViewportDeferredLoading(
-  'ViewportDeferredMarkdownCodeBlockNode',
-  MarkdownCodeBlockNodeInnerAsync,
-  CodeBlockNodeLoading,
-)
-
-function isMarkdownCodeBlockComponent(component: unknown) {
-  return component === MarkdownCodeBlockNodeAsync
-}
-
 const codeBlockComponent = computed(() => {
-  if (resolvedCodeRenderer.value === 'pre')
+  if (resolvedRenderCodeBlocksAsPre.value)
     return PreCodeNode
-  if (resolvedCodeRenderer.value === 'shiki')
-    return MarkdownCodeBlockNodeAsync
   return CodeBlockNodeAsync
 })
 
@@ -1644,12 +1614,10 @@ function resolveCodeBlockRendererKind(node: ParsedNode) {
   if (node.type !== 'code_block')
     return null
   const component = getNodeComponent(node, getCodeBlockLanguage(node))
-  if (isMarkdownCodeBlockComponent(component))
-    return 'markdown'
   if (component === PreCodeNode)
     return 'pre'
   if (component === codeBlockComponent.value || component === CodeBlockNodeAsync)
-    return 'monaco'
+    return 'stream-diffs'
   return null
 }
 
@@ -1681,12 +1649,12 @@ function estimateNodeHeight(node: ParsedNode, index: number, width: number) {
 
   if (codeBlockEstimationEnabled.value && node.type === 'code_block') {
     const rendererKind = resolveCodeBlockRendererKind(node)
-    if (rendererKind === 'monaco' || rendererKind === 'markdown' || rendererKind === 'pre') {
+    if (rendererKind === 'stream-diffs' || rendererKind === 'pre') {
       return estimateCodeBlockHeight(node, {
         rendererKind,
-        monacoOptions: rendererProps.codeBlockMonacoOptions,
         showHeader: resolveCodeBlockShowHeader(),
         width,
+        diffStyle: rendererProps.codeBlockOptions?.diffStyle,
       })
     }
   }
@@ -1700,9 +1668,8 @@ function getEstimatedNodeHeightContext(width: number) {
     textEstimationEnabled.value,
     codeBlockEstimationEnabled.value,
     simpleTextProbeProfile.value,
-    rendererProps.codeBlockMonacoOptions,
     resolveCodeBlockShowHeader(),
-    resolvedCodeRenderer.value,
+    resolvedRenderCodeBlocksAsPre.value,
     customComponentsMap.value,
     heightEstimationExperimentRevision.value,
   ]
@@ -1934,18 +1901,14 @@ function isSameVirtualThreadKey(threadKey: string | undefined) {
 }
 
 function getVirtualRendererLayoutKey() {
-  const renderer = resolvedCodeRenderer.value
-
   return buildVirtualRendererLayoutKey({
-    renderer,
+    renderCodeBlocksAsPre: resolvedRenderCodeBlocksAsPre.value,
     isDark: rendererProps.isDark,
     codeBlockStream: rendererProps.codeBlockStream,
     codeBlockMinWidth: rendererProps.codeBlockMinWidth,
     codeBlockMaxWidth: rendererProps.codeBlockMaxWidth,
-    codeBlockMonacoOptions: renderer === 'monaco' ? rendererProps.codeBlockMonacoOptions : undefined,
+    codeBlockOptions: rendererProps.codeBlockOptions,
     codeBlockProps: rendererProps.codeBlockProps,
-    themes: renderer === 'shiki' ? rendererProps.themes : undefined,
-    langs: renderer === 'shiki' ? rendererProps.langs : undefined,
   })
 }
 
@@ -4049,6 +4012,14 @@ function shouldRenderNode(index: number) {
     return true
   if (index < resolvedInitialBatch.value)
     return true
+  if (
+    contentStreamingTailActive.value
+    && effectiveFinal.value !== true
+    && !props.nodes?.length
+    && index >= parsedNodes.value.length - liveNodeBufferResolved.value
+  ) {
+    return true
+  }
   return visibleNodeIndices.value.has(index)
 }
 
@@ -5277,26 +5248,25 @@ const nodeComponents: Partial<CustomComponents> = {
 const indexPrefix = computed(() => getCurrentIndexPrefix())
 const codeBlockExtraProps = computed(() => getCodeBlockExtraProps(rendererProps.codeBlockProps))
 const builtinCodeBlockExtraProps = computed(() =>
-  getCodeBlockExtraProps(rendererProps.codeBlockProps, { omit: ['langs'] }),
+  getCodeBlockExtraProps(rendererProps.codeBlockProps),
 )
 const codeBlockBindings = computed(() => ({
-  // streaming behavior control for CodeBlockNode / MarkdownCodeBlockNode
+  // streaming behavior control for CodeBlockNode
   stream: rendererProps.codeBlockStream,
   darkTheme: rendererProps.codeBlockDarkTheme,
   lightTheme: rendererProps.codeBlockLightTheme,
-  monacoOptions: rendererProps.codeBlockMonacoOptions,
   themes: rendererProps.themes,
-  langs: resolvedCodeRenderer.value === 'shiki' ? rendererProps.langs : undefined,
   minWidth: rendererProps.codeBlockMinWidth,
   maxWidth: rendererProps.codeBlockMaxWidth,
   ...(typeof resolvedShowTooltips.value === 'boolean' ? { showTooltips: resolvedShowTooltips.value } : {}),
   ...builtinCodeBlockExtraProps.value,
+  codeBlockOptions: rendererProps.codeBlockOptions,
 }))
 
 const customCodeBlockBindings = computed(() => ({
   ...codeBlockBindings.value,
-  langs: rendererProps.langs,
   ...codeBlockExtraProps.value,
+  codeBlockOptions: rendererProps.codeBlockOptions,
 }))
 
 function pickBoolean(value: unknown) {
@@ -5313,8 +5283,14 @@ const preCodeBlockBindings = computed(() => {
   const bindings: Record<string, unknown> = {}
 
   const showLineNumbers = pickBoolean(source.showLineNumbers)
-  if (showLineNumbers !== undefined)
-    bindings.showLineNumbers = showLineNumbers
+  const disableLineNumbers = rendererProps.codeBlockOptions?.disableLineNumbers
+  bindings.showLineNumbers = showLineNumbers
+    ?? (typeof disableLineNumbers === 'boolean' ? !disableLineNumbers : false)
+  if (rendererProps.codeBlockOptions?.overflow) {
+    bindings.style = {
+      whiteSpace: rendererProps.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+    }
+  }
 
   const diffInline = pickBoolean(source.diffInline)
   if (diffInline !== undefined)
@@ -5325,22 +5301,6 @@ const preCodeBlockBindings = computed(() => {
     bindings.reservedHeightPx = reservedHeightPx
 
   return bindings
-})
-
-const shikiCodeBlockBindings = computed(() => {
-  return {
-    stream: rendererProps.codeBlockStream,
-    darkTheme: rendererProps.codeBlockDarkTheme,
-    lightTheme: rendererProps.codeBlockLightTheme,
-    themes: rendererProps.themes,
-    langs: rendererProps.langs,
-    minWidth: rendererProps.codeBlockMinWidth,
-    maxWidth: rendererProps.codeBlockMaxWidth,
-    ...(typeof resolvedShowTooltips.value === 'boolean'
-      ? { showTooltips: resolvedShowTooltips.value }
-      : {}),
-    ...codeBlockExtraProps.value,
-  }
 })
 
 const mermaidBindings = computed(() => ({
@@ -5411,7 +5371,7 @@ function hasSlotChildren(node: ParsedNode) {
 const renderedItems = computed(() => {
   return visibleNodes.value.map((item) => {
     // Reuse the previous shallow clone for code blocks unless the visible
-    // payload changed, so parent recomputations do not churn Monaco props.
+    // payload changed, so parent recomputations do not churn stream-diffs props.
     let node = getCodeBlockRenderNode(item.node)
     const language = getCodeBlockLanguage(node)
     let component = getNodeComponent(node, language)
@@ -5467,7 +5427,7 @@ const renderedItems = computed(() => {
     }
 
     const usesPreCodeBindings = node.type === 'code_block'
-      && resolvedCodeRenderer.value === 'pre'
+      && resolvedRenderCodeBlocksAsPre.value
       && component === PreCodeNode
       && !getCustomCodeLanguageComponent(customComponentsMap.value, language)
     let bindings = { ...getBindingsFor(node, language, component) } as Record<string, unknown>
@@ -5609,7 +5569,7 @@ function getNodeComponent(node: ParsedNode, language?: string) {
     if (customForLanguage)
       return customForLanguage
 
-    if (resolvedCodeRenderer.value === 'pre') {
+    if (resolvedRenderCodeBlocksAsPre.value) {
       const customCodeBlock = customComponents.code_block
       return customCodeBlock || PreCodeNode
     }
@@ -5660,7 +5620,7 @@ function getBindingsFor(node: ParsedNode, language?: string, component?: unknown
 
     if (
       component
-      && resolvedCodeRenderer.value === 'pre'
+      && resolvedRenderCodeBlocksAsPre.value
       && !customLanguageComponent
       && component === PreCodeNode
     ) {
@@ -5682,9 +5642,6 @@ function getBindingsFor(node: ParsedNode, language?: string, component?: unknown
 
     if (component && component === customComponentsMap.value.code_block)
       return customCodeBlockBindings.value
-
-    if (isMarkdownCodeBlockComponent(component))
-      return shikiCodeBlockBindings.value
   }
 
   if (lang === 'mermaid')
@@ -6283,7 +6240,7 @@ onBeforeUnmount(() => {
             :ref="el => setNodeContentRef(item.index, el as HTMLElement | null)"
             class="node-content"
           >
-            <!-- Skip wrapping code_block nodes in transitions to avoid touching Monaco editor internals -->
+            <!-- Skip wrapping code_block nodes in transitions to avoid touching stream-diffs internals -->
             <transition
               v-if="!item.isCodeBlock"
               name="fade"

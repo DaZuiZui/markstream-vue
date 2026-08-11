@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hasCompleteHtmlTagContent } from '../packages/markstream-angular/src/components/shared/node-helpers'
 import {
@@ -8,6 +10,13 @@ import {
   resolveNodeOutletCustomInputs,
 } from '../packages/markstream-angular/src/components/shared/node-outlet-helpers'
 
+const require = createRequire(import.meta.url)
+const angularCompilerEntry = require.resolve('@angular/compiler', {
+  paths: [resolve(process.cwd(), 'node_modules/.pnpm/node_modules')],
+})
+await import(angularCompilerEntry)
+const { NodeOutletComponent } = await import('../packages/markstream-angular/src/components/NodeOutlet/NodeOutlet.component')
+
 class ExactLanguageComponent {}
 class GenericCodeBlockComponent {}
 class MermaidComponent {}
@@ -15,6 +24,41 @@ class D2Component {}
 class D2LangComponent {}
 
 describe('markstream-angular NodeOutlet', () => {
+  it('lets explicit fallback line-number props override neutral options', () => {
+    const outlet = new NodeOutletComponent()
+    outlet.context = { events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreShowLineNumbers).toBe(false)
+
+    outlet.context = { codeBlockOptions: { disableLineNumbers: false }, events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreShowLineNumbers).toBe(true)
+
+    outlet.context = {
+      codeBlockOptions: { disableLineNumbers: false },
+      codeBlockProps: { showLineNumbers: false },
+      events: {},
+      renderCodeBlocksAsPre: true,
+    }
+    expect(outlet.resolvedPreShowLineNumbers).toBe(false)
+
+    outlet.context = {
+      codeBlockOptions: { disableLineNumbers: true },
+      codeBlockProps: { showLineNumbers: true },
+      events: {},
+      renderCodeBlocksAsPre: true,
+    }
+    expect(outlet.resolvedPreShowLineNumbers).toBe(true)
+  })
+
+  it('keeps direct pre overflow aligned with enhanced fallbacks', () => {
+    const outlet = new NodeOutletComponent()
+    outlet.context = { events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreWhiteSpace).toBeUndefined()
+    outlet.context = { codeBlockOptions: { overflow: 'scroll' }, events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreWhiteSpace).toBe('pre')
+    outlet.context = { codeBlockOptions: { overflow: 'wrap' }, events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreWhiteSpace).toBe('pre-wrap')
+  })
+
   it('coerces custom html tags into tag-typed nodes for custom components', () => {
     const node = {
       type: 'html_block',

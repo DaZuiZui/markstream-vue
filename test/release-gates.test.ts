@@ -66,6 +66,138 @@ describe('release dependency gates', () => {
     expect(releaseDryRun.indexOf('pnpm run publish:core:dry-run')).toBeLessThan(releaseDryRun.indexOf('pnpm run publish:vue3:dry-run'))
   })
 
+  it('preflights dist-tags before publishing the complete package family', () => {
+    const scripts = packageJson.scripts
+    const releaseFamily = scripts['release:family']
+    const preflight = 'pnpm run release:family:preflight'
+    const publishSteps = [
+      'pnpm run publish:parser:current',
+      'pnpm run publish:core:current',
+      'pnpm run publish:vue3:current',
+      'pnpm run publish:react:current',
+      'pnpm run publish:octane:current',
+      'pnpm run publish:svelte:current',
+      'pnpm run publish:angular:current',
+      'pnpm run publish:vue2:current',
+    ]
+
+    expect(scripts['release:family:preflight']).toBe('node scripts/check-release-family-dist-tags.mjs')
+    expect(releaseFamily.indexOf(preflight)).toBe(0)
+    for (let index = 0; index < publishSteps.length; index++) {
+      expect(releaseFamily.indexOf(publishSteps[index])).toBeGreaterThan(releaseFamily.indexOf(preflight))
+      if (index > 0)
+        expect(releaseFamily.indexOf(publishSteps[index])).toBeGreaterThan(releaseFamily.indexOf(publishSteps[index - 1]))
+    }
+
+    const preflightScript = readFileSync(resolve(process.cwd(), 'scripts/check-release-family-dist-tags.mjs'), 'utf8')
+    for (const path of [
+      'package.json',
+      'packages/markdown-parser/package.json',
+      'packages/markstream-core/package.json',
+      'packages/markstream-react/package.json',
+      'packages/markstream-octane/package.json',
+      'packages/markstream-svelte/package.json',
+      'packages/markstream-angular/package.json',
+      'packages/markstream-vue2/package.json',
+    ]) {
+      expect(preflightScript).toContain(`'${path}'`)
+    }
+  })
+
+  it('runs pull request validation on the 2.0 integration branch', () => {
+    const workflows = [
+      ['.github/workflows/ci.yml', 2],
+      ['.github/workflows/docs-check.yml', 1],
+      ['.github/workflows/docs-parity.yml', 2],
+      ['.github/workflows/dts-typecheck.yml', 2],
+      ['.github/workflows/pkg-pr-new.yml', 1],
+    ] as const
+
+    for (const [path, expectedCount] of workflows) {
+      const workflow = readFileSync(resolve(process.cwd(), path), 'utf8')
+      expect(workflow.match(/branches: \[main, 2\.0\.0\]/g)).toHaveLength(expectedCount)
+    }
+  })
+
+  it('fails closed when a release tag does not match its package manifest', () => {
+    const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-stable.yml'), 'utf8')
+    const mappings = [
+      ['markstream-vue', '.', 'package.json'],
+      ['stream-markdown-parser', 'packages/markdown-parser', 'packages/markdown-parser/package.json'],
+      ['markstream-core', 'packages/markstream-core', 'packages/markstream-core/package.json'],
+      ['markstream-angular', 'packages/markstream-angular', 'packages/markstream-angular/package.json'],
+      ['markstream-octane', 'packages/markstream-octane', 'packages/markstream-octane/package.json'],
+      ['markstream-react', 'packages/markstream-react', 'packages/markstream-react/package.json'],
+      ['markstream-svelte', 'packages/markstream-svelte', 'packages/markstream-svelte/package.json'],
+      ['markstream-vue2', 'packages/markstream-vue2', 'packages/markstream-vue2/package.json'],
+    ]
+
+    for (const [name, packageDir, packageJson] of mappings) {
+      const mapping = `${name}) PACKAGE_DIR="${packageDir}"; PACKAGE_JSON="${packageJson}" ;;`
+      expect(workflow).toContain(mapping)
+      expect(workflow.match(new RegExp(mapping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))).toHaveLength(1)
+    }
+
+    const validationIndex = workflow.indexOf('- name: Resolve and validate package manifest')
+    const installIndex = workflow.indexOf('- name: Install dependencies')
+    const publishIndex = workflow.indexOf('- name: Publish package to npm')
+
+    expect(validationIndex).toBeGreaterThan(-1)
+    expect(validationIndex).toBeLessThan(installIndex)
+    expect(validationIndex).toBeLessThan(publishIndex)
+    expect(workflow).toContain('if [[ "$' + '{MANIFEST_NAME}" != "$' + '{PACKAGE_NAME}" ]]')
+    expect(workflow).toContain('if [[ "$' + '{MANIFEST_VERSION}" != "$' + '{PACKAGE_VERSION}" ]]')
+    expect(workflow).toContain('if [[ "$' + '{GITHUB_REF_NAME}" != "$' + '{MANIFEST_NAME}@$' + '{MANIFEST_VERSION}" ]]')
+    expect(workflow).toContain('PACKAGE_DIR: $' + '{{ steps.package.outputs.package_dir }}')
+    expect(workflow).toContain('PACKAGE_JSON: $' + '{{ steps.package.outputs.package_json }}')
+  })
+
+  it('gates renderer packages on published and packed workspace dependencies', () => {
+    const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-stable.yml'), 'utf8')
+    const gateIndex = workflow.indexOf('- name: Check renderer workspace dependencies')
+    const publishedGateIndex = workflow.indexOf('node scripts/check-workspace-deps-published.mjs', gateIndex)
+    const packedGateIndex = workflow.indexOf('node scripts/check-packed-workspace-deps.mjs', gateIndex)
+    const publishIndex = workflow.indexOf('- name: Publish package to npm')
+
+    expect(gateIndex).toBeGreaterThan(-1)
+    expect(workflow).toContain('if: $' + '{{ steps.meta.outputs.pkg != \'stream-markdown-parser\' && steps.meta.outputs.pkg != \'markstream-core\' }}')
+    expect(publishedGateIndex).toBeGreaterThan(gateIndex)
+    expect(packedGateIndex).toBeGreaterThan(publishedGateIndex)
+    expect(publishIndex).toBeGreaterThan(packedGateIndex)
+  })
+
+  it('adds fixed breaking notes only to the 0.1.0 renderer family releases', () => {
+    const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-stable.yml'), 'utf8')
+    const rendererPackages = 'markstream-react|markstream-octane|markstream-svelte|markstream-angular|markstream-vue2'
+    const pkgVariable = '$' + '{PKG}'
+    const versionVariable = '$' + '{VERSION}'
+    const familyBreakingVariable = '$' + '{FAMILY_BREAKING}'
+    const githubOutputVariable = '$' + '{GITHUB_OUTPUT}'
+    const actionsExpression = '$' + '{{'
+    const familyGate = workflow.slice(
+      workflow.indexOf('FAMILY_BREAKING=false'),
+      workflow.indexOf(`echo "pkg=${pkgVariable}"`),
+    )
+    const familyRelease = workflow.slice(
+      workflow.indexOf('- name: Create GitHub Release (0.1.0 renderer family)'),
+      workflow.indexOf('- name: Create GitHub Release (other packages)'),
+    )
+
+    expect(familyGate).toContain(`case "${pkgVariable}" in\n            ${rendererPackages})`)
+    expect(familyGate).toContain(`case "${versionVariable}" in\n                0.1.0|0.1.0-*) FAMILY_BREAKING=true ;;`)
+    expect(familyGate.match(/FAMILY_BREAKING=true/g)).toHaveLength(1)
+    expect(familyGate).not.toContain('stream-markdown-parser')
+    expect(familyGate).not.toContain('markstream-core')
+    expect(workflow).toContain(`echo "family_breaking=${familyBreakingVariable}" >> "${githubOutputVariable}"`)
+
+    expect(familyRelease).toContain(`if: ${actionsExpression} steps.meta.outputs.family_breaking == 'true' }}`)
+    expect(familyRelease).toContain('## Breaking changes in the Markstream 2.0 renderer family')
+    expect(familyRelease).toContain('https://markstream.simonhe.me/guide/migration-2-0')
+    expect(familyRelease).toContain('generate_release_notes: true')
+    expect(familyRelease).toContain('append_body: true')
+    expect(workflow).toContain(`if: ${actionsExpression} steps.meta.outputs.pkg != 'markstream-vue' && steps.meta.outputs.family_breaking != 'true' }}`)
+  })
+
   it('binds the 1.0 benchmark report to the release version and commit', () => {
     const script = readFileSync(resolve(process.cwd(), 'scripts/benchmark-1-0.mjs'), 'utf8')
 
@@ -130,7 +262,7 @@ describe('release dependency gates', () => {
     expect(webVitalsScript).toContain('scroll.viewport = copyViewport(viewport)')
   })
 
-  it('keeps terminal Monaco pre fallbacks in the Web Vitals code block gate', () => {
+  it('keeps terminal pre fallbacks in the Web Vitals code block gate', () => {
     const webVitalsScript = readFileSync(resolve(process.cwd(), 'scripts/e2e-web-vitals-performance.mjs'), 'utf8')
 
     expect(webVitalsScript).toContain('const codeBlockScenarioExpectedCodeBlockCount = 12')
@@ -140,7 +272,7 @@ describe('release dependency gates', () => {
     expect(webVitalsScript).toContain('expected $' + '{codeBlockScenarioExpectedCodeBlockCount} code blocks')
   })
 
-  it('requires offscreen Monaco blocks to stay deferred before scripted scroll', () => {
+  it('requires offscreen enhanced blocks to stay deferred before scripted scroll', () => {
     const webVitalsScript = readFileSync(resolve(process.cwd(), 'scripts/e2e-web-vitals-performance.mjs'), 'utf8')
 
     expect(webVitalsScript).toContain('vmr-test-code-block-viewport-root-margin')
@@ -200,7 +332,7 @@ describe('release dependency gates', () => {
 
   it('keeps code block scroll measurement before stateful copy and collapse interactions', () => {
     const webVitalsScript = readFileSync(resolve(process.cwd(), 'scripts/e2e-web-vitals-performance.mjs'), 'utf8')
-    const scrollCapture = webVitalsScript.indexOf('const scrollSnapshot = await captureVitalsSnapshot(page, \'codeblock-scripted-scroll-into-monaco\')')
+    const scrollCapture = webVitalsScript.indexOf('const scrollSnapshot = await captureVitalsSnapshot(page, \'codeblock-scripted-scroll-into-stream-diffs\')')
     const restoreTop = webVitalsScript.indexOf('await scrollPreviewByRatio(page, 0)', scrollCapture)
     const copyInteraction = webVitalsScript.indexOf('interactions.push(await runInteraction(page, \'codeblock-copy\'')
     const collapseInteraction = webVitalsScript.indexOf('interactions.push(await runInteraction(page, \'codeblock-collapse\'')
@@ -242,7 +374,7 @@ describe('release dependency gates', () => {
     expect(webVitalsScript).toContain('function checkpointWebVitalsResult(result)')
     expect(webVitalsScript).toContain('result.warnings = collectResultWarnings(result)')
     expect(webVitalsScript).toContain('result.millionRestore = await runMillionRestoreScenario(browser, port)')
-    expect(webVitalsScript).toContain('result.codeblockMonaco = await runCodeBlockScenario(browser, port)')
+    expect(webVitalsScript).toContain('result.codeblockStreamDiffs = await runCodeBlockScenario(browser, port)')
     const millionRestoreAssignment = webVitalsScript.indexOf('result.millionRestore = await runMillionRestoreScenario(browser, port)')
     const firstCheckpointCall = webVitalsScript.indexOf('checkpointWebVitalsResult(result)', millionRestoreAssignment)
 
@@ -289,8 +421,10 @@ describe('release dependency gates', () => {
 
     expect(script).toContain('const dryRunPublishArgs = args.dryRun ? [\'--dry-run\', \'--ignore-scripts\'] : []')
     expect(script).toContain('const pnpmDryRunPublishArgs = args.dryRun ? [...dryRunPublishArgs, \'--no-git-checks\'] : []')
-    expect(script).toContain('[\'publish\', \'--access\', \'public\', ...prereleaseTagArgs, ...pnpmDryRunPublishArgs]')
-    expect(script).toContain('[\'publish\', \'--access\', \'public\', ...prereleaseTagArgs, ...dryRunPublishArgs]')
+    expect(script).toContain('? resolveDistTag(packageJson.version)')
+    expect(script).toContain(': resolvePublishedDistTag(packageJson.name, packageJson.version)')
+    expect(script).toContain('[\'publish\', \'--access\', \'public\', ...distTagArgs, ...pnpmDryRunPublishArgs]')
+    expect(script).toContain('[\'publish\', \'--access\', \'public\', ...distTagArgs, ...dryRunPublishArgs]')
   })
 
   it('checks both runtime workspace packages for published versions', () => {
@@ -308,6 +442,7 @@ describe('release dependency gates', () => {
   it('uses workspace dependency publish gates for framework package releases', () => {
     for (const path of [
       'packages/markstream-angular/package.json',
+      'packages/markstream-octane/package.json',
       'packages/markstream-react/package.json',
       'packages/markstream-svelte/package.json',
       'packages/markstream-vue2/package.json',

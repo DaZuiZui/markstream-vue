@@ -1,5 +1,5 @@
 import type { AdmonitionNode, MarkdownToken, ParsedNode, ParseOptions, TextNode } from '../../types'
-import { parseInlineTokens } from '../inline-parsers'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 import { applyNodeSourceMap } from '../node-source-map'
 import { parseBasicBlockToken } from './block-token-parser'
@@ -32,7 +32,8 @@ function parseContainerInfo(info: string) {
 export function parseContainer(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [AdmonitionNode, number] {
   const openToken = tokens[index]
 
@@ -109,7 +110,7 @@ export function parseContainer(
       tokens[j].type === 'bullet_list_open'
       || tokens[j].type === 'ordered_list_open'
     ) {
-      const [listNode, newIndex] = parseList(tokens, j, linkifyContext.options())
+      const [listNode, newIndex] = parseList(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (options?.includeSourceMap)
         applyNodeSourceMap(listNode, tokens[j], options)
       children.push(listNode)
@@ -117,7 +118,7 @@ export function parseContainer(
       j = newIndex
     }
     else if (tokens[j].type === 'blockquote_open') {
-      const [blockquoteNode, newIndex] = parseBlockquote(tokens, j, linkifyContext.options())
+      const [blockquoteNode, newIndex] = parseBlockquote(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (options?.includeSourceMap)
         applyNodeSourceMap(blockquoteNode, tokens[j], options)
       children.push(blockquoteNode)
@@ -125,7 +126,7 @@ export function parseContainer(
       j = newIndex
     }
     else {
-      const handled = parseBasicBlockToken(tokens, j, linkifyContext.options())
+      const handled = parseBasicBlockToken(tokens, j, linkifyContext.options(), parseInlineTokens)
       if (handled) {
         children.push(handled[0])
         linkifyContext.remember(handled[0].raw)

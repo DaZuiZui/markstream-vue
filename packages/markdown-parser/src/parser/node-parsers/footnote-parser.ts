@@ -1,11 +1,12 @@
 import type { FootnoteNode, MarkdownToken, ParsedNode, ParseOptions } from '../../types'
-import { parseInlineTokens } from '../inline-parsers'
+import type { ParseInlineTokensFn } from '../inline-parsers/inline-parser-types'
 import { createLinkifyDemotionContextTracker } from '../linkifyHeuristics'
 
 export function parseFootnote(
   tokens: MarkdownToken[],
   index: number,
-  options?: ParseOptions,
+  options: ParseOptions | undefined,
+  parseInlineTokens: ParseInlineTokensFn,
 ): [FootnoteNode, number] {
   const token = tokens[index]
   const meta = (token.meta ?? {}) as unknown as { label?: number | string }

@@ -33,8 +33,6 @@ export type { LinkNodeStyleProps } from './components/LinkNode/LinkNode'
 export { ListItemNode } from './components/ListItemNode/ListItemNode'
 export type { ListItemNodeProps } from './components/ListItemNode/ListItemNode'
 export { ListNode } from './components/ListNode/ListNode'
-export { MarkdownCodeBlockNode } from './components/MarkdownCodeBlockNode/MarkdownCodeBlockNode'
-export type { MarkdownCodeBlockNodeProps } from './components/MarkdownCodeBlockNode/MarkdownCodeBlockNode'
 export { MathBlockNode } from './components/MathBlockNode/MathBlockNode'
 export { MathInlineNode } from './components/MathInlineNode/MathInlineNode'
 export { MermaidBlockNode } from './components/MermaidBlockNode/MermaidBlockNode'
@@ -81,20 +79,13 @@ export * from './i18n/useSafeI18n'
 export * from './renderers/renderNode'
 export type { NodeRendererCodeBlockProps, NodeRendererProps } from './types'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
-  CodeBlockMonacoLanguage,
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
-  CodeBlockMonacoThemeObject,
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockPreviewPayload,
+  CodeBlockTheme,
+  CodeBlockThemes,
   D2BlockNodeProps,
   ImageNodeProps,
   InfographicBlockNodeProps,
@@ -104,7 +95,6 @@ export type {
   MermaidBlockEvent,
   MermaidBlockNodeProps,
   PreCodeNodeProps,
-  ShikiCodeBlockProps,
 } from './types/component-props'
 export type { NodeComponentProps } from './types/node-component'
 export * from './utils/languageIcon'

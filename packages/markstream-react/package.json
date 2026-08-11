@@ -1,8 +1,8 @@
 {
   "name": "markstream-react",
   "type": "module",
-  "version": "0.0.56-beta.4",
-  "description": "React/Next.js streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, Shiki, Monaco, and custom React components.",
+  "version": "0.1.0-beta.2",
+  "description": "React/Next.js streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, stream-diffs powered code blocks, and custom React components.",
   "author": "Simon He",
   "license": "MIT",
   "homepage": "https://markstream.simonhe.me/frameworks/react",
@@ -39,9 +39,7 @@
     "streaming-mermaid",
     "katex",
     "streaming-katex",
-    "shiki",
-    "monaco",
-    "monaco-editor",
+    "stream-diffs",
     "streaming-code-blocks",
     "large-documents",
     "safe-html",
@@ -92,7 +90,7 @@
     "size:check": "node ../../scripts/check-package-size.mjs",
     "check:core-published": "node ../../scripts/check-core-published.mjs --package-json package.json --core-package-json ../markstream-core/package.json",
     "check:workspace-deps-published": "node ../../scripts/check-workspace-deps-published.mjs --package-json package.json",
-    "release": "pnpm run check:workspace-deps-published && bumpp --all --commit --no-tag --no-push --execute 'pnpm --workspace-root run docs:llms:generate' && pnpm publish --access public $(node ../../scripts/dist-tag.mjs) && node ../../scripts/tag-package.mjs --package-json package.json --push"
+    "release": "pnpm run check:workspace-deps-published && bumpp --all --commit --no-tag --no-push --execute 'pnpm --workspace-root run docs:llms:generate' && DIST_TAG=\"$(node ../../scripts/dist-tag.mjs)\" && pnpm publish --access public --tag \"${DIST_TAG}\" && node ../../scripts/tag-package.mjs --package-json package.json --push"
   },
   "peerDependencies": {
     "@antv/infographic": "^0.2.3",
@@ -101,9 +99,7 @@
     "mermaid": ">=11",
     "react": ">=18",
     "react-dom": ">=18",
-    "stream-diffs": ">=0.0.2",
-    "stream-markdown": ">=0.0.16",
-    "stream-monaco": ">=0.0.48"
+    "stream-diffs": ">=0.0.2"
   },
   "peerDependenciesMeta": {
     "@antv/infographic": {
@@ -119,12 +115,6 @@
       "optional": true
     },
     "stream-diffs": {
-      "optional": true
-    },
-    "stream-markdown": {
-      "optional": true
-    },
-    "stream-monaco": {
       "optional": true
     }
   },

@@ -2,17 +2,12 @@
 import { useLocalStorage } from '@vueuse/core'
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string'
 import MarkdownRender, {
-  CodeBlockNode,
   disableKatex,
   disableMermaid,
   enableKatex,
   enableMermaid,
-  getUseMonaco,
   isKatexEnabled,
   isMermaidEnabled,
-  MarkdownCodeBlockNode,
-  PreCodeNode,
-  setCustomComponents,
   setKaTeXWorker,
   setMermaidWorker,
 } from 'markstream-vue'
@@ -74,8 +69,7 @@ const streamSpeed = useLocalStorage<number>('vmr-test-stream-speed', 1) // 每�
 const streamInterval = useLocalStorage<number>('vmr-test-stream-interval', 16) // 每次更新的时间间隔（毫秒）
 const showStreamSettings = useLocalStorage<boolean>('vmr-test-show-settings', false) // 是否显示流式渲染设置
 
-// 渲染配置相关（用于测试不同代码块/渲染模式）
-const renderMode = useLocalStorage<'monaco' | 'pre' | 'markdown'>('vmr-test-render-mode', 'monaco')
+// 渲染配置相关
 const codeBlockStream = useLocalStorage<boolean>('vmr-test-code-stream', true)
 const viewportPriority = useLocalStorage<boolean>('vmr-test-viewport-priority', true)
 const batchRendering = useLocalStorage<boolean>('vmr-test-batch-rendering', true)
@@ -84,9 +78,9 @@ const debugParse = useLocalStorage<boolean>('vmr-test-debug-parse', false)
 const mathEnabled = useLocalStorage<boolean>('vmr-test-math-enabled', isKatexEnabled())
 const mermaidEnabled = useLocalStorage<boolean>('vmr-test-mermaid-enabled', isMermaidEnabled())
 
-// 预加载 Monaco 编辑器和 worker
+// 预加载 stream-diffs 运行时
 if (process.client) {
-  getUseMonaco()
+  import('markstream-vue').then(({ preloadCodeBlockRuntime }) => preloadCodeBlockRuntime()).catch(() => {})
   setKaTeXWorker(new KatexWorker())
   setMermaidWorker(new MermaidWorker())
 }
@@ -269,18 +263,6 @@ onMounted(() => {
   }
 })
 
-watch(() => renderMode.value, (mode: string) => {
-  if (mode === 'pre') {
-    setCustomComponents({ code_block: PreCodeNode })
-  }
-  else if (mode === 'markdown') {
-    setCustomComponents({ code_block: MarkdownCodeBlockNode })
-  }
-  else {
-    setCustomComponents({ code_block: CodeBlockNode })
-  }
-}, { immediate: true })
-
 watch(mathEnabled, (enabled) => {
   if (enabled)
     enableKatex()
@@ -426,27 +408,10 @@ function toggleStreamSettings() {
 
         <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
           <h3 class="text-sm font-semibold mb-3 text-gray-800 dark:text-gray-200">
-            渲染配置（用于调试不同模式）
+            渲染配置
           </h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div class="space-y-2">
-              <div>
-                <label class="block font-medium mb-1 text-gray-700 dark:text-gray-300">代码块模式</label>
-                <select
-                  v-model="renderMode"
-                  class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1"
-                >
-                  <option value="monaco">
-                    Monaco 编辑器
-                  </option>
-                  <option value="markdown">
-                    MarkdownCodeBlock (stream-markdown)
-                  </option>
-                  <option value="pre">
-                    纯 PreCodeNode
-                  </option>
-                </select>
-              </div>
               <div class="flex items-center gap-2">
                 <input id="toggle-code-stream" v-model="codeBlockStream" type="checkbox" class="rounded border-gray-300 dark:border-gray-600">
                 <label for="toggle-code-stream" class="cursor-pointer">代码块流式渲染</label>

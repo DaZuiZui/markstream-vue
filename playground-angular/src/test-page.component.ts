@@ -13,9 +13,7 @@ import {
   enableMermaid,
   isKatexEnabled,
   isMermaidEnabled,
-  MarkdownCodeBlockNode,
   MarkstreamAngularComponent,
-  PreCodeNode,
 } from 'markstream-angular'
 import { resolveMarkdownTextareaPaste } from '../../playground-shared/markdownPaste'
 import { TEST_LAB_FRAMEWORKS, TEST_LAB_SAMPLES } from '../../playground-shared/testLabFixtures'
@@ -31,29 +29,11 @@ import { ThinkingNodeComponent } from './thinking-node.component'
 
 type SampleId = TestLabSampleId
 type FrameworkId = TestLabFrameworkId
-type RenderMode = 'monaco' | 'pre' | 'markdown'
 type NoticeType = 'success' | 'error' | 'info'
 
 const CURRENT_FRAMEWORK: FrameworkId = 'angular'
 const DARK_MODE_KEY = 'vmr-test-dark'
 const MAX_URL_LEN = 2000
-const diffHideUnchangedRegions = {
-  enabled: true,
-  contextLineCount: 2,
-  minimumLineCount: 4,
-  revealLineCount: 5,
-} as const
-
-const testPageMonacoOptions = {
-  renderSideBySide: true,
-  useInlineViewWhenSpaceIsLimited: true,
-  maxComputationTime: 0,
-  ignoreTrimWhitespace: false,
-  renderIndicators: true,
-  diffAlgorithm: 'legacy',
-  diffHideUnchangedRegions,
-  hideUnchangedRegions: diffHideUnchangedRegions,
-} as const
 
 function readStoredString(key: string, fallback: string) {
   if (typeof window === 'undefined')
@@ -96,10 +76,6 @@ function readTextInput(event: Event, fallback = '') {
 
 function readCheckedInput(event: Event, fallback = false) {
   return (event.target as HTMLInputElement | null)?.checked ?? fallback
-}
-
-function normalizeRenderMode(value: string | null | undefined): RenderMode {
-  return value === 'pre' || value === 'markdown' ? value : 'monaco'
 }
 
 function normalizeSampleId(value: string | null | undefined): SampleId {
@@ -152,7 +128,6 @@ function basePageUrl() {
               <span class="mini-pill" [class.mini-pill--active]="isStreaming()">
                 {{ streamStatusLabel() }}
               </span>
-              <span class="mini-pill">{{ renderModeLabel() }}</span>
               <span class="mini-pill" [class.mini-pill--active]="!sandboxDirty()">
                 沙箱{{ sandboxStatusLabel() }}
               </span>
@@ -228,7 +203,6 @@ function basePageUrl() {
 
               <div class="stream-summary">
                 <div class="stream-summary__row">
-                  <span class="mini-pill mini-pill--active">{{ renderModeLabel() }}</span>
                   <span class="mini-pill" [class.mini-pill--active]="isStreaming()">
                     {{ streamStatusLabel() }}
                   </span>
@@ -294,10 +268,6 @@ function basePageUrl() {
               </div>
 
               <div class="meta-list">
-                <div class="meta-list__row">
-                  <span>当前视图</span>
-                  <strong>{{ renderModeLabel() }}</strong>
-                </div>
                 <div class="meta-list__row">
                   <span>分享地址</span>
                   <strong>{{ shareUrl() || '尚未生成' }}</strong>
@@ -398,17 +368,15 @@ function basePageUrl() {
                   [batchRendering]="batchRendering()"
                   [typewriter]="typewriter()"
                   [codeBlockStream]="codeBlockStream()"
-                  [renderCodeBlocksAsPre]="renderMode() === 'pre'"
-                  [codeBlockMonacoOptions]="testPageMonacoOptions"
                   [parseOptions]="parseOptions()"
                   [customHtmlTags]="thinkingTags"
-                  [customComponents]="customComponents()"
+                  [customComponents]="customComponents"
                 />
               </div>
 
               <footer *ngIf="!isSharePreviewMode()" class="workspace-card__foot">
                 <span>{{ previewContent().length }} / {{ input().length || 0 }}</span>
-                <span>{{ isStreaming() ? renderModeLabel() + ' · Streaming 中' : 'Angular renderer' }}</span>
+                <span>{{ isStreaming() ? 'Angular renderer · Streaming 中' : 'Angular renderer' }}</span>
               </footer>
             </article>
           </section>
@@ -545,7 +513,7 @@ function basePageUrl() {
             <header class="settings-dialog__head">
               <div>
                 <h2>流式详细设置</h2>
-                <p>这里调整节奏、代码块模式和渲染增强开关。</p>
+                <p>这里调整节奏、代码块与渲染增强开关。</p>
               </div>
               <button type="button" class="ghost-button" (click)="closeStreamSettingsDialog()">
                 关闭
@@ -576,15 +544,6 @@ function basePageUrl() {
                   [value]="streamInterval()"
                   (input)="updateStreamInterval($event)"
                 >
-              </label>
-
-              <label class="select-control">
-                <span>代码块模式</span>
-                <select [value]="renderMode()" (change)="updateRenderMode($event)">
-                  <option value="monaco">Monaco</option>
-                  <option value="markdown">MarkdownCodeBlock</option>
-                  <option value="pre">PreCodeNode</option>
-                </select>
               </label>
 
               <div class="toggle-grid">
@@ -636,7 +595,6 @@ export class TestPageComponent implements OnInit, OnDestroy {
   readonly sampleCards = TEST_LAB_SAMPLES
   readonly sandboxFrameworks = testSandboxFrameworks
   readonly thinkingTags = ['thinking'] as const
-  readonly testPageMonacoOptions = testPageMonacoOptions
 
   readonly selectedSampleId = signal<SampleId>(normalizeSampleId(readStoredString('vmr-test-sample', 'baseline')))
   readonly input = signal(this.resolveInitialSample().content)
@@ -648,7 +606,6 @@ export class TestPageComponent implements OnInit, OnDestroy {
   readonly isStreaming = signal(false)
   readonly streamSpeed = signal(clampInt(readStoredNumber('vmr-test-stream-speed', 4), 1, 80, 4))
   readonly streamInterval = signal(clampInt(readStoredNumber('vmr-test-stream-interval', 24), 8, 300, 24))
-  readonly renderMode = signal<RenderMode>(normalizeRenderMode(readStoredString('vmr-test-render-mode', 'monaco')))
   readonly codeBlockStream = signal(readStoredBoolean('vmr-test-code-stream', true))
   readonly viewportPriority = signal(readStoredBoolean('vmr-test-viewport-priority', true))
   readonly batchRendering = signal(readStoredBoolean('vmr-test-batch-rendering', true))
@@ -701,14 +658,6 @@ export class TestPageComponent implements OnInit, OnDestroy {
   readonly showImmersivePreviewControls = computed(() => this.isSharePreviewMode() || this.isPreviewFullscreen())
   readonly immersiveBackLabel = computed(() => this.isSharePreviewMode() ? '打开 Test Page' : '返回编辑')
   readonly previewThemeButtonLabel = computed(() => this.isDark() ? '切换浅色' : '切换暗色')
-  readonly renderModeLabel = computed(() => {
-    if (this.renderMode() === 'markdown')
-      return 'MarkdownCodeBlock'
-    if (this.renderMode() === 'pre')
-      return 'PreCodeNode'
-    return 'Monaco'
-  })
-
   readonly streamFeatureSummaryLabel = computed(() => {
     const enabledCount = [
       this.codeBlockStream(),
@@ -724,16 +673,9 @@ export class TestPageComponent implements OnInit, OnDestroy {
   })
 
   readonly parseOptions = computed(() => this.debugParse() ? { debug: true } : undefined)
-  readonly customComponents = computed<Record<string, Type<any>>>(() => {
-    const components: Record<string, Type<any>> = {
-      thinking: ThinkingNodeComponent,
-    }
-    if (this.renderMode() === 'pre')
-      components.code_block = PreCodeNode as Type<any>
-    else if (this.renderMode() === 'markdown')
-      components.code_block = MarkdownCodeBlockNode as Type<any>
-    return components
-  })
+  readonly customComponents: Record<string, Type<any>> = {
+    thinking: ThinkingNodeComponent,
+  }
 
   readonly activeSandbox = computed(() => resolveSandboxSelection(testSandboxFrameworks, {
     frameworkId: this.sandboxFrameworkId(),
@@ -918,12 +860,6 @@ export class TestPageComponent implements OnInit, OnDestroy {
       enableMermaid()
     else
       disableMermaid()
-  }
-
-  updateRenderMode(event: Event) {
-    const next = normalizeRenderMode(readTextInput(event, this.renderMode()))
-    this.renderMode.set(next)
-    persistStoredValue('vmr-test-render-mode', next)
   }
 
   toggleStreamRender() {

@@ -2,28 +2,26 @@ import type { BaseNode, HtmlPolicy, MarkdownIt, ParseOptions } from 'stream-mark
 import type { Ref } from 'vue'
 import type { SmoothMarkdownStreamOptions } from '../composables/useSmoothMarkdownStream'
 import type {
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
   CodeBlockNodeProps,
+  CodeBlockOptions,
+  CodeBlockTheme,
+  CodeBlockThemes,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
-  ShikiCodeBlockProps,
 } from './component-props'
 
 type NodeRendererCodeBlockThemes
   = CodeBlockNodeProps['themes']
-    | ShikiCodeBlockProps['themes']
 
 export type NodeRendererCodeBlockProps
-  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
-    & Partial<Omit<ShikiCodeBlockProps, 'themes'>>
+  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes' | 'codeBlockOptions'>>
     & {
       themes?: NodeRendererCodeBlockThemes
+      codeBlockOptions?: never
     }
     & Record<string, unknown>
 export type NodeRendererMode = 'docs' | 'chat' | 'minimal'
-export type NodeRendererCodeRenderer = 'pre' | 'shiki' | 'monaco'
 export type NodeRendererTypewriter = boolean | 'simple' | 'precise'
 export type NodeRendererDomMode = 'full' | 'minimal'
 
@@ -169,7 +167,7 @@ interface MarkstreamVirtualScrollSharedBaseOptions {
   restoreAnchor?: boolean | string | number
   /**
    * Extra cache invalidation key for layout-affecting host state:
-   * theme, font, density, custom component style revision, Monaco line height, etc.
+   * theme, font, density, custom component style revision, stream-diffs line height, etc.
    */
   measurementKey?: string | number
   settleMode?: 'auto' | 'manual'
@@ -322,20 +320,18 @@ export interface NodeRendererProps {
    * Default: true
    */
   codeBlockStream?: boolean
-  /** Preferred dark Monaco theme forwarded to every code block renderer. */
-  codeBlockDarkTheme?: CodeBlockMonacoTheme
-  /** Preferred light Monaco theme forwarded to every code block renderer. */
-  codeBlockLightTheme?: CodeBlockMonacoTheme
-  /** Monaco editor options forwarded to every `CodeBlockNode`. */
-  codeBlockMonacoOptions?: CodeBlockMonacoOptions
-  /** Code block renderer. `renderCodeBlocksAsPre` still takes precedence when true. */
-  codeRenderer?: NodeRendererCodeRenderer
-  /** If true, render all `code_block` nodes as plain <pre><code> blocks instead of the full CodeBlockNode */
+  /** Preferred dark stream-diffs theme forwarded to every code block renderer. */
+  codeBlockDarkTheme?: CodeBlockTheme
+  /** Preferred light stream-diffs theme forwarded to every code block renderer. */
+  codeBlockLightTheme?: CodeBlockTheme
+  /** Force the built-in fenced-code path to PreCodeNode. Custom code block overrides keep priority. */
   renderCodeBlocksAsPre?: boolean
   /** Minimum width forwarded to CodeBlockNode (px or CSS unit) */
   codeBlockMinWidth?: string | number
   /** Maximum width forwarded to CodeBlockNode (px or CSS unit) */
   codeBlockMaxWidth?: string | number
+  /** Runtime options forwarded to stream-diffs-backed CodeBlockNode instances. */
+  codeBlockOptions?: CodeBlockOptions
   /** Arbitrary props to forward to every CodeBlockNode */
   codeBlockProps?: NodeRendererCodeBlockProps
   /** Props forwarded to MermaidBlockNode for mermaid fences */
@@ -347,19 +343,9 @@ export interface NodeRendererProps {
   /** Global tooltip toggle for link/code-block renderers (default: true) */
   showTooltips?: boolean
   /**
-   * Theme names or theme objects preloaded for Monaco-backed code blocks.
-   * When `codeRenderer="shiki"`, only string theme names are forwarded to
-   * MarkdownCodeBlockNode / stream-markdown; theme objects are ignored.
+   * Theme-name tuple ordered as `[dark, light]` for stream-diffs-backed code blocks.
    */
-  themes?: CodeBlockMonacoTheme[]
-  /**
-   * Shiki language preload list forwarded to MarkdownCodeBlockNode.
-   *
-   * Vue 3 built-in Shiki mode consumes this when `codeRenderer="shiki"`.
-   * React/Vue2 consume it when a custom `code_block` or language renderer
-   * uses MarkdownCodeBlockNode.
-   */
-  langs?: readonly string[]
+  themes?: CodeBlockThemes
   /** Forces dark mode for built-in renderers such as Mermaid, D2, KaTeX, and code blocks. */
   isDark?: boolean
   /** Scope key used by `setCustomComponents()` and `data-custom-id` style overrides. */

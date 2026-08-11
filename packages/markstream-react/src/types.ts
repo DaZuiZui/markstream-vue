@@ -4,25 +4,24 @@ import type { BaseNode, HtmlPolicy, MarkdownIt, ParsedNode, ParseOptions } from 
 import type { CustomComponentMap, HtmlComponentDefinitions, HtmlComponentMap, StreamingComponentDefinitions, StreamingComponentMap } from './customComponents'
 import type { SmoothMarkdownStreamOptions } from './hooks/useSmoothMarkdownStream'
 import type {
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockPreviewPayload,
+  CodeBlockTheme,
+  CodeBlockThemes,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
-  ShikiCodeBlockProps,
 } from './types/component-props'
 
 type NodeRendererCodeBlockThemes
   = CodeBlockNodeProps['themes']
-    | ShikiCodeBlockProps['themes']
 
 export type NodeRendererCodeBlockProps
-  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
-    & Partial<Omit<ShikiCodeBlockProps, 'themes'>>
+  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes' | 'codeBlockOptions'>>
     & {
       themes?: NodeRendererCodeBlockThemes
+      codeBlockOptions?: never
     }
     & Record<string, unknown>
 
@@ -51,30 +50,19 @@ export interface NodeRendererProps<
   htmlPolicy?: HtmlPolicy
   viewportPriority?: boolean
   codeBlockStream?: boolean
-  codeBlockDarkTheme?: CodeBlockMonacoTheme
-  codeBlockLightTheme?: CodeBlockMonacoTheme
-  codeBlockMonacoOptions?: CodeBlockMonacoOptions
+  codeBlockDarkTheme?: CodeBlockTheme
+  codeBlockLightTheme?: CodeBlockTheme
   renderCodeBlocksAsPre?: boolean
   codeBlockMinWidth?: string | number
   codeBlockMaxWidth?: string | number
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   mermaidProps?: Partial<Omit<MermaidBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   d2Props?: Partial<Omit<D2BlockNodeProps, 'node' | 'loading' | 'isDark'>>
   infographicProps?: Partial<Omit<InfographicBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   showTooltips?: boolean
-  /**
-   * Theme names or theme objects preloaded for Monaco-backed code blocks.
-   * When Shiki code blocks are used, only string theme names are forwarded to
-   * MarkdownCodeBlockNode / stream-markdown; theme objects are ignored.
-   */
-  themes?: CodeBlockMonacoTheme[]
-  /**
-   * Shiki language preload list forwarded to MarkdownCodeBlockNode.
-   *
-   * The default React code block renderer is Monaco-backed. This prop is used
-   * when a custom `code_block` or language renderer uses MarkdownCodeBlockNode.
-   */
-  langs?: readonly string[]
+  /** Dark/light theme names used by stream-diffs backed code blocks. */
+  themes?: CodeBlockThemes
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -123,6 +111,7 @@ export interface RenderContext {
   htmlComponents?: HtmlComponentMap
   customHtmlTags?: readonly string[]
   htmlPolicy?: HtmlPolicy
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   mermaidProps?: Partial<Omit<MermaidBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   d2Props?: Partial<Omit<D2BlockNodeProps, 'node' | 'loading' | 'isDark'>>
@@ -131,13 +120,11 @@ export interface RenderContext {
   codeBlockStream?: boolean
   renderCodeBlocksAsPre?: boolean
   codeBlockThemes?: {
-    themes?: CodeBlockMonacoTheme[]
-    darkTheme?: CodeBlockMonacoTheme
-    lightTheme?: CodeBlockMonacoTheme
-    monacoOptions?: CodeBlockMonacoOptions
+    themes?: CodeBlockThemes
+    darkTheme?: CodeBlockTheme
+    lightTheme?: CodeBlockTheme
     minWidth?: string | number
     maxWidth?: string | number
-    langs?: readonly string[]
   }
   events: {
     onCopy?: (code: string) => void

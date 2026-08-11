@@ -1,11 +1,13 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import CodeBlockNode from '../packages/markstream-vue2/src/components/CodeBlockNode/CodeBlockNode.vue'
 import { CodeBlockNodeLoading } from '../packages/markstream-vue2/src/components/NodeRenderer/asyncComponent'
 
-interface StreamMonacoHelpers {
-  useMonaco: ReturnType<typeof vi.fn>
+interface StreamDiffsHelpers {
+  createCodeBlockRuntime: ReturnType<typeof vi.fn>
   createEditor: ReturnType<typeof vi.fn>
   createDiffEditor: ReturnType<typeof vi.fn>
   updateCode: ReturnType<typeof vi.fn>
@@ -20,12 +22,12 @@ interface StreamMonacoHelpers {
   whenVisualReady?: ReturnType<typeof vi.fn>
 }
 
-function getStreamMonacoHelpers(): StreamMonacoHelpers {
-  return (globalThis as any).__streamMonacoHelpers
+function getStreamDiffsHelpers(): StreamDiffsHelpers {
+  return (globalThis as any).__streamDiffsHelpers
 }
 
-function resetStreamMonacoHelpers() {
-  const helpers = getStreamMonacoHelpers()
+function resetStreamDiffsHelpers() {
+  const helpers = getStreamDiffsHelpers()
   const makeEditorView = () => ({
     getModel: () => ({ getLineCount: () => 1 }),
     getOption: () => 14,
@@ -33,7 +35,7 @@ function resetStreamMonacoHelpers() {
     layout: vi.fn(),
   })
 
-  helpers.useMonaco.mockReset().mockImplementation(() => helpers)
+  helpers.createCodeBlockRuntime.mockReset().mockImplementation(() => helpers)
   helpers.createEditor.mockReset().mockImplementation(async () => {})
   helpers.createDiffEditor.mockReset().mockImplementation(async () => {})
   helpers.updateCode.mockReset()
@@ -60,7 +62,7 @@ async function flushPendingMicrotasks() {
   await new Promise<void>(resolve => setTimeout(resolve, 0))
 }
 
-async function waitForCreateEditorCalls(expected: number, helpers: StreamMonacoHelpers, timeout = 1000) {
+async function waitForCreateEditorCalls(expected: number, helpers: StreamDiffsHelpers, timeout = 1000) {
   const start = Date.now()
   while (helpers.createEditor.mock.calls.length < expected) {
     if (Date.now() - start > timeout)
@@ -69,7 +71,7 @@ async function waitForCreateEditorCalls(expected: number, helpers: StreamMonacoH
   }
 }
 
-async function waitForCreateDiffEditorCalls(expected: number, helpers: StreamMonacoHelpers, timeout = 1000) {
+async function waitForCreateDiffEditorCalls(expected: number, helpers: StreamDiffsHelpers, timeout = 1000) {
   const start = Date.now()
   while (helpers.createDiffEditor.mock.calls.length < expected) {
     if (Date.now() - start > timeout)
@@ -127,11 +129,11 @@ describe('markstream-vue2 codeBlockNode async loading surface', () => {
 
 describe('markstream-vue2 codeBlockNode theme updates', () => {
   beforeEach(() => {
-    resetStreamMonacoHelpers()
+    resetStreamDiffsHelpers()
   })
 
   it('keeps the pre fallback visible until the runtime reports highlighted output ready', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     let resolveVisualReady: ((ready: boolean) => void) | undefined
     const visualReady = new Promise<boolean>((resolve) => {
       resolveVisualReady = resolve
@@ -171,7 +173,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
   })
 
   it('keeps the pre fallback when the runtime cannot confirm highlighted output', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     helpers.whenVisualReady = vi.fn(async () => false)
 
     const wrapper = mount(CodeBlockNode as any, {
@@ -198,7 +200,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
   })
 
   it('updates single-editor themes without recreating the editor when isDark toggles', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
 
     const wrapper = mount(CodeBlockNode as any, {
       props: {
@@ -241,8 +243,8 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
     wrapper.unmount()
   })
 
-  it('passes active themes and syntax languages to stream-monaco legacy', async () => {
-    const helpers = getStreamMonacoHelpers()
+  it('passes active themes and syntax languages to stream-diffs', async () => {
+    const helpers = getStreamDiffsHelpers()
 
     const wrapper = mount(CodeBlockNode as any, {
       props: {
@@ -255,29 +257,70 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
         loading: false,
         showHeader: false,
         isDark: false,
-        darkTheme: 'vitesse-dark',
-        lightTheme: 'vitesse-light',
+        themes: ['tuple-dark', 'tuple-light'],
       },
     })
 
     await waitForCreateEditorCalls(1, helpers)
 
-    const options = helpers.useMonaco.mock.calls[0]?.[0]
+    const options = helpers.createCodeBlockRuntime.mock.calls[0]?.[0]
     expect(options.stream).toBe(false)
     expect(options.disableFileHeader).toBe(true)
     expect(options.fontFamily).toBe('"SF Mono", Monaco, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace')
     expect(options.fontSize).toBe(12)
     expect(options.lineHeight).toBe(18)
-    expect(options.padding).toEqual({ top: 8, bottom: 8 })
-    expect(options.tabSize).toBe(4)
-    expect(options.themes).toEqual(['vitesse-dark', 'vitesse-light'])
-    expect(options.languages).toEqual(expect.arrayContaining(['tsx', 'typescript', 'plaintext']))
+    expect(options.padding).toBeUndefined()
+    expect(options.tabSize).toBeUndefined()
+    expect(options.themes).toEqual(['tuple-dark', 'tuple-light'])
+    expect(options.theme).toBe('tuple-light')
+    expect(options.languages).toBeUndefined()
 
     wrapper.unmount()
   })
 
+  it('lets the direct showLineNumbers prop override neutral options on enhanced surfaces', async () => {
+    const helpers = getStreamDiffsHelpers()
+    const mountBlock = (showLineNumbers: boolean, disableLineNumbers: boolean) => mount(CodeBlockNode as any, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'export const value = 1',
+          raw: '```ts\nexport const value = 1\n```',
+        },
+        loading: false,
+        showHeader: false,
+        showLineNumbers,
+        codeBlockOptions: { disableLineNumbers },
+      },
+    })
+
+    const enabled = mountBlock(true, true)
+    await waitForCreateEditorCalls(1, helpers)
+    expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
+    enabled.unmount()
+
+    resetStreamDiffsHelpers()
+    const disabled = mountBlock(false, false)
+    await waitForCreateEditorCalls(1, helpers)
+    expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.disableLineNumbers).toBe(true)
+    disabled.unmount()
+  })
+
+  it('keeps deferred runtime option recreation wired to static loading settlement', () => {
+    const source = readFileSync(resolve(process.cwd(), 'packages/markstream-vue2/src/components/CodeBlockNode/CodeBlockNode.vue'), 'utf8')
+
+    expect(source).toContain('deferredRuntimeOptionsRecreation = true')
+    expect(source).toContain('() => [props.loading, viewportReady.value] as const')
+    expect(source).toContain('if (loading !== false || !visible || !deferredRuntimeOptionsRecreation)')
+    expect(source).toContain('initializeRuntimeHelpers(createRuntimeHelpersFactory)')
+    expect(source).toContain('let editorCreationGeneration = 0')
+    expect(source).toContain('if (createEditorPromise === tracked)')
+    expect(source).toContain('generation !== editorCreationGeneration')
+  })
+
   it('updates diff themes without recreating the diff editor when isDark toggles', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
 
     const wrapper = mount(CodeBlockNode as any, {
       props: {
@@ -325,61 +368,8 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
     wrapper.unmount()
   })
 
-  it('normalizes diff unchanged reveal icons to chevrons', async () => {
-    const helpers = getStreamMonacoHelpers()
-
-    helpers.createDiffEditor.mockImplementation(async (el: HTMLElement) => {
-      el.innerHTML = `
-        <div class="stream-monaco-diff-root">
-          <div class="stream-monaco-diff-unchanged-bridge">
-            <div class="stream-monaco-unchanged-rail">
-              <button class="stream-monaco-unchanged-reveal" data-direction="down">
-                <span class="codicon codicon-unfold"></span>
-              </button>
-            </div>
-          </div>
-        </div>
-      `
-    })
-
-    const wrapper = mount(CodeBlockNode as any, {
-      props: {
-        node: {
-          type: 'code_block',
-          language: 'diff',
-          code: '@@ -1 +1 @@',
-          diff: true,
-          originalCode: 'const a = 1\nconst b = 2\n',
-          updatedCode: 'const a = 1\nconst c = 3\n',
-          raw: '```diff\n-const b = 2\n+const c = 3\n```',
-        },
-        loading: false,
-        showHeader: false,
-        isDark: false,
-        darkTheme: 'vitesse-dark',
-        lightTheme: 'vitesse-light',
-      },
-    })
-
-    await waitForCreateDiffEditorCalls(1, helpers)
-    await waitForCondition(() => {
-      const revealIcon = wrapper.element.querySelector(
-        '.stream-monaco-diff-unchanged-bridge .stream-monaco-unchanged-reveal .codicon',
-      ) as HTMLElement | null
-      return revealIcon?.className === 'codicon codicon-chevron-down'
-    })
-
-    const revealIcon = wrapper.element.querySelector(
-      '.stream-monaco-diff-unchanged-bridge .stream-monaco-unchanged-reveal .codicon',
-    ) as HTMLElement | null
-
-    expect(revealIcon?.className).toBe('codicon codicon-chevron-down')
-
-    wrapper.unmount()
-  })
-
-  it('renders a two-pane diff fallback with Monaco-aligned metrics before the diff editor is ready', async () => {
-    const helpers = getStreamMonacoHelpers()
+  it('renders a two-pane diff fallback with stream-diffs-aligned metrics before the diff editor is ready', async () => {
+    const helpers = getStreamDiffsHelpers()
     let resolveCreateDiffEditor: (() => void) | undefined
 
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>((resolve) => {
@@ -400,14 +390,6 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
         loading: false,
         showHeader: false,
         isDark: false,
-        monacoOptions: {
-          fontFamily: 'Menlo',
-          fontSize: 13,
-          lineHeight: 20,
-          padding: { top: 2, bottom: 6 },
-          renderSideBySide: true,
-          tabSize: 2,
-        },
       },
     })
 
@@ -416,17 +398,16 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
     const fallback = wrapper.element.querySelector('pre.code-pre-fallback.markstream-pre--diff-preview') as HTMLElement | null
     expect(fallback).not.toBeNull()
     expect(fallback?.dataset.language).toBe('json')
-    expect(fallback?.style.fontFamily).toBe('Menlo')
-    expect(fallback?.style.fontSize).toBe('13px')
-    expect(fallback?.style.lineHeight).toBe('20px')
-    expect(fallback?.style.paddingTop).toBe('2px')
-    expect(fallback?.style.paddingBottom).toBe('6px')
-    expect(fallback?.style.tabSize).toBe('2')
+    expect(fallback?.style.fontSize).toBe('12px')
+    expect(fallback?.style.lineHeight).toBe('18px')
+    expect(fallback?.style.paddingTop).toBe('0px')
+    expect(fallback?.style.paddingBottom).toBe('0px')
+    expect(fallback?.style.tabSize).toBe('4')
 
     const panes = wrapper.element.querySelectorAll('.markstream-pre__diff-pane')
     expect(panes).toHaveLength(2)
-    const options = helpers.useMonaco.mock.calls[0]?.[0]
-    expect(options.languages).toEqual(expect.arrayContaining(['json', 'plaintext']))
+    const options = helpers.createCodeBlockRuntime.mock.calls[0]?.[0]
+    expect(options.languages).toBeUndefined()
     expect(wrapper.element.querySelector('.markstream-pre__diff-pane--original')?.textContent).toContain('"version": "0.0.49"')
     expect(wrapper.element.querySelector('.markstream-pre__diff-pane--modified')?.textContent).toContain('"version": "0.0.54-beta.1"')
     expect(wrapper.element.querySelector('.markstream-pre__diff-pane--original .markstream-pre__diff-line--removed')?.textContent).toContain('"version": "0.0.49"')
@@ -434,60 +415,6 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
 
     resolveCreateDiffEditor?.()
     await flushPendingMicrotasks()
-
-    wrapper.unmount()
-  })
-})
-
-describe('markstream-vue2 codeBlockNode plain text theme fallback', () => {
-  beforeEach(() => {
-    resetStreamMonacoHelpers()
-  })
-
-  it('keeps dark plain text blocks on the fallback dark surface when Monaco reports light colors', async () => {
-    const helpers = getStreamMonacoHelpers()
-
-    helpers.createEditor.mockImplementation(async (el: HTMLElement) => {
-      const editor = document.createElement('div')
-      editor.className = 'monaco-editor'
-      editor.style.backgroundColor = 'rgb(255, 255, 255)'
-      editor.style.color = 'rgb(17, 24, 39)'
-
-      const background = document.createElement('div')
-      background.className = 'monaco-editor-background'
-      background.style.backgroundColor = 'rgb(255, 255, 255)'
-
-      const lines = document.createElement('div')
-      lines.className = 'view-lines'
-      lines.style.color = 'rgb(17, 24, 39)'
-
-      editor.append(background, lines)
-      el.appendChild(editor)
-    })
-
-    const wrapper = mount(CodeBlockNode as any, {
-      props: {
-        node: {
-          type: 'code_block',
-          language: 'plaintext',
-          code: 'packages/',
-          raw: '```text\npackages/\n```',
-        },
-        loading: false,
-        isDark: true,
-        darkTheme: 'vitesse-dark',
-        lightTheme: 'vitesse-light',
-      },
-    })
-
-    await waitForCreateEditorCalls(1, helpers)
-    await flushPendingMicrotasks()
-
-    const container = wrapper.get('.code-block-container').element as HTMLElement
-    expect(container.classList.contains('is-dark')).toBe(true)
-    expect(container.classList.contains('is-plain-text')).toBe(true)
-    expect(container.style.getPropertyValue('--vscode-editor-background')).toBe('')
-    expect(container.style.getPropertyValue('--vscode-editor-foreground')).toBe('')
 
     wrapper.unmount()
   })

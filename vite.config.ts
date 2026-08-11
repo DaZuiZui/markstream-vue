@@ -97,6 +97,10 @@ export default defineConfig(({ mode }) => {
       },
       rollupOptions: {
         external: (id: string) => {
+          if (id === 'stream-diffs' || id.startsWith('stream-diffs/'))
+            return true
+          if (/node_modules\/stream-diffs(?:\/|$)/.test(id))
+            return true
           if (id === '@terrastruct/d2' || id.startsWith('@terrastruct/d2/'))
             return true
           // also match resolved node_modules paths that include /node_modules/@terrastruct/d2
@@ -127,12 +131,10 @@ export default defineConfig(({ mode }) => {
             '@floating-ui/dom',
             'katex/contrib/mhchem',
             'katex/dist/contrib/mhchem',
-            'stream-monaco',
             'stream-diffs',
             'stream-markdown',
             'stream-markdown-parser',
             'markstream-core',
-            'monaco-editor',
             'shiki',
           ].includes(id)
         },

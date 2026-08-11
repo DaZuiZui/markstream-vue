@@ -5,7 +5,7 @@ import CodeBlockNode from '../src/components/CodeBlockNode/CodeBlockNode.vue'
 import { resetCodeBlockRuntimeReadyForTest } from '../src/components/CodeBlockNode/runtime'
 
 function helpers() {
-  return (globalThis as any).__streamMonacoHelpers
+  return (globalThis as any).__streamDiffsHelpers
 }
 
 let reportedContentHeight = 0
@@ -70,7 +70,7 @@ function resetHelpers(contentHeight: number) {
     },
   }
 
-  runtime.useMonaco.mockReset().mockImplementation(() => runtime)
+  runtime.createCodeBlockRuntime.mockReset().mockImplementation(() => runtime)
   runtime.createEditor.mockReset().mockImplementation(async (container: HTMLElement) => {
     container.replaceChildren(document.createElement('diffs-container'))
   })
@@ -98,7 +98,6 @@ function mountCodeBlock(lineCount: number) {
       showFontSizeButtons: false,
       showPreviewButton: false,
       showTooltips: false,
-      monacoOptions: { MAX_HEIGHT: 500 },
     },
   })
 }
@@ -131,9 +130,6 @@ describe('code block scroll restoration after collapse', () => {
 
     reportedContentHeight = 500
     triggerEditorContentSizeChange()
-    await wrapper.setProps({ monacoOptions: { MAX_HEIGHT: 500, fontSize: 13 } })
-    await wrapper.setProps({ monacoOptions: { MAX_HEIGHT: 500, fontSize: 14 } })
-    await wrapper.setProps({ monacoOptions: { MAX_HEIGHT: 500, fontSize: 15 } })
     await flush()
     await flush()
 

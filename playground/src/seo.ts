@@ -23,13 +23,13 @@ const routeSeoMap: Record<string, RouteSeoConfig> = {
   },
   '/markdown': {
     title: 'Markdown Block Playground | markstream-vue',
-    description: 'Focus on MarkdownCodeBlockNode behavior with streaming content, KaTeX, Mermaid, custom tags, and code block theming.',
+    description: 'Focus on CodeBlockNode behavior with streaming content, KaTeX, Mermaid, custom tags, and code block theming.',
     robots: 'noindex,nofollow',
     canonicalUrl: `${DOCS_SITE_URL}/guide/code-blocks`,
   },
   '/test': {
     title: 'Markdown Preview & Test Lab | markstream-vue Playground',
-    description: 'Paste markdown for live preview, then compare framework and version behavior with streaming, Monaco, Mermaid, and KaTeX in one place.',
+    description: 'Paste markdown for live preview, then compare framework and version behavior with streaming, stream-diffs, Mermaid, and KaTeX in one place.',
     robots: 'noindex,nofollow',
     canonicalUrl: `${DOCS_SITE_URL}/guide/playground`,
   },

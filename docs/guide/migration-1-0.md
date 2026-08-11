@@ -17,7 +17,7 @@ keywords:
 - `MarkdownRender`, `VueRendererMarkdown`, and `useSmoothMarkdownStream`.
 - Raw `content` rendering and pre-parsed `nodes` rendering.
 - Safe HTML rendering with `htmlPolicy="safe"` by default.
-- Optional Mermaid, KaTeX, D2, Infographic, and Monaco integrations.
+- Optional Mermaid, KaTeX, D2, Infographic, and Monaco integrations (Monaco integration removed in 2.0).
 - CSS exports, Tailwind safelist export, worker client exports, SSR imports, and app-scoped custom components.
 
 ## Before upgrading

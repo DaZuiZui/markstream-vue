@@ -2,7 +2,7 @@
 import type { BaseNode, HtmlPolicy, MarkdownIt, ParsedNode, ParseOptions } from 'stream-markdown-parser'
 import type { SmoothMarkdownStreamOptions } from '../../composables/useSmoothMarkdownStream'
 import type { VisibilityHandle } from '../../composables/viewportPriority'
-import type { CodeBlockMonacoOptions, CodeBlockMonacoTheme, CodeBlockNodeProps, CodeBlockPreviewPayload, D2BlockNodeProps, InfographicBlockNodeProps, MermaidBlockNodeProps, ShikiCodeBlockProps } from '../../types/component-props'
+import type { CodeBlockNodeProps, CodeBlockOptions, CodeBlockPreviewPayload, CodeBlockTheme, CodeBlockThemes, D2BlockNodeProps, InfographicBlockNodeProps, MermaidBlockNodeProps } from '../../types/component-props'
 import { normalizeShikiLanguage } from 'markstream-core'
 import { getMarkdown, mergeCustomHtmlTags, parseMarkdownToStructure, resolveCustomHtmlTags } from 'stream-markdown-parser'
 import { h as createVNode } from 'vue'
@@ -52,20 +52,16 @@ import FallbackComponent from './FallbackComponent.vue'
 import LegacyNodesRenderer from './LegacyNodesRenderer.vue'
 
 // 组件接收的 props
-// 增加用于统一设置所有 code_block 主题和 Monaco 选项的外部 API
+// 增加用于统一设置所有 code_block 主题和增强渲染选项的外部 API
 interface IdleDeadlineLike {
   timeRemaining?: () => number
 }
 
-type NodeRendererCodeBlockThemes
-  = CodeBlockNodeProps['themes']
-    | ShikiCodeBlockProps['themes']
-
 type NodeRendererCodeBlockProps
-  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
-    & Partial<Omit<ShikiCodeBlockProps, 'themes'>>
+  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes' | 'codeBlockOptions'>>
     & {
-      themes?: NodeRendererCodeBlockThemes
+      themes?: CodeBlockThemes
+      codeBlockOptions?: never
     }
     & Record<string, unknown>
 
@@ -97,17 +93,17 @@ export interface NodeRendererProps {
    * Default: true
    */
   codeBlockStream?: boolean
-  // 全局传递到每个 CodeBlockNode 的主题（monaco theme 对象）
-  codeBlockDarkTheme?: CodeBlockMonacoTheme
-  codeBlockLightTheme?: CodeBlockMonacoTheme
-  // 传递给 CodeBlockNode 的 monacoOptions（比如 fontSize, MAX_HEIGHT 等）
-  codeBlockMonacoOptions?: CodeBlockMonacoOptions
+  // 全局传递到每个 CodeBlockNode 的主题
+  codeBlockDarkTheme?: CodeBlockTheme
+  codeBlockLightTheme?: CodeBlockTheme
   /** If true, render all `code_block` nodes as plain <pre><code> blocks instead of the full CodeBlockNode */
   renderCodeBlocksAsPre?: boolean
   /** Minimum width forwarded to CodeBlockNode (px or CSS unit) */
   codeBlockMinWidth?: string | number
   /** Maximum width forwarded to CodeBlockNode (px or CSS unit) */
   codeBlockMaxWidth?: string | number
+  /** Options forwarded to the built-in stream-diffs CodeBlockNode. */
+  codeBlockOptions?: CodeBlockOptions
   /** Arbitrary props to forward to every CodeBlockNode */
   codeBlockProps?: NodeRendererCodeBlockProps
   /** Props forwarded to MermaidBlockNode for mermaid fences */
@@ -118,19 +114,8 @@ export interface NodeRendererProps {
   infographicProps?: Partial<Omit<InfographicBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   /** Global tooltip toggle for link/code-block renderers (default: true) */
   showTooltips?: boolean
-  /**
-   * Theme names or theme objects preloaded for Monaco-backed code blocks.
-   * When Shiki code blocks are used, only string theme names are forwarded to
-   * MarkdownCodeBlockNode / stream-markdown; theme objects are ignored.
-   */
-  themes?: CodeBlockMonacoTheme[]
-  /**
-   * Shiki language preload list forwarded to MarkdownCodeBlockNode.
-   *
-   * Vue2's default code block renderer is Monaco-backed. This prop is used
-   * when a custom `code_block` or language renderer uses MarkdownCodeBlockNode.
-   */
-  langs?: readonly string[]
+  /** Theme-name tuple ordered as `[dark, light]` for enhanced code blocks. */
+  themes?: CodeBlockThemes
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -486,7 +471,7 @@ const virtualizationEnabled = computed(() => {
     return false
   return parsedNodes.value.length > maxLiveNodesResolved.value
 })
-// Viewport priority is used to defer heavy work (Monaco/Mermaid/KaTeX) until
+// Viewport priority is used to defer heavy work (stream-diffs/Mermaid/KaTeX) until
 // nodes approach the viewport. Node-level deferral is controlled separately
 // via `deferNodes`.
 const viewportPriorityEnabled = computed(() => {
@@ -1867,25 +1852,23 @@ const nodeComponents = {
 }
 const indexPrefix = computed(() => (props.indexKey != null ? String(props.indexKey) : 'markdown-renderer'))
 const codeBlockExtraProps = computed(() => getCodeBlockExtraProps(props.codeBlockProps))
-const builtinCodeBlockExtraProps = computed(() =>
-  getCodeBlockExtraProps(props.codeBlockProps, { omit: ['langs'] }),
-)
+const builtinCodeBlockExtraProps = computed(() => getCodeBlockExtraProps(props.codeBlockProps))
 const codeBlockBindings = computed(() => ({
   // streaming behavior control for CodeBlockNode
   stream: props.codeBlockStream,
   darkTheme: props.codeBlockDarkTheme,
   lightTheme: props.codeBlockLightTheme,
-  monacoOptions: props.codeBlockMonacoOptions,
   themes: props.themes,
   minWidth: props.codeBlockMinWidth,
   maxWidth: props.codeBlockMaxWidth,
   ...(typeof props.showTooltips === 'boolean' ? { showTooltips: props.showTooltips } : {}),
   ...builtinCodeBlockExtraProps.value,
+  codeBlockOptions: props.codeBlockOptions,
 }))
 const customCodeBlockBindings = computed(() => ({
   ...codeBlockBindings.value,
-  langs: props.langs,
   ...codeBlockExtraProps.value,
+  codeBlockOptions: props.codeBlockOptions,
 }))
 
 function countCodeLines(value: unknown) {
@@ -1894,24 +1877,20 @@ function countCodeLines(value: unknown) {
 }
 
 function estimateBuiltinCodeBlockHeight(node: ParsedNode) {
-  const raw = (props.codeBlockMonacoOptions || {}) as Record<string, any>
-  const fontSize = parsePositiveNumber(raw.fontSize) ?? 12
-  const lineHeight = parsePositiveNumber(raw.lineHeight) ?? Math.round(fontSize * 1.5)
+  const lineHeight = props.codeBlockOptions?.lineHeight ?? 18
   const isDiff = Boolean((node as any).diff)
-  const diffInline = isDiff && raw.renderSideBySide === false
+  const configuredDiffInline = pickBoolean((builtinCodeBlockExtraProps.value as Record<string, unknown>).diffInline)
+  const diffInline = isDiff && (configuredDiffInline ?? props.codeBlockOptions?.diffStyle === 'unified')
   const lineCount = isDiff
     ? (diffInline
         ? countCodeLines((node as any).originalCode) + countCodeLines((node as any).updatedCode)
         : Math.max(countCodeLines((node as any).originalCode), countCodeLines((node as any).updatedCode)))
     : countCodeLines((node as any).code)
   const defaultPadding = isDiff ? 0 : 8
-  const paddingTop = typeof raw.padding?.top === 'number' && Number.isFinite(raw.padding.top)
-    ? Math.max(0, raw.padding.top)
-    : defaultPadding
-  const paddingBottom = typeof raw.padding?.bottom === 'number' && Number.isFinite(raw.padding.bottom)
-    ? Math.max(0, raw.padding.bottom)
-    : defaultPadding
-  const maxHeight = parsePositiveNumber(raw.MAX_HEIGHT) ?? 500
+  const padding = props.codeBlockOptions?.padding ?? defaultPadding
+  const paddingTop = padding
+  const paddingBottom = padding
+  const maxHeight = props.codeBlockOptions?.maxHeight ?? 500
   const contentHeight = Math.max(1, Math.min(
     maxHeight,
     Math.round(lineCount * lineHeight + paddingTop + paddingBottom),
@@ -1933,8 +1912,14 @@ const preCodeBlockBindings = computed(() => {
   const bindings: Record<string, unknown> = {}
 
   const showLineNumbers = pickBoolean(source.showLineNumbers)
-  if (showLineNumbers !== undefined)
-    bindings.showLineNumbers = showLineNumbers
+  const disableLineNumbers = props.codeBlockOptions?.disableLineNumbers
+  bindings.showLineNumbers = showLineNumbers
+    ?? (typeof disableLineNumbers === 'boolean' ? !disableLineNumbers : false)
+  if (props.codeBlockOptions?.overflow) {
+    bindings.style = {
+      whiteSpace: props.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+    }
+  }
 
   const diffInline = pickBoolean(source.diffInline)
   if (diffInline !== undefined)
@@ -2172,7 +2157,7 @@ function getRenderKey(node: ParsedNode, index: number) {
     return base
 
   const type = String((node as any).type || 'unknown')
-  // Keep streaming code blocks on a stable key so Monaco-backed components
+  // Keep streaming code blocks on a stable key so stream-diffs-backed components
   // receive prop updates instead of being torn down and recreated per chunk.
   if (type === 'code_block')
     return base
@@ -2559,13 +2544,12 @@ watch(
       :code-block-stream="props.codeBlockStream"
       :code-block-dark-theme="props.codeBlockDarkTheme"
       :code-block-light-theme="props.codeBlockLightTheme"
-      :code-block-monaco-options="props.codeBlockMonacoOptions"
       :render-code-blocks-as-pre="props.renderCodeBlocksAsPre"
       :code-block-min-width="props.codeBlockMinWidth"
       :code-block-max-width="props.codeBlockMaxWidth"
+      :code-block-options="props.codeBlockOptions"
       :code-block-props="props.codeBlockProps"
       :themes="props.themes"
-      :langs="props.langs"
       :is-dark="props.isDark"
       :custom-html-tags="mergedParseOptions.customHtmlTags"
       :html-policy="resolvedHtmlPolicy"
@@ -2592,7 +2576,7 @@ watch(
           :ref="`node-content-${item.index}`"
           class="node-content"
         >
-          <!-- Skip wrapping code_block nodes in transitions to avoid touching Monaco editor internals -->
+          <!-- Skip wrapping code_block nodes in transitions to avoid touching stream-diffs internals -->
           <transition
             v-if="!item.isCodeBlock && props.fade !== false"
             name="fade"

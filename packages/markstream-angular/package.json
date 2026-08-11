@@ -1,8 +1,8 @@
 {
   "name": "markstream-angular",
   "type": "module",
-  "version": "0.0.10",
-  "description": "Angular 20+ standalone streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, Monaco-powered code blocks, and safe Angular component rendering.",
+  "version": "0.1.0-beta.2",
+  "description": "Angular 20+ standalone streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, stream-diffs powered code blocks, and safe Angular component rendering.",
   "author": "Simon He",
   "license": "MIT",
   "homepage": "https://markstream.simonhe.me/frameworks/angular",
@@ -40,7 +40,7 @@
     "streaming-mermaid",
     "katex",
     "streaming-katex",
-    "monaco-editor",
+    "stream-diffs",
     "streaming-code-blocks",
     "large-documents",
     "custom-components",
@@ -74,7 +74,7 @@
     "prepublishOnly": "pnpm run build && pnpm run check:workspace-deps-published",
     "check:core-published": "node ../../scripts/check-core-published.mjs --package-json package.json --core-package-json ../markstream-core/package.json",
     "check:workspace-deps-published": "node ../../scripts/check-workspace-deps-published.mjs --package-json package.json",
-    "release": "pnpm run check:workspace-deps-published && bumpp --all --commit --no-tag --no-push --execute 'pnpm --workspace-root run docs:llms:generate' && pnpm publish --access public $(node ../../scripts/dist-tag.mjs) && node ../../scripts/tag-package.mjs --package-json package.json --push"
+    "release": "pnpm run check:workspace-deps-published && bumpp --all --commit --no-tag --no-push --execute 'pnpm --workspace-root run docs:llms:generate' && DIST_TAG=\"$(node ../../scripts/dist-tag.mjs)\" && pnpm publish --access public --tag \"${DIST_TAG}\" && node ../../scripts/tag-package.mjs --package-json package.json --push"
   },
   "peerDependencies": {
     "@angular/common": ">=20",
@@ -83,8 +83,7 @@
     "@terrastruct/d2": ">=0.1.33",
     "katex": ">=0.16.22",
     "mermaid": ">=11",
-    "stream-diffs": ">=0.0.2",
-    "stream-monaco": ">=0.0.48"
+    "stream-diffs": ">=0.0.2"
   },
   "peerDependenciesMeta": {
     "@antv/infographic": {
@@ -100,9 +99,6 @@
       "optional": true
     },
     "stream-diffs": {
-      "optional": true
-    },
-    "stream-monaco": {
       "optional": true
     }
   },

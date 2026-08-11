@@ -1,16 +1,13 @@
-import type { NodeRendererCodeRenderer, NodeRendererProps } from '../../types/node-renderer-props'
-import { getHighlightRegistrationKey } from 'markstream-core'
+import type { NodeRendererProps } from '../../types/node-renderer-props'
 
 export interface VirtualRendererLayoutKeyOptions {
-  renderer: NodeRendererCodeRenderer
+  renderCodeBlocksAsPre: boolean
   isDark?: boolean
   codeBlockStream?: boolean
   codeBlockMinWidth?: NodeRendererProps['codeBlockMinWidth']
   codeBlockMaxWidth?: NodeRendererProps['codeBlockMaxWidth']
-  codeBlockMonacoOptions?: NodeRendererProps['codeBlockMonacoOptions']
+  codeBlockOptions?: NodeRendererProps['codeBlockOptions']
   codeBlockProps?: NodeRendererProps['codeBlockProps']
-  themes?: NodeRendererProps['themes']
-  langs?: NodeRendererProps['langs']
 }
 
 export function stringifyVirtualToken(value: unknown) {
@@ -34,41 +31,38 @@ export function stringifyVirtualToken(value: unknown) {
 }
 
 export function buildVirtualRendererLayoutKey(options: VirtualRendererLayoutKeyOptions) {
-  const renderer = options.renderer
-  const monaco = renderer === 'monaco' ? options.codeBlockMonacoOptions : undefined
   const codeProps = options.codeBlockProps as Record<string, unknown> | undefined
-  const includeShikiCodeOptions = renderer === 'shiki'
+  const codeOptions = options.codeBlockOptions
+  const parseDiffOptions = codeOptions?.parseDiffOptions
 
   return [
     options.isDark ? 'dark' : 'light',
-    renderer === 'monaco'
-      ? 'code-rich'
-      : renderer === 'pre'
-        ? 'code-pre'
-        : 'code-shiki',
+    options.renderCodeBlocksAsPre ? 'code-pre' : 'code-rich',
     options.codeBlockStream === false ? 'code-static' : 'code-stream',
     stringifyVirtualToken(options.codeBlockMinWidth),
     stringifyVirtualToken(options.codeBlockMaxWidth),
-    ...(includeShikiCodeOptions
-      ? [getHighlightRegistrationKey(
-          (codeProps?.themes ?? options.themes) as readonly unknown[] | undefined,
-          (codeProps?.langs ?? options.langs) as readonly unknown[] | undefined,
-        )]
-      : []),
-    stringifyVirtualToken(monaco?.fontSize),
-    stringifyVirtualToken(monaco?.lineHeight),
-    stringifyVirtualToken(monaco?.fontFamily),
-    stringifyVirtualToken(monaco?.tabSize),
-    stringifyVirtualToken(monaco?.MAX_HEIGHT),
-    stringifyVirtualToken(monaco?.wordWrap),
-    stringifyVirtualToken(monaco?.wrappingIndent),
-    stringifyVirtualToken(monaco?.padding),
+    stringifyVirtualToken(codeOptions?.fontSize),
+    stringifyVirtualToken(codeOptions?.lineHeight),
+    stringifyVirtualToken(codeOptions?.fontFamily),
+    stringifyVirtualToken(codeOptions?.maxHeight),
+    stringifyVirtualToken(codeOptions?.tabSize),
+    stringifyVirtualToken(codeOptions?.padding),
+    stringifyVirtualToken(codeOptions?.overflow),
+    stringifyVirtualToken(codeOptions?.disableLineNumbers),
+    stringifyVirtualToken(codeOptions?.diffStyle),
+    stringifyVirtualToken(codeOptions?.diffIndicators),
+    stringifyVirtualToken(codeOptions?.hunkSeparators),
+    stringifyVirtualToken(codeOptions?.expandUnchanged),
+    stringifyVirtualToken(codeOptions?.collapsedContextThreshold),
+    stringifyVirtualToken(codeOptions?.expansionLineCount),
+    stringifyVirtualToken(parseDiffOptions?.context),
     stringifyVirtualToken(codeProps?.showHeader),
     stringifyVirtualToken(codeProps?.showCopyButton),
     stringifyVirtualToken(codeProps?.showExpandButton),
     stringifyVirtualToken(codeProps?.showPreviewButton),
     stringifyVirtualToken(codeProps?.showCollapseButton),
     stringifyVirtualToken(codeProps?.showFontSizeButtons),
+    stringifyVirtualToken(codeProps?.showLineNumbers),
   ].join('\u0000')
 }
 

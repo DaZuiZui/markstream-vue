@@ -17,12 +17,6 @@ const layouts = process.env.DIFF_LAYOUT === 'side-by-side'
   : process.env.DIFF_LAYOUT === 'inline'
     ? ['inline']
     : ['inline', 'side-by-side']
-const renderModes = process.env.CODE_BLOCK_RENDERER === 'markdown'
-  ? ['markdown']
-  : process.env.CODE_BLOCK_RENDERER === 'monaco'
-    ? ['monaco']
-    : ['monaco', 'markdown']
-
 const diffSample = [
   '```diff json:package.json',
   '{',
@@ -343,7 +337,7 @@ async function verifyFinalCollapseCycle(page) {
   })
 }
 
-async function runCase(browser, port, layout, renderMode) {
+async function runCase(browser, port, layout) {
   const context = await browser.newContext({
     viewport: { width: 1600, height: 1200 },
     storageState: {
@@ -351,7 +345,6 @@ async function runCase(browser, port, layout, renderMode) {
       origins: [{
         origin: `http://${host}:${port}`,
         localStorage: [
-          { name: 'vmr-test-render-mode', value: renderMode },
           { name: 'vmr-test-code-stream', value: 'true' },
           { name: 'vmr-test-stream-chunk-size-min', value: '1' },
           { name: 'vmr-test-stream-chunk-size-max', value: '1' },
@@ -421,7 +414,6 @@ async function runCase(browser, port, layout, renderMode) {
     const handoffGeometry = compareHandoffGeometry(lastPre?.preGeometry, visibleStates.at(-1)?.diffsGeometry)
     const result = {
       layout,
-      renderMode,
       sampledFrames: visibleStates.length,
       preFrames: stateKinds.filter(kind => kind === 'pre').length,
       preWithDiffsFrames: visibleStates.filter(state => state.preVisible && state.diffsCount === 1).length,
@@ -481,10 +473,8 @@ async function main() {
     await waitForPort(port)
     const browser = await chromium.launch(resolveChromeLaunchOptions())
     const results = []
-    for (const renderMode of renderModes) {
-      for (const layout of layouts)
-        results.push(await runCase(browser, port, layout, renderMode))
-    }
+    for (const layout of layouts)
+      results.push(await runCase(browser, port, layout))
     await browser.close()
 
     const ok = results.every(result => result.ok)

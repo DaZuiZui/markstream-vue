@@ -142,7 +142,7 @@ setKaTeXWorker(new KatexWorker())
 
 ## 可选 peer
 
-Mermaid、KaTeX、Monaco、D2 和 Infographic 是**可选 peer**。只安装你的 AI 输出需要的：
+Mermaid、KaTeX、stream-diffs、D2 和 Infographic 是**可选 peer**。只安装你的 AI 输出需要的：
 
 ```bash
 # 仅 Mermaid（无数学公式）
@@ -155,7 +155,7 @@ pnpm add katex
 pnpm add mermaid katex
 
 # 所有重型 peer
-pnpm add mermaid katex stream-monaco @terrastruct/d2 @antv/infographic
+pnpm add mermaid katex stream-diffs @terrastruct/d2 @antv/infographic
 ```
 
 安装 peer 后，Markstream 的默认 loader 可以自动解析它。`enableMermaid()` 和 `enableKatex()` 用于重新启用或替换可选依赖 loader；`setMermaidWorker()` 和 `setKaTeXWorker()` 注入离线程（off-thread）的 worker 客户端。如果某个 peer 未安装或 loader 被禁用，该功能会回退，而不是通过 Mermaid 或 KaTeX 渲染。

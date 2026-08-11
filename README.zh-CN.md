@@ -96,7 +96,7 @@ Vue 包：
 
 - 为 **流式 Markdown**（AI/聊天/SSE）打造，目标是减少闪烁并保持内存可预期。
 - **双渲染模式**：长文档虚拟化窗口，或“打字机”式增量批次。
-- **渐进式图表**（Mermaid）与 **流式代码块**（Monaco/Shiki），跟上 diff/增量输出。
+- **渐进式图表**（Mermaid）与 **流式代码块**（stream-diffs），跟上 diff/增量输出。
 - 同时支持 **Markdown 字符串或预解析节点**，可在 Vue、React、Octane、Svelte 和 Angular 中嵌入 **自定义框架组件**。
 - TypeScript 优先，开箱默认即可上线（导入 CSS 即用）。
 
@@ -308,7 +308,7 @@ createApp({
 }).mount('#app')
 ```
 
-确保在 CSS reset（如 `@tailwind base` 或 `@unocss/reset`）之后导入 `markstream-vue/index.css`，推荐使用 `@import 'markstream-vue/index.css' layer(components);` 以避免 Tailwind/UnoCSS 覆盖组件样式。根据需求再按需安装可选 peer 依赖：`stream-diffs`（增强代码块与 diff）、`shiki` + `stream-markdown`（Shiki 高亮）、`mermaid`（Mermaid 图表）、`katex`（数学公式）。
+确保在 CSS reset（如 `@tailwind base` 或 `@unocss/reset`）之后导入 `markstream-vue/index.css`，推荐使用 `@import 'markstream-vue/index.css' layer(components);` 以避免 Tailwind/UnoCSS 覆盖组件样式。根据需求再按需安装可选 peer 依赖：`stream-diffs`（增强代码块与 diff）、`mermaid`（Mermaid 图表）、`katex`（数学公式）。
 如果你的移动端会主动调大根字号（`html`/`body`），建议改用 `markstream-vue/index.px.css`，避免 `rem` 跟随根字号导致整体放大。
 
 按使用场景选择渲染模式：
@@ -332,9 +332,11 @@ createApp({
 ```
 
 当你想要和 `chat` 相同的轻量默认值，但当前页面不是聊天语义时，可以使用 `mode="minimal"`。避免把高频 `smooth-streaming` 和 `fade` 同时开启，否则稳定的流式输出可能变成反复重启的透明度动画。
-同一条聊天消息不要仅因为 `final` 变为 `true` 就从 `mode="chat"` 切到 `mode="docs"`。保持 mode 稳定，只切换 `smooth-streaming`、`typewriter`、`fade` 等节奏/动画 props；`docs` 会改变默认代码块渲染器和布局策略。
-如果文档页不需要增强代码块，建议设置 `:render-code-blocks-as-pre="true"`；如果需要富 `CodeBlockNode` UI 与 File/Diff 渲染，请安装 `stream-diffs`，否则渲染器会按设计降级为 `<pre>` 渲染。
+同一条聊天消息不要仅因为 `final` 变为 `true` 就从 `mode="chat"` 切到 `mode="docs"`。保持 mode 稳定，只切换 `smooth-streaming`、`typewriter`、`fade` 等节奏/动画 props；`docs` 会改变布局策略。
+如果某个渲染面不需要增强代码块，建议设置 `:render-code-blocks-as-pre="true"`；如果需要富 `CodeBlockNode` UI 与 File/Diff 渲染，请安装 `stream-diffs`，否则渲染器会按设计降级为 `<pre>` 渲染。如果应用要完全接管普通 fenced code，用 `setCustomComponents` 注册带作用域的 `code_block`。
 `stream-diffs` 是与框架无关的 DOM runtime；由 `CodeBlockNode` 决定何时把流式 `<pre>` 切换为最终的 File 或 FileDiff surface。
+
+使用顶层 `code-block-options` 配置内置 surface；直接使用 `CodeBlockNode` 时接收同一个 `codeBlockOptions` object。六个框架 adapter 共享 `CodeBlockOptions`。它包含宿主管理的排版/布局字段（`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`），以及受支持的 File/FileDiff、交互、annotation 与 callback 字段。主题、code/language、流式状态、header、挂载、显示与释放仍由宿主管理。
 
 渲染器的 CSS 会作用于内部 `.markstream-vue` 容器下，以尽量降低对全局的影响；如果你脱离 `MarkdownRender` 单独使用导出的节点组件，请在外层包一层带 `markstream-vue` 类名的容器。
 
@@ -349,6 +351,8 @@ createApp({
   :content="doc"
 />
 ```
+
+主题值使用已注册名称：直接 `CodeBlockNode.theme` 接收固定 string 或 `{ dark, light }`，`themes` 是要加载的 `[dark, light]` 对。旧 Monaco JSON theme object 不会直接改名；先调用 `stream-diffs/pierre` 的 `registerCustomTheme`，再传入注册名称。
 
 `code-block-props` 只会透传面向用户的代码块 props；`node`、`key`、`ref`、`ctx`、`renderNode`、`indexKey`、`__proto__`、`prototype`、`constructor` 等渲染器结构字段会被忽略。
 
@@ -588,7 +592,7 @@ setCustomComponents('docs', {
 
 - AI / 聊天界面：Markdown token 通过 SSE/WebSocket 持续抵达，要求无闪烁与稳定内存。
 - 文档、变更日志、知识库：需要即时加载，同时保持长内容滚动的流畅性。
-- 流式 diff / 代码审查：Monaco 增量更新让大代码块也能跟上变更。
+- 流式 diff / 代码审查：`stream-diffs` 增量更新让大代码块也能跟上变更。
 - 图表与示意：Mermaid 渐进式渲染，避免阻塞主渲染。
 - Markdown 驱动的界面中嵌入 Vue 组件（callout、交互式挂件、CTA 等）。
 
@@ -596,7 +600,7 @@ setCustomComponents('docs', {
 
 - Mermaid / KaTeX 不显示？安装对应 peer（`mermaid` / `katex`），并传入 `:enable-mermaid="true"` / `:enable-katex="true"` 或调用 loader 设置函数。如果你是用 CDN `<script>` 引入，库也会自动读取 `window.mermaid` / `window.katex`。
 - CDN + KaTeX worker：如果你不打包 `katex` 但仍希望公式在 worker 中渲染（不占主线程），可以用 `createKaTeXWorkerFromCDN()` 创建一个“CDN 加载 KaTeX”的 worker，然后通过 `setKaTeXWorker()` 注入。
-- 体积问题：可选 peer 不会被打包，CSS 只需导入一次；对代码块可用 Shiki（`MarkdownCodeBlockNode`）替代 Monaco。传入 `langs` 可以请求更小的 Shiki 语言预加载集合；它不是渲染 allow-list，共享 Shiki registry 中已经可用的语言仍可能高亮。低频语言图标已拆分为异步 chunk 并按需加载；如果希望首屏就避免图标回退，可在空闲时调用 `preloadExtendedLanguageIcons()` 预热。
+- 体积问题：可选 peer 不会被打包，CSS 只需导入一次；增强代码块仅在安装了 `stream-diffs` 时按需加载其运行时。低频语言图标已拆分为异步 chunk 并按需加载；如果希望避免首次命中图标回退，可在空闲时调用 `preloadExtendedLanguageIcons()` 预热。
 - 自定义 UI：通过 `setCustomComponents`（全局或作用域）注册组件，在 Markdown 中放置占位标记并映射到 Vue 组件。
 
 ## 🆚 为什么选择 markstream-vue，而不是普通 Markdown 渲染器？
@@ -604,7 +608,7 @@ setCustomComponents('docs', {
 | 需求 | 普通 Markdown 预览 | markstream-vue |
 | --- | --- | --- |
 | 流式输入 | 全量重渲染、易闪烁 | 虚拟窗口 + 增量批次 |
-| 大代码块 | 重新高亮速度慢 | Monaco 流式更新 + 可选 Shiki |
+| 大代码块 | 重新高亮速度慢 | `stream-diffs` File/Diff 界面 |
 | 图表 | 解析/渲染阻塞 | Mermaid 渐进式渲染与回退 |
 | 自定义 UI | 插槽有限 | Markdown 内嵌 Vue 组件与类型化节点 |
 | 长文档 | 内存峰值高 | 可配置 live-node 上限，滚动稳定 |
@@ -612,7 +616,7 @@ setCustomComponents('docs', {
 ## 🗺️ Roadmap（快照）
 
 - 更多「即开即用」模板（Vite / Nuxt / Tailwind）与 StackBlitz 更新。
-- 代码块预设扩展（适合 diff 的 Shiki 主题、Monaco 装饰/标注辅助）。
+- 代码块预设扩展（stream-diffs 的 diff 友好主题）。
 - AI / 聊天场景的 Cookbook（SSE/WebSocket、重试与续传、Markdown 中间态处理）。
 - 展示更多在 Markdown 中嵌入 Vue 组件的示例与实践。
 
@@ -620,10 +624,10 @@ setCustomComponents('docs', {
 
 - 最新版本与升级提示：[Releases](https://github.com/Simon-He95/markstream-vue/releases)
 - 完整历史：[CHANGELOG.md](./CHANGELOG.md)
-- 最新亮点（0.0.3-beta.1/beta.0）：
-  - 解析器升级到 `stream-markdown-parser@0.0.36`，修复多项解析问题。
-  - Monaco 升级，更多语言/主题，代码块对 diff 更友好。
-  - Playground 增加 HTML/SVG 预览对话框与 AST 调试视图。
+- 2.0 beta 候选版：
+  - `npm view markstream-vue@next version` 返回 `2.0.0-beta.1` 后，通过 `markstream-vue@next` 安装；稳定 1.x 继续通过 `@1` 获取。
+  - Monaco、`stream-markdown` runtime 与 Monaco 命名 API 已移除；受支持的代码块配置迁移到 `codeBlockOptions`。
+  - 升级前阅读 [从 1.x 迁移到 2.0](https://markstream.simonhe.me/zh/guide/migration-2-0)。
 
 ## 🧭 案例与展示
 
@@ -644,14 +648,14 @@ setCustomComponents('docs', {
 
 - ⚡ 极致性能：为流式场景设计的最小化重渲染和高效 DOM 更新
 - 🌊 流式优先：原生支持不完整或频繁更新的 token 化 Markdown 内容
-- 🧠 Monaco 流式更新：高性能的 Monaco 集成，支持大代码块的平滑增量更新
+- 🧠 增强代码块：`stream-diffs` File/Diff 界面，支持语法高亮与 diff 交互
 - 🪄 渐进式 Mermaid：图表在语法可用时即时渲染，并在后续更新中完善
 - 🧩 自定义组件：允许在 Markdown 内容中嵌入对应框架组件
 - 📝 完整 Markdown 支持：表格、公式、Emoji、复选框、代码块等
 - 🔄 实时更新：支持增量内容而不破坏格式
 - 📦 TypeScript 优先：提供完善的类型定义与智能提示
 - 🔌 默认配置：各框架入口开箱即可接入
-- 🎨 灵活的代码块渲染：可选基于 `stream-diffs` 的 `CodeBlockNode` 或轻量的 Shiki 高亮 (`MarkdownCodeBlockNode`)
+- 🎨 增强代码块渲染：`stream-diffs` File/Diff 界面（`CodeBlockNode`），未安装该 peer 时回退为普通 `<pre>`
 - 🧰 解析工具集：[`stream-markdown-parser`](./packages/markdown-parser) 文档现已覆盖如何在 Worker/SSE 流中复用解析器、直接向 `<MarkdownRender :nodes>` 输送 AST、以及注册全局插件/数学辅助函数的方式。
 
 ## 🙌 贡献与社区
@@ -699,10 +703,8 @@ https://github.com/Simon-He95/markstream-vue/issues
 本项目使用并受益于：
 
 - [stream-diffs](https://github.com/Simon-He95/stream-diffs)
-- [stream-markdown](https://github.com/Simon-He95/stream-markdown)
 - [mermaid](https://mermaid-js.github.io/mermaid)
 - [katex](https://katex.org/)
-- [shiki](https://github.com/shikijs/shiki)
 - [markdown-it-ts](https://github.com/Simon-He95/markdown-it-ts)
 
 感谢这些项目的作者与贡献者！

@@ -2,9 +2,9 @@ name: Docs parity check
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 2.0.0]
   push:
-    branches: [main]
+    branches: [main, 2.0.0]
 
 permissions:
   contents: read

@@ -1,4 +1,4 @@
-import type { MarkdownIt, Token } from './markdown-it-types'
+import type { Token } from './markdown-it-types'
 
 export interface BaseNode {
   type: string
@@ -452,32 +452,19 @@ export interface ParseOptions {
    * children may also be annotated.
    */
   includeSourceMap?: boolean
+  /** Reuse eligible stable top-level nodes between append-only stream parses. */
+  reuseStableTopLevelNodes?: boolean
+  /** Optional parser work/timing collector. */
+  parserMetrics?: {
+    tokenCloneMs?: number
+    processTokensInputTokens?: number
+    processTokensReusedTopLevelNodes?: number
+    processTokensMs?: number
+    safeMarkdownMs?: number
+    tokenizeMs?: number
+    htmlBlockPassesMs?: number
+    parseMarkdownToStructureTotalMs?: number
+  }
   // When true, log the parsed tree structure for debugging
   debug?: boolean
-}
-
-export interface InternalParseOptions extends ParseOptions {
-  __customHtmlBlockCursor?: number
-  __disableStreamParse?: boolean
-  /**
-   * Set for fragment parses (html block children) that share the md instance
-   *  but must not read/write/evict the top-level structured reuse cache.
-   */
-  __disableStructuredReuse?: boolean
-  __insideStrong?: boolean
-  __reuseStableTopLevelNodes?: boolean
-  __linkifyDemotionContext?: {
-    filename?: boolean
-    explicitFilename?: boolean
-    marketTicker?: boolean
-  }
-  /**
-   * Raw strings of reused prefix nodes, replayed into the linkify demotion
-   *  tracker before a tail is processed so tail linkify decisions see the
-   *  same accumulated context a full parse would have.
-   */
-  __linkifyDemotionSeed?: string[]
-  __markdownIt?: MarkdownIt
-  __sourceLineMapper?: (line: number) => MarkdownNodeSourceMap
-  __sourceMarkdown?: string
 }

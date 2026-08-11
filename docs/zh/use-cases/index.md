@@ -20,7 +20,7 @@ Markstream 专为 Markdown 逐块到达的场景而设计。以下是最常见�
 - [AI 聊天流式 Markdown](/zh/use-cases/ai-chat-streaming) — 在 Vue、React、Svelte 和 Angular 中渲染 LLM token 流
 - [SSE 与 WebSocket 流式渲染](/zh/use-cases/sse-websocket) — 处理 Server-Sent Events 和 WebSocket 的 Markdown 输出
 - [未闭合 Markdown 渲染器](/zh/use-cases/incomplete-markdown-renderer) — 在回复仍处于流式阶段时，保持未闭合 fence、部分表格、数学公式和 HTML 稳定
-- [流式代码块](/zh/use-cases/streaming-code-blocks) — 为逐 token 到达的代码 fence 选择 Monaco、Shiki 或普通 `pre` 渲染
+- [流式代码块](/zh/use-cases/streaming-code-blocks) — 用增强的 `stream-diffs` surface 或普通 `pre` 回退渲染逐 token 到达的代码 fence
 
 ## 渐进式重型块
 

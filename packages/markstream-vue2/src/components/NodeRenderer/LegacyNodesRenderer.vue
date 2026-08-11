@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BaseNode, HtmlPolicy, ParsedNode } from 'stream-markdown-parser'
-import type { CodeBlockMonacoOptions, CodeBlockMonacoTheme, CodeBlockNodeProps, CodeBlockPreviewPayload, ShikiCodeBlockProps } from '../../types/component-props'
+import type { CodeBlockNodeProps, CodeBlockOptions, CodeBlockPreviewPayload, CodeBlockTheme, CodeBlockThemes } from '../../types/component-props'
 import { normalizeShikiLanguage } from 'markstream-core'
 import { normalizeCustomHtmlTags } from 'stream-markdown-parser'
 import { computed, provide } from 'vue-demi'
@@ -42,15 +42,11 @@ import HtmlInlineNode from '../HtmlInlineNode/HtmlInlineNode.vue'
 import { MathBlockNodeAsync, MathInlineNodeAsync } from './asyncComponent'
 import FallbackComponent from './FallbackComponent.vue'
 
-type NodeRendererCodeBlockThemes
-  = CodeBlockNodeProps['themes']
-    | ShikiCodeBlockProps['themes']
-
 type NodeRendererCodeBlockProps
-  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
-    & Partial<Omit<ShikiCodeBlockProps, 'themes'>>
+  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes' | 'codeBlockOptions'>>
     & {
-      themes?: NodeRendererCodeBlockThemes
+      themes?: CodeBlockThemes
+      codeBlockOptions?: never
     }
     & Record<string, unknown>
 
@@ -62,26 +58,15 @@ const props = withDefaults(defineProps<{
   fade?: boolean
   showTooltips?: boolean
   codeBlockStream?: boolean
-  codeBlockDarkTheme?: CodeBlockMonacoTheme
-  codeBlockLightTheme?: CodeBlockMonacoTheme
-  codeBlockMonacoOptions?: CodeBlockMonacoOptions
+  codeBlockDarkTheme?: CodeBlockTheme
+  codeBlockLightTheme?: CodeBlockTheme
   codeBlockMinWidth?: string | number
   codeBlockMaxWidth?: string | number
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   renderCodeBlocksAsPre?: boolean
-  /**
-   * Theme names or theme objects preloaded for Monaco-backed code blocks.
-   * When Shiki code blocks are used, only string theme names are forwarded to
-   * MarkdownCodeBlockNode / stream-markdown; theme objects are ignored.
-   */
-  themes?: CodeBlockMonacoTheme[]
-  /**
-   * Shiki language preload list forwarded to MarkdownCodeBlockNode.
-   *
-   * Vue2's default code block renderer is Monaco-backed. This prop is used
-   * when a custom `code_block` or language renderer uses MarkdownCodeBlockNode.
-   */
-  langs?: readonly string[]
+  /** Theme-name tuple ordered as `[dark, light]` for enhanced code blocks. */
+  themes?: CodeBlockThemes
   isDark?: boolean
   customHtmlTags?: readonly string[]
   htmlPolicy?: HtmlPolicy
@@ -167,23 +152,29 @@ const customComponentsMap = computed(() => {
 })
 const indexPrefix = computed(() => (props.indexKey != null ? String(props.indexKey) : 'legacy-renderer'))
 const codeBlockExtraProps = computed(() => getCodeBlockExtraProps(props.codeBlockProps))
-const builtinCodeBlockExtraProps = computed(() =>
-  getCodeBlockExtraProps(props.codeBlockProps, { omit: ['langs'] }),
-)
+const builtinCodeBlockExtraProps = computed(() => getCodeBlockExtraProps(props.codeBlockProps))
 const codeBlockBindings = computed(() => ({
   stream: props.codeBlockStream,
   darkTheme: props.codeBlockDarkTheme,
   lightTheme: props.codeBlockLightTheme,
-  monacoOptions: props.codeBlockMonacoOptions,
   themes: props.themes,
   minWidth: props.codeBlockMinWidth,
   maxWidth: props.codeBlockMaxWidth,
   ...builtinCodeBlockExtraProps.value,
+  showLineNumbers: typeof builtinCodeBlockExtraProps.value.showLineNumbers === 'boolean'
+    ? builtinCodeBlockExtraProps.value.showLineNumbers
+    : typeof props.codeBlockOptions?.disableLineNumbers === 'boolean'
+      ? !props.codeBlockOptions.disableLineNumbers
+      : false,
+  ...(props.codeBlockOptions?.overflow
+    ? { style: { whiteSpace: props.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap' } }
+    : {}),
+  codeBlockOptions: props.codeBlockOptions,
 }))
 const customCodeBlockBindings = computed(() => ({
   ...codeBlockBindings.value,
-  langs: props.langs,
   ...codeBlockExtraProps.value,
+  codeBlockOptions: props.codeBlockOptions,
 }))
 const nonCodeBindings = computed(() => ({ typewriter: props.typewriter, fade: props.fade, htmlPolicy: props.htmlPolicy ?? 'safe' }))
 const linkBindings = computed(() => ({
@@ -255,7 +246,7 @@ const renderedItems = computed(() => {
     return {
       index,
       indexKey: `${indexPrefix.value}-${index}`,
-      // Keep code blocks mounted during streaming so Shiki/Monaco renderers can
+      // Keep code blocks mounted during streaming so Shiki/stream-diffs renderers can
       // preserve their last successful DOM instead of flashing back to <pre>.
       renderKey: type === 'code_block'
         ? `${indexPrefix.value}-${index}-${type}`

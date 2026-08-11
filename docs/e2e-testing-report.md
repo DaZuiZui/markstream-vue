@@ -70,7 +70,7 @@ pnpm lint
    - Complex nested lists with markup inside
    - Escaped bracket edge-cases
    - Streaming fence edgecases
-3. Add integration tests for rendering plugins that require DOM or workers (Mermaid, KaTeX worker, Monaco). Consider adding a browser-based test job (Playwright) for those.
+3. Add integration tests for rendering plugins that require DOM or workers (Mermaid, the KaTeX worker, and the `stream-diffs` code-block surface). Consider adding a browser-based test job (Playwright) for those.
 4. Configure CI to run snapshots or a visual regression step if the renderer's HTML output becomes more important.
 
 If you want, I can:

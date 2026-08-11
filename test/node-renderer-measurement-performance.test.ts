@@ -190,7 +190,7 @@ describe('node renderer measurement performance', () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         nodes,
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         viewportPriority: false,
         virtualScroll: {
           enabled: true,
@@ -226,7 +226,7 @@ describe('node renderer measurement performance', () => {
       props: {
         customId,
         nodes: [createCodeBlock(1)],
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         viewportPriority: false,
         virtualScroll: {
           enabled: true,
@@ -268,7 +268,7 @@ describe('node renderer measurement performance', () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         content: createMarkdownWithOpenCodeBlock(10),
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         viewportPriority: false,
         virtualScroll: {
           enabled: true,

@@ -4,7 +4,6 @@
     disableMermaid,
     enableKatex,
     enableMermaid,
-    MarkdownCodeBlockNode,
     preloadCodeBlockRuntime,
     setCustomComponents,
     setKaTeXWorker,
@@ -47,23 +46,6 @@
     'vitesse-light',
   ]
 
-  const diffHideUnchangedRegions = {
-    enabled: true,
-    contextLineCount: 2,
-    minimumLineCount: 4,
-    revealLineCount: 5,
-  } as const
-  const playgroundMonacoOptions = {
-    renderSideBySide: false,
-    useInlineViewWhenSpaceIsLimited: true,
-    maxComputationTime: 0,
-    ignoreTrimWhitespace: false,
-    renderIndicators: true,
-    diffAlgorithm: 'legacy',
-    diffHideUnchangedRegions,
-    hideUnchangedRegions: diffHideUnchangedRegions,
-  } as const
-
   const LINE_NUMBER_HANDOFF_PATH = '/line-number-handoff-check'
   const handoffMarkdown = [
     '# Pre → Highlight Line Number Handoff',
@@ -102,6 +84,7 @@
     : window.localStorage.getItem('vueuse-color-scheme') === 'dark'
       || (window.localStorage.getItem('vueuse-color-scheme') == null && window.matchMedia?.('(prefers-color-scheme: dark)').matches)
   let selectedTheme = window.localStorage.getItem('vmr-settings-selected-theme') || 'vitesse-dark'
+  $: codeBlockThemes = [selectedTheme, selectedTheme] as const
   let chunkSizeMin = Number(window.localStorage.getItem('vmr-settings-stream-chunk-size-min') || 2)
   let chunkSizeMax = Number(window.localStorage.getItem('vmr-settings-stream-chunk-size-max') || 7)
   let chunkDelayMin = Number(window.localStorage.getItem('vmr-settings-stream-delay-min') || 14)
@@ -118,7 +101,6 @@
   let testTimer: number | null = null
   let isTestStreaming = false
   let isTestPaused = false
-  let renderMode = (window.localStorage.getItem('vmr-test-render-mode') || 'monaco') as 'monaco' | 'markdown' | 'pre'
   let codeBlockStream = window.localStorage.getItem('vmr-test-code-stream') !== 'false'
   let viewportPriority = window.localStorage.getItem('vmr-test-viewport-priority') !== 'false'
   let batchRendering = window.localStorage.getItem('vmr-test-batch-rendering') !== 'false'
@@ -138,14 +120,12 @@
   let homepageProgrammaticScroll = false
   let homepageAutoScrollFrame: number | null = null
   let homepageAutoScrollFollowupFrame: number | null = null
-  const markdownModeComponents = { code_block: MarkdownCodeBlockNode }
   $: activeSample = TEST_LAB_SAMPLES.find(sample => sample.id === sampleId) || TEST_LAB_SAMPLES[0]
   $: testPreviewContent = isTestStreaming ? testStreamContent : testInput
   $: testStreamProgress = testInput.length ? Math.min(100, Math.round((testPreviewContent.length / testInput.length) * 100)) : 0
   $: document.documentElement.classList.toggle('dark', isDark)
   $: window.localStorage.setItem('vueuse-color-scheme', isDark ? 'dark' : 'light')
   $: window.localStorage.setItem('vmr-settings-selected-theme', selectedTheme)
-  $: window.localStorage.setItem('vmr-test-render-mode', renderMode)
   $: window.localStorage.setItem('vmr-test-code-stream', String(codeBlockStream))
   $: window.localStorage.setItem('vmr-test-viewport-priority', String(viewportPriority))
   $: window.localStorage.setItem('vmr-test-batch-rendering', String(batchRendering))
@@ -157,8 +137,6 @@
   $: streamChunkRangeLabel = Math.min(chunkSizeMin, chunkSizeMax) + '-' + Math.max(chunkSizeMin, chunkSizeMax)
   $: streamDelayRangeLabel = Math.min(chunkDelayMin, chunkDelayMax) + '-' + Math.max(chunkDelayMin, chunkDelayMax) + 'ms'
   $: currentTitle = currentPath === '/test' ? 'markstream-svelte test lab' : 'markstream-svelte'
-  $: renderModeLabel = renderMode === 'markdown' ? 'MarkdownCodeBlock' : renderMode === 'pre' ? 'PreCodeNode' : 'Monaco'
-  $: activeRenderModeLabel = currentPath === '/test' ? renderModeLabel : 'Monaco'
   $: if (currentPath !== '/test' && currentPath !== LINE_NUMBER_HANDOFF_PATH && content.length !== previousContentLength) {
     previousContentLength = content.length
     const shouldStickToBottom = homepagePinnedToBottom || isHomepageAtBottom()
@@ -612,7 +590,6 @@
             <div class="chat-header__meta">
               <span class:chat-header__meta-pill--active={isTestStreaming} class="chat-header__meta-pill">{isTestStreaming ? (isTestPaused ? 'Paused' : 'Streaming') : 'Ready'}</span>
               <span class="chat-header__meta-pill">{selectedTheme}</span>
-              <span class="chat-header__meta-pill">{activeRenderModeLabel}</span>
             </div>
           </div>
         </div>
@@ -629,7 +606,6 @@
               <h2>Markdown 输入</h2>
               <p>{activeSample.summary}</p>
             </div>
-            <span class="mini-pill">{renderModeLabel}</span>
           </div>
 
           <label class="field">
@@ -651,14 +627,6 @@
           </div>
 
           <div class="control-grid">
-            <label class="field">
-              Render
-              <select bind:value={renderMode}>
-                <option value="monaco">Monaco</option>
-                <option value="markdown">MarkdownCodeBlock</option>
-                <option value="pre">PreCodeNode</option>
-              </select>
-            </label>
             <label class="toggle-item"><input type="checkbox" bind:checked={codeBlockStream} /> Code stream</label>
             <label class="toggle-item"><input type="checkbox" bind:checked={viewportPriority} /> viewportPriority</label>
             <label class="toggle-item"><input type="checkbox" bind:checked={batchRendering} /> batchRendering</label>
@@ -699,10 +667,7 @@
               codeBlockStream={codeBlockStream}
               codeBlockDarkTheme={selectedTheme}
               codeBlockLightTheme={selectedTheme}
-              codeBlockMonacoOptions={playgroundMonacoOptions}
-              renderCodeBlocksAsPre={renderMode === 'pre'}
-              customComponents={renderMode === 'markdown' ? markdownModeComponents : undefined}
-              {themes}
+              themes={codeBlockThemes}
               {isDark}
               customId={PLAYGROUND_CUSTOM_ID}
               customHtmlTags={PLAYGROUND_CUSTOM_HTML_TAGS}
@@ -774,10 +739,7 @@
             codeBlockStream={true}
             codeBlockDarkTheme={selectedTheme}
             codeBlockLightTheme={selectedTheme}
-            codeBlockMonacoOptions={playgroundMonacoOptions}
-            renderCodeBlocksAsPre={false}
-            customComponents={undefined}
-            {themes}
+            themes={codeBlockThemes}
             {isDark}
             customId={PLAYGROUND_CUSTOM_ID}
             customHtmlTags={PLAYGROUND_CUSTOM_HTML_TAGS}

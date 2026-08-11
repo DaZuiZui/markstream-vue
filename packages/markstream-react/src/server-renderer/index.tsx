@@ -9,7 +9,6 @@ import type {
   TableRowNode as TableRowNodeType,
 } from 'stream-markdown-parser'
 import type { HtmlPreviewFrameProps } from '../components/CodeBlockNode/HtmlPreviewFrame'
-import type { MarkdownCodeBlockNodeProps } from '../components/MarkdownCodeBlockNode/MarkdownCodeBlockNode'
 import type { TooltipProps } from '../components/Tooltip/Tooltip'
 import type { CustomComponentMap, HtmlComponentMap, StreamingComponentMap } from '../customComponents'
 import type { NodeRendererProps, RenderContext } from '../types'
@@ -144,11 +143,11 @@ function renderCustomCodeBlockComponent(
     darkTheme: ctx.codeBlockThemes?.darkTheme,
     lightTheme: ctx.codeBlockThemes?.lightTheme,
     themes: ctx.codeBlockThemes?.themes,
-    langs: ctx.codeBlockThemes?.langs,
     minWidth: ctx.codeBlockThemes?.minWidth,
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     onCopy: ctx.events.onCopy,
     ...extraProps,
+    codeBlockOptions: ctx.codeBlockOptions,
     ...specialProps,
     ctx,
     renderNode,
@@ -225,6 +224,7 @@ function createRenderContext(
     htmlComponents,
     renderCodeBlocksAsPre: props.renderCodeBlocksAsPre,
     codeBlockStream: props.codeBlockStream,
+    codeBlockOptions: props.codeBlockOptions,
     codeBlockProps: {
       ...(typeof props.showTooltips === 'boolean' ? { showTooltips: props.showTooltips } : {}),
       ...(props.codeBlockProps || {}),
@@ -240,10 +240,8 @@ function createRenderContext(
     },
     codeBlockThemes: {
       themes: props.themes,
-      langs: props.langs,
       darkTheme: props.codeBlockDarkTheme,
       lightTheme: props.codeBlockLightTheme,
-      monacoOptions: props.codeBlockMonacoOptions,
       minWidth: props.codeBlockMinWidth,
       maxWidth: props.codeBlockMaxWidth,
     },
@@ -362,12 +360,19 @@ function renderCodeBlock(
     return renderCustomCodeBlockComponent(customCodeBlock, node, key, ctx)
 
   if (ctx.renderCodeBlocksAsPre) {
+    const configuredShowLineNumbers = ctx.codeBlockProps?.showLineNumbers
+    const disableLineNumbers = ctx.codeBlockOptions?.disableLineNumbers
+    const overflow = ctx.codeBlockOptions?.overflow
     return (
       <PreCodeNode
         key={key}
         node={node}
-        monacoOptions={ctx.codeBlockThemes?.monacoOptions}
-        showLineNumbers={ctx.codeBlockProps?.showLineNumbers === true}
+        style={overflow ? { whiteSpace: overflow === 'scroll' ? 'pre' : 'pre-wrap' } : undefined}
+        showLineNumbers={typeof configuredShowLineNumbers === 'boolean'
+          ? configuredShowLineNumbers
+          : typeof disableLineNumbers === 'boolean'
+            ? !disableLineNumbers
+            : false}
       />
     )
   }
@@ -378,12 +383,14 @@ function renderCodeBlock(
       node={node}
       loading={Boolean(node.loading)}
       stream={ctx.codeBlockStream}
-      monacoOptions={ctx.codeBlockThemes?.monacoOptions}
       themes={ctx.codeBlockThemes?.themes}
+      darkTheme={ctx.codeBlockThemes?.darkTheme}
+      lightTheme={ctx.codeBlockThemes?.lightTheme}
       minWidth={ctx.codeBlockThemes?.minWidth}
       maxWidth={ctx.codeBlockThemes?.maxWidth}
       isDark={ctx.isDark}
-      {...getCodeBlockExtraProps(ctx.codeBlockProps, { omit: ['langs'] })}
+      {...getCodeBlockExtraProps(ctx.codeBlockProps)}
+      codeBlockOptions={ctx.codeBlockOptions}
     />
   )
 }
@@ -947,13 +954,6 @@ export function CodeBlockNode(props: CodeBlockNodeProps) {
   return renderStaticCodeShell('code-block-node', props.node, {
     showHeader: props.showHeader,
     fallback: 'code-block',
-  })
-}
-
-export function MarkdownCodeBlockNode(props: MarkdownCodeBlockNodeProps) {
-  return renderStaticCodeShell('markdown-code-block-node', props.node, {
-    showHeader: props.showHeader,
-    fallback: 'markdown-code-block',
   })
 }
 

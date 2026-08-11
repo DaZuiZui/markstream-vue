@@ -179,11 +179,16 @@ import { VmrContainerNodeComponent } from '../VmrContainerNode/VmrContainerNode.
             <markstream-angular-pre-code-node
               *ngIf="codeMode === 'pre'; else enhancedCode"
               [node]="node"
-              [showLineNumbers]="true"
+              [showLineNumbers]="resolvedPreShowLineNumbers"
+              [whiteSpace]="resolvedPreWhiteSpace"
             />
           </ng-template>
           <ng-template #enhancedCode>
-            <markstream-angular-code-block-node [node]="node" [context]="context" />
+            <markstream-angular-code-block-node
+              [node]="node"
+              [context]="context"
+              [codeBlockOptions]="context?.codeBlockOptions"
+            />
           </ng-template>
         </ng-container>
 
@@ -216,6 +221,21 @@ export class NodeOutletComponent {
 
   get codeMode() {
     return resolveNodeOutletCodeMode(this.node, this.context)
+  }
+
+  get resolvedPreShowLineNumbers() {
+    const explicit = this.context?.codeBlockProps?.showLineNumbers
+    const disabled = this.context?.codeBlockOptions?.disableLineNumbers
+    return typeof explicit === 'boolean'
+      ? explicit
+      : typeof disabled === 'boolean'
+        ? !disabled
+        : false
+  }
+
+  get resolvedPreWhiteSpace(): 'pre' | 'pre-wrap' | undefined {
+    const overflow = this.context?.codeBlockOptions?.overflow
+    return overflow ? (overflow === 'scroll' ? 'pre' : 'pre-wrap') : undefined
   }
 
   get htmlTag() {

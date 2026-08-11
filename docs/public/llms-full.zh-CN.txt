@@ -6,77 +6,90 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 
 ### markstream-vue
 - 包名：markstream-vue
-- 版本：1.1.2-beta.3
+- 版本：2.0.0-beta.1
 - 成熟度标签：稳定
 - 框架/运行时：Vue 3、Nuxt 3、VitePress
-- 描述：Vue/Nuxt streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, Shiki, and Monaco.
+- 描述：Vue/Nuxt streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, and stream-diffs powered code blocks.
 - Homepage：https://markstream.simonhe.me/frameworks/vue
 - 文档 URL：https://markstream.simonhe.me/frameworks/vue
 - Playground URL：https://markstream-vue.simonhe.me/
-- Peer dependencies：@antv/infographic, @terrastruct/d2, katex, mermaid, stream-diffs, stream-markdown, stream-monaco, vue, vue-i18n
-- Keywords：markdown, markdown-renderer, streaming-markdown, streaming-markdown-renderer, markdown-streaming, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, vue, vue3, nuxt, vitepress, vue-markdown, vue-streaming-markdown, nuxt-markdown, vitepress-markdown, incomplete-markdown, mermaid, streaming-mermaid, katex, streaming-katex, shiki, monaco-editor, streaming-code-blocks, large-documents, safe-html, mobile-webview, markstream-vue, markstream
-- 核心能力：content 输入路径；nodes 输入路径；安全 HTML 策略；渐进式 Mermaid；Monaco/Shiki 流式代码块；KaTeX 数学；长文档虚拟化；worker client 子路径；SSR 导入；移动端 px CSS；Tailwind 支持
+- Peer dependencies：@antv/infographic, @terrastruct/d2, katex, mermaid, stream-diffs, vue, vue-i18n
+- Keywords：markdown, markdown-renderer, streaming-markdown, streaming-markdown-renderer, markdown-streaming, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, vue, vue3, nuxt, vitepress, vue-markdown, vue-streaming-markdown, nuxt-markdown, vitepress-markdown, incomplete-markdown, mermaid, streaming-mermaid, katex, streaming-katex, stream-diffs, streaming-code-blocks, large-documents, safe-html, mobile-webview, markstream-vue, markstream
+- 核心能力：content 输入路径；nodes 输入路径；安全 HTML 策略；渐进式 Mermaid；stream-diffs 流式代码块；KaTeX 数学；长文档虚拟化；worker client 子路径；SSR 导入；移动端 px CSS；Tailwind 支持
 - 已知限制：Vue 包是最成熟路径；可选 peer 只在需要对应能力时安装。
 
 ### markstream-react
 - 包名：markstream-react
-- 版本：0.0.56-beta.4
+- 版本：0.1.0-beta.2
 - 成熟度标签：beta
 - 框架/运行时：React 18/19、Next.js App Router、Next.js Pages Router、Remix
-- 描述：React/Next.js streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, Shiki, Monaco, and custom React components.
+- 描述：React/Next.js streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, stream-diffs powered code blocks, and custom React components.
 - Homepage：https://markstream.simonhe.me/frameworks/react
 - 文档 URL：https://markstream.simonhe.me/frameworks/react
 - Playground URL：https://markstream-react.pages.dev/
-- Peer dependencies：@antv/infographic, @terrastruct/d2, katex, mermaid, react, react-dom, stream-diffs, stream-markdown, stream-monaco
-- Keywords：react, nextjs, next.js, remix, markdown, markdown-renderer, streaming-markdown-renderer, react-markdown, react-markdown-alternative, streamdown-alternative, streaming-markdown, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, mermaid, streaming-mermaid, katex, streaming-katex, shiki, monaco, monaco-editor, streaming-code-blocks, large-documents, safe-html, markstream-react, markstream
+- Peer dependencies：@antv/infographic, @terrastruct/d2, katex, mermaid, react, react-dom, stream-diffs
+- Keywords：react, nextjs, next.js, remix, markdown, markdown-renderer, streaming-markdown-renderer, react-markdown, react-markdown-alternative, streamdown-alternative, streaming-markdown, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, mermaid, streaming-mermaid, katex, streaming-katex, stream-diffs, streaming-code-blocks, large-documents, safe-html, markstream-react, markstream
 - 核心能力：content 输入路径；nodes 输入路径；渐进式 Mermaid；流式代码块；KaTeX 数学；虚拟化；worker 支持；Next.js SSR 安全入口
 - 已知限制：比 Vue 包更新，API 可能变化。Next.js SSR-first 或 server-only Markdown 应看 /frameworks/next。
 
+### markstream-octane
+- 包名：markstream-octane
+- 版本：0.1.0-beta.2
+- 成熟度标签：beta
+- 框架/运行时：Octane 0.1.x 客户端与服务端 runtime
+- 描述：Octane streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, stream-diffs powered code blocks, and custom Octane components.
+- Homepage：https://markstream.simonhe.me
+- 文档 URL：https://github.com/Simon-He95/markstream-vue/tree/main/packages/markstream-octane
+- Peer dependencies：@antv/infographic, @terrastruct/d2, katex, mermaid, octane, stream-diffs
+- Keywords：octane, markdown, markdown-renderer, streaming-markdown-renderer, octane-markdown, streamdown-alternative, streaming-markdown, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, mermaid, streaming-mermaid, katex, streaming-katex, stream-diffs, streaming-code-blocks, large-documents, safe-html, markstream-octane, markstream
+- 核心能力：content 输入路径；nodes 输入路径；安全 HTML 策略；渐进式 Mermaid；KaTeX 数学；stream-diffs 代码块；自定义 Octane 组件；客户端与服务端构建；worker 子路径；移动端 px CSS 与 Tailwind CSS 导出
+- 已知限制：需要 Octane ^0.1.21 及对应 compiler/Vite 配置。API 仍是 beta，且不提供虚拟化。
+
 ### markstream-svelte
 - 包名：markstream-svelte
-- 版本：0.0.6
+- 版本：0.1.0-beta.2
 - 成熟度标签：beta/实验
 - 框架/运行时：仅 Svelte 5
-- 描述：Svelte 5 and SvelteKit streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, Monaco-powered code blocks, and custom Svelte components.
+- 描述：Svelte 5 and SvelteKit streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, stream-diffs powered code blocks, and custom Svelte components.
 - Homepage：https://markstream.simonhe.me/frameworks/svelte
 - 文档 URL：https://markstream.simonhe.me/frameworks/svelte
 - Playground URL：https://markstream-svelte.pages.dev/
-- Peer dependencies：@antv/infographic, @terrastruct/d2, katex, mermaid, stream-diffs, stream-monaco, svelte
-- Keywords：svelte, svelte5, sveltekit, markdown, markdown-renderer, svelte-markdown, svelte-markdown-renderer, svelte5-markdown, sveltekit-markdown, svelte-streaming-markdown, svelte-ai-chat, streaming-markdown, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, incomplete-markdown, mermaid, streaming-mermaid, katex, streaming-katex, streaming-code-blocks, d2, infographic, monaco-editor, large-documents, custom-components, beta, markstream-svelte, markstream
+- Peer dependencies：@antv/infographic, @terrastruct/d2, katex, mermaid, stream-diffs, svelte
+- Keywords：svelte, svelte5, sveltekit, markdown, markdown-renderer, svelte-markdown, svelte-markdown-renderer, svelte5-markdown, sveltekit-markdown, svelte-streaming-markdown, svelte-ai-chat, streaming-markdown, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, incomplete-markdown, mermaid, streaming-mermaid, katex, streaming-katex, stream-diffs, streaming-code-blocks, d2, infographic, large-documents, custom-components, beta, markstream-svelte, markstream
 - 核心能力：Svelte 5 runes；content 输入路径；nodes 输入路径；content 原始输入路径的平滑流式节奏；safe HTML policy 与 URL/SVG 安全处理路径；与 Vue/React 一致的 worker 支持；移动端 px CSS 和 Tailwind CSS 导出；Markdown 中的自定义 Svelte 组件
 - 已知限制：需要 Svelte 5；不支持 Svelte 4。API 仍是 beta。不适合优先推荐给短静态 Markdown 或需要兼容 Svelte 4 的项目。
 
 ### markstream-angular
 - 包名：markstream-angular
-- 版本：0.0.10
+- 版本：0.1.0-beta.2
 - 成熟度标签：alpha
 - 框架/运行时：Angular standalone 组件，Angular 20+
-- 描述：Angular 20+ standalone streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, Monaco-powered code blocks, and safe Angular component rendering.
+- 描述：Angular 20+ standalone streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, stream-diffs powered code blocks, and safe Angular component rendering.
 - Homepage：https://markstream.simonhe.me/frameworks/angular
 - 文档 URL：https://markstream.simonhe.me/frameworks/angular
 - Playground URL：https://markstream-angular.pages.dev/
-- Peer dependencies：@angular/common, @angular/core, @antv/infographic, @terrastruct/d2, katex, mermaid, stream-diffs, stream-monaco
-- Keywords：angular, angular-standalone, angular20, markdown, markdown-renderer, ngx-markdown-alternative, angular-markdown, streaming-markdown, streaming-markdown-renderer, angular-streaming-markdown, angular-ai-chat, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, incomplete-markdown, mermaid, streaming-mermaid, katex, streaming-katex, monaco-editor, streaming-code-blocks, large-documents, custom-components, alpha, markstream-angular, markstream
+- Peer dependencies：@angular/common, @angular/core, @antv/infographic, @terrastruct/d2, katex, mermaid, stream-diffs
+- Keywords：angular, angular-standalone, angular20, markdown, markdown-renderer, ngx-markdown-alternative, angular-markdown, streaming-markdown, streaming-markdown-renderer, angular-streaming-markdown, angular-ai-chat, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, incomplete-markdown, mermaid, streaming-mermaid, katex, streaming-katex, stream-diffs, streaming-code-blocks, large-documents, custom-components, alpha, markstream-angular, markstream
 - 核心能力：standalone 组件；基于 signal 的响应式内容；无需 innerHTML 的安全 HTML；OnPush 渲染器实现；渐进式 Mermaid；KaTeX 数学；流式代码块；面向流式输出的 content 输入路径
 - 已知限制：需要 Angular 20+；API 仍是 alpha，peer 测试有限。短静态或只渲染完成态 Markdown 时不应优先推荐。没有 px CSS 构建。
 
 ### markstream-vue2
 - 包名：markstream-vue2
-- 版本：0.0.53
+- 版本：0.1.0-beta.2
 - 成熟度标签：兼容移植版
 - 框架/运行时：Vue 2.6 / 2.7
-- 描述：Vue 2.6/2.7 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, Shiki, and Vue 2 component rendering.
+- 描述：Vue 2.6/2.7 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, stream-diffs powered code blocks, and Vue 2 component rendering.
 - Homepage：https://markstream.simonhe.me/frameworks/vue2
 - 文档 URL：https://markstream.simonhe.me/frameworks/vue2
 - Playground URL：https://markstream-vue2.pages.dev/
-- Peer dependencies：@antv/infographic, @terrastruct/d2, @vue/composition-api, katex, mermaid, stream-diffs, stream-markdown, stream-monaco, vue, vue-i18n
-- Keywords：vue2, vue-2, vue, vue2.6, vue2.7, markdown, markdown-to-html, markdown-renderer, vue-markdown, vue-markdown-renderer, vue-markdown-component, vue2-markdown, vue2-streaming-markdown, vue2-ai-chat, vue2-llm-markdown, vue2-sse-markdown, vue2-websocket-markdown, vue2-composition-api, vue-demi, legacy-vue2, markdown-preview, markdown-viewer, vue-component, nuxt, nuxt2, nuxt-2, vite, webpack, streaming-markdown, ai-chat, llm, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, incomplete-markdown, html, renderer, custom-component, mermaid, streaming-mermaid, progressive-mermaid, katex, streaming-katex, shiki, streaming-code-blocks, streaming-diff, diff-codeblock, large-documents, performance, real-time-preview, markstream-vue2, markstream, documentation, docs, content-management, cms, markdown-parser, md-to-html, vue2-component
+- Peer dependencies：@antv/infographic, @terrastruct/d2, @vue/composition-api, katex, mermaid, stream-diffs, vue, vue-i18n
+- Keywords：vue2, vue-2, vue, vue2.6, vue2.7, markdown, markdown-to-html, markdown-renderer, vue-markdown, vue-markdown-renderer, vue-markdown-component, vue2-markdown, vue2-streaming-markdown, vue2-ai-chat, vue2-llm-markdown, vue2-sse-markdown, vue2-websocket-markdown, vue2-composition-api, vue-demi, legacy-vue2, markdown-preview, markdown-viewer, vue-component, nuxt, nuxt2, nuxt-2, vite, webpack, streaming-markdown, ai-chat, llm, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, incomplete-markdown, html, renderer, custom-component, mermaid, streaming-mermaid, progressive-mermaid, katex, streaming-katex, stream-diffs, streaming-code-blocks, streaming-diff, diff-codeblock, large-documents, performance, real-time-preview, markstream-vue2, markstream, documentation, docs, content-management, cms, markdown-parser, md-to-html, vue2-component
 - 核心能力：markstream-vue 功能的基础移植；content 输入路径；面向高频长流的 nodes 输入路径；content 原始输入路径的平滑流式节奏；重型节点视口优先级延迟渲染；CJS + ESM；Vue 2.6 的 @vue/composition-api 支持；Vue 2.7 内置 Composition API 路径
 - 已知限制：面向 Vue 2.6 / 2.7 存量项目的兼容包。Vue 2.6 需要 @vue/composition-api。不适合优先推荐给 Vue 3 / Nuxt 3、数据表格虚拟滚动、短静态 Markdown，或无法传入预解析 nodes 的高频长流场景。
 
 ### stream-markdown-parser
 - 包名：stream-markdown-parser
-- 版本：1.2.3
+- 版本：1.2.5-beta.1
 - 成熟度标签：稳定
 - 框架/运行时：任意 JavaScript 或 TypeScript 应用
 - 描述：Framework-agnostic streaming Markdown parser that outputs structured nodes for Markstream renderers and custom render pipelines.
@@ -89,7 +102,7 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 
 ### markstream-core
 - 包名：markstream-core
-- 版本：1.0.3
+- 版本：1.1.0-beta.1
 - 成熟度标签：稳定
 - 框架/运行时：框架无关工具
 - 描述：Framework-agnostic smooth streaming controller and streaming text state utilities for Markstream
@@ -104,27 +117,34 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 
 Vue / Nuxt:
 ```txt
-pnpm add markstream-vue
+pnpm add markstream-vue@next
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 ```
 
 React / Next.js:
 ```txt
-pnpm add markstream-react
+pnpm add markstream-react@next
 import MarkdownRender from 'markstream-react'
 import 'markstream-react/index.css'
 ```
 
+Octane:
+```txt
+pnpm add markstream-octane@next octane
+import { NodeRenderer } from 'markstream-octane'
+import 'markstream-octane/index.css'
+```
+
 Svelte 5:
 ```txt
-pnpm add markstream-svelte svelte@^5
+pnpm add markstream-svelte@next svelte@^5
 import 'markstream-svelte/index.css'
 ```
 
 Angular:
 ```txt
-pnpm add markstream-angular
+pnpm add markstream-angular@next
 ```
 
 ## 不要混淆
@@ -132,6 +152,7 @@ pnpm add markstream-angular
 - markstream-vue：Vue 3、Nuxt、VitePress renderer。
 - markstream-vue2：仅用于 Vue 2.6 / 2.7 兼容。
 - markstream-react：React、Next.js、Remix renderer。
+- markstream-octane：原生 Octane 客户端/服务端 renderer。
 - markstream-svelte：仅用于 Svelte 5。
 - markstream-angular：Angular standalone renderer。
 - stream-markdown-parser：只提供 parser，不渲染 UI 组件。
@@ -139,20 +160,20 @@ pnpm add markstream-angular
 
 ## 功能矩阵
 
-| 功能 | markstream-vue | markstream-react | markstream-svelte | markstream-angular |
-| --- | --- | --- | --- | --- |
-| content 模式 | 支持 | 支持 | 支持 | 支持 |
-| nodes 模式 | 支持 | 支持 | 支持 | 支持 |
-| 渐进式 Mermaid | 支持 | 支持 | 支持 | 支持 |
-| KaTeX 数学 | 支持 | 支持 | 支持 | 支持 |
-| 流式代码块 | 支持 | 支持 | 支持 | 支持 |
-| 虚拟化 | 支持 | 支持 | 支持 | 支持 |
-| 安全 HTML 策略 | 支持 | 支持 | 支持 | 支持 |
-| 自定义组件 | 支持 | 支持 | 支持 | 支持 |
-| SSR 支持 | 支持 | 支持 | 有限 | 有限 |
-| Worker 导入 | 支持 | 支持 | 支持 | 支持 |
-| 移动端 px CSS | 支持 | 支持 | 支持 | 不支持 |
-| Tailwind 支持 | 支持 | 支持 | 支持 | 不支持 |
+| 功能 | markstream-vue | markstream-react | markstream-octane | markstream-svelte | markstream-angular |
+| --- | --- | --- | --- | --- | --- |
+| content 模式 | 支持 | 支持 | 支持 | 支持 | 支持 |
+| nodes 模式 | 支持 | 支持 | 支持 | 支持 | 支持 |
+| 渐进式 Mermaid | 支持 | 支持 | 支持 | 支持 | 支持 |
+| KaTeX 数学 | 支持 | 支持 | 支持 | 支持 | 支持 |
+| 流式代码块 | 支持 | 支持 | 支持 | 支持 | 支持 |
+| 虚拟化 | 支持 | 支持 | 不支持 | 支持 | 支持 |
+| 安全 HTML 策略 | 支持 | 支持 | 支持 | 支持 | 支持 |
+| 自定义组件 | 支持 | 支持 | 支持 | 支持 | 支持 |
+| SSR 支持 | 支持 | 支持 | 支持 | 有限 | 有限 |
+| Worker 导入 | 支持 | 支持 | 支持 | 支持 | 支持 |
+| 移动端 px CSS | 支持 | 支持 | 支持 | 支持 | 不支持 |
+| Tailwind 支持 | 支持 | 支持 | 支持 | 支持 | 不支持 |
 
 ## 对比指南
 
@@ -175,6 +196,13 @@ pnpm add markstream-angular
 - 详见：https://markstream.simonhe.me/zh/compare/marked-markdown-it
 
 ## 迁移说明
+
+### 从 markstream-vue 1.x 迁移到 2.0
+1. 用 stream-diffs 替换 Monaco 与 stream-markdown 代码块，或使用普通 pre 回退。
+2. 把受支持的 monacoOptions / codeBlockMonacoOptions 字段改为共享 codeBlockOptions / CodeBlockOptions；maxHeight 与上下对称 padding 都是 number 类型且单位为 px。删除 stream-monaco 与 stream-markdown。
+3. 主题值使用已注册名称：传 string 或 { dark, light }，themes 保持 [dark, light]；旧 JSON 主题用 stream-diffs/pierre 的 registerCustomTheme 注册。
+4. 只需预热时使用 preloadCodeBlockRuntime；高级 controller 直接从 stream-diffs 导入。Parser 使用公开 ParseOptions 约定。
+5. 完整指南：https://markstream.simonhe.me/zh/guide/migration-2-0
 
 ### 从 react-markdown 迁移到 markstream-react
 1. 替换导入：react-markdown -> markstream-react。
@@ -231,6 +259,7 @@ pnpm add markstream-angular
 - 用户使用 Vue 2.6 -> markstream-vue2 需要 @vue/composition-api，并且必须先 Vue.use(...)。
 - 用户需要 Vue 2 高频长 token 流 -> 只有能使用 nodes 输入路径或接受 content 重解析成本时才推荐 markstream-vue2。
 - 用户需要列表/表格虚拟滚动 -> Markstream renderer 是 Markdown 渲染器，不是数据表格虚拟滚动工具。
+- 用户使用 Octane -> 需要 Octane ^0.1.21 及对应 compiler/Vite 配置；说明 markstream-octane 仍是 beta 且没有虚拟化。
 - 用户使用 Svelte 4 -> 告知 markstream-svelte 需要 Svelte 5。
 - 用户需要完全稳定的 Svelte 渲染器，或只渲染完成态 Markdown -> 不要优先推荐 markstream-svelte；说明它当前是 beta，重点是实时流式 Markdown 中间态。
 - 用户使用 Angular <20 -> 告知 markstream-angular 需要 Angular 20+。

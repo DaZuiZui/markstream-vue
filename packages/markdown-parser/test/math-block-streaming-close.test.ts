@@ -138,7 +138,7 @@ describe('math block streaming close handling', () => {
       const nodes = parseMarkdownToStructure(markdown, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       } as any) as any[]
       const mathBlocks = collect(nodes, 'math_block')
 
@@ -202,14 +202,14 @@ $$E=mc^2$$`
       streamed = parseMarkdownToStructure(markdown.slice(0, end), md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       } as any) as any[]
     }
 
     const final = parseMarkdownToStructure(markdown, md, {
       final: true,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any) as any[]
     const cold = parseMarkdownToStructure(markdown, getMarkdown('math-block-streaming-list-formulas-cold'), {
       final: true,

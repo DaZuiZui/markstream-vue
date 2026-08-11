@@ -21,14 +21,14 @@ describe('structured reuse linkify seed granularity', () => {
     parseMarkdownToStructure(commit1, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     })
 
     for (const source of [commit2, commit3]) {
       const nodes = parseMarkdownToStructure(source, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       })
       const cold = parseMarkdownToStructure(source, coldMd, { final: false, streamParse: false })
       expect(JSON.stringify(nodes)).toBe(JSON.stringify(cold))

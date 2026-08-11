@@ -4,9 +4,8 @@ import type { StreamPresetId } from '../composables/streamPresets'
 import type { StreamTransportMode } from '../composables/useStreamSimulator'
 import { Icon } from '@iconify/vue'
 import { useRouter } from 'vue-router'
-import { getUseMonaco } from '../../../src/components/CodeBlockNode/monaco'
-import MarkdownCodeBlockNode from '../../../src/components/MarkdownCodeBlockNode'
 import MarkdownRender from '../../../src/components/NodeRenderer'
+import { preloadCodeBlockRuntime } from '../../../src/exports'
 import { setCustomComponents } from '../../../src/utils/nodeComponents'
 import KatexWorker from '../../../src/workers/katexRenderer.worker?worker&inline'
 import { setKaTeXWorker } from '../../../src/workers/katexWorkerClient'
@@ -87,8 +86,8 @@ const {
   transportMode: streamTransportMode,
 })
 
-// 预加载 Monaco 编辑器
-getUseMonaco()
+// 预加载 stream-diffs 运行时
+void preloadCodeBlockRuntime()
 setKaTeXWorker(new KatexWorker())
 setMermaidWorker(new MermaidWorker())
 const router = useRouter()
@@ -129,7 +128,7 @@ watchEffect(() => {
     streamBurstiness.value = boundedBurstiness
 })
 
-setCustomComponents('playground-demo', { thinking: ThinkingNode, code_block: MarkdownCodeBlockNode })
+setCustomComponents('playground-demo', { thinking: ThinkingNode })
 const parseOptions = {
   preTransformTokens: (tokens: any[]) => {
     // Example: Log tokens during parsing
@@ -234,6 +233,7 @@ const themes = [
   'vitesse-light',
 ]
 const selectedTheme = useLocalStorage<string>('vmr-settings-selected-theme', 'vitesse-dark')
+const codeBlockThemes = computed(() => [selectedTheme.value, selectedTheme.value] as const)
 
 // 格式化主题名称显示
 function formatThemeName(themeName: string) {
@@ -764,7 +764,7 @@ onBeforeUnmount(() => {
           :content="content"
           :code-block-dark-theme="selectedTheme || undefined"
           :code-block-light-theme="selectedTheme || undefined"
-          :themes="themes"
+          :themes="codeBlockThemes"
           :custom-html-tags="['thinking']"
           :is-dark="isDark"
           :parse-options="parseOptions"

@@ -30,6 +30,7 @@ function getDisplayCode(code: unknown, loading?: boolean) {
   template: `<pre
     [ngClass]="preClasses"
     [ngStyle]="lineNumberLayoutStyle"
+    [style.white-space]="whiteSpace"
     [attr.aria-busy]="loading"
     [attr.aria-label]="ariaLabel"
     [attr.data-language]="language"
@@ -42,6 +43,7 @@ function getDisplayCode(code: unknown, loading?: boolean) {
 export class PreCodeNodeComponent {
   @Input({ required: true }) node!: AngularRenderableNode
   @Input() showLineNumbers = false
+  @Input() whiteSpace: 'pre' | 'pre-wrap' | undefined = 'pre-wrap'
 
   // ─── Line-count caching (mirrors the vue3 PreCodeNode) ─────────────────────
   private cachedCode = ''

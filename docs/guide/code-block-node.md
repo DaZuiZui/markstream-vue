@@ -13,31 +13,28 @@ keywords:
 
 ## Quick summary
 - Enhanced mode (install `stream-diffs`) — finalized File/FileDiff surface with syntax highlighting and diff interactions
-- Fallback — plain `<pre><code>` when neither `stream-diffs` nor `stream-monaco` is installed
-- If you want Shiki-based highlighting, use `MarkdownCodeBlockNode` (peer: `stream-markdown`)
+- Fallback — plain `<pre><code>` when `stream-diffs` is not installed
 
 ## Props
 Refer to `src/types/component-props.ts` for full signature. Key props:
 - `node` — code_block node (required)
 - `loading`, `stream`, `isShowPreview`
-- `monacoOptions` — typed as `CodeBlockMonacoOptions` for API compatibility and forwarded to the `stream-diffs` adapter
-  - diff options such as `diffHideUnchangedRegions`, `diffLineStyle`, `diffAppearance`, `diffUnchangedRegionStyle`, `diffHunkActionsOnHover`, `diffHunkHoverHideDelayMs`, and `onDiffHunkAction` belong here
+- `codeBlockOptions` — renderer-neutral typography, layout, File/FileDiff, interaction, annotation, and callback options. The same prop is also available at the `NodeRenderer` / `MarkdownRender` top level.
+- `theme` — a registered string name or `{ dark, light }`; `themes` is the `[dark, light]` name pair to load.
 - Header controls: `showHeader`, `showCollapseButton`, `showCopyButton`, `showExpandButton`, `showPreviewButton`, `showFontSizeButtons`, `showTooltips`
 - HTML preview sandbox: `htmlPreviewAllowScripts` defaults to `false`, and `htmlPreviewSandbox` lets you override the iframe sandbox tokens directly
 
 Built-in inline HTML preview uses `sandbox=""` by default so untrusted preview documents do not run scripts or inherit the host origin. `htmlPreviewSandbox` takes precedence over `htmlPreviewAllowScripts`; passing `htmlPreviewSandbox=""` keeps the iframe fully sandboxed, omitting `htmlPreviewSandbox` leaves `htmlPreviewAllowScripts` in control, and invalid non-string overrides such as `null` fall back to the safe default. Only opt into `htmlPreviewAllowScripts` for trusted demos, and avoid combining `allow-scripts` with `allow-same-origin` for untrusted preview content.
 
-Default diff UX in enhanced mode:
+Default finalized diff UX when no `codeBlockOptions` override is supplied:
 
-- `diffHideUnchangedRegions: { enabled: true, contextLineCount: 2, minimumLineCount: 4, revealLineCount: 5 }`
-- `diffLineStyle: 'background'`
-- `diffAppearance: 'auto'`
-- `diffUnchangedRegionStyle: 'line-info'`
-- `diffHunkActionsOnHover: true`
-- `diffHunkHoverHideDelayMs: 160`
+- `diffStyle: 'split'`
+- `expandUnchanged: false`
+- `collapsedContextThreshold: 5`
+- `hunkSeparators: 'line-info'`
+- `parseDiffOptions: { context: 2 }`
 
-You can override any of them through `monacoOptions`.
-When the preset uses `diffAppearance: 'auto'`, `CodeBlockNode` resolves it to the current light/dark surface before passing the options to its `stream-diffs` adapter.
+The same folding options apply to the fallback and finalized surface; streaming state does not override the consumer's `expandUnchanged` choice. Theme, content/language, header, mount/reveal timing, and disposal remain host-owned even when `codeBlockOptions` is present.
 
 Diff blocks also show `- / +` line counts in the built-in header.
 
@@ -110,6 +107,36 @@ function runSnippet() {}
 </template>
 ```
 
+### Configure the code surface
+
+```vue
+<script setup lang="ts">
+import type { CodeBlockNodeProps, CodeBlockOptions } from 'markstream-vue'
+import { CodeBlockNode } from 'markstream-vue'
+
+const node = {
+  type: 'code_block',
+  language: 'ts',
+  code: 'const answer = 42',
+  raw: 'const answer = 42',
+} satisfies CodeBlockNodeProps['node']
+
+const codeBlockOptions: CodeBlockOptions = {
+  fontSize: 13,
+  lineHeight: 20,
+  overflow: 'wrap',
+  disableLineNumbers: true,
+  enableLineSelection: true,
+}
+</script>
+
+<template>
+  <CodeBlockNode :node="node" :code-block-options="codeBlockOptions" />
+</template>
+```
+
+`fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, and `tabSize` are host-managed so the fallback and finalized surface share geometry. Other supported fields are forwarded to `stream-diffs`. Use the separate component props for header and toolbar controls.
+
 ### Custom loading placeholder
 
 ```vue twoslash
@@ -151,14 +178,11 @@ const isDark = useDark() // Ref<boolean> reactive to system/theme preference
 const toggleDark = useToggle(isDark)
 const content = '# Example\n\n```js\nconsole.log("dark mode")\n```'
 
-// Available themes (must include the themes you want to use)
+// Dark/light theme pair
 const themes = [
   'vitesse-dark',
   'vitesse-light',
-  'github-dark',
-  'github-light',
-  // ... more themes
-]
+] as const
 </script>
 
 <template>
@@ -168,8 +192,7 @@ const themes = [
     </button>
     <MarkdownRender
       :is-dark="isDark"
-      code-block-dark-theme="vitesse-dark"
-      code-block-light-theme="vitesse-light"
+      :code-block-props="{ theme: { dark: 'vitesse-dark', light: 'vitesse-light' } }"
       :themes="themes"
       :content="content"
     />
@@ -207,17 +230,13 @@ const content = '# Example\n\n```js\nconsole.log("dark mode")\n```'
 const themes = [
   'vitesse-dark',
   'vitesse-light',
-  'github-dark',
-  'github-light',
-  // ... more themes
-]
+] as const
 </script>
 
 <template>
   <MarkdownRender
     :is-dark="isDark"
-    code-block-dark-theme="vitesse-dark"
-    code-block-light-theme="vitesse-light"
+    :code-block-props="{ theme: { dark: 'vitesse-dark', light: 'vitesse-light' } }"
     :themes="themes"
     :content="content"
   />
@@ -234,14 +253,11 @@ The `theme` prop accepts either a fixed theme or a light/dark pair:
 
 <!-- Fixed theme (ignores isDark) -->
 <CodeBlockNode theme="monokai" />
-
-<!-- Theme object (fixed, ignores isDark) -->
-<CodeBlockNode :theme="{ name: 'my-theme', colors: { ... } }" />
 ```
 
-When using a `{ light, dark }` pair, the component automatically switches based on the `isDark` prop.
+When using a `{ dark, light }` pair, the component automatically switches based on the `isDark` prop.
 
-The `themes` prop registers the available themes so Monaco can lazy-load them on demand.
+The `themes` prop accepts exactly a `[dark, light]` pair. A former Monaco JSON theme object is not a valid `theme` value in 2.0; use `registerCustomTheme` from `stream-diffs/pierre`, then pass its registered name.
 
 > **Backward compatibility:** `darkTheme` / `lightTheme` props still work but are deprecated. Prefer the unified `theme` prop.
 
@@ -250,8 +266,8 @@ The `themes` prop registers the available themes so Monaco can lazy-load them on
 | Prop | Direct CodeBlockNode | Via MarkdownRender |
 |------|---------------------|-------------------|
 | `isDark` | Passed directly to `<CodeBlockNode :is-dark="isDark" />` | Passed via `<MarkdownRender :is-dark="isDark" />` and automatically forwarded |
-| Theme | `:theme="{ light: 'vitesse-light', dark: 'vitesse-dark' }"` | `:code-block-dark-theme="'vitesse-dark'"` `:code-block-light-theme="'vitesse-light'"` (legacy) |
-| Themes list | `:themes="['vitesse-dark', 'vitesse-light', ...]"` | `:themes="['vitesse-dark', 'vitesse-light', ...]"` |
+| Theme | `:theme="{ dark: 'vitesse-dark', light: 'vitesse-light' }"` | `:code-block-props="{ theme: { dark: 'vitesse-dark', light: 'vitesse-light' } }"` |
+| Themes pair | `:themes="['vitesse-dark', 'vitesse-light']"` | `:themes="['vitesse-dark', 'vitesse-light']"` |
 
 ## Notes
 - The CodeBlock header API is documented in `docs/guide/codeblock-header.md` (examples for replacing header and custom loading placeholder).
@@ -273,8 +289,3 @@ const node = { type: 'code_block', language: 'js', code: 'console.log("hello")',
 ```
 
 ---
-
-Tell me if you want me to also:
-- Add stricter TS types for `defineEmits` in the SFC
-- Update the docs sidebar to link this page (I can add the entry to `docs/guide/index.md` or the sidebar config)
-- Add a runnable example in `playground/` demonstrating slot usage and event interception

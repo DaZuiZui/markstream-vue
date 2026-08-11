@@ -72,9 +72,6 @@ const MermaidBlockNode = definePublicAsyncComponent<MermaidBlockNodeProps>(() =>
 const InfographicBlockNode = definePublicAsyncComponent<InfographicBlockNodeProps>(() => import('./components/InfographicBlockNode'))
 const D2BlockNode = definePublicAsyncComponent<D2BlockNodeProps>(() => import('./components/D2BlockNode'))
 const Tooltip = definePublicAsyncComponent<Record<string, unknown>>(() => import('./components/Tooltip'))
-const MarkdownCodeBlockNode = definePublicAsyncComponent<Record<string, unknown>>(
-  () => import('./components/MarkdownCodeBlockNode'),
-)
 const MarkstreamVirtualTimeline = definePublicAsyncComponent<MarkstreamVirtualTimelineProps<any>>(
   () => import('./components/MarkstreamVirtualTimeline'),
 )
@@ -103,32 +100,24 @@ export type {
   SmoothMarkdownStreamOptions,
 } from './composables/useSmoothMarkdownStream'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
-  CodeBlockMonacoLanguage,
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
-  CodeBlockMonacoThemeObject,
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockPreviewPayload,
+  CodeBlockTheme,
+  CodeBlockThemePair,
   CodeBlockThemeProp,
+  CodeBlockThemes,
   D2BlockNodeProps,
   ImageNodeProps,
   InfographicBlockNodeProps,
   LinkNodeProps,
-  MarkdownCodeBlockPreviewPayload,
   MathBlockNodeProps,
   MathInlineNodeProps,
   MermaidBlockEvent,
   MermaidBlockNodeProps,
   PreCodeNodeProps,
-  ShikiCodeBlockProps,
 } from './types/component-props'
 export type {
   MarkstreamCaptureVirtualStateOptions,
@@ -151,7 +140,6 @@ export type {
   MarkstreamVirtualScrollOptions,
   MarkstreamVirtualScrollSharedOptions,
   MarkstreamVirtualState,
-  NodeRendererCodeRenderer,
   NodeRendererDomMode,
   NodeRendererMode,
   NodeRendererProps,
@@ -257,7 +245,6 @@ export {
   LinkNode,
   ListItemNode,
   ListNode,
-  MarkdownCodeBlockNode,
   MarkdownRender,
   MarkstreamVirtualTimeline,
   MathBlockNode,
@@ -328,7 +315,6 @@ const componentMap: Record<string, Component> = {
   ThematicBreakNode,
   VmrContainerNode,
   ReferenceNode,
-  MarkdownCodeBlockNode,
   MarkstreamVirtualTimeline,
   Tooltip,
 }

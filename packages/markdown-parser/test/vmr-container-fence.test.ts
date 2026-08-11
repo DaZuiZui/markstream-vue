@@ -211,7 +211,7 @@ describe('vmr_container fallback', () => {
       const nodes = parseMarkdownToStructure(markdown, md, {
         final: false,
         streamParse: true,
-        __reuseStableTopLevelNodes: true,
+        reuseStableTopLevelNodes: true,
       } as any) as any[]
       const container = nodes[0]
 
@@ -224,7 +224,7 @@ describe('vmr_container fallback', () => {
     const nodes = parseMarkdownToStructure(markdown, md, {
       final: false,
       streamParse: true,
-      __reuseStableTopLevelNodes: true,
+      reuseStableTopLevelNodes: true,
     } as any) as any[]
     expect(nodes[0]?.children?.[0]?.raw).toBe('content')
   })

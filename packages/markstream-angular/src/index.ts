@@ -3,7 +3,6 @@ export { BlockquoteNodeComponent as BlockquoteNode } from './components/Blockquo
 export { CheckboxNodeComponent as CheckboxNode } from './components/CheckboxNode/CheckboxNode.component'
 export { CodeBlockNodeComponent as CodeBlockNode } from './components/CodeBlockNode/CodeBlockNode.component'
 export { CodeBlockNodeComponent as AngularCodeBlockNode } from './components/CodeBlockNode/CodeBlockNode.component'
-export { CodeBlockNodeComponent as MarkdownCodeBlockNode } from './components/CodeBlockNode/CodeBlockNode.component'
 export { HtmlPreviewFrameComponent as HtmlPreviewFrame } from './components/CodeBlockNode/HtmlPreviewFrame.component'
 export { D2BlockNodeComponent as D2BlockNode } from './components/D2BlockNode/D2BlockNode.component'
 export { DefinitionListNodeComponent as DefinitionListNode } from './components/DefinitionListNode/DefinitionListNode.component'
@@ -124,24 +123,19 @@ export { sanitizeHtmlContent } from './sanitizeHtmlContent'
 export { SmoothMarkdownStreamService } from './services/smooth-markdown-stream.service'
 export type { SmoothMarkdownStreamOptions } from './services/smooth-markdown-stream.service'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
-  CodeBlockMonacoLanguage,
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
-  CodeBlockMonacoThemeObject,
-} from './types/monaco'
+  CodeBlockOptions,
+  CodeBlockTheme,
+  CodeBlockThemePair,
+  CodeBlockThemeProp,
+  CodeBlockThemes,
+} from './types/codeBlock'
 export {
   getLanguageIcon,
   languageMap,
   normalizeLanguageIdentifier,
-  resolveMonacoLanguageId,
+  resolveLanguageId,
   setLanguageIconResolver,
 } from './utils/languageIcon'
 export type { LanguageIconResolver } from './utils/languageIcon'

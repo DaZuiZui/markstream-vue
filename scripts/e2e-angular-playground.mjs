@@ -322,7 +322,7 @@ async function waitForHomeCompletion(page, timeout = 180000) {
     const total = Number.parseInt(match[2], 10)
     const percent = Number.parseInt(match[3], 10)
     return total > 0 && current >= total && percent === 100
-  }, { timeout })
+  }, undefined, { timeout })
 }
 
 async function collectHomeCompletionMetrics(page) {
@@ -359,12 +359,12 @@ async function waitForHomeStreamingCodeHighlight(page, timeout = 180000) {
         total,
         percent,
         done: total > 0 && current >= total && percent === 100,
-        monacoCount: document.querySelectorAll('.panel.preview .markstream-angular [data-markstream-monaco="1"]').length,
+        streamDiffsCount: document.querySelectorAll('.panel.preview .markstream-angular .code-editor-container:not([aria-hidden="true"]) .stream-diffs-shell').length,
         fallbackPreCount: document.querySelectorAll('.panel.preview .markstream-angular .code-fallback-plain').length,
       }
     })
 
-    if (lastSnapshot.monacoCount > 0)
+    if (lastSnapshot.streamDiffsCount > 0)
       return lastSnapshot
 
     if (lastSnapshot.done)
@@ -485,9 +485,11 @@ async function verifyBaselineInteractions(page) {
 
 async function collectDiffMetrics(page) {
   return page.evaluate(() => ({
-    wrapperCount: document.querySelectorAll('.preview-surface [data-markstream-monaco="1"]').length,
-    monacoCount: document.querySelectorAll('.preview-surface [data-markstream-monaco="1"] .monaco-editor').length,
-    monacoDiffCount: document.querySelectorAll('.preview-surface [data-markstream-monaco="1"] .monaco-diff-editor').length,
+    wrapperCount: document.querySelectorAll('.preview-surface .code-block-container').length,
+    streamDiffsCount: document.querySelectorAll('.preview-surface .code-editor-container:not([aria-hidden="true"]) .stream-diffs-shell').length,
+    diffSurfaceCount: Array.from(document.querySelectorAll('.preview-surface .code-block-container diffs-container'))
+      .filter(surface => surface.closest('.code-editor-container')?.getAttribute('aria-hidden') !== 'true' && surface.shadowRoot?.querySelector('pre[data-diff]'))
+      .length,
     badgeTexts: Array.from(document.querySelectorAll('.preview-surface .markstream-angular-enhanced-block__badge'))
       .map(node => node.textContent?.trim())
       .filter(Boolean),
@@ -495,20 +497,28 @@ async function collectDiffMetrics(page) {
 }
 
 async function verifyDiffInteractions(page) {
-  const diffBlock = page.locator('.preview-surface [data-markstream-monaco-diff="1"]').first()
+  const diffBlock = page.locator('.preview-surface .code-block-container')
+    .filter({ has: page.locator('diffs-container pre[data-diff]') })
+    .first()
   await diffBlock.locator('button[title="Collapse"]').first().click()
   await page.waitForFunction(() => {
-    const body = document.querySelector('.preview-surface [data-markstream-monaco-diff="1"] .code-block-body')
+    const body = Array.from(document.querySelectorAll('.preview-surface .code-block-container'))
+      .find(block => Array.from(block.querySelectorAll('diffs-container')).some(surface => surface.shadowRoot?.querySelector('pre[data-diff]')))
+      ?.querySelector('.code-block-body')
     return body?.classList.contains('code-block-body--collapsed') === true
   }, { timeout: 10000 })
   await diffBlock.locator('button[title="Expand"]').first().click()
   await page.waitForFunction(() => {
-    const body = document.querySelector('.preview-surface [data-markstream-monaco-diff="1"] .code-block-body')
+    const body = Array.from(document.querySelectorAll('.preview-surface .code-block-container'))
+      .find(block => Array.from(block.querySelectorAll('diffs-container')).some(surface => surface.shadowRoot?.querySelector('pre[data-diff]')))
+      ?.querySelector('.code-block-body')
     return body?.classList.contains('code-block-body--collapsed') === false
   }, { timeout: 10000 })
   await diffBlock.locator('button[title="Copy"]').first().click()
   await page.waitForFunction(() => {
-    const live = document.querySelector('.preview-surface [data-markstream-monaco-diff="1"] [role="status"]')
+    const live = Array.from(document.querySelectorAll('.preview-surface .code-block-container'))
+      .find(block => Array.from(block.querySelectorAll('diffs-container')).some(surface => surface.shadowRoot?.querySelector('pre[data-diff]')))
+      ?.querySelector('[role="status"]')
     return live?.textContent?.includes('Copied')
   }, { timeout: 10000 })
 }
@@ -517,7 +527,7 @@ async function collectThinkingMetrics(page) {
   return page.evaluate(() => ({
     thinkingCount: document.querySelectorAll('.preview-surface .thinking-node').length,
     mermaidSvgCount: document.querySelectorAll('.preview-surface .thinking-node .markstream-angular-mermaid svg').length,
-    monacoCount: document.querySelectorAll('.preview-surface .thinking-node [data-markstream-monaco="1"]').length,
+    streamDiffsCount: document.querySelectorAll('.preview-surface .thinking-node .code-editor-container:not([aria-hidden="true"]) .stream-diffs-shell').length,
     listCount: document.querySelectorAll('.preview-surface .thinking-node li').length,
     previewExcerpt: (document.querySelector('.preview-surface')?.textContent || '').slice(0, 500),
   }))
@@ -544,8 +554,8 @@ async function waitForDiffEditors(page, timeout = 60000) {
 
   while (Date.now() - startedAt < timeout) {
     lastSnapshot = await page.evaluate(() => ({
-      wrapperCount: document.querySelectorAll('.preview-surface [data-markstream-monaco="1"]').length,
-      monacoCount: document.querySelectorAll('.preview-surface [data-markstream-monaco="1"] .monaco-editor').length,
+      wrapperCount: document.querySelectorAll('.preview-surface .code-block-container').length,
+      streamDiffsCount: document.querySelectorAll('.preview-surface .code-editor-container:not([aria-hidden="true"]) .stream-diffs-shell').length,
       badgeTexts: Array.from(document.querySelectorAll('.preview-surface .markstream-angular-enhanced-block__badge'))
         .map(node => node.textContent?.trim())
         .filter(Boolean),
@@ -555,13 +565,13 @@ async function waitForDiffEditors(page, timeout = 60000) {
         : '') || '').slice(0, 160),
     }))
 
-    if (lastSnapshot.wrapperCount >= 2 && lastSnapshot.monacoCount >= 2)
+    if (lastSnapshot.wrapperCount >= 2 && lastSnapshot.streamDiffsCount >= 2)
       return lastSnapshot
 
     await page.waitForTimeout(1000)
   }
 
-  throw new Error(`Timed out waiting for diff Monaco blocks: ${JSON.stringify(lastSnapshot)}`)
+  throw new Error(`Timed out waiting for stream-diffs blocks: ${JSON.stringify(lastSnapshot)}`)
 }
 
 async function collectStressMetrics(page) {
@@ -583,22 +593,26 @@ async function collectStreamingMetrics(page) {
 
   await page.getByRole('button', { name: '开始流式渲染' }).click()
   await page.waitForFunction(() => {
-    const pill = document.querySelectorAll('.workspace-card .mini-pill')[1]
-    const foot = document.querySelectorAll('.workspace-card__foot span')[3]
+    const pill = document.querySelector('.hero-panel__status-row .mini-pill:nth-child(2)')
+    const previewStatus = document.querySelector('.workspace-card--preview .workspace-card__head p')
+    const foot = document.querySelector('.workspace-card--preview .workspace-card__foot span:last-child')
     return pill?.textContent?.trim() === 'Streaming'
-      && foot?.textContent?.includes('正在逐步追加中')
-  }, { timeout: 10000 })
+      && previewStatus?.textContent?.includes('Streaming 中')
+      && foot?.textContent?.includes('Streaming 中')
+  }, undefined, { timeout: 10000 })
 
   const earlyProgress = await readProgress()
 
   await page.waitForFunction(() => {
     const progress = document.querySelectorAll('.hero-panel__metrics .metric-card strong')[3]
-    const pill = document.querySelectorAll('.workspace-card .mini-pill')[1]
-    const foot = document.querySelectorAll('.workspace-card__foot span')[3]
+    const pill = document.querySelector('.hero-panel__status-row .mini-pill:nth-child(2)')
+    const previewStatus = document.querySelector('.workspace-card--preview .workspace-card__head p')
+    const foot = document.querySelector('.workspace-card--preview .workspace-card__foot span:last-child')
     return progress?.textContent?.trim() === '100%'
       && pill?.textContent?.trim() === 'Ready'
-      && foot?.textContent?.includes('已显示完整输入')
-  }, { timeout: 30000 })
+      && previewStatus?.textContent?.includes('已显示完整输入')
+      && foot?.textContent?.includes('Angular renderer')
+  }, undefined, { timeout: 30000 })
 
   return {
     earlyProgress,
@@ -696,7 +710,7 @@ async function main() {
       const thinkingDebug = await collectThinkingDebug(page)
       throw new Error(`Timed out waiting for thinking Mermaid render: ${JSON.stringify(thinkingDebug)}`, { cause: error })
     }
-    await page.waitForSelector('.preview-surface .thinking-node [data-markstream-monaco="1"]', { timeout: 30000 })
+    await page.waitForSelector('.preview-surface .thinking-node .code-editor-container:not([aria-hidden="true"]) .stream-diffs-shell', { timeout: 30000 })
     const thinking = await collectThinkingMetrics(page)
 
     await page.getByRole('button', { name: 'Diff 与代码流' }).click()
@@ -748,7 +762,7 @@ async function main() {
     if (result.homeStreamingHealth.frameCount < 20 || result.homeStreamingHealth.metaText === result.homeProgressText) {
       throw new Error(`Home page became unresponsive while streaming: ${JSON.stringify(result.homeStreamingHealth)}`)
     }
-    if (result.homeCompletion.metaText !== '11268 / 11268 (100%)') {
+    if (!/^(\d+)\s*\/\s*\1\s*\(100%\)$/.test(result.homeCompletion.metaText)) {
       throw new Error(`Home page did not reach full completion: ${JSON.stringify(result.homeCompletion)}`)
     }
     if (!result.homeCompletion.containsTaylor || !result.homeCompletion.containsOrthogonalComplement || !result.homeCompletion.containsHelloWorldTail) {
@@ -777,17 +791,17 @@ async function main() {
     if (!result.homeLinkTooltip.visible || !result.homeLinkTooltip.text.includes('https://github.com/Simon-He95/markstream-vue')) {
       throw new Error(`Home link tooltip did not match the shared singleton behavior: ${JSON.stringify(result.homeLinkTooltip)}`)
     }
-    if (result.homeStreamingCodeHighlight.monacoCount < 1 || result.homeStreamingCodeHighlight.done) {
+    if (result.homeStreamingCodeHighlight.streamDiffsCount < 1 || result.homeStreamingCodeHighlight.done) {
       throw new Error(`Home code blocks did not enter highlighted mode before stream completion: ${JSON.stringify(result.homeStreamingCodeHighlight)}`)
     }
     if (baseline.katexCount < 1 || baseline.mermaidSvgCount < 1 || baseline.infographicSvgCount < 1 || baseline.d2SvgCount < 1) {
       throw new Error(`Baseline enhancements did not all render: ${JSON.stringify(baseline)}`)
     }
-    if (thinking.thinkingCount < 1 || thinking.mermaidSvgCount < 1 || thinking.monacoCount < 1 || thinking.listCount < 2) {
+    if (thinking.thinkingCount < 1 || thinking.mermaidSvgCount < 1 || thinking.streamDiffsCount < 1 || thinking.listCount < 2) {
       throw new Error(`Thinking sample did not render nested heavy nodes as expected: ${JSON.stringify(thinking)}`)
     }
-    if (diff.wrapperCount < 2 || diff.monacoCount < 2) {
-      throw new Error(`Diff sample did not mount Monaco editors as expected: ${JSON.stringify(diff)}`)
+    if (diff.wrapperCount < 2 || diff.streamDiffsCount < 2 || diff.diffSurfaceCount < 1) {
+      throw new Error(`Diff sample did not mount stream-diffs surfaces as expected: ${JSON.stringify(diff)}`)
     }
     if (stress.tableCount < 1 || stress.detailsCount < 1 || stress.summaryCount < 1) {
       throw new Error(`Stress sample missed expected structural nodes: ${JSON.stringify(stress)}`)

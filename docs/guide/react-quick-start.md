@@ -141,26 +141,16 @@ export default function MarkdownPage() {
 
 ### Code Syntax Highlighting
 
-Install dependencies:
+Install the optional peer:
 
 ```bash
-pnpm add stream-markdown
+pnpm add stream-diffs
 ```
 
-```tsx
-import MarkdownRender, { MarkdownCodeBlockNode, setCustomComponents } from 'markstream-react'
+Enhanced code blocks use `stream-diffs` defaults and accept the shared `CodeBlockOptions` contract through direct `CodeBlockNode.codeBlockOptions` or top-level `MarkdownRender.codeBlockOptions`. Themes are registered names; `themes` is the `[dark, light]` pair. When `stream-diffs` is not installed, code blocks fall back to a plain `<pre>`.
 
-// Use Shiki-based code blocks inside MarkdownRender
-setCustomComponents({
-  code_block: ({ node, isDark, ctx }: any) => (
-    <MarkdownCodeBlockNode
-      node={node}
-      isDark={isDark}
-      stream={ctx?.codeBlockStream}
-      {...(ctx?.codeBlockProps || {})}
-    />
-  ),
-})
+```tsx
+import MarkdownRender from 'markstream-react'
 
 function App() {
   const markdown = `\`\`\`javascript

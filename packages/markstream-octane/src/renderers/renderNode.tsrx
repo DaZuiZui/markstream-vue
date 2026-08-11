@@ -6,7 +6,7 @@ import { convertHtmlAttrsToProps, getHtmlTagFromContent, normalizeCustomHtmlTagN
 import { AdmonitionNode } from '../components/AdmonitionNode/AdmonitionNode.tsrx'
 import { BlockquoteNode } from '../components/BlockquoteNode/BlockquoteNode.tsrx'
 import { CheckboxNode } from '../components/CheckboxNode/CheckboxNode.tsrx'
-import { CodeBlockNode as MonacoCodeBlockNode } from '../components/CodeBlockNode/CodeBlockNode.tsrx'
+import { CodeBlockNode } from '../components/CodeBlockNode/CodeBlockNode.tsrx'
 import { PreCodeNode } from '../components/CodeBlockNode/PreCodeNode.tsrx'
 import { D2BlockNode } from '../components/D2BlockNode/D2BlockNode.tsrx'
 import { DefinitionListNode } from '../components/DefinitionListNode/DefinitionListNode.tsrx'
@@ -129,19 +129,19 @@ function renderCustomCodeBlockComponent(
   return Octane.createElement(component, {
     key,
     node,
-    loading: Boolean(node.loading),
+    loading: Boolean(node.loading) || ctx.final === false,
     stream: ctx.codeBlockStream,
     customId: ctx.customId,
     isDark: ctx.isDark,
     darkTheme: ctx.codeBlockThemes?.darkTheme,
     lightTheme: ctx.codeBlockThemes?.lightTheme,
     themes: ctx.codeBlockThemes?.themes,
-    langs: ctx.codeBlockThemes?.langs,
     minWidth: ctx.codeBlockThemes?.minWidth,
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     onCopy: ctx.events.onCopy,
     onPreviewCode,
     ...extraProps,
+    codeBlockOptions: ctx.codeBlockOptions,
     ...specialProps,
     ctx,
     renderNode,
@@ -280,26 +280,36 @@ function renderCodeBlock(
     return renderCustomCodeBlockComponent(customCodeBlock, node, key, ctx)
 
   if (ctx.renderCodeBlocksAsPre || language === 'mermaid') {
-    const extraProps = getCodeBlockExtraProps(ctx.codeBlockProps, { omit: ['langs'] })
+    const extraProps = getCodeBlockExtraProps(ctx.codeBlockProps)
+    const configuredShowLineNumbers = extraProps.showLineNumbers
+    const disableLineNumbers = ctx.codeBlockOptions?.disableLineNumbers
+    const overflow = ctx.codeBlockOptions?.overflow
     return Octane.createElement(PreCodeNode, {
       key,
       node,
-      showLineNumbers: extraProps.showLineNumbers === true,
+      style: overflow ? { whiteSpace: overflow === 'scroll' ? 'pre' : 'pre-wrap' } : undefined,
+      showLineNumbers: typeof configuredShowLineNumbers === 'boolean'
+        ? configuredShowLineNumbers
+        : typeof disableLineNumbers === 'boolean'
+          ? !disableLineNumbers
+          : false,
     })
   }
 
-  return Octane.createElement(MonacoCodeBlockNode, {
+  return Octane.createElement(CodeBlockNode, {
     key,
     node,
-    loading: Boolean(node.loading),
+    loading: Boolean(node.loading) || ctx.final === false,
     stream: ctx.codeBlockStream,
-    monacoOptions: ctx.codeBlockThemes?.monacoOptions,
     themes: ctx.codeBlockThemes?.themes,
+    darkTheme: ctx.codeBlockThemes?.darkTheme,
+    lightTheme: ctx.codeBlockThemes?.lightTheme,
     minWidth: ctx.codeBlockThemes?.minWidth,
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     isDark: ctx.isDark,
     onCopy: ctx.events.onCopy,
-    ...getCodeBlockExtraProps(ctx.codeBlockProps, { omit: ['langs'] }),
+    ...getCodeBlockExtraProps(ctx.codeBlockProps),
+    codeBlockOptions: ctx.codeBlockOptions,
   })
 }
 

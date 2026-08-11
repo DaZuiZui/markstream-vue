@@ -18,6 +18,7 @@ markstream-vue2 provides the same powerful components as markstream-vue, but bui
 ```ts
 import type {
   CodeBlockNodeProps,
+  CodeBlockOptions,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
@@ -64,7 +65,7 @@ The primary component for rendering markdown content in Vue 2.
 |------|---------|-------------|
 | `render-code-blocks-as-pre` | `false` | Render non-Mermaid/Infographic/D2 code blocks as `<pre><code>` |
 | `code-block-stream` | `true` | Stream code block updates as content arrives |
-| `viewport-priority` | `true` | Defer heavy work (Monaco/Mermaid/D2/KaTeX) until near viewport |
+| `viewport-priority` | `true` | Defer heavy work (Mermaid/D2/KaTeX) until near viewport |
 | `defer-nodes-until-visible` | `true` | Render heavy nodes as placeholders until visible (non-virtualized mode only) |
 | `smooth-streaming` | `'auto'` | Enables built-in pacing for streaming `content` updates (`boolean | 'auto'`) |
 | `smooth-streaming-options` | - | Fine-tune pacing (`SmoothMarkdownStreamOptions`) |
@@ -86,16 +87,16 @@ The primary component for rendering markdown content in Vue 2.
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `code-block-dark-theme` | `any` | Monaco dark theme object forwarded to every `CodeBlockNode` |
-| `code-block-light-theme` | `any` | Monaco light theme object forwarded to every `CodeBlockNode` |
-| `code-block-monaco-options` | `Record<string, any>` | Options forwarded to `stream-monaco`, including diff hover-action settings like `diffHunkActionsOnHover`, `diffHunkHoverHideDelayMs`, and `onDiffHunkAction` |
+| `code-block-dark-theme` | `CodeBlockTheme` | Registered dark theme name forwarded to every `CodeBlockNode` |
+| `code-block-light-theme` | `CodeBlockTheme` | Registered light theme name forwarded to every `CodeBlockNode` |
 | `code-block-min-width` | `string \| number` | Min width forwarded to `CodeBlockNode` |
 | `code-block-max-width` | `string \| number` | Max width forwarded to `CodeBlockNode` |
+| `code-block-options` | `CodeBlockOptions` | Typography/layout and supported File/FileDiff options forwarded to every ordinary `CodeBlockNode` |
 | `code-block-props` | `Record<string, any>` | Extra props forwarded to every `CodeBlockNode` |
 | `mermaid-props` | `Partial<Omit<MermaidBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to Mermaid fences and custom `mermaid` renderers |
 | `d2-props` | `Partial<Omit<D2BlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to D2 fences and custom `d2` renderers |
 | `infographic-props` | `Partial<Omit<InfographicBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to infographic fences and custom `infographic` renderers |
-| `themes` | `string[]` | Theme list forwarded to `stream-monaco` |
+| `themes` | `readonly [string, string]` | Registered `[dark, light]` theme-name pair forwarded to `CodeBlockNode` |
 
 #### Heavy renderer prop forwarding
 
@@ -116,7 +117,7 @@ The primary component for rendering markdown content in Vue 2.
 ```
 
 Streaming notes:
-- Keep `viewport-priority` enabled to prevent offscreen Mermaid / Monaco / D2 work from running while text is still streaming. Set it to `false` when the whole document must render immediately.
+- Keep `viewport-priority` enabled to prevent offscreen Mermaid / D2 work from running while text is still streaming. Set it to `false` when the whole document must render immediately.
 - For jittery SSE or AI token streams, start with `content` + built-in `smooth-streaming`.
 - Use `nodes` when a worker, store, or custom AST pipeline already owns parsing.
 - Mermaid strict mode is now the default. Set `:mermaid-props="{ isStrict: false }"` only for trusted diagrams that need loose Mermaid HTML-label behavior.
@@ -165,52 +166,9 @@ export default {
 
 ## Code Block Components
 
-### MarkdownCodeBlockNode
-
-Lightweight code highlighting using Shiki.
-
-```vue
-<script>
-import { MarkdownCodeBlockNode } from 'markstream-vue2'
-
-export default {
-  components: { MarkdownCodeBlockNode },
-  data() {
-    return {
-      codeNode: {
-        type: 'code_block',
-        language: 'javascript',
-        code: 'const hello = "world"',
-        raw: 'const hello = "world"'
-      }
-    }
-  },
-  methods: {
-    handleCopy() {
-      alert('Code copied!')
-    }
-  }
-}
-</script>
-
-<template>
-  <div class="markstream-vue">
-    <MarkdownCodeBlockNode
-      :node="codeNode"
-      :show-copy-button="true"
-      @copy="handleCopy"
-    >
-      <template #header-right>
-        <span class="lang-badge">{{ codeNode.language }}</span>
-      </template>
-    </MarkdownCodeBlockNode>
-  </div>
-</template>
-```
-
 ### CodeBlockNode
 
-Feature-rich Monaco-powered code blocks.
+Feature-rich code blocks enhanced by the optional `stream-diffs` runtime (falls back to a plain `<pre>` when the peer is not installed). Both direct `CodeBlockNode` and top-level `MarkdownRender` usage accept `codeBlockOptions`.
 
 ```vue
 <script>
@@ -225,6 +183,11 @@ export default {
         language: 'typescript',
         code: 'const greeting: string = "Hello"',
         raw: 'const greeting: string = "Hello"'
+      },
+      codeBlockOptions: {
+        overflow: 'wrap',
+        diffStyle: 'unified',
+        enableLineSelection: true
       }
     }
   },
@@ -243,7 +206,7 @@ export default {
   <div class="markstream-vue">
     <CodeBlockNode
       :node="codeNode"
-      :monaco-options="{ fontSize: 14, theme: 'vs-dark' }"
+      :code-block-options="codeBlockOptions"
       :stream="true"
       @copy="handleCopy"
       @preview-code="handlePreviewCode"
@@ -251,6 +214,8 @@ export default {
   </div>
 </template>
 ```
+
+Markstream coordinates `fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, and `tabSize` across the fallback and finalized surface. It forwards the other supported File/FileDiff fields while retaining ownership of theme, content/language, streaming state, header, mounting, reveal, and disposal.
 
 ## Math Components
 

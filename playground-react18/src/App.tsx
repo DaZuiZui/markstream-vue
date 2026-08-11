@@ -234,7 +234,7 @@ export default function App() {
     sliceMode: streamSliceMode,
     transportMode: streamTransportMode,
   })
-  const themeOptions = useMemo(() => Array.from(THEMES), [])
+  const themeOptions = useMemo(() => [selectedTheme, selectedTheme] as const, [selectedTheme])
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const settingsRootRef = useRef<HTMLDivElement | null>(null)
   const isCompactSettings = useMediaQuery('(max-width: 1023px)')

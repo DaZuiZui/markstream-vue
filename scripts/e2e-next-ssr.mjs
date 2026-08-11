@@ -20,7 +20,6 @@ const EXPORT_NAMES = [
   'CheckboxNode',
   'CodeBlockNode',
   'ReactCodeBlockNode',
-  'MarkdownCodeBlockNode',
   'PreCodeNode',
   'D2BlockNode',
   'MermaidBlockNode',
@@ -346,7 +345,7 @@ async function assertHydratedUi(page) {
   if (serverExportCount !== EXPORT_NAMES.length)
     throw new Error(`Expected ${EXPORT_NAMES.length} server export markers, received ${serverExportCount}`)
 
-  const codeEnhanced = await nextEnhanced.locator('[data-ssr-demo="code"] .monaco-editor, [data-ssr-demo="code"] .code-editor-fallback-surface').count()
+  const codeEnhanced = await nextEnhanced.locator('[data-ssr-demo="code"] .stream-diffs-shell, [data-ssr-demo="code"] .code-editor-fallback-surface').count()
   if (codeEnhanced === 0)
     throw new Error('Code block did not enhance to the client shell')
 

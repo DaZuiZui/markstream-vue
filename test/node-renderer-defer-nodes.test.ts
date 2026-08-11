@@ -495,7 +495,7 @@ describe('markdownRender deferNodesUntilVisible', () => {
     }
   })
 
-  it('uses the heavy-block preload margin for MarkdownCodeBlockNode', async () => {
+  it('uses the heavy-block preload margin for CodeBlockNode', async () => {
     const OriginalIO = globalThis.IntersectionObserver
     const benchmarkWindow = window as any
     vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver as any)
@@ -503,10 +503,10 @@ describe('markdownRender deferNodesUntilVisible', () => {
 
     let wrapper: ReturnType<typeof mount> | null = null
     try {
-      const { default: MarkdownCodeBlockNode } = await import('../src/components/MarkdownCodeBlockNode/MarkdownCodeBlockNode.vue')
+      const { default: CodeBlockNode } = await import('../src/components/CodeBlockNode/CodeBlockNode.vue')
       const viewportPriority = await import('../src/composables/viewportPriority')
       const Probe = defineComponent({
-        components: { MarkdownCodeBlockNode },
+        components: { CodeBlockNode },
         setup() {
           const viewportPriorityOptions = ref({
             rootMargin: '111px',
@@ -525,7 +525,7 @@ describe('markdownRender deferNodesUntilVisible', () => {
 
           return { node }
         },
-        template: '<MarkdownCodeBlockNode :node="node" :loading="false" :stream="false" />',
+        template: '<CodeBlockNode :node="node" :loading="false" :stream="false" />',
       })
 
       wrapper = mount(Probe)
@@ -552,7 +552,6 @@ describe('markdownRender deferNodesUntilVisible', () => {
 
     let wrapper: ReturnType<typeof mount> | null = null
     try {
-      await import('../src/components/MarkdownCodeBlockNode')
       const { default: MarkdownRender } = await import('../src/components/NodeRenderer')
 
       wrapper = mount(MarkdownRender, {
@@ -562,7 +561,6 @@ describe('markdownRender deferNodesUntilVisible', () => {
             'console.log(1)',
             '```',
           ].join('\n'),
-          codeRenderer: 'shiki',
           batchRendering: false,
           deferNodesUntilVisible: false,
           final: true,
@@ -659,73 +657,6 @@ describe('markdownRender deferNodesUntilVisible', () => {
       secondObserver?.trigger(secondTarget.element)
       await flushAll()
       expect(wrapper.get('img').attributes('src')).toBe('https://example.com/thread-b.png')
-    }
-    finally {
-      wrapper?.unmount()
-      delete benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__
-      vi.stubGlobal('IntersectionObserver', OriginalIO as any)
-    }
-  })
-
-  it('keeps MarkdownCodeBlockNode ready after viewport priority options change', async () => {
-    const OriginalIO = globalThis.IntersectionObserver
-    const benchmarkWindow = window as any
-    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver as any)
-    benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__ = true
-
-    let wrapper: ReturnType<typeof mount> | null = null
-    try {
-      const { default: MarkdownCodeBlockNode } = await import('../src/components/MarkdownCodeBlockNode/MarkdownCodeBlockNode.vue')
-      const viewportPriority = await import('../src/composables/viewportPriority')
-      const Probe = defineComponent({
-        components: { MarkdownCodeBlockNode },
-        setup() {
-          const viewportPriorityOptions = ref({
-            rootMargin: '111px',
-            heavyBlockMargin: '222px',
-          })
-          viewportPriority.provideViewportPriorityOptions(computed(() => viewportPriorityOptions.value))
-          viewportPriority.provideOffscreenHeavyNodeDeferral(computed(() => true))
-          viewportPriority.provideViewportPriority(() => null, true)
-
-          function updateMargin() {
-            viewportPriorityOptions.value = {
-              rootMargin: '111px',
-              heavyBlockMargin: '333px',
-            }
-          }
-
-          return {
-            node: {
-              type: 'code_block',
-              language: 'ts',
-              code: 'console.log(1)',
-              raw: '```ts\nconsole.log(1)\n```',
-            },
-            updateMargin,
-          }
-        },
-        template: '<MarkdownCodeBlockNode :node="node" :loading="false" :stream="false" />',
-      })
-
-      wrapper = mount(Probe)
-      await flushAll()
-
-      const codeBlock = wrapper.get('[data-markstream-code-block="1"]')
-      const initialObserver = FakeIntersectionObserver.instances.find(instance => instance.elements.has(codeBlock.element))
-      expect(initialObserver).toBeTruthy()
-      expect(initialObserver?.options.rootMargin).toBe('222px')
-
-      initialObserver?.trigger(codeBlock.element, true)
-      await flushAll()
-
-      ;(wrapper.vm as any).updateMargin()
-      await flushAll()
-
-      const updatedObserver = FakeIntersectionObserver.instances.find(instance =>
-        instance.options.rootMargin === '333px' && instance.elements.has(codeBlock.element),
-      )
-      expect(updatedObserver).toBeUndefined()
     }
     finally {
       wrapper?.unmount()
@@ -924,6 +855,51 @@ describe('markdownRender deferNodesUntilVisible', () => {
     }
   })
 
+  it('renders the live buffer tail during non-final content appends before IO fires', async () => {
+    const OriginalIO = globalThis.IntersectionObserver
+    const benchmarkWindow = window as any
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver as any)
+    benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__ = true
+
+    const createMarkdown = (count: number) =>
+      Array.from({ length: count }, (_, index) => `Paragraph ${index + 1}`).join('\n\n')
+
+    let wrapper: ReturnType<typeof mount> | null = null
+    try {
+      const MarkdownRender = (await import('../src/components/NodeRenderer')).default
+
+      wrapper = mount(MarkdownRender, {
+        props: {
+          content: createMarkdown(60),
+          deferNodesUntilVisible: true,
+          final: false,
+          initialRenderBatchSize: 40,
+          liveNodeBuffer: 10,
+          maxLiveNodes: 220,
+          viewportPriority: true,
+        },
+      })
+
+      await flushAll()
+      expect(wrapper.find('[data-node-index="59"] .node-placeholder').exists()).toBe(true)
+
+      await wrapper.setProps({ content: createMarkdown(65) })
+      await flushAll()
+
+      expect(wrapper.find('[data-node-index="54"] .node-placeholder').exists()).toBe(true)
+      for (let index = 55; index < 65; index++) {
+        const slot = wrapper.find(`[data-node-index="${index}"]`)
+        expect(slot.find('.node-placeholder').exists()).toBe(false)
+        expect(slot.find('.node-content').exists()).toBe(true)
+      }
+    }
+    finally {
+      wrapper?.unmount()
+      delete benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__
+      vi.stubGlobal('IntersectionObserver', OriginalIO as any)
+    }
+  })
+
   it('uses viewportPriorityOptions.rootMargin for deferred node shells', async () => {
     const OriginalIO = globalThis.IntersectionObserver
     const benchmarkWindow = window as any
@@ -1014,6 +990,7 @@ describe('markdownRender deferNodesUntilVisible', () => {
           content: createMarkdown(220),
           batchRendering: false,
           deferNodesUntilVisible: true,
+          final: true,
           viewportPriority: true,
           viewportPriorityOptions: {
             maxTargets: 1,

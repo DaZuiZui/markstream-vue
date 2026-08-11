@@ -44,8 +44,8 @@ const diffEditorView = {
   layout: () => {},
 }
 
-const streamMonacoHelpers = {
-  useMonaco: vi.fn(() => streamMonacoHelpers),
+const streamDiffsHelpers = {
+  createCodeBlockRuntime: vi.fn(() => streamDiffsHelpers),
   createEditor: vi.fn(async () => {}),
   createDiffEditor: vi.fn(async () => {}),
   updateCode: vi.fn(),
@@ -59,52 +59,20 @@ const streamMonacoHelpers = {
   setTheme: vi.fn(async () => {}),
 }
 
-// Tests reach into this global handle to reset/inspect the shared stream-monaco mock.
-;(globalThis as any).__streamMonacoHelpers = streamMonacoHelpers
-
-vi.mock('stream-monaco', () => ({
-  useMonaco: streamMonacoHelpers.useMonaco,
-  preloadMonacoWorkers: vi.fn(async () => {}),
-  getOrCreateHighlighter: vi.fn(async () => ({
-    codeToTokens: vi.fn(() => ({
-      tokens: [],
-      fg: '#000000',
-      bg: '#ffffff',
-      themeName: 'vitesse-dark',
-      rootStyle: {},
-      grammarState: null,
-    })),
-  })),
-  detectLanguage: () => 'plaintext',
-}))
+// Tests reach into this handle to reset and inspect the shared runtime mock.
+;(globalThis as any).__streamDiffsHelpers = streamDiffsHelpers
 
 vi.mock('stream-diffs', () => ({
-  useMonaco: streamMonacoHelpers.useMonaco,
-  preloadMonacoWorkers: vi.fn(async () => {}),
+  createCodeBlockRuntime: streamDiffsHelpers.createCodeBlockRuntime,
+  preloadStreamDiffsWorkers: vi.fn(async () => {}),
   detectLanguage: () => 'plaintext',
 }))
 
-vi.mock('stream-monaco/legacy', () => {
-  const mod = {
-    useMonaco: streamMonacoHelpers.useMonaco,
-    preloadMonacoWorkers: vi.fn(async () => {}),
-    getOrCreateHighlighter: vi.fn(async () => ({
-      codeToTokens: vi.fn(() => ({
-        tokens: [],
-        fg: '#000000',
-        bg: '#ffffff',
-        themeName: 'vitesse-dark',
-        rootStyle: {},
-        grammarState: null,
-      })),
-    })),
-    detectLanguage: () => 'plaintext',
-  }
-  return {
-    ...mod,
-    default: mod,
-  }
-})
+vi.mock('stream-diffs/markstream', () => ({
+  createCodeBlockRuntime: streamDiffsHelpers.createCodeBlockRuntime,
+  preloadStreamDiffs: vi.fn(async () => {}),
+  detectLanguage: () => 'plaintext',
+}))
 
 vi.mock('mermaid', () => ({
   default: {

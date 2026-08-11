@@ -21,7 +21,7 @@ If you only render static articles or docs pages, go back to [Usage & Streaming]
 | Need | Packages | Best for |
 | --- | --- | --- |
 | Text-only or lightweight chat UI | `markstream-vue` | Basic Markdown, lists, links, blockquotes |
-| Lightweight syntax-highlighted code | `markstream-vue stream-markdown` | SSR-friendly transcripts, lower bundle budgets |
+| Plain (SSR-friendly) code blocks | `markstream-vue` (`render-code-blocks-as-pre`) | Lower bundle budgets, SSR-friendly transcripts |
 | Rich code interactions | `markstream-vue stream-diffs` | Copy, preview, syntax highlighting, and File/Diff surfaces |
 | Diagrams or math in chat output | `markstream-vue mermaid katex` | Mermaid fences and KaTeX formulas |
 
@@ -244,8 +244,9 @@ For long mixed timelines, prefer the built-in virtual timeline. Its default `sti
 
 ### Better code blocks
 
-- Want a lighter docs-style look: use `MarkdownCodeBlockNode` with `stream-markdown`
-- Want richer preview/diff controls: use `CodeBlockNode` with `stream-diffs`
+- Want a lighter surface: set `render-code-blocks-as-pre` on `MarkdownRender` for plain `<pre>` output.
+- Want richer preview/diff controls: install `stream-diffs`; the built-in `CodeBlockNode` uses it automatically.
+- Want an application-owned renderer: register a scoped `code_block` with `setCustomComponents`. Mermaid, D2, and Infographic use their own component keys.
 
 See [Renderer & Node Components](/guide/components) for the trade-offs.
 

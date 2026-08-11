@@ -27,7 +27,6 @@ import InsertNode from './components/InsertNode'
 import LinkNode from './components/LinkNode'
 import ListItemNode from './components/ListItemNode'
 import ListNode from './components/ListNode'
-import MarkdownCodeBlockNode from './components/MarkdownCodeBlockNode'
 import MarkdownRender from './components/MarkdownRenderCompat.vue'
 import MathBlockNode from './components/MathBlockNode'
 import MathInlineNode from './components/MathInlineNode'
@@ -65,31 +64,24 @@ export type {
   SmoothMarkdownStreamOptions,
 } from './composables/useSmoothMarkdownStream'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
-  CodeBlockMonacoLanguage,
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
-  CodeBlockMonacoThemeObject,
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockPreviewPayload,
+  CodeBlockTheme,
+  CodeBlockThemePair,
+  CodeBlockThemeProp,
+  CodeBlockThemes,
   D2BlockNodeProps,
   ImageNodeProps,
   InfographicBlockNodeProps,
   LinkNodeProps,
-  MarkdownCodeBlockPreviewPayload,
   MathBlockNodeProps,
   MathInlineNodeProps,
   MermaidBlockEvent,
   MermaidBlockNodeProps,
   PreCodeNodeProps,
-  ShikiCodeBlockProps,
 } from './types/component-props'
 export * from './utils'
 export * from './workers/katexCdnWorker'
@@ -155,7 +147,6 @@ export {
   LinkNode,
   ListItemNode,
   ListNode,
-  MarkdownCodeBlockNode,
   MarkdownRender,
   MathBlockNode,
   MathInlineNode,
@@ -265,7 +256,6 @@ const componentMap: Record<string, Component> = {
   LinkNode,
   ListItemNode,
   ListNode,
-  MarkdownCodeBlockNode,
   MathBlockNode,
   MathInlineNode,
   MermaidBlockNode,

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import type { CodeBlockMonacoOptions, CodeBlockMonacoTheme } from '../types/monaco'
+  import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemeProp, CodeBlockThemes } from '../types/codeBlock'
   import type { SvelteRenderableNode, SvelteRenderContext } from './shared/node-helpers'
   import { onDestroy, onMount, tick } from 'svelte'
   import { useSafeI18n } from '../i18n/useSafeI18n'
-  import { getUseMonaco } from '../optional/monaco'
+  import { getStreamDiffsRuntime } from '../optional/streamDiffs'
   import { hideTooltip, showTooltipForAnchor } from '../tooltip/singletonTooltip'
-  import { getLanguageIcon, isLikelyIncompleteLanguageIdentifier, languageMap, normalizeLanguageIdentifier, resolveMonacoLanguageId } from '../utils/languageIcon'
+  import { getLanguageIcon, isLikelyIncompleteLanguageIdentifier, languageMap, normalizeLanguageIdentifier, resolveLanguageId } from '../utils/languageIcon'
   import HtmlPreviewFrame from './HtmlPreviewFrame.svelte'
   import PreCodeNode from './PreCodeNode.svelte'
   import { copyTextToClipboard, resolveCssSize } from './shared/rich-block-helpers'
@@ -17,10 +17,11 @@
     isDark?: boolean | undefined
     loading?: boolean | undefined
     stream?: boolean | undefined
-    darkTheme?: CodeBlockMonacoTheme | undefined
-    lightTheme?: CodeBlockMonacoTheme | undefined
-    themes?: CodeBlockMonacoTheme[] | undefined
-    monacoOptions?: CodeBlockMonacoOptions | undefined
+    codeBlockOptions?: CodeBlockOptions | undefined
+    theme?: CodeBlockThemeProp | undefined
+    darkTheme?: CodeBlockTheme | undefined
+    lightTheme?: CodeBlockTheme | undefined
+    themes?: CodeBlockThemes | undefined
     minWidth?: string | number | undefined
     maxWidth?: string | number | undefined
     isShowPreview?: boolean
@@ -42,10 +43,11 @@
     isDark = undefined,
     loading = undefined,
     stream = undefined,
+    codeBlockOptions = undefined,
+    theme = undefined,
     darkTheme = undefined,
     lightTheme = undefined,
     themes = undefined,
-    monacoOptions = undefined,
     minWidth = undefined,
     maxWidth = undefined,
     isShowPreview = true,
@@ -56,24 +58,12 @@
     showPreviewButton = true,
     showCollapseButton = true,
     showFontSizeButtons = true,
-    showLineNumbers = true,
+    showLineNumbers = undefined,
     htmlPreviewAllowScripts = false,
     htmlPreviewSandbox = undefined
   }: Props = $props()
 
   const { t } = useSafeI18n()
-  const defaultDiffHideUnchangedRegions = Object.freeze({
-    enabled: true,
-    contextLineCount: 2,
-    minimumLineCount: 4,
-    revealLineCount: 5,
-  })
-  const disabledDiffHideUnchangedRegions = Object.freeze({
-    enabled: false,
-    contextLineCount: 0,
-    minimumLineCount: Number.POSITIVE_INFINITY,
-    revealLineCount: 0,
-  })
   const streamingLanguageTokens = ['javascript', 'plaintext', 'shellscript', 'typescript']
   const defaultPreFallbackFontFamily = '"SF Mono", Monaco, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace'
 
@@ -127,8 +117,8 @@
 
   let editorHost: HTMLDivElement | null = $state(null)
   let helpers: any = $state(null)
-  let runtimeMonacoOptions: Record<string, any> | null = $state(null)
-  let ensureMonacoPromise: Promise<void> | null = $state(null)
+  let runtimeOptions: Record<string, any> | null = $state(null)
+  let ensureRuntimePromise: Promise<void> | null = $state(null)
   let editorReady = $state(false)
   let useFallback = $state(false)
   let fallbackLanguage = $state('')
@@ -150,6 +140,7 @@
   let lastLayoutWidth: number | null = $state(null)
   let lastLayoutHeight: number | null = $state(null)
   let lastThemeRequest = $state('')
+  let lastRuntimeInstallationConfig: unknown
   let languageRetryTimer: ReturnType<typeof setTimeout> | null = $state(null)
   let loadingSettledRefreshPromise: Promise<void> | null = $state(null)
   let loadingSettledRefreshTimer: ReturnType<typeof setTimeout> | null = $state(null)
@@ -160,7 +151,7 @@
 
   let rawLanguage = $derived(getString((node as any)?.language).trim())
   let canonicalLanguage = $derived(normalizeLanguageIdentifier(rawLanguage))
-  let monacoLanguage = $derived(resolveMonacoLanguageId(canonicalLanguage || rawLanguage || 'plaintext'))
+  let runtimeLanguage = $derived(resolveLanguageId(canonicalLanguage || rawLanguage || 'plaintext'))
   let code = $derived(getResolvedCode(node))
   let diff = $derived(Boolean((node as any)?.diff))
   let originalCode = $derived(getString((node as any)?.originalCode))
@@ -170,15 +161,21 @@
   let resolvedStream = $derived(stream ?? context?.codeBlockStream ?? true)
   let resolvedIsDark = $derived(isDark ?? context?.isDark ?? false)
   let resolvedThemes = $derived(context?.codeBlockThemes)
-  let mergedMonacoOptions = $derived({ ...(resolvedThemes?.monacoOptions || {}), ...(monacoOptions || {}) })
-  let resolvedMonacoOptions = $derived(buildResolvedMonacoOptions())
-  let requestedTheme = $derived(getThemeName(
-    resolvedIsDark
-      ? darkTheme ?? resolvedThemes?.darkTheme
-      : lightTheme ?? resolvedThemes?.lightTheme,
-    resolvedIsDark ? 'vitesse-dark' : 'vitesse-light',
-  ))
-  let defaultCodeFontSize = $derived(Number(mergedMonacoOptions.fontSize) || 12)
+  let resolvedCodeBlockOptions = $derived(codeBlockOptions ?? context?.codeBlockOptions)
+  let effectiveShowLineNumbers = $derived(showLineNumbers ?? resolvedCodeBlockOptions?.disableLineNumbers !== true)
+  let runtimeInstallationConfig = $derived.by(() => {
+    const parseDiffOptions = resolvedCodeBlockOptions?.parseDiffOptions
+    return {
+      options: { ...(resolvedCodeBlockOptions ?? {}) },
+      parseDiffOptions: parseDiffOptions && typeof parseDiffOptions === 'object'
+        ? { ...parseDiffOptions }
+        : parseDiffOptions,
+      showLineNumbers: effectiveShowLineNumbers,
+    }
+  })
+  let resolvedRuntimeOptions = $derived(buildResolvedRuntimeOptions())
+  let requestedTheme = $derived(resolveRequestedTheme())
+  let defaultCodeFontSize = $derived(readPositiveMetric(resolvedCodeBlockOptions?.fontSize) ?? 12)
   let minWidthValue = $derived(resolveCssSize(minWidth ?? resolvedThemes?.minWidth))
   let maxWidthValue = $derived(resolveCssSize(maxWidth ?? resolvedThemes?.maxWidth))
   let containerStyle = $derived([
@@ -200,8 +197,8 @@
   } as SvelteRenderableNode)
   let preFallbackStyle = $derived(buildPreFallbackStyle())
   let settledRefreshSignature = $derived(diff
-    ? `${monacoLanguage}\0${originalCode}\0${updatedCode || code}`
-    : `${monacoLanguage}\0${code}`)
+    ? `${runtimeLanguage}\0${originalCode}\0${updatedCode || code}`
+    : `${runtimeLanguage}\0${code}`)
 
   $effect(() => {
     if (useFallback && fallbackLanguage && rawLanguage !== fallbackLanguage && isLikelyIncompleteLanguageIdentifier(fallbackLanguage)) {
@@ -235,13 +232,21 @@
     void code
     void originalCode
     void updatedCode
-    void monacoLanguage
+    void runtimeLanguage
     void requestedTheme
-    void resolvedMonacoOptions
+    void resolvedRuntimeOptions
+    void resolvedCodeBlockOptions
+    void runtimeInstallationConfig
     void codeFontSize
     void expanded
-    if (mounted)
+    if (mounted) {
+      if (lastRuntimeInstallationConfig !== runtimeInstallationConfig) {
+        lastRuntimeInstallationConfig = runtimeInstallationConfig
+        codeFontSize = defaultCodeFontSize
+        cleanupEditor()
+      }
       void syncEditor()
+    }
   })
 
   onMount(() => {
@@ -279,29 +284,30 @@
   }
 
   function getCodeLineHeight() {
-    return readPositiveMetric(mergedMonacoOptions.lineHeight)
+    return readPositiveMetric(resolvedCodeBlockOptions?.lineHeight)
       ?? (codeFontSize === 12 ? 18 : Math.max(12, Math.round(codeFontSize * 1.5)))
   }
 
   function getCodePadding() {
-    const padding = mergedMonacoOptions.padding as Record<string, unknown> | undefined
+    const padding = resolvedCodeBlockOptions?.padding
     const defaultPadding = diff ? 0 : 8
+    const value = readNonNegativeMetric(padding) ?? defaultPadding
     return {
-      top: readNonNegativeMetric(padding?.top) ?? defaultPadding,
-      bottom: readNonNegativeMetric(padding?.bottom) ?? defaultPadding,
+      top: value,
+      bottom: value,
     }
   }
 
   function getCodeFontFamily() {
-    return typeof mergedMonacoOptions.fontFamily === 'string' && mergedMonacoOptions.fontFamily.trim()
-      ? mergedMonacoOptions.fontFamily.trim()
+    return typeof resolvedCodeBlockOptions?.fontFamily === 'string' && resolvedCodeBlockOptions.fontFamily.trim()
+      ? resolvedCodeBlockOptions.fontFamily.trim()
       : defaultPreFallbackFontFamily
   }
 
   function buildPreFallbackStyle() {
     const padding = getCodePadding()
     const fontFamily = getCodeFontFamily()
-    const tabSize = readPositiveMetric(mergedMonacoOptions.tabSize) ?? 4
+    const tabSize = readPositiveMetric(resolvedCodeBlockOptions?.tabSize) ?? 4
     const lineHeight = getCodeLineHeight()
     return [
       `--markstream-code-font-family: ${fontFamily}`,
@@ -317,181 +323,145 @@
       `padding-bottom: ${padding.bottom}px`,
       `padding-left: var(--markstream-code-padding-left, 52px)`,
       `tab-size: ${tabSize}`,
+      `max-height: ${getMaxHeightValue()}px`,
+      'overflow: auto',
+      `white-space: ${resolvedCodeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'}`,
     ].join('; ')
   }
 
-  function getThemeName(theme: CodeBlockMonacoTheme | undefined, fallback: string) {
+  function isThemePair(value: unknown): value is { dark: string, light: string } {
+    return !!value && typeof value === 'object' && typeof (value as any).dark === 'string' && typeof (value as any).light === 'string'
+  }
+
+  function resolveRequestedTheme() {
     if (typeof theme === 'string' && theme)
       return theme
-    if (theme && typeof theme === 'object' && typeof (theme as any).name === 'string')
-      return String((theme as any).name)
-    return fallback
+    if (isThemePair(theme))
+      return resolvedIsDark ? theme.dark : theme.light
+    const directTheme = resolvedIsDark ? darkTheme : lightTheme
+    if (directTheme)
+      return directTheme
+    if (themes)
+      return resolvedIsDark ? themes[0] : themes[1]
+    const contextTheme = resolvedIsDark ? resolvedThemes?.darkTheme : resolvedThemes?.lightTheme
+    if (contextTheme)
+      return contextTheme
+    if (resolvedThemes?.themes)
+      return resolvedIsDark ? resolvedThemes.themes[0] : resolvedThemes.themes[1]
+    return resolvedIsDark ? 'vitesse-dark' : 'vitesse-light'
   }
 
-  function buildThemeList() {
-    const list: CodeBlockMonacoTheme[] = ['vitesse-dark', 'vitesse-light']
-    const add = (item: CodeBlockMonacoTheme | undefined) => {
-      if (item)
-        list.push(item)
-    }
-    add(darkTheme ?? resolvedThemes?.darkTheme)
-    add(lightTheme ?? resolvedThemes?.lightTheme)
-    for (const item of resolvedThemes?.themes || [])
-      add(item)
-    for (const item of themes || [])
-      add(item)
-    return list
+  function buildThemeList(): [dark: string, light: string] {
+    return [
+      darkTheme ?? themes?.[0] ?? resolvedThemes?.darkTheme ?? resolvedThemes?.themes?.[0] ?? 'vitesse-dark',
+      lightTheme ?? themes?.[1] ?? resolvedThemes?.lightTheme ?? resolvedThemes?.themes?.[1] ?? 'vitesse-light',
+    ]
   }
 
-  function resolveDiffHideUnchangedRegionsOption(value: unknown) {
-    if (typeof value === 'boolean')
-      return value
-    if (value && typeof value === 'object') {
-      const raw = value as Record<string, unknown>
-      return {
-        ...defaultDiffHideUnchangedRegions,
-        ...raw,
-        enabled: raw.enabled ?? true,
-      }
-    }
-    return { ...defaultDiffHideUnchangedRegions }
-  }
+  function buildResolvedRuntimeOptions() {
+    const userOptions = { ...(resolvedCodeBlockOptions ?? {}) } as Record<string, any>
+    for (const key of [
+      'maxHeight',
+      'padding',
+      'tabSize',
+      'theme',
+      'themes',
+      'themeType',
+      'language',
+      'languages',
+      'stream',
+      'disableFileHeader',
+      'onThemeChange',
+      'renderCustomHeader',
+      'renderHeaderMetadata',
+      'renderHeaderPrefix',
+    ])
+      delete userOptions[key]
 
-  function buildResolvedMonacoOptions() {
-    const raw = { ...mergedMonacoOptions } as Record<string, any>
-    const maxHeight = expanded ? 900 : (raw.MAX_HEIGHT ?? 500)
-    const baseOptions = {
-      readOnly: true,
-      minimap: { enabled: false },
-      lineNumbers: 'on',
-      wordWrap: 'on',
-      wrappingIndent: 'same',
-      revealDebounceMs: 75,
-    }
-    const padding = getCodePadding()
-    const configuredUnsafeCSS = typeof raw.unsafeCSS === 'string' ? raw.unsafeCSS : ''
-    const unsafeCSS = `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
-${configuredUnsafeCSS}`.trim()
-    const finalOptions = {
-      MAX_HEIGHT: maxHeight,
+    const parseDiffOptions = userOptions.parseDiffOptions && typeof userOptions.parseDiffOptions === 'object'
+      ? userOptions.parseDiffOptions as Record<string, unknown>
+      : {}
+    const nativeOptions = diff
+      ? {
+          diffStyle: 'split',
+          expandUnchanged: false,
+          collapsedContextThreshold: 5,
+          hunkSeparators: 'line-info',
+          ...userOptions,
+          parseDiffOptions: {
+            context: 2,
+            ...parseDiffOptions,
+          },
+        }
+      : userOptions
+    const configuredUnsafeCSS = typeof nativeOptions.unsafeCSS === 'string' ? nativeOptions.unsafeCSS : ''
+
+    return {
+      overflow: 'wrap',
+      ...nativeOptions,
+      MAX_HEIGHT: expanded ? 900 : (resolvedCodeBlockOptions?.maxHeight ?? 500),
       fontFamily: getCodeFontFamily(),
       fontSize: codeFontSize,
       lineHeight: getCodeLineHeight(),
-      // stream-diffs expects a boolean (`disableLineNumbers: options.lineNumbers === false`);
-      // passing 'off'/'on' strings would always be truthy and defeat showLineNumbers={false}.
-      lineNumbers: showLineNumbers !== false,
-      padding,
-      unsafeCSS,
-      // The component owns the streaming fallback and file header. Initialize
-      // stream-diffs in final mode so the revealed surface has highlighting,
-      // line numbers, and the same geometry as the fallback.
+      disableLineNumbers: !effectiveShowLineNumbers,
+      unsafeCSS: `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
+${configuredUnsafeCSS}`.trim(),
       disableFileHeader: true,
       stream: false,
       themes: buildThemeList(),
-    }
-
-    if (!diff) {
-      return {
-        ...baseOptions,
-        ...raw,
-        ...finalOptions,
-      }
-    }
-
-    const diffHideUnchangedRegions = raw.diffHideUnchangedRegions === undefined
-      ? { ...defaultDiffHideUnchangedRegions }
-      : resolveDiffHideUnchangedRegionsOption(raw.diffHideUnchangedRegions)
-    const hideUnchangedRegions = raw.hideUnchangedRegions === undefined
-      ? undefined
-      : resolveDiffHideUnchangedRegionsOption(raw.hideUnchangedRegions)
-    const streamPreviewDiff = resolvedStream !== false && resolvedLoading !== false
-    const activeDiffHideUnchangedRegions = streamPreviewDiff
-      ? { ...disabledDiffHideUnchangedRegions }
-      : diffHideUnchangedRegions
-    const activeHideUnchangedRegions = streamPreviewDiff
-      ? { ...disabledDiffHideUnchangedRegions }
-      : hideUnchangedRegions
-    const experimental = {
-      ...((raw.experimental as Record<string, unknown> | undefined) ?? {}),
-    }
-    const diffUnchangedRegionStyle = raw.diffUnchangedRegionStyle ?? 'line-info'
-    const diffDefaults = {
-      maxComputationTime: 0,
-      diffAlgorithm: 'legacy',
-      ignoreTrimWhitespace: false,
-      renderIndicators: true,
-      diffUpdateThrottleMs: 120,
-      renderLineHighlight: 'none',
-      renderLineHighlightOnlyWhenFocus: true,
-      selectionHighlight: false,
-      occurrencesHighlight: 'off',
-      matchBrackets: 'never',
-      lineDecorationsWidth: 4,
-      lineNumbersMinChars: 2,
-      glyphMargin: false,
-      renderOverviewRuler: false,
-      overviewRulerBorder: false,
-      hideCursorInOverviewRuler: true,
-      scrollBeyondLastLine: false,
-      diffHideUnchangedRegions: activeDiffHideUnchangedRegions,
-      useInlineViewWhenSpaceIsLimited: raw.useInlineViewWhenSpaceIsLimited ?? false,
-      diffLineStyle: 'background',
-      diffAppearance: 'auto',
-      diffUnchangedRegionStyle,
-      diffHunkActionsOnHover: false,
-      experimental,
-    }
-
-    return {
-      ...baseOptions,
-      ...diffDefaults,
-      ...raw,
-      experimental,
-      ...(activeHideUnchangedRegions === undefined ? {} : { hideUnchangedRegions: activeHideUnchangedRegions }),
-      diffHideUnchangedRegions: activeDiffHideUnchangedRegions,
-      ...finalOptions,
+      themeType: resolvedIsDark ? 'dark' : 'light',
+      onThemeChange() {
+        syncEditorGeometryVars()
+        scheduleEditorHeightSync()
+      },
     }
   }
 
-  function syncRuntimeMonacoOptions() {
+  function syncRuntimeOptions() {
     const nextOptions = {
-      ...resolvedMonacoOptions,
+      ...resolvedRuntimeOptions,
       theme: requestedTheme,
     }
-    if (!runtimeMonacoOptions) {
-      runtimeMonacoOptions = nextOptions
-      return runtimeMonacoOptions
+    if (!runtimeOptions) {
+      runtimeOptions = nextOptions
+      return runtimeOptions
     }
-    for (const key of Object.keys(runtimeMonacoOptions)) {
+    for (const key of Object.keys(runtimeOptions)) {
       if (!(key in nextOptions))
-        delete runtimeMonacoOptions[key]
+        delete runtimeOptions[key]
     }
-    Object.assign(runtimeMonacoOptions, nextOptions)
-    return runtimeMonacoOptions
+    Object.assign(runtimeOptions, nextOptions)
+    return runtimeOptions
   }
 
-  async function ensureMonaco() {
+  async function ensureRuntime() {
     if (helpers || useFallback || typeof window === 'undefined')
       return
-    if (ensureMonacoPromise)
-      return ensureMonacoPromise
+    if (ensureRuntimePromise)
+      return ensureRuntimePromise
 
-    ensureMonacoPromise = (async () => {
-      const mod = await getUseMonaco()
-      if (!mounted)
+    const runtimeId = lifecycleId
+    const pending = (async () => {
+      const mod = await getStreamDiffsRuntime()
+      if (!mounted || lifecycleId !== runtimeId)
         return
-      if (!mod || typeof mod.useMonaco !== 'function') {
+      if (!mod || typeof mod.createCodeBlockRuntime !== 'function') {
         useFallback = true
         return
       }
 
-      helpers = mod.useMonaco(syncRuntimeMonacoOptions())
+      helpers = mod.createCodeBlockRuntime(syncRuntimeOptions())
       await Promise.resolve(helpers.setTheme?.(requestedTheme))
+      if (!mounted || lifecycleId !== runtimeId)
+        return
       lastThemeRequest = requestedTheme
-    })().finally(() => {
-      ensureMonacoPromise = null
+    })()
+    const tracked = pending.finally(() => {
+      if (ensureRuntimePromise === tracked)
+        ensureRuntimePromise = null
     })
-    return ensureMonacoPromise
+    ensureRuntimePromise = tracked
+    return tracked
   }
 
   function queueThemeSync() {
@@ -500,7 +470,7 @@ ${configuredUnsafeCSS}`.trim()
     lastThemeRequest = requestedTheme
     void Promise.resolve(helpers.setTheme?.(requestedTheme)).catch((error) => {
       if (typeof console !== 'undefined')
-        console.warn('[markstream-svelte] Failed to apply Monaco theme:', error)
+        console.warn('[markstream-svelte] Failed to apply code-block theme:', error)
     })
   }
 
@@ -508,10 +478,18 @@ ${configuredUnsafeCSS}`.trim()
     if (!mounted || !shouldRender || !editorHost || collapsed || shouldDelayEditor || shouldDeferStreamingLanguage)
       return
 
-    await ensureMonaco()
-    if (!mounted || useFallback || !helpers)
+    const runtimeId = lifecycleId
+    try {
+      await ensureRuntime()
+    }
+    catch (error) {
+      if (mounted && lifecycleId === runtimeId)
+        markEditorFallback(error)
       return
-    syncRuntimeMonacoOptions()
+    }
+    if (!mounted || lifecycleId !== runtimeId || useFallback || !helpers)
+      return
+    syncRuntimeOptions()
 
     const desiredKind: 'single' | 'diff' = diff ? 'diff' : 'single'
     const hasEditorView = desiredKind === 'diff'
@@ -528,45 +506,43 @@ ${configuredUnsafeCSS}`.trim()
         return
     }
 
+    const operationId = lifecycleId
     try {
       if (diff && typeof helpers.updateDiff === 'function')
-        await Promise.resolve(helpers.updateDiff(originalCode, updatedCode || code, monacoLanguage))
+        await Promise.resolve(helpers.updateDiff(originalCode, updatedCode || code, runtimeLanguage))
       else if (typeof helpers.updateCode === 'function') {
-        await Promise.resolve(helpers.updateCode(code, monacoLanguage))
+        await Promise.resolve(helpers.updateCode(code, runtimeLanguage))
         scheduleEditorTokenization()
+      }
+      if (!editorReady && await prepareEditorHandoff(desiredKind, lifecycleId)) {
+        editorRevealed = true
+        fallbackRetired = true
+        editorReady = true
       }
       queueThemeSync()
       applyEditorOptions()
       scheduleEditorHeightSync()
     }
     catch (error) {
-      markEditorFallback(error)
+      if (mounted && lifecycleId === operationId)
+        markEditorFallback(error)
     }
   }
 
   function hasRenderedEditorDom(kind: 'single' | 'diff') {
     if (!editorHost)
       return false
-    if (kind === 'diff') {
-      return Boolean(editorHost.querySelector([
-        '.monaco-diff-editor',
-        'diffs-container',
-        '.stream-diffs-shell',
-        '[data-stream-diffs-state]',
-      ].join(',')))
-    }
-    return Boolean(editorHost.querySelector([
-      '.monaco-editor',
+    // stream-diffs renders its surface inside these containers.
+    const selectors = [
       'diffs-container',
       '.stream-diffs-shell',
       '[data-stream-diffs-state]',
-    ].join(',')))
+    ].join(',')
+    return Boolean(editorHost.querySelector(selectors))
   }
 
   function getVisualEditorSurface() {
     return editorHost?.querySelector<HTMLElement>([
-      '.monaco-diff-editor',
-      '.monaco-editor',
       'diffs-container',
       '[data-stream-diffs-state]',
       '.stream-diffs-shell',
@@ -595,9 +571,8 @@ ${configuredUnsafeCSS}`.trim()
 
   async function prepareEditorHandoff(kind: 'single' | 'diff', creationId: number) {
     await tick()
-    // Time-box the handoff: if visual readiness can't be confirmed (e.g. a
-    // hidden/zero-size container), reveal the editor anyway once its DOM is
-    // mounted so the block never strands in the pre-fallback forever.
+    // Streaming updates retry this gate, so keep the fallback until the live
+    // surface has positive geometry.
     const deadline = Date.now() + 1500
     let attempt = 0
     while (Date.now() < deadline && attempt < 30) {
@@ -612,33 +587,42 @@ ${configuredUnsafeCSS}`.trim()
         return isEditorVisuallyReady(kind)
       }
     }
-    return !!(mounted && editorHost && lifecycleId === creationId && hasRenderedEditorDom(kind))
+    return !!(mounted && editorHost && lifecycleId === creationId && isEditorVisuallyReady(kind))
   }
 
   async function recreateEditor(kind: 'single' | 'diff') {
     if (!editorHost || !helpers || createEditorPromise)
       return createEditorPromise
 
+    const activeHelpers = helpers
     const creationId = ++lifecycleId
     editorReady = false
-    createEditorPromise = (async () => {
+    const pending = (async () => {
       try {
         cleanupEditor(false)
-        if (!mounted || !editorHost || lifecycleId !== creationId)
+        if (!mounted || !editorHost || lifecycleId !== creationId || helpers !== activeHelpers)
           return
         editorHost.replaceChildren()
         lastLayoutWidth = null
         lastLayoutHeight = null
 
         editorStreamMode = false
-        if (kind === 'diff' && typeof helpers.createDiffEditor === 'function') {
-          await helpers.createDiffEditor(editorHost, originalCode, updatedCode || code, monacoLanguage)
-          await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, monacoLanguage))
+        if (kind === 'diff' && typeof activeHelpers.createDiffEditor === 'function') {
+          await activeHelpers.createDiffEditor(editorHost, originalCode, updatedCode || code, runtimeLanguage)
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
+          await Promise.resolve(activeHelpers.updateDiff?.(originalCode, updatedCode || code, runtimeLanguage))
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
           editorKind = 'diff'
         }
         else {
-          await helpers.createEditor(editorHost, code, monacoLanguage)
-          await Promise.resolve(helpers.updateCode?.(code, monacoLanguage))
+          await activeHelpers.createEditor(editorHost, code, runtimeLanguage)
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
+          await Promise.resolve(activeHelpers.updateCode?.(code, runtimeLanguage))
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
           editorKind = 'single'
         }
         applyEditorOptions()
@@ -655,15 +639,17 @@ ${configuredUnsafeCSS}`.trim()
         scheduleEditorHeightSync()
       }
       catch (error) {
-        if (mounted) {
+        if (mounted && lifecycleId === creationId && helpers === activeHelpers) {
           markEditorFallback(error)
         }
       }
-    })().finally(() => {
-      createEditorPromise = null
+    })()
+    const tracked = pending.finally(() => {
+      if (createEditorPromise === tracked)
+        createEditorPromise = null
     })
-
-    return createEditorPromise
+    createEditorPromise = tracked
+    return tracked
   }
 
   function refreshEditorAfterLoadingSettled() {
@@ -681,23 +667,23 @@ ${configuredUnsafeCSS}`.trim()
       }
       if (!mounted || !shouldRender || !editorHost || collapsed || shouldDelayEditor || shouldDeferStreamingLanguage)
         return
-      await ensureMonaco()
+      await ensureRuntime()
       if (!mounted || useFallback || !helpers)
         return
-      syncRuntimeMonacoOptions()
+      syncRuntimeOptions()
       const desiredKind: 'single' | 'diff' = diff ? 'diff' : 'single'
       if (!hasRenderedEditorDom(desiredKind) || editorKind !== desiredKind)
         await recreateEditor(desiredKind)
       if (!mounted || useFallback || !helpers || !hasRenderedEditorDom(desiredKind) || editorKind !== desiredKind)
         return
       if (diff) {
-        await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, monacoLanguage))
+        await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, runtimeLanguage))
         helpers.refreshDiffPresentation?.()
         applyEditorOptions()
         scheduleEditorHeightSync()
         return
       }
-      await Promise.resolve(helpers.updateCode?.(code, monacoLanguage))
+      await Promise.resolve(helpers.updateCode?.(code, runtimeLanguage))
       scheduleEditorTokenization(140, true)
       applyEditorOptions()
       scheduleEditorHeightSync()
@@ -724,6 +710,11 @@ ${configuredUnsafeCSS}`.trim()
   }
 
   function cleanupEditor(disposeHelpers = true) {
+    if (disposeHelpers) {
+      lifecycleId += 1
+      createEditorPromise = null
+      ensureRuntimePromise = null
+    }
     clearEditorHeightSyncBindings()
     cancelEditorHeightSync()
     try {
@@ -742,15 +733,15 @@ ${configuredUnsafeCSS}`.trim()
     lastLayoutHeight = null
     if (disposeHelpers) {
       helpers = null
-      runtimeMonacoOptions = null
-      ensureMonacoPromise = null
+      runtimeOptions = null
+      ensureRuntimePromise = null
       lastThemeRequest = ''
     }
   }
 
   function applyEditorOptions() {
     const target = diff ? helpers?.getDiffEditorView?.() : helpers?.getEditorView?.()
-    target?.updateOptions?.({ fontSize: codeFontSize, automaticLayout: false })
+    target?.updateOptions?.({ fontSize: codeFontSize })
     syncEditorGeometryVars()
     scheduleEditorHeightSync()
   }
@@ -760,10 +751,10 @@ ${configuredUnsafeCSS}`.trim()
   function syncEditorGeometryVars() {
     if (!editorHost)
       return
-    const tabSize = readPositiveMetric(mergedMonacoOptions.tabSize) ?? 4
+    const tabSize = readPositiveMetric(resolvedCodeBlockOptions?.tabSize) ?? 4
     editorHost.style.setProperty('--diffs-tab-size', String(tabSize))
-    const rawPadding = mergedMonacoOptions.padding
-    const hasConfiguredPadding = Boolean(rawPadding && typeof rawPadding === 'object')
+    const rawPadding = resolvedCodeBlockOptions?.padding
+    const hasConfiguredPadding = typeof rawPadding === 'number'
     if (hasConfiguredPadding)
       editorHost.style.setProperty('--diffs-gap-block', `${getCodePadding().top}px`)
     else
@@ -771,11 +762,7 @@ ${configuredUnsafeCSS}`.trim()
   }
 
   function getMaxHeightValue() {
-    const raw = resolvedMonacoOptions.MAX_HEIGHT
-    if (raw === 'none' || raw == null)
-      return Number.POSITIVE_INFINITY
-    const value = typeof raw === 'number' ? raw : Number.parseFloat(String(raw))
-    return Number.isFinite(value) && value > 0 ? value : 500
+    return resolvedCodeBlockOptions?.maxHeight ?? 500
   }
 
   function scheduleEditorHeightSync() {
@@ -989,37 +976,19 @@ ${configuredUnsafeCSS}`.trim()
       if (hostRect.height <= 0)
         return null
 
-      const selectors = [
-        '.editor.original .view-lines .view-line',
-        '.editor.modified .view-lines .view-line',
-        '.editor.original .view-zones > div',
-        '.editor.modified .view-zones > div',
-        '.editor.original .margin-view-zones > div',
-        '.editor.modified .margin-view-zones > div',
-        '.editor.original .diff-hidden-lines',
-        '.editor.modified .diff-hidden-lines',
-        '.stream-monaco-diff-unchanged-bridge',
-      ]
-
-      let bottom = 0
-      for (const node of Array.from(container.querySelectorAll<HTMLElement>(selectors.join(',')))) {
-        const style = window.getComputedStyle(node)
-        if (style.display === 'none' || style.visibility === 'hidden')
-          continue
-        if (Number.parseFloat(style.opacity || '1') <= 0.01)
-          continue
-        const rect = node.getBoundingClientRect()
-        if (rect.height <= 0 || rect.bottom <= hostRect.top)
-          continue
-        bottom = Math.max(bottom, rect.bottom - hostRect.top)
-      }
-
-      if (bottom > 0)
-        return Math.ceil(bottom + 1)
-
-      const diffRoot = container.querySelector<HTMLElement>('.monaco-diff-editor')
-      const diffHeight = diffRoot?.getBoundingClientRect?.().height ?? 0
-      return diffHeight > 0 ? Math.ceil(diffHeight + 1) : null
+      // stream-diffs renders its surface inside these containers. Measure the
+      // rendered shell so a diff block fills its real content height even when
+      // the adapter's getContentHeight isn't available yet.
+      const surface = container.querySelector<HTMLElement>([
+        'diffs-container',
+        '.stream-diffs-shell',
+        '[data-stream-diffs-state]',
+      ].join(','))
+      if (!surface)
+        return null
+      const rect = surface.getBoundingClientRect()
+      const height = rect.bottom - hostRect.top
+      return height > 0 ? Math.ceil(height + 1) : null
     }
     catch {
       return null
@@ -1073,7 +1042,7 @@ ${configuredUnsafeCSS}`.trim()
 {#if shouldRender}
   <div
     class:is-dark={resolvedIsDark}
-    class:is-plain-text={monacoLanguage === 'plaintext'}
+    class:is-plain-text={runtimeLanguage === 'plaintext'}
     class:is-rendering={resolvedLoading}
     class:is-diff={diff}
     class="code-block-container"
@@ -1137,7 +1106,7 @@ ${configuredUnsafeCSS}`.trim()
             class="code-pre-fallback"
             enhanceable={false}
             node={preFallbackNode}
-            showLineNumbers={showLineNumbers !== false}
+            showLineNumbers={effectiveShowLineNumbers}
             style={preFallbackStyle}
           />
         </div>

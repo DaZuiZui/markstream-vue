@@ -1,7 +1,7 @@
 import type { SmoothMarkdownStreamOptions } from 'markstream-core'
 import type { BaseNode, HtmlPolicy, MarkdownIt, ParsedNode, ParseOptions } from 'stream-markdown-parser'
 import type { CustomComponentMap } from '../../customComponents'
-import type { CodeBlockMonacoOptions, CodeBlockMonacoTheme } from '../../types/monaco'
+import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemeProp, CodeBlockThemes } from '../../types/codeBlock'
 import {
   getHtmlTagFromContent,
   getMarkdown,
@@ -32,10 +32,10 @@ export interface CodeBlockPreviewPayload {
 
 export type NodeRendererCodeBlockProps = Partial<{
   stream: boolean
-  darkTheme: CodeBlockMonacoTheme
-  lightTheme: CodeBlockMonacoTheme
-  themes: CodeBlockMonacoTheme[]
-  monacoOptions: CodeBlockMonacoOptions
+  theme: CodeBlockThemeProp
+  darkTheme: CodeBlockTheme
+  lightTheme: CodeBlockTheme
+  themes: CodeBlockThemes
   minWidth: string | number
   maxWidth: string | number
   isShowPreview: boolean
@@ -46,8 +46,10 @@ export type NodeRendererCodeBlockProps = Partial<{
   showPreviewButton: boolean
   showCollapseButton: boolean
   showFontSizeButtons: boolean
+  showLineNumbers: boolean
   htmlPreviewAllowScripts: boolean
   htmlPreviewSandbox: string
+  codeBlockOptions?: never
 }> & Record<string, unknown>
 
 export type NodeRendererMermaidProps = Partial<{
@@ -108,19 +110,19 @@ export interface NodeRendererProps {
   htmlPolicy?: HtmlPolicy
   viewportPriority?: boolean
   codeBlockStream?: boolean
-  codeBlockDarkTheme?: CodeBlockMonacoTheme
-  codeBlockLightTheme?: CodeBlockMonacoTheme
-  codeBlockMonacoOptions?: CodeBlockMonacoOptions
+  codeBlockDarkTheme?: CodeBlockTheme
+  codeBlockLightTheme?: CodeBlockTheme
   renderCodeBlocksAsPre?: boolean
   codeBlockMinWidth?: string | number
   codeBlockMaxWidth?: string | number
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   mermaidProps?: NodeRendererMermaidProps
   d2Props?: NodeRendererD2Props
   infographicProps?: NodeRendererInfographicProps
   customComponents?: CustomComponentMap
   showTooltips?: boolean
-  themes?: CodeBlockMonacoTheme[]
+  themes?: CodeBlockThemes
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -158,16 +160,16 @@ export interface AngularRenderContext {
   customHtmlTags?: readonly string[]
   parseOptions?: ParseOptions
   customMarkdownIt?: (md: MarkdownIt) => MarkdownIt
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   mermaidProps?: NodeRendererMermaidProps
   d2Props?: NodeRendererD2Props
   infographicProps?: NodeRendererInfographicProps
   customComponents?: CustomComponentMap
   codeBlockThemes?: {
-    themes?: CodeBlockMonacoTheme[]
-    darkTheme?: CodeBlockMonacoTheme
-    lightTheme?: CodeBlockMonacoTheme
-    monacoOptions?: CodeBlockMonacoOptions
+    themes?: CodeBlockThemes
+    darkTheme?: CodeBlockTheme
+    lightTheme?: CodeBlockTheme
     minWidth?: string | number
     maxWidth?: string | number
   }
@@ -222,6 +224,7 @@ export function buildRenderContext(
     customHtmlTags,
     parseOptions: props.parseOptions,
     customMarkdownIt: props.customMarkdownIt,
+    codeBlockOptions: props.codeBlockOptions,
     codeBlockProps: props.codeBlockProps,
     mermaidProps: props.mermaidProps,
     d2Props: props.d2Props,
@@ -231,7 +234,6 @@ export function buildRenderContext(
       themes: props.themes,
       darkTheme: props.codeBlockDarkTheme,
       lightTheme: props.codeBlockLightTheme,
-      monacoOptions: props.codeBlockMonacoOptions,
       minWidth: props.codeBlockMinWidth,
       maxWidth: props.codeBlockMaxWidth,
     },

@@ -141,26 +141,16 @@ export default function MarkdownPage() {
 
 ### 代码语法高亮
 
-安装依赖：
+安装可选对等依赖：
 
 ```bash
-pnpm add stream-markdown
+pnpm add stream-diffs
 ```
 
-```tsx
-import MarkdownRender, { MarkdownCodeBlockNode, setCustomComponents } from 'markstream-react'
+增强代码块默认使用 `stream-diffs` 配置，并通过直接 `CodeBlockNode.codeBlockOptions` 或顶层 `MarkdownRender.codeBlockOptions` 接收共享 `CodeBlockOptions`。主题使用已注册名称，`themes` 是 `[dark, light]` 对。未安装 `stream-diffs` 时，代码块会回退渲染普通 `<pre>`。
 
-// 在 MarkdownRender 中使用 Shiki 代码块
-setCustomComponents({
-  code_block: ({ node, isDark, ctx }: any) => (
-    <MarkdownCodeBlockNode
-      node={node}
-      isDark={isDark}
-      stream={ctx?.codeBlockStream}
-      {...(ctx?.codeBlockProps || {})}
-    />
-  ),
-})
+```tsx
+import MarkdownRender from 'markstream-react'
 
 function App() {
   const markdown = `\`\`\`javascript

@@ -1,32 +1,21 @@
 // Centralized exported props interfaces for components
 import type { CodeBlockNode } from 'stream-markdown-parser'
 
-export interface CodeBlockMonacoThemeObject {
-  name: string
-  base?: string
-  inherit?: boolean
-  colors?: Record<string, string>
-  rules?: Array<Record<string, unknown>>
-  [key: string]: unknown
+export interface CodeBlockThemePair {
+  dark: string
+  light: string
 }
 
-export type CodeBlockMonacoTheme = string | CodeBlockMonacoThemeObject
+export type CodeBlockTheme = string
 
-export type CodeBlockMonacoLanguage = string | ((...args: unknown[]) => unknown)
+export type CodeBlockThemeProp = CodeBlockTheme | CodeBlockThemePair
+
+export type CodeBlockThemes = readonly [dark: CodeBlockTheme, light: CodeBlockTheme]
 
 export interface CommonCodeBlockProps {
   showHeader?: boolean
   showCopyButton?: boolean
   showExpandButton?: boolean
-}
-
-export interface ShikiCodeBlockProps extends CommonCodeBlockProps {
-  themes?: readonly string[]
-  /**
-   * Shiki language preload request forwarded to stream-markdown's registerHighlight().
-   * This is not a rendering allow-list; already available Shiki languages may still highlight.
-   */
-  langs?: readonly string[]
 }
 
 export interface CodeBlockDiffHideUnchangedRegionsOptions {
@@ -40,74 +29,74 @@ export type CodeBlockDiffHideUnchangedRegions
   = | boolean
     | CodeBlockDiffHideUnchangedRegionsOptions
 
-export type CodeBlockDiffLineStyle = 'background' | 'bar'
-
-export type CodeBlockDiffAppearance = 'auto' | 'light' | 'dark'
-
-export type CodeBlockDiffUnchangedRegionStyle = 'line-info' | 'line-info-basic' | 'metadata' | 'simple'
-
-export type CodeBlockDiffHunkActionKind = 'revert' | 'stage'
-
-export type CodeBlockDiffHunkSide = 'upper' | 'lower'
-
-export interface CodeBlockDiffHunkActionContext {
-  action: CodeBlockDiffHunkActionKind
-  side: CodeBlockDiffHunkSide
-  lineChange: unknown
-  originalModel: unknown
-  modifiedModel: unknown
-}
-
-export interface CodeBlockMonacoOptions {
-  MAX_HEIGHT?: number | string
+export interface CodeBlockOptions {
   fontSize?: number
   lineHeight?: number
   fontFamily?: string
+  maxHeight?: number
+  padding?: number
   tabSize?: number
-  readOnly?: boolean
-  wordWrap?: 'off' | 'on' | 'wordWrapColumn' | 'bounded' | string
-  wrappingIndent?: 'none' | 'same' | 'indent' | 'deepIndent' | string
-  theme?: string
-  themes?: CodeBlockMonacoTheme[]
-  languages?: CodeBlockMonacoLanguage[]
-  renderSideBySide?: boolean
-  useInlineViewWhenSpaceIsLimited?: boolean
-  enableSplitViewResizing?: boolean
-  ignoreTrimWhitespace?: boolean
-  maxComputationTime?: number
-  diffAlgorithm?: string
-  renderIndicators?: boolean
-  originalEditable?: boolean
-  revealDebounceMs?: number
-  revealStrategy?: 'bottom' | 'centerIfOutside' | 'center'
-  revealBatchOnIdleMs?: number
-  updateThrottleMs?: number
-  diffUpdateThrottleMs?: number
-  diffAutoScroll?: boolean
-  diffHideUnchangedRegions?: CodeBlockDiffHideUnchangedRegions
-  diffLineStyle?: CodeBlockDiffLineStyle
-  diffAppearance?: CodeBlockDiffAppearance
-  diffUnchangedRegionStyle?: CodeBlockDiffUnchangedRegionStyle
-  diffHunkActionsOnHover?: boolean
-  diffHunkHoverHideDelayMs?: number
-  onDiffHunkAction?: (context: CodeBlockDiffHunkActionContext) => void | boolean | Promise<void | boolean>
-  scrollbar?: Record<string, unknown>
-  [key: string]: unknown
+  disableLineNumbers?: boolean
+  overflow?: 'scroll' | 'wrap'
+  disableVirtualizationBuffers?: boolean
+  preferredHighlighter?: 'shiki-js' | 'shiki-wasm'
+  useCSSClasses?: boolean
+  useTokenTransformer?: boolean
+  tokenizeMaxLineLength?: number
+  tokenizeMaxLength?: number
+  unsafeCSS?: string
+  diffStyle?: 'unified' | 'split'
+  diffIndicators?: 'classic' | 'bars' | 'none'
+  disableBackground?: boolean
+  hunkSeparators?: 'simple' | 'metadata' | 'line-info' | 'line-info-basic'
+  expandUnchanged?: boolean
+  collapsedContextThreshold?: number
+  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'
+  maxLineDiffLength?: number
+  expansionLineCount?: number
+  parseDiffOptions?: Record<string, unknown>
+  lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line'
+  enableTokenInteractionsOnWhitespace?: boolean
+  enableGutterUtility?: boolean
+  enableLineSelection?: boolean
+  controlledSelection?: boolean
+  onGutterUtilityClick?: (...args: any[]) => unknown
+  onLineClick?: (...args: any[]) => unknown
+  onLineNumberClick?: (...args: any[]) => unknown
+  onLineEnter?: (...args: any[]) => unknown
+  onLineLeave?: (...args: any[]) => unknown
+  onTokenClick?: (...args: any[]) => unknown
+  onTokenEnter?: (...args: any[]) => unknown
+  onTokenLeave?: (...args: any[]) => unknown
+  onLineSelected?: (...args: any[]) => unknown
+  onLineSelectionStart?: (...args: any[]) => unknown
+  onLineSelectionChange?: (...args: any[]) => unknown
+  onLineSelectionEnd?: (...args: any[]) => unknown
+  getLineIndex?: (...args: any[]) => unknown
+  renderAnnotation?: (...args: any[]) => unknown
+  renderGutterUtility?: (...args: any[]) => unknown
+  onPostRender?: (...args: any[]) => unknown
+  mergeConflict?: boolean
+  lineAnnotations?: unknown[]
+  onController?: (controller: any) => void
+  workerManager?: unknown
 }
 
 export interface CodeBlockNodeProps extends CommonCodeBlockProps {
   node: CodeBlockNode
+  codeBlockOptions?: CodeBlockOptions
+  showLineNumbers?: boolean
   isDark?: boolean
   loading?: boolean
   stream?: boolean
-  darkTheme?: CodeBlockMonacoTheme
-  lightTheme?: CodeBlockMonacoTheme
+  theme?: CodeBlockThemeProp
+  darkTheme?: CodeBlockTheme
+  lightTheme?: CodeBlockTheme
   isShowPreview?: boolean
-  monacoOptions?: CodeBlockMonacoOptions
   enableFontSizeControl?: boolean
   minWidth?: string | number
   maxWidth?: string | number
-  themes?: CodeBlockMonacoTheme[]
+  themes?: CodeBlockThemes
   showPreviewButton?: boolean
   showCollapseButton?: boolean
   showFontSizeButtons?: boolean
@@ -199,12 +188,6 @@ export interface CodeBlockPreviewPayload {
   artifactType: 'text/html' | 'image/svg+xml'
   artifactTitle: string
   id: string
-}
-
-export interface MarkdownCodeBlockPreviewPayload {
-  type: 'text/html' | 'image/svg+xml'
-  content: string
-  title: string
 }
 
 export interface MermaidBlockEvent<TPayload = unknown> {

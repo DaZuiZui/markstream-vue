@@ -1,11 +1,14 @@
 import { spawn } from 'node:child_process'
 import net from 'node:net'
+import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
 const host = '127.0.0.1'
 const port = 4230
-const playground = '/Users/Simon/Github/markstream-vue/playground'
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const playground = path.join(repoRoot, 'playground')
 
 function isOpen(portNumber) {
   return new Promise((resolve) => {
@@ -31,10 +34,7 @@ async function waitForPort(portNumber, timeout = 30000) {
   throw new Error(`timeout waiting for ${portNumber}`)
 }
 
-async function captureStaticState(page) {
-  await page.waitForSelector('.stream-monaco-diff-root', { timeout: 120000 })
-  await page.waitForSelector('.stream-monaco-diff-unchanged-bridge', { timeout: 120000 })
-
+async function readFoldingState(page) {
   return page.evaluate(() => {
     function pickStyle(node) {
       if (!(node instanceof HTMLElement))
@@ -44,176 +44,90 @@ async function captureStaticState(page) {
         background: style.background,
         backgroundColor: style.backgroundColor,
         borderColor: style.borderColor,
-        boxShadow: style.boxShadow,
         color: style.color,
       }
     }
 
-    const bridge = document.querySelector('.stream-monaco-diff-unchanged-bridge')
-    const rail = bridge?.querySelector('.stream-monaco-unchanged-rail')
-    const summary = bridge?.querySelector('.stream-monaco-unchanged-summary')
-    const count = bridge?.querySelector('.stream-monaco-unchanged-count, .stream-monaco-unchanged-metadata-label')
-    const reveal = bridge?.querySelector('.stream-monaco-unchanged-reveal')
-    const diffOverview = document.querySelector('.monaco-diff-editor .diffOverview')
-    const decorationsOverviewRuler = document.querySelector('.decorationsOverviewRuler')
-    const firstLineNumber = document.querySelector('.monaco-diff-editor .editor.modified .line-numbers')
-    const firstViewLine = document.querySelector('.monaco-diff-editor .editor.modified .view-line')
-    const visibleRevealDirections = Array.from(
-      bridge?.querySelectorAll('.stream-monaco-unchanged-reveal') ?? [],
-    )
-      .filter(node => node instanceof HTMLElement && !node.hidden)
-      .map(node => node.dataset.direction ?? null)
+    function isVisible(node) {
+      if (!(node instanceof HTMLElement))
+        return false
+      const style = window.getComputedStyle(node)
+      const rect = node.getBoundingClientRect()
+      return rect.width > 0
+        && rect.height > 0
+        && style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && Number.parseFloat(style.opacity || '1') > 0.01
+    }
+
+    const shell = document.querySelector('.code-block-container.is-diff .stream-diffs-shell')
+    const surface = document.querySelector('.code-block-container.is-diff diffs-container')
+    const root = surface?.shadowRoot
+    const pre = root?.querySelector('pre[data-diff]')
+    const separators = Array.from(root?.querySelectorAll('[data-separator="line-info"]') ?? [])
+    const labels = Array.from(root?.querySelectorAll('[data-unmodified-lines]') ?? [])
+    const buttons = Array.from(root?.querySelectorAll('[data-expand-button]') ?? [])
+    const firstLineNumber = root?.querySelector('[data-line-number-content]')
+    const firstLine = root?.querySelector('[data-content] [data-line]')
 
     return {
-      bridge: pickStyle(bridge),
-      rail: pickStyle(rail),
-      railClasses: rail instanceof HTMLElement ? Array.from(rail.classList) : [],
-      summary: pickStyle(summary),
-      summaryPadding: summary instanceof HTMLElement
+      surfaceCount: document.querySelectorAll('.code-block-container.is-diff diffs-container').length,
+      diffType: pre?.getAttribute('data-diff-type') ?? null,
+      hiddenRegionCount: labels.length,
+      hiddenRegionTexts: labels.map(node => node.textContent?.trim() ?? ''),
+      visibleExpandButtonCount: buttons.filter(isVisible).length,
+      pre: pickStyle(pre),
+      separator: pickStyle(separators[0]),
+      label: pickStyle(labels[0]),
+      lineNumber: firstLineNumber instanceof HTMLElement
         ? {
-            left: window.getComputedStyle(summary).paddingLeft,
-            right: window.getComputedStyle(summary).paddingRight,
+            text: firstLineNumber.textContent?.trim() ?? '',
+            left: Math.round(firstLineNumber.getBoundingClientRect().left),
+            width: Math.round(firstLineNumber.getBoundingClientRect().width),
           }
         : null,
-      count: count ? window.getComputedStyle(count).color : null,
-      reveal: pickStyle(reveal),
-      visibleRevealDirections,
-      overview: pickStyle(diffOverview),
-      decorationsOverviewRuler: pickStyle(decorationsOverviewRuler),
-      overviewMetrics: diffOverview instanceof HTMLElement
+      code: firstLine instanceof HTMLElement
         ? {
-            width: Math.round(diffOverview.getBoundingClientRect().width),
-            display: window.getComputedStyle(diffOverview).display,
+            text: firstLine.textContent?.trim() ?? '',
+            left: Math.round(firstLine.getBoundingClientRect().left),
           }
         : null,
-      decorationsOverviewRulerMetrics: decorationsOverviewRuler instanceof HTMLElement
+      scroll: shell instanceof HTMLElement
         ? {
-            width: Math.round(decorationsOverviewRuler.getBoundingClientRect().width),
-            display: window.getComputedStyle(decorationsOverviewRuler).display,
-          }
-        : null,
-      modifiedColumn: (
-        firstLineNumber instanceof HTMLElement
-        && firstViewLine instanceof HTMLElement
-        && rail instanceof HTMLElement
-      )
-        ? {
-            lineNumberLeft: Math.round(firstLineNumber.getBoundingClientRect().left),
-            lineNumberWidth: Math.round(firstLineNumber.getBoundingClientRect().width),
-            codeLeft: Math.round(firstViewLine.getBoundingClientRect().left),
-            railLeft: Math.round(rail.getBoundingClientRect().left),
-            railWidth: Math.round(rail.getBoundingClientRect().width),
-          }
-        : null,
-      text: summary?.textContent?.trim() ?? null,
-      rootVars: bridge instanceof HTMLElement
-        ? {
-            unchangedBg: bridge.style.getPropertyValue('--stream-monaco-unchanged-bg'),
-            unchangedFg: bridge.style.getPropertyValue('--stream-monaco-unchanged-fg'),
+            top: Math.round(shell.scrollTop),
+            height: Math.round(shell.getBoundingClientRect().height),
+            scrollHeight: Math.round(shell.scrollHeight),
           }
         : null,
     }
   })
 }
 
-async function captureExpandedScrollState(page) {
-  await page.click('.stream-monaco-diff-unchanged-bridge .stream-monaco-unchanged-summary')
-  await page.waitForTimeout(300)
-
-  await page.evaluate(() => {
-    const scrollable = document.querySelector(
-      '.monaco-diff-editor .editor.modified .monaco-scrollable-element',
-    )
-    if (scrollable instanceof HTMLElement)
-      scrollable.scrollTop = 220
-  })
-
-  await page.waitForTimeout(300)
-
-  return page.evaluate(() => {
-    const bridges = Array.from(
-      document.querySelectorAll('.stream-monaco-diff-unchanged-bridge'),
-    )
-      .filter(node => node instanceof HTMLElement)
-      .map((node) => {
-        const style = window.getComputedStyle(node)
-        const rect = node.getBoundingClientRect()
-        return {
-          hiddenAttr: node.hasAttribute('hidden'),
-          ariaHidden: node.getAttribute('aria-hidden'),
-          display: style.display,
-          visibility: style.visibility,
-          opacity: style.opacity,
-          height: Math.round(rect.height),
-          width: Math.round(rect.width),
-          text: node.textContent?.trim() ?? '',
-        }
-      })
-
-    const visibleBridges = bridges.filter(bridge =>
-      !bridge.hiddenAttr
-      && bridge.ariaHidden !== 'true'
-      && bridge.display !== 'none'
-      && bridge.visibility !== 'hidden'
-      && bridge.opacity !== '0'
-      && bridge.height > 0
-      && bridge.width > 0,
-    )
-
-    const modifiedScrollable = document.querySelector(
-      '.monaco-diff-editor .editor.modified .monaco-scrollable-element',
-    )
-
-    return {
-      bridgeCount: bridges.length,
-      visibleBridgeCount: visibleBridges.length,
-      visibleBridges,
-      modifiedScrollTop:
-        modifiedScrollable instanceof HTMLElement ? modifiedScrollable.scrollTop : null,
-    }
-  })
+async function captureStaticState(page) {
+  await page.waitForSelector('.code-block-container.is-diff[data-markstream-enhanced="true"] .stream-diffs-shell', { timeout: 120000 })
+  await page.waitForFunction(() => {
+    const root = document.querySelector('.code-block-container.is-diff diffs-container')?.shadowRoot
+    return (root?.querySelectorAll('[data-unmodified-lines]').length ?? 0) > 0
+  }, { timeout: 120000 })
+  return readFoldingState(page)
 }
 
 async function captureRevealStepState(page) {
-  const parseCount = (text) => {
-    const match = text.match(/\d+/)
-    return match ? Number.parseInt(match[0], 10) : Number.NaN
-  }
-
-  const before = await page.evaluate(() => {
-    const bridge = document.querySelector('.stream-monaco-diff-unchanged-bridge:not([hidden])')
-    const summary = bridge?.querySelector('.stream-monaco-unchanged-summary')
-    const button = bridge?.querySelector('.stream-monaco-unchanged-reveal:not([hidden])')
-    return {
-      label: summary?.textContent?.trim() ?? null,
-      direction: button instanceof HTMLElement ? button.dataset.direction ?? null : null,
-    }
-  })
-
-  await page.click('.stream-monaco-diff-unchanged-bridge .stream-monaco-unchanged-reveal:not([hidden])')
+  const before = await readFoldingState(page)
+  await page.locator('diffs-container [data-expand-button]:visible').first().click()
   await page.waitForTimeout(300)
+  const after = await readFoldingState(page)
+  return { before, after }
+}
 
-  const after = await page.evaluate(() => {
-    const bridge = document.querySelector('.stream-monaco-diff-unchanged-bridge:not([hidden])')
-    const summary = bridge?.querySelector('.stream-monaco-unchanged-summary')
-    return {
-      label: summary?.textContent?.trim() ?? null,
-    }
+async function captureExpandedScrollState(page) {
+  await page.evaluate(() => {
+    const shell = document.querySelector('.code-block-container.is-diff .stream-diffs-shell')
+    if (shell instanceof HTMLElement)
+      shell.scrollTop = Math.min(220, shell.scrollHeight - shell.clientHeight)
   })
-
-  const beforeCount = parseCount(before.label ?? '')
-  const afterCount = parseCount(after.label ?? '')
-
-  return {
-    before,
-    after,
-    beforeCount,
-    afterCount,
-    delta:
-      Number.isFinite(beforeCount) && Number.isFinite(afterCount)
-        ? beforeCount - afterCount
-        : null,
-  }
+  await page.waitForTimeout(300)
+  return readFoldingState(page)
 }
 
 async function main() {
@@ -238,7 +152,6 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } })
 
     await page.addInitScript(() => {
-      localStorage.setItem('vmr-test-render-mode', 'monaco')
       localStorage.setItem('vmr-test-code-stream', 'true')
       localStorage.setItem('vmr-test-viewport-priority', 'false')
       localStorage.setItem('vmr-test-batch-rendering', 'false')

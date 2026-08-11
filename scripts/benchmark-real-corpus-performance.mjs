@@ -389,7 +389,7 @@ async function runParserBenchmarks(corpus) {
       const nodes = parseMarkdownToStructure(testCase.markdown, md, {
         final: true,
         streamParse: true,
-        __timing: timing,
+        parserMetrics: timing,
       })
       const elapsed = performance.now() - startedAt
       if (roundIndex >= parserWarmups) {
@@ -423,8 +423,8 @@ async function runParserBenchmarks(corpus) {
           lastNodes = parseMarkdownToStructure(current, md, {
             final: false,
             streamParse: true,
-            ...(mode.reuseStableTopLevelNodes ? { __reuseStableTopLevelNodes: true } : {}),
-            __timing: timing,
+            ...(mode.reuseStableTopLevelNodes ? { reuseStableTopLevelNodes: true } : {}),
+            parserMetrics: timing,
           })
           commitDurations.push(performance.now() - startedAt)
           commitTimings.push({ timing })
@@ -435,7 +435,7 @@ async function runParserBenchmarks(corpus) {
         const finalNodes = parseMarkdownToStructure(testCase.markdown, md, {
           final: true,
           streamParse: true,
-          __timing: finalTiming,
+          parserMetrics: finalTiming,
         })
         const finalFlushMs = performance.now() - finalStartedAt
 
@@ -1514,7 +1514,7 @@ const App = defineComponent({
           overscanPx: 1000000,
           stickToBottom: false,
           markdownMode: 'chat',
-          markdownCodeRenderer: 'pre',
+          renderCodeBlocksAsPre: true,
           markdownFade: false,
           restoreMaxLoadingMs: false,
           debug: true,

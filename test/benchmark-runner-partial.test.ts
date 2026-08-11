@@ -37,12 +37,12 @@ if (script.includes('/scripts/e2e-')) {
     result = {
       environment: {},
       millionRestore: { restore: {}, scroll: {} },
-      codeblockMonaco: { initial: {}, scroll: {} },
+      codeblockStreamDiffs: { initial: {}, scroll: {} },
       warnings: [],
     }
   }
   else {
-    result = { markdown: {}, monaco: {} }
+    result = { 'stream-diffs': {} }
   }
 
   writeFileSync(resultPath, JSON.stringify(result))

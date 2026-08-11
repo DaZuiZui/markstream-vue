@@ -6,7 +6,7 @@ import { convertHtmlAttrsToProps, getHtmlTagFromContent, normalizeCustomHtmlTagN
 import { AdmonitionNode } from '../components/AdmonitionNode/AdmonitionNode'
 import { BlockquoteNode } from '../components/BlockquoteNode/BlockquoteNode'
 import { CheckboxNode } from '../components/CheckboxNode/CheckboxNode'
-import { CodeBlockNode as MonacoCodeBlockNode } from '../components/CodeBlockNode/CodeBlockNode'
+import { CodeBlockNode } from '../components/CodeBlockNode/CodeBlockNode'
 import { PreCodeNode } from '../components/CodeBlockNode/PreCodeNode'
 import { D2BlockNode } from '../components/D2BlockNode/D2BlockNode'
 import { DefinitionListNode } from '../components/DefinitionListNode/DefinitionListNode'
@@ -115,12 +115,12 @@ function renderCustomCodeBlockComponent(
     darkTheme: ctx.codeBlockThemes?.darkTheme,
     lightTheme: ctx.codeBlockThemes?.lightTheme,
     themes: ctx.codeBlockThemes?.themes,
-    langs: ctx.codeBlockThemes?.langs,
     minWidth: ctx.codeBlockThemes?.minWidth,
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     onCopy: ctx.events.onCopy,
     onPreviewCode,
     ...extraProps,
+    codeBlockOptions: ctx.codeBlockOptions,
     ...specialProps,
     ctx,
     renderNode,
@@ -265,29 +265,38 @@ function renderCodeBlock(
     return renderCustomCodeBlockComponent(customCodeBlock, node, key, ctx)
 
   if (ctx.renderCodeBlocksAsPre || language === 'mermaid') {
+    const configuredShowLineNumbers = ctx.codeBlockProps?.showLineNumbers
+    const disableLineNumbers = ctx.codeBlockOptions?.disableLineNumbers
+    const overflow = ctx.codeBlockOptions?.overflow
     return (
       <PreCodeNode
         key={key}
         node={node}
-        monacoOptions={ctx.codeBlockThemes?.monacoOptions}
-        showLineNumbers={ctx.codeBlockProps?.showLineNumbers === true}
+        style={overflow ? { whiteSpace: overflow === 'scroll' ? 'pre' : 'pre-wrap' } : undefined}
+        showLineNumbers={typeof configuredShowLineNumbers === 'boolean'
+          ? configuredShowLineNumbers
+          : typeof disableLineNumbers === 'boolean'
+            ? !disableLineNumbers
+            : false}
       />
     )
   }
 
   return (
-    <MonacoCodeBlockNode
+    <CodeBlockNode
       key={key}
       node={node}
       loading={Boolean(node.loading)}
       stream={ctx.codeBlockStream}
-      monacoOptions={ctx.codeBlockThemes?.monacoOptions}
       themes={ctx.codeBlockThemes?.themes}
+      darkTheme={ctx.codeBlockThemes?.darkTheme}
+      lightTheme={ctx.codeBlockThemes?.lightTheme}
       minWidth={ctx.codeBlockThemes?.minWidth}
       maxWidth={ctx.codeBlockThemes?.maxWidth}
       isDark={ctx.isDark}
       onCopy={ctx.events.onCopy}
-      {...getCodeBlockExtraProps(ctx.codeBlockProps, { omit: ['langs'] })}
+      {...getCodeBlockExtraProps(ctx.codeBlockProps)}
+      codeBlockOptions={ctx.codeBlockOptions}
     />
   )
 }

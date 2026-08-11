@@ -30,7 +30,6 @@ InsertNode
 LinkNode
 ListItemNode
 ListNode
-MarkdownCodeBlockNode
 MarkdownRender
 MathBlockNode
 MathInlineNode
@@ -96,21 +95,14 @@ safeCancelRaf
 
 # Key public types that appear in component props and function signatures
 CodeBlockNodeProps
+CodeBlockOptions
 CodeBlockPreviewPayload
+CodeBlockTheme
+CodeBlockThemePair
 CodeBlockThemeProp
-ShikiCodeBlockProps
-CodeBlockMonacoLanguage
-CodeBlockMonacoOptions
-CodeBlockMonacoTheme
-CodeBlockMonacoThemeObject
-CodeBlockDiffAppearance
+CodeBlockThemes
 CodeBlockDiffHideUnchangedRegions
 CodeBlockDiffHideUnchangedRegionsOptions
-CodeBlockDiffHunkActionContext
-CodeBlockDiffHunkActionKind
-CodeBlockDiffHunkSide
-CodeBlockDiffLineStyle
-CodeBlockDiffUnchangedRegionStyle
 CustomComponentAttrs
 CustomComponentNode
 CustomComponents
@@ -123,7 +115,6 @@ InfographicBlockNodeProps
 InfographicLoader
 KatexLoader
 LinkNodeProps
-MarkdownCodeBlockPreviewPayload
 MarkstreamVuePluginOptions
 MathBlockNodeProps
 MathInlineNodeProps
