@@ -167,7 +167,6 @@ export default defineConfig(({ mode }) => {
             'mermaid',
             'katex/contrib/mhchem',
             'stream-diffs',
-            'stream-markdown',
             'stream-markdown-parser',
             'markstream-core',
             '@antv/infographic',

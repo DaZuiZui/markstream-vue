@@ -72,7 +72,7 @@ export interface MarkstreamHeightCacheEntry extends MarkstreamMeasuredHeightCach
   /**
    * Compatibility metadata.
    *
-   * MarkdownRender exports these fields for newly captured caches, and
+   * NodeRenderer exports these fields for newly captured caches, and
    * standalone virtualScroll.heightCache imports require signature at runtime.
    */
   nodeType?: string
@@ -395,6 +395,6 @@ export interface NodeRendererProps {
   nodeVirtual?: boolean | 'auto'
   /** Advanced: report logical height and restore state to an outer virtual scroller. */
   virtualScroll?: MarkstreamVirtualScrollOptions
-  /** Internal: render nodes as a fragment without container wrappers */
+  /** @internal */
   renderAsFragment?: boolean
 }
