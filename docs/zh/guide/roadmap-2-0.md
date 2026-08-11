@@ -51,10 +51,10 @@ keywords:
 以下 registry 操作需要 npm maintainer 权限；在对应发布完成验证前保持未完成状态：
 
 - [ ] 首个 beta 前运行 `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next`，保留当前预发布。
-- [ ] 运行 `pnpm release:family:preflight`，发布协调 beta 家族，并对已发布包完成真实安装验证。
+- [ ] 在干净且已更新的 `2.0.0` 集成分支 checkout 中运行 `pnpm release:family:preflight`，发布协调 beta 家族，并对已发布包完成真实安装验证。
 - [ ] 2.0 stable 前先读取 `npm view markstream-vue@latest version`，确认它仍是 1.x，再执行 `release:family:preflight` 针对该实时版本输出的准确 `npm dist-tag add` 命令。
 
-`release:family:preflight` 会在发布任何包之前检查全部候选 dist-tag；别名缺失时会给出所需命令并失败关闭。
+只操作 registry 的 `npm dist-tag add` 命令不依赖 Git checkout。`release:family:preflight` 与发布脚本由 `2.0.0` 集成分支提供；preflight 会在发布任何包之前检查全部候选 dist-tag，别名缺失时会给出所需命令并失败关闭。
 
 ## 目标 4：运行时视觉验证
 

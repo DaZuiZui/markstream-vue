@@ -52,10 +52,10 @@ Get the breaking release through the normal release gates before publishing.
 These registry operations require npm maintainer credentials and remain incomplete until the corresponding publication is verified:
 
 - [ ] Before the first beta, preserve the current prerelease with `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next`.
-- [ ] Run `pnpm release:family:preflight`, publish the coordinated beta family, and verify real installs of the published packages.
+- [ ] From a clean, up-to-date checkout of the `2.0.0` integration branch, run `pnpm release:family:preflight`, publish the coordinated beta family, and verify real installs of the published packages.
 - [ ] Before stable 2.0, read `npm view markstream-vue@latest version`, verify that it is still a 1.x version, and run the exact `npm dist-tag add` command printed by `release:family:preflight` for that live version.
 
-`release:family:preflight` checks every candidate dist-tag before any package is published and fails with the required command if an alias is missing.
+The registry-only `npm dist-tag add` command does not depend on a Git checkout. The `release:family:preflight` and publish scripts are provided by the `2.0.0` integration branch; the preflight checks every candidate dist-tag before any package is published and fails with the required command if an alias is missing.
 
 ## Goal 4: Runtime visual verification
 
