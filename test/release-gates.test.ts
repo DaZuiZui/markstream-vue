@@ -166,6 +166,38 @@ describe('release dependency gates', () => {
     expect(publishIndex).toBeGreaterThan(packedGateIndex)
   })
 
+  it('adds fixed breaking notes only to the 0.1.0 renderer family releases', () => {
+    const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-stable.yml'), 'utf8')
+    const rendererPackages = 'markstream-react|markstream-octane|markstream-svelte|markstream-angular|markstream-vue2'
+    const pkgVariable = '$' + '{PKG}'
+    const versionVariable = '$' + '{VERSION}'
+    const familyBreakingVariable = '$' + '{FAMILY_BREAKING}'
+    const githubOutputVariable = '$' + '{GITHUB_OUTPUT}'
+    const actionsExpression = '$' + '{{'
+    const familyGate = workflow.slice(
+      workflow.indexOf('FAMILY_BREAKING=false'),
+      workflow.indexOf(`echo "pkg=${pkgVariable}"`),
+    )
+    const familyRelease = workflow.slice(
+      workflow.indexOf('- name: Create GitHub Release (0.1.0 renderer family)'),
+      workflow.indexOf('- name: Create GitHub Release (other packages)'),
+    )
+
+    expect(familyGate).toContain(`case "${pkgVariable}" in\n            ${rendererPackages})`)
+    expect(familyGate).toContain(`case "${versionVariable}" in\n                0.1.0|0.1.0-*) FAMILY_BREAKING=true ;;`)
+    expect(familyGate.match(/FAMILY_BREAKING=true/g)).toHaveLength(1)
+    expect(familyGate).not.toContain('stream-markdown-parser')
+    expect(familyGate).not.toContain('markstream-core')
+    expect(workflow).toContain(`echo "family_breaking=${familyBreakingVariable}" >> "${githubOutputVariable}"`)
+
+    expect(familyRelease).toContain(`if: ${actionsExpression} steps.meta.outputs.family_breaking == 'true' }}`)
+    expect(familyRelease).toContain('## Breaking changes in the Markstream 2.0 renderer family')
+    expect(familyRelease).toContain('https://markstream.simonhe.me/guide/migration-2-0')
+    expect(familyRelease).toContain('generate_release_notes: true')
+    expect(familyRelease).toContain('append_body: true')
+    expect(workflow).toContain(`if: ${actionsExpression} steps.meta.outputs.pkg != 'markstream-vue' && steps.meta.outputs.family_breaking != 'true' }}`)
+  })
+
   it('binds the 1.0 benchmark report to the release version and commit', () => {
     const script = readFileSync(resolve(process.cwd(), 'scripts/benchmark-1-0.mjs'), 'utf8')
 

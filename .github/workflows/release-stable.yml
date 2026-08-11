@@ -39,9 +39,19 @@ jobs:
             PRERELEASE=true
           fi
 
+          FAMILY_BREAKING=false
+          case "${PKG}" in
+            markstream-react|markstream-octane|markstream-svelte|markstream-angular|markstream-vue2)
+              case "${VERSION}" in
+                0.1.0|0.1.0-*) FAMILY_BREAKING=true ;;
+              esac
+              ;;
+          esac
+
           echo "pkg=${PKG}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "prerelease=${PRERELEASE}" >> "${GITHUB_OUTPUT}"
+          echo "family_breaking=${FAMILY_BREAKING}" >> "${GITHUB_OUTPUT}"
           echo "name=[${PKG}] ${VERSION}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout (for changelog body)
@@ -199,8 +209,26 @@ jobs:
           prerelease: ${{ steps.meta.outputs.prerelease }}
           generate_release_notes: true
 
+      - name: Create GitHub Release (0.1.0 renderer family)
+        if: ${{ steps.meta.outputs.family_breaking == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.meta.outputs.name }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          generate_release_notes: true
+          body: |
+            ## Breaking changes in the Markstream 2.0 renderer family
+
+            - Monaco and `stream-markdown` integrations, renderer selection, and their public configuration are removed.
+            - `stream-diffs` is the only built-in enhanced code-block runtime; without it, code fences use the plain `<pre><code>` fallback.
+            - These `0.1.0` adapter releases are not API-compatible with the prior `0.0.x` line.
+
+            Migration guide: https://markstream.simonhe.me/guide/migration-2-0
+          append_body: true
+
       - name: Create GitHub Release (other packages)
-        if: ${{ steps.meta.outputs.pkg != 'markstream-vue' }}
+        if: ${{ steps.meta.outputs.pkg != 'markstream-vue' && steps.meta.outputs.family_breaking != 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
