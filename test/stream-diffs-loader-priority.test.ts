@@ -14,7 +14,7 @@ interface LoaderModule {
 
 const LOADERS = [
   ['react', '../../packages/markstream-react/src/components/CodeBlockNode/monaco.ts', 'getStreamDiffsRuntime'],
-  ['svelte', '../../packages/markstream-svelte/src/optional/monaco.ts', 'getUseMonaco'],
+  ['svelte', '../../packages/markstream-svelte/src/optional/monaco.ts', 'getStreamDiffsRuntime'],
   ['angular', '../../packages/markstream-angular/src/optional/monaco.ts', 'getUseMonaco'],
   ['vue2', '../../packages/markstream-vue2/src/components/CodeBlockNode/streamDiffs.ts', 'getStreamDiffsRuntime'],
 ] as const

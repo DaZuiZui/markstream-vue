@@ -47,7 +47,7 @@ This repository publishes multiple packages (`markstream-vue`, `markstream-vue2`
 - `markstream-core@<version>`
 - `stream-markdown-parser@<version>`
 
-Framework package releases now run an automated check that blocks publish when the required `markstream-core` version is not on npm yet. If it fails, release `markstream-core` first.
+Framework package releases block until their required `stream-markdown-parser` and `markstream-core` versions are both available on npm. Coordinated family releases use this order: parser, core, Vue 3, React, Octane, Svelte, Angular, then Vue 2. `pnpm release:family` also checks every dist-tag before publishing the first package.
 
 Avoid creating bare `v<version>` tags (they mix different package versions in a monorepo).
 
@@ -60,7 +60,7 @@ Nightly tags can be **dependency-driven**: when `stream-markdown-parser` changes
 
 ### Common commands
 
-- Tag current version of a package: `pnpm tag:vue3` / `pnpm tag:vue2` / `pnpm tag:react` / `pnpm tag:octane` / `pnpm tag:angular` / `pnpm tag:core` / `pnpm tag:parser`
-- Tag + push to remote: `pnpm tag:vue3:push` / `pnpm tag:vue2:push` / `pnpm tag:react:push` / `pnpm tag:octane:push` / `pnpm tag:angular:push` / `pnpm tag:core:push` / `pnpm tag:parser:push`
+- Tag current version of a package: `pnpm tag:vue3` / `pnpm tag:vue2` / `pnpm tag:react` / `pnpm tag:octane` / `pnpm tag:svelte` / `pnpm tag:angular` / `pnpm tag:core` / `pnpm tag:parser`
+- Tag + push to remote: `pnpm tag:vue3:push` / `pnpm tag:vue2:push` / `pnpm tag:react:push` / `pnpm tag:octane:push` / `pnpm tag:svelte:push` / `pnpm tag:angular:push` / `pnpm tag:core:push` / `pnpm tag:parser:push`
 - Backfill namespaced tags from existing legacy `v*` tags (dry run): `pnpm tag:backfill:dry`
 - Apply backfill locally: `pnpm tag:backfill` (add `-- --push` to also push tags)

@@ -136,7 +136,6 @@ function renderCustomCodeBlockComponent(
     darkTheme: ctx.codeBlockThemes?.darkTheme,
     lightTheme: ctx.codeBlockThemes?.lightTheme,
     themes: ctx.codeBlockThemes?.themes,
-    langs: ctx.codeBlockThemes?.langs,
     minWidth: ctx.codeBlockThemes?.minWidth,
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     onCopy: ctx.events.onCopy,
@@ -280,7 +279,7 @@ function renderCodeBlock(
     return renderCustomCodeBlockComponent(customCodeBlock, node, key, ctx)
 
   if (ctx.renderCodeBlocksAsPre || language === 'mermaid') {
-    const extraProps = getCodeBlockExtraProps(ctx.codeBlockProps, { omit: ['langs'] })
+    const extraProps = getCodeBlockExtraProps(ctx.codeBlockProps)
     return Octane.createElement(PreCodeNode, {
       key,
       node,
@@ -300,7 +299,7 @@ function renderCodeBlock(
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     isDark: ctx.isDark,
     onCopy: ctx.events.onCopy,
-    ...getCodeBlockExtraProps(ctx.codeBlockProps, { omit: ['langs'] }),
+    ...getCodeBlockExtraProps(ctx.codeBlockProps),
   })
 }
 

@@ -1,8 +1,8 @@
 # CodeBlockNode (component)
 
-`CodeBlockNode` renders rich interactive code blocks. It supports Monaco streaming integration (optional), Markdown mode, and a flexible header API with slots and events.
+`CodeBlockNode` renders interactive code blocks with the optional `stream-diffs` peer and a flexible header API with slots and events.
 
-Quick example — inline usage (fallback to a simple rendering if Monaco not installed):
+Quick example — inline usage (falls back to plain code when `stream-diffs` is not installed):
 
 ```vue
 <CodeBlockNode :node="{ type: 'code_block', language: 'js', code: 'console.log(1)', raw: 'console.log(1)' }" />

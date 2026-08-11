@@ -66,6 +66,91 @@ describe('release dependency gates', () => {
     expect(releaseDryRun.indexOf('pnpm run publish:core:dry-run')).toBeLessThan(releaseDryRun.indexOf('pnpm run publish:vue3:dry-run'))
   })
 
+  it('preflights dist-tags before publishing the complete package family', () => {
+    const scripts = packageJson.scripts
+    const releaseFamily = scripts['release:family']
+    const preflight = 'pnpm run release:family:preflight'
+    const publishSteps = [
+      'pnpm run publish:parser:current',
+      'pnpm run publish:core:current',
+      'pnpm run publish:vue3:current',
+      'pnpm run publish:react:current',
+      'pnpm run publish:octane:current',
+      'pnpm run publish:svelte:current',
+      'pnpm run publish:angular:current',
+      'pnpm run publish:vue2:current',
+    ]
+
+    expect(scripts['release:family:preflight']).toBe('node scripts/check-release-family-dist-tags.mjs')
+    expect(releaseFamily.indexOf(preflight)).toBe(0)
+    for (let index = 0; index < publishSteps.length; index++) {
+      expect(releaseFamily.indexOf(publishSteps[index])).toBeGreaterThan(releaseFamily.indexOf(preflight))
+      if (index > 0)
+        expect(releaseFamily.indexOf(publishSteps[index])).toBeGreaterThan(releaseFamily.indexOf(publishSteps[index - 1]))
+    }
+
+    const preflightScript = readFileSync(resolve(process.cwd(), 'scripts/check-release-family-dist-tags.mjs'), 'utf8')
+    for (const path of [
+      'package.json',
+      'packages/markdown-parser/package.json',
+      'packages/markstream-core/package.json',
+      'packages/markstream-react/package.json',
+      'packages/markstream-octane/package.json',
+      'packages/markstream-svelte/package.json',
+      'packages/markstream-angular/package.json',
+      'packages/markstream-vue2/package.json',
+    ]) {
+      expect(preflightScript).toContain(`'${path}'`)
+    }
+  })
+
+  it('fails closed when a release tag does not match its package manifest', () => {
+    const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-stable.yml'), 'utf8')
+    const mappings = [
+      ['markstream-vue', '.', 'package.json'],
+      ['stream-markdown-parser', 'packages/markdown-parser', 'packages/markdown-parser/package.json'],
+      ['markstream-core', 'packages/markstream-core', 'packages/markstream-core/package.json'],
+      ['markstream-angular', 'packages/markstream-angular', 'packages/markstream-angular/package.json'],
+      ['markstream-octane', 'packages/markstream-octane', 'packages/markstream-octane/package.json'],
+      ['markstream-react', 'packages/markstream-react', 'packages/markstream-react/package.json'],
+      ['markstream-svelte', 'packages/markstream-svelte', 'packages/markstream-svelte/package.json'],
+      ['markstream-vue2', 'packages/markstream-vue2', 'packages/markstream-vue2/package.json'],
+    ]
+
+    for (const [name, packageDir, packageJson] of mappings) {
+      const mapping = `${name}) PACKAGE_DIR="${packageDir}"; PACKAGE_JSON="${packageJson}" ;;`
+      expect(workflow).toContain(mapping)
+      expect(workflow.match(new RegExp(mapping.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))).toHaveLength(1)
+    }
+
+    const validationIndex = workflow.indexOf('- name: Resolve and validate package manifest')
+    const installIndex = workflow.indexOf('- name: Install dependencies')
+    const publishIndex = workflow.indexOf('- name: Publish package to npm')
+
+    expect(validationIndex).toBeGreaterThan(-1)
+    expect(validationIndex).toBeLessThan(installIndex)
+    expect(validationIndex).toBeLessThan(publishIndex)
+    expect(workflow).toContain('if [[ "$' + '{MANIFEST_NAME}" != "$' + '{PACKAGE_NAME}" ]]')
+    expect(workflow).toContain('if [[ "$' + '{MANIFEST_VERSION}" != "$' + '{PACKAGE_VERSION}" ]]')
+    expect(workflow).toContain('if [[ "$' + '{GITHUB_REF_NAME}" != "$' + '{MANIFEST_NAME}@$' + '{MANIFEST_VERSION}" ]]')
+    expect(workflow).toContain('PACKAGE_DIR: $' + '{{ steps.package.outputs.package_dir }}')
+    expect(workflow).toContain('PACKAGE_JSON: $' + '{{ steps.package.outputs.package_json }}')
+  })
+
+  it('gates renderer packages on published and packed workspace dependencies', () => {
+    const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-stable.yml'), 'utf8')
+    const gateIndex = workflow.indexOf('- name: Check renderer workspace dependencies')
+    const publishedGateIndex = workflow.indexOf('node scripts/check-workspace-deps-published.mjs', gateIndex)
+    const packedGateIndex = workflow.indexOf('node scripts/check-packed-workspace-deps.mjs', gateIndex)
+    const publishIndex = workflow.indexOf('- name: Publish package to npm')
+
+    expect(gateIndex).toBeGreaterThan(-1)
+    expect(workflow).toContain('if: $' + '{{ steps.meta.outputs.pkg != \'stream-markdown-parser\' && steps.meta.outputs.pkg != \'markstream-core\' }}')
+    expect(publishedGateIndex).toBeGreaterThan(gateIndex)
+    expect(packedGateIndex).toBeGreaterThan(publishedGateIndex)
+    expect(publishIndex).toBeGreaterThan(packedGateIndex)
+  })
+
   it('binds the 1.0 benchmark report to the release version and commit', () => {
     const script = readFileSync(resolve(process.cwd(), 'scripts/benchmark-1-0.mjs'), 'utf8')
 
@@ -310,6 +395,7 @@ describe('release dependency gates', () => {
   it('uses workspace dependency publish gates for framework package releases', () => {
     for (const path of [
       'packages/markstream-angular/package.json',
+      'packages/markstream-octane/package.json',
       'packages/markstream-react/package.json',
       'packages/markstream-svelte/package.json',
       'packages/markstream-vue2/package.json',

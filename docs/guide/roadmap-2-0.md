@@ -16,20 +16,22 @@ keywords:
 
 The 2.0 headline breaking change: the Monaco-based code block API and the Shiki-based `stream-markdown` renderer are removed. Code blocks are rendered by `stream-diffs` only (or a plain `<pre>` fallback when the optional peer is absent).
 
-Tracked in [issue #615](https://github.com/Simon-He95/markstream-vue/issues/615). The implementation lives on branch `2.0.0-remove-monaco` and has not been merged into `main` yet; merge it via PR before closing the checklist. In this page, "— `2.0.0-remove-monaco` 分支" marks items completed on that branch.
+Tracked in [issue #615](https://github.com/Simon-He95/markstream-vue/issues/615) and merged into the `2.0.0` integration branch by [PR #619](https://github.com/Simon-He95/markstream-vue/pull/619).
 
-- [x] Remove `monacoOptions` / `codeBlockMonacoOptions` and all `CodeBlockMonaco*` params/APIs (no replacement; diff options fall back to stream-diffs built-in defaults) — `2.0.0-remove-monaco` 分支
-- [x] Delete the `stream-markdown` `MarkdownCodeBlockNode` component and its styles — `2.0.0-remove-monaco` 分支
-- [x] Rename `codeRenderer` value `'monaco'` → `'stream-diffs'`; drop the `'shiki'` / `'markdown'` renderer kinds — `2.0.0-remove-monaco` 分支
-- [x] Rename public identifiers to drop Monaco naming (`CodeBlockTheme`, `resolveLanguageId`, `getStreamDiffsRuntime`) — `2.0.0-remove-monaco` 分支
-- [x] Migrate vue2 / react / svelte / angular / octane to stream-diffs only — `2.0.0-remove-monaco` 分支
-- [x] Update tests and snapshots; full suite green (313 files / 2684 tests) — `2.0.0-remove-monaco` 分支
-- [x] Clean playgrounds (deps, vite config, sandbox pages) — `2.0.0-remove-monaco` 分支
-- [x] Update documentation (en + zh), LLM docs, package descriptions — `2.0.0-remove-monaco` 分支
+- [x] Remove `monacoOptions` / `codeBlockMonacoOptions` and all `CodeBlockMonaco*` params/APIs (no replacement; diff options fall back to stream-diffs built-in defaults)
+- [x] Delete the `stream-markdown` `MarkdownCodeBlockNode` component and its styles
+- [x] Rename `codeRenderer` value `'monaco'` → `'stream-diffs'`; drop the `'shiki'` / `'markdown'` renderer kinds
+- [x] Rename public identifiers to drop Monaco naming (`CodeBlockTheme`, `resolveLanguageId`, `getStreamDiffsRuntime`)
+- [x] Migrate vue2 / react / svelte / angular / octane to stream-diffs only
+- [x] Update tests and snapshots; full suite green (313 files / 2684 tests)
+- [x] Clean playgrounds (deps, vite config, sandbox pages)
+- [x] Update documentation (en + zh), LLM docs, package descriptions
 
-## Goal 2: Parser reliability and maintainability
+## Goal 2: Parser reliability and maintainability ✅
 
 The neutral 2.0 parser work is tracked independently from the renderer removal in [issue #625](https://github.com/Simon-He95/markstream-vue/issues/625). Internal runtime ownership and reset lifecycle are tracked in [issue #633](https://github.com/Simon-He95/markstream-vue/issues/633).
+
+The nine incremental parser changes were merged into `2.0.0` in dependency order through PRs [#635](https://github.com/Simon-He95/markstream-vue/pull/635), [#636](https://github.com/Simon-He95/markstream-vue/pull/636), [#637](https://github.com/Simon-He95/markstream-vue/pull/637), [#638](https://github.com/Simon-He95/markstream-vue/pull/638), [#639](https://github.com/Simon-He95/markstream-vue/pull/639), [#640](https://github.com/Simon-He95/markstream-vue/pull/640), [#641](https://github.com/Simon-He95/markstream-vue/pull/641), [#642](https://github.com/Simon-He95/markstream-vue/pull/642), and [#643](https://github.com/Simon-He95/markstream-vue/pull/643). They freeze correctness, API, allocation, and performance gates before separating parser stages and tightening stream lifecycle ownership.
 
 ### Parser options migration
 
@@ -39,31 +41,34 @@ The neutral 2.0 parser work is tracked independently from the renderer removal i
 
 Get the breaking release through the normal release gates before publishing.
 
-- [ ] Run the full library build (`pnpm build`) and DTS generation
-- [ ] `pnpm test:api:strict` (public API snapshot, exports, subpath isolation)
-- [ ] Framework smoke tests: react / octane / vue2-cjs / minimal / pack (optional peers)
-- [ ] Reconcile `check:peer-deps` for workspace-root optional peers
-- [ ] Bump version to 2.0.0 and write release notes
+- [x] Run the full library build (`pnpm build`) and DTS generation
+- [x] `pnpm test:api:strict` (public API snapshot, exports, subpath isolation)
+- [x] Framework smoke tests: react / octane / vue2-cjs / minimal / pack (optional peers)
+- [x] Reconcile `check:peer-deps` for workspace-root optional peers
+- [x] Prepare coordinated `2.0.0-beta.1` package versions, release notes, and the [2.0 migration guide](/guide/migration-2-0); publish the beta before promoting the same matrix to stable versions
+
+Release-operator cutover (requires npm maintainer credentials): before the first beta, preserve the current prerelease with `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next`. Before stable 2.0, preserve the current stable with `npm dist-tag add markstream-vue@1.0.9 legacy`. `release:family:preflight` checks every candidate dist-tag before any package is published and fails with the required command if an alias is missing.
 
 ## Goal 4: Runtime visual verification
 
-Verify the stream-diffs handoff in a real browser (the migration so far is verified by unit/type checks only).
+The stream-diffs handoff is verified in real browsers as well as by unit and type checks.
 
-- [ ] Playground: code-block height sync, diff theme switching, inline vs side-by-side behavior
-- [ ] `test:e2e:octane-playground` green against stream-diffs selectors
-- [ ] Svelte diff color mapping on `.is-diff .code-block-body`
+- [x] Playground: code-block height sync, diff theme switching, inline vs side-by-side behavior
+- [x] `test:e2e:octane-playground` green against stream-diffs selectors
+- [x] Svelte diff color mapping on `.is-diff .code-block-body`
 
 ## Goal 5: Leftover cleanup (low priority)
 
 Small consistency cleanups that were intentionally left out of Goal 1.
 
-- [ ] Rename internal Monaco-named variables in svelte / react / vue2 packages (e.g. `resolvedMonacoOptions`)
-- [ ] Update manual e2e debug scripts that still use old `.stream-monaco-diff-*` selectors (`e2e-diff-theme-switch.mjs`, `e2e-codeblock-diff-line-info-debug.mjs`)
-- [ ] Remove the unused `langs` field from react / vue2 code block theme types
-- [ ] Known pre-existing typecheck issues (out of 2.0 scope): `markstream-core` rootDir TS6059, `HtmlPreviewFrame.vue` `import.meta.env`
+- [x] Rename internal Monaco-named variables in svelte / react / vue2 packages (for example, `resolvedMonacoOptions`)
+- [x] Update manual e2e debug scripts to use stream-diffs selectors and repository-relative paths
+- [x] Remove the unused `langs` field from react / vue2 code block theme types
+- [x] Record the known pre-existing typecheck issues outside the 2.0 scope: the Vue2 package's direct `vue-tsc` run reaches `markstream-core` outside its `rootDir` (TS6059) and uses `import.meta.env` in `HtmlPreviewFrame.vue`
 
 ## Related
 
 - GitHub milestone: `2.0.0`
-- Roadmap checklist issue: tracked alongside this page on the `2.0.0` milestone
+- Roadmap checklist: [issue #618](https://github.com/Simon-He95/markstream-vue/issues/618)
+- Migration guide: [Migrate from 1.x to 2.0](/guide/migration-2-0)
 - 1.0 baseline: [1.0 Release Readiness](/guide/release-1-0)

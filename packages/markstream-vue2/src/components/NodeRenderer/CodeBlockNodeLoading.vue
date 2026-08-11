@@ -24,7 +24,7 @@ const languageIcon = computed(() => getLanguageIcon(language.value))
 const defaultCodeFontFamily = '"SF Mono", Monaco, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace'
 
 const metrics = computed(() => {
-  // Fixed default metrics; the monacoOptions prop was removed in 2.0.0.
+  // Fixed default metrics for the stream-diffs handoff.
   const fontSize = 12
   const lineHeight = 18
   const paddingTop = 8

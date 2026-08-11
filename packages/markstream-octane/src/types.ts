@@ -10,16 +10,14 @@ import type {
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
-  ShikiCodeBlockProps,
 } from './types/component-props'
 
 type NodeRendererCodeBlockThemes
   = CodeBlockNodeProps['themes']
-    | ShikiCodeBlockProps['themes']
+    | readonly string[]
 
 export type NodeRendererCodeBlockProps
   = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
-    & Partial<Omit<ShikiCodeBlockProps, 'themes'>>
     & {
       themes?: NodeRendererCodeBlockThemes
     }
@@ -64,13 +62,6 @@ export interface NodeRendererProps<
    * Theme names or theme objects preloaded for stream-diffs backed code blocks.
    */
   themes?: CodeBlockTheme[]
-  /**
-   * Shiki language preload list.
-   *
-   * The default Octane code block renderer is stream-diffs backed. This prop is
-   * used when a custom `code_block` or language renderer opts into Shiki.
-   */
-  langs?: readonly string[]
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -132,7 +123,6 @@ export interface RenderContext {
     lightTheme?: CodeBlockTheme
     minWidth?: string | number
     maxWidth?: string | number
-    langs?: readonly string[]
   }
   events: {
     onCopy?: (code: string) => void

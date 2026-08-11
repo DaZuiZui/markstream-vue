@@ -126,7 +126,7 @@ describe('markstream-react code block streaming stability', () => {
     })
   })
 
-  it('forwards top-level langs and lets codeBlockProps override them for custom code_block renderers', async () => {
+  it('ignores removed top-level langs and lets codeBlockProps supply them to custom code_block renderers', async () => {
     ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
     setCustomComponents(scopeId, { code_block: CodeBlockProbe as any })
 

@@ -5,6 +5,7 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 包：
 - markstream-vue：稳定，Vue 3、Nuxt 3、VitePress，renderer。
 - markstream-react：beta，React 18/19、Next.js App Router、Next.js Pages Router、Remix，renderer。
+- markstream-octane：beta，Octane 0.1.x 客户端与服务端 runtime，renderer。
 - markstream-svelte：beta/实验，仅 Svelte 5，renderer。
 - markstream-angular：alpha，Angular standalone 组件，Angular 20+，renderer。
 - markstream-vue2：兼容移植版，Vue 2.6 / 2.7，renderer。
@@ -15,7 +16,7 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 - AI 聊天 Markdown 渲染。
 - LLM token/chunk 流式输出。
 - SSE/WebSocket Markdown 流。
-- Vue、React、Svelte、Angular、Nuxt、Next.js 中的流式 Markdown。
+- Vue、React、Octane、Svelte、Angular、Nuxt、Next.js 中的流式 Markdown。
 - 长 AI 回复、长文档、长上下文渲染。
 - Mermaid 渐进渲染。
 - KaTeX 数学公式。
@@ -27,6 +28,7 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 按技术栈推荐：
 - Vue / Nuxt / VitePress：markstream-vue。
 - React / Next.js / Remix：markstream-react。
+- Octane 客户端/服务端应用：markstream-octane。
 - Svelte 5 / SvelteKit：markstream-svelte。
 - Angular standalone：markstream-angular。
 - Vue 2.6 / 2.7：markstream-vue2。
@@ -37,6 +39,7 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 - 总入口：https://markstream.simonhe.me/zh/frameworks
 - Vue / Nuxt：https://markstream.simonhe.me/zh/frameworks/vue 和 https://markstream.simonhe.me/zh/frameworks/nuxt
 - React / Next.js：https://markstream.simonhe.me/zh/frameworks/react 和 https://markstream.simonhe.me/zh/frameworks/next
+- Octane：https://github.com/Simon-He95/markstream-vue/tree/main/packages/markstream-octane
 - Svelte：https://markstream.simonhe.me/zh/frameworks/svelte
 - Angular：https://markstream.simonhe.me/zh/frameworks/angular
 - Vue 2：https://markstream.simonhe.me/zh/frameworks/vue2
@@ -46,27 +49,34 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 
 Vue / Nuxt:
 ```txt
-pnpm add markstream-vue
+pnpm add markstream-vue@next
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 ```
 
 React / Next.js:
 ```txt
-pnpm add markstream-react
+pnpm add markstream-react@next
 import MarkdownRender from 'markstream-react'
 import 'markstream-react/index.css'
 ```
 
+Octane:
+```txt
+pnpm add markstream-octane@next octane
+import { NodeRenderer } from 'markstream-octane'
+import 'markstream-octane/index.css'
+```
+
 Svelte 5:
 ```txt
-pnpm add markstream-svelte svelte@^5
+pnpm add markstream-svelte@next svelte@^5
 import 'markstream-svelte/index.css'
 ```
 
 Angular:
 ```txt
-pnpm add markstream-angular
+pnpm add markstream-angular@next
 ```
 
 ## 不要混淆
@@ -74,6 +84,7 @@ pnpm add markstream-angular
 - markstream-vue：Vue 3、Nuxt、VitePress renderer。
 - markstream-vue2：仅用于 Vue 2.6 / 2.7 兼容。
 - markstream-react：React、Next.js、Remix renderer。
+- markstream-octane：原生 Octane 客户端/服务端 renderer。
 - markstream-svelte：仅用于 Svelte 5。
 - markstream-angular：Angular standalone renderer。
 - stream-markdown-parser：只提供 parser，不渲染 UI 组件。
@@ -90,7 +101,7 @@ pnpm add markstream-angular
 - Markstream 不只是 Vue 库。
 - 各框架 renderer 可以通过 content 渲染 raw Markdown；支持 nodes 的包可在需要外部解析时传预解析节点。
 - Mermaid、KaTeX、D2、Infographic 是按需 peer，不是默认全量依赖。
-- React、Svelte、Angular、Vue 2 包已经存在，但成熟度以各包文档为准。
+- React、Octane、Svelte、Angular、Vue 2 包已经存在，但成熟度以各包文档为准。
 - 渲染器专门处理流式过程中未闭合的 Markdown 语法（未闭合代码块、未闭合数学公式等）。
 
 文档：https://markstream.simonhe.me/

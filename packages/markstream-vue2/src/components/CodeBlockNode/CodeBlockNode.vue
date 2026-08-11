@@ -122,7 +122,7 @@ let createEditorPromise: Promise<void> | null = null
 let detectLanguage: (code: string) => string = () => String(props.node.language ?? 'plaintext')
 let setTheme: (theme: any) => Promise<void> = async () => {}
 let whenRuntimeVisualReady: (() => Promise<boolean>) | null = null
-let runtimeMonacoOptions: Record<string, any> | null = null
+let runtimeOptions: Record<string, any> | null = null
 let isUnmounted = false
 let deferredEditorVisualSyncRafId: number | null = null
 const isDiff = computed(() => props.node.diff)
@@ -151,9 +151,9 @@ function readPadding(value: unknown) {
   }
 }
 
-// Fixed runtime defaults for the stream-diffs surface. The monacoOptions
-// prop was removed in 2.0.0; code block presentation uses these constants.
-const resolvedMonacoOptions = computed<Record<string, any>>(() => ({
+// Fixed runtime defaults for the stream-diffs surface. Public adapter options
+// were removed in 2.0.0; code block presentation uses these constants.
+const resolvedRuntimeOptions = computed<Record<string, any>>(() => ({
   MAX_HEIGHT: 500,
   fontSize: 12,
   lineHeight: 18,
@@ -179,8 +179,8 @@ const resolvedMonacoOptions = computed<Record<string, any>>(() => ({
 
 // In streaming scenarios, the opening fence info string can arrive in chunks
 // (e.g. "```d" then "iff json:..."), which means a block may flip between
-// single <-> diff after the component has mounted. Monaco editors can't switch
-// kind in-place, so we recreate the editor when the kind changes.
+// single <-> diff after the component has mounted. The mounted surface cannot
+// switch kind in place, so we recreate it when the kind changes.
 const desiredEditorKind = computed<'diff' | 'single'>(() => (isDiff.value ? 'diff' : 'single'))
 const currentEditorKind = ref<'diff' | 'single'>(desiredEditorKind.value)
 const usePreCodeRender = ref(false)
@@ -200,18 +200,17 @@ if (typeof window !== 'undefined') {
         usePreCodeRender.value = true
         return
       }
-      // `useMonaco` and `detectLanguage` should be available
-      const useMonaco = (mod as any).useMonaco
+      const createRuntimeHelpers = (mod as any).useMonaco
       const det = (mod as any).detectLanguage
       if (typeof det === 'function')
         detectLanguage = det
-      if (typeof useMonaco === 'function') {
+      if (typeof createRuntimeHelpers === 'function') {
         const theme = resolveRequestedTheme()
         if (theme && props.themes && Array.isArray(props.themes) && !props.themes.includes(theme)) {
           throw new Error('Preferred theme not in provided themes array')
         }
-        runtimeMonacoOptions = buildRuntimeMonacoOptions()
-        const helpers = useMonaco(runtimeMonacoOptions)
+        runtimeOptions = buildRuntimeOptions()
+        const helpers = createRuntimeHelpers(runtimeOptions)
         createEditor = helpers.createEditor || createEditor
         createDiffEditor = helpers.createDiffEditor || createDiffEditor
         updateCode = helpers.updateCode || updateCode
@@ -233,7 +232,7 @@ if (typeof window !== 'undefined') {
     catch (err) {
       // Only log warning in development mode
       if (isDevEnv) {
-        console.warn('[markstream-vue2] Failed to initialize Monaco editor:', err)
+        console.warn('[markstream-vue2] Failed to initialize stream-diffs:', err)
       }
       // Use PreCodeNode for rendering
       usePreCodeRender.value = true
@@ -245,7 +244,7 @@ const codeFontMin = 10
 const codeFontMax = 36
 const codeFontStep = 1
 const defaultCodeFontSize = ref<number>(
-  typeof resolvedMonacoOptions.value?.fontSize === 'number' ? resolvedMonacoOptions.value.fontSize : defaultPreFallbackFontSize,
+  typeof resolvedRuntimeOptions.value?.fontSize === 'number' ? resolvedRuntimeOptions.value.fontSize : defaultPreFallbackFontSize,
 )
 const codeFontSize = ref<number>(defaultCodeFontSize.value)
 const fontBaselineReady = computed(() => {
@@ -330,8 +329,8 @@ function readActualFontSizeFromEditor(): number | null {
 
 function getLineHeightSafe(editor: any): number {
   try {
-    const monacoEditor = getEditor()
-    const key = monacoEditor?.EditorOption?.lineHeight
+    const editorModule = getEditor()
+    const key = editorModule?.EditorOption?.lineHeight
     if (key != null) {
       const v = editor?.getOption?.(key)
       if (typeof v === 'number' && v > 0)
@@ -348,9 +347,9 @@ function ensureFontBaseline() {
   if (Number.isFinite(codeFontSize.value) && (codeFontSize.value as number) > 0 && Number.isFinite(defaultCodeFontSize.value))
     return codeFontSize.value as number
   const actual = readActualFontSizeFromEditor()
-  if (typeof resolvedMonacoOptions.value?.fontSize === 'number') {
-    defaultCodeFontSize.value = resolvedMonacoOptions.value.fontSize
-    codeFontSize.value = resolvedMonacoOptions.value.fontSize
+  if (typeof resolvedRuntimeOptions.value?.fontSize === 'number') {
+    defaultCodeFontSize.value = resolvedRuntimeOptions.value.fontSize
+    codeFontSize.value = resolvedRuntimeOptions.value.fontSize
     return codeFontSize.value as number
   }
   if (actual && actual > 0) {
@@ -395,12 +394,12 @@ function measureRenderedStaticSurfaceHeight(): number | null {
 
 function computeContentHeight(): number | null {
   // stream-diffs renders inside Shadow DOM, so its adapter model may not expose
-  // a Monaco-style content height. Prefer the committed static surface itself.
+  // a runtime-reported content height. Prefer the committed static surface itself.
   const staticSurfaceHeight = measureRenderedStaticSurfaceHeight()
   if (staticSurfaceHeight != null)
     return staticSurfaceHeight
 
-  // Prefer Monaco's contentHeight when available; fallback to lineCount * lineHeight
+  // Prefer the runtime contentHeight when available; fall back to lineCount * lineHeight.
   try {
     const ed = isDiff.value ? getDiffEditorView() : getEditorView()
     if (!ed)
@@ -455,7 +454,7 @@ function syncEditorCssVars() {
   // pierre honor these CSS variables on the editor host (custom properties
   // inherit across the pierre shadow boundary).
   const targetEl = editorEl
-  const runtimeMetrics = resolvedMonacoOptions.value
+  const runtimeMetrics = resolvedRuntimeOptions.value
   const tabSize = readPositiveNumber(runtimeMetrics?.tabSize) ?? 4
   targetEl.style.setProperty('--diffs-tab-size', String(tabSize))
   const configuredPadding = runtimeMetrics?.padding
@@ -620,7 +619,7 @@ function updateCollapsedHeight() {
 }
 
 function getMaxHeightValue(): number {
-  const maxH = resolvedMonacoOptions.value?.MAX_HEIGHT ?? 500
+  const maxH = resolvedRuntimeOptions.value?.MAX_HEIGHT ?? 500
   if (typeof maxH === 'number')
     return maxH
   const m = String(maxH).match(/^(\d+(?:\.\d+)?)/)
@@ -889,7 +888,7 @@ async function runEditorCreation(el: HTMLElement) {
   if (!createEditor)
     return
 
-  syncRuntimeMonacoOptions()
+  syncRuntimeOptions()
 
   if (isDiff.value) {
     safeClean()
@@ -903,10 +902,10 @@ async function runEditorCreation(el: HTMLElement) {
   }
 
   const editor = isDiff.value ? getDiffEditorView() : getEditorView()
-  if (typeof resolvedMonacoOptions.value?.fontSize === 'number') {
-    editor?.updateOptions({ fontSize: resolvedMonacoOptions.value.fontSize, automaticLayout: false })
-    defaultCodeFontSize.value = resolvedMonacoOptions.value.fontSize
-    codeFontSize.value = resolvedMonacoOptions.value.fontSize
+  if (typeof resolvedRuntimeOptions.value?.fontSize === 'number') {
+    editor?.updateOptions({ fontSize: resolvedRuntimeOptions.value.fontSize, automaticLayout: false })
+    defaultCodeFontSize.value = resolvedRuntimeOptions.value.fontSize
+    codeFontSize.value = resolvedRuntimeOptions.value.fontSize
   }
   else {
     const actual = readActualFontSizeFromEditor()
@@ -987,7 +986,7 @@ watch(
       return
     currentEditorKind.value = nextKind
 
-    // If Monaco isn't mounted yet (or not available), just let the normal
+    // If the enhanced surface is not mounted yet, let the normal
     // creation path pick up the latest kind.
     if (!createEditor || !codeEditor.value)
       return
@@ -1043,7 +1042,7 @@ function addRuntimeLanguage(languages: string[], language: unknown) {
   }
 }
 
-const runtimeMonacoThemes = computed(() => {
+const runtimeThemes = computed(() => {
   const themes = Array.isArray(props.themes) ? [...props.themes] : []
   for (const theme of [props.darkTheme, props.lightTheme]) {
     if (theme != null && !hasTheme(themes, theme))
@@ -1052,9 +1051,9 @@ const runtimeMonacoThemes = computed(() => {
   return themes.length ? themes : undefined
 })
 
-const runtimeMonacoLanguages = computed(() => {
+const runtimeLanguages = computed(() => {
   const languages: string[] = []
-  const configured = resolvedMonacoOptions.value?.languages
+  const configured = resolvedRuntimeOptions.value?.languages
   if (Array.isArray(configured)) {
     for (const language of configured)
       addRuntimeLanguage(languages, language)
@@ -1069,9 +1068,9 @@ const runtimeMonacoLanguages = computed(() => {
 
 function resolveRequestedTheme() {
   const preferred = getPreferredColorScheme()
-  const explicit = resolvedMonacoOptions.value?.theme
+  const explicit = resolvedRuntimeOptions.value?.theme
   const requested = preferred ?? explicit
-  const availableThemes = runtimeMonacoThemes.value ?? []
+  const availableThemes = runtimeThemes.value ?? []
   if (!availableThemes.length || requested == null)
     return requested
 
@@ -1090,7 +1089,7 @@ function resolveRequestedTheme() {
 }
 
 function themeUpdate() {
-  syncRuntimeMonacoOptions()
+  syncRuntimeOptions()
 
   const themeToSet: any = resolveRequestedTheme()
   const syncPresentation = () => {
@@ -1152,7 +1151,7 @@ const effectiveDiffAppearance = computed<'light' | 'dark'>(() => {
   if (!isDiff.value)
     return resolvedChromeIsDark.value ? 'dark' : 'light'
 
-  const explicit = resolvedMonacoOptions.value?.diffAppearance
+  const explicit = resolvedRuntimeOptions.value?.diffAppearance
   if (explicit === 'light' || explicit === 'dark')
     return explicit
 
@@ -1164,7 +1163,7 @@ const resolvedSurfaceIsDark = computed(() =>
 )
 
 const preFallbackMetrics = computed(() => {
-  const raw = resolvedMonacoOptions.value as Record<string, unknown> | null | undefined
+  const raw = resolvedRuntimeOptions.value as Record<string, unknown> | null | undefined
   const fallbackFontSize = Number.isFinite(codeFontSize.value) && (codeFontSize.value as number) > 0
     ? (codeFontSize.value as number)
     : defaultPreFallbackFontSize
@@ -1196,7 +1195,7 @@ const preFallbackDiffInline = computed(() => {
     return false
   if (typeof props.estimatedDiffInline === 'boolean')
     return props.estimatedDiffInline
-  return resolvedMonacoOptions.value?.renderSideBySide === false
+  return resolvedRuntimeOptions.value?.renderSideBySide === false
 })
 
 const preFallbackStyle = computed(() => {
@@ -1277,14 +1276,14 @@ const codeEditorContainerStyle = computed(() => {
     : { minHeight: `${Math.ceil(Math.min(estimatedContentHeight, getMaxHeightValue()))}px` }
 })
 
-function buildRuntimeMonacoOptions() {
+function buildRuntimeOptions() {
   const metrics = preFallbackMetrics.value
   const nextOptions = {
     wordWrap: 'on',
     wrappingIndent: 'same',
-    ...(resolvedMonacoOptions.value || {}),
-    themes: runtimeMonacoThemes.value,
-    languages: runtimeMonacoLanguages.value,
+    ...(resolvedRuntimeOptions.value || {}),
+    themes: runtimeThemes.value,
+    languages: runtimeLanguages.value,
     // CodeBlockNode owns both the header and streamed content. Keep the runtime
     // surface final and headerless, and lock it to the visible pre's metrics so
     // the handoff cannot introduce an intermediate font/layout state.
@@ -1311,37 +1310,37 @@ ${configuredUnsafeCSS}`.trim()
   return nextOptions
 }
 
-function syncRuntimeMonacoOptions() {
-  const nextOptions = buildRuntimeMonacoOptions()
-  if (!runtimeMonacoOptions) {
-    runtimeMonacoOptions = nextOptions
-    return runtimeMonacoOptions
+function syncRuntimeOptions() {
+  const nextOptions = buildRuntimeOptions()
+  if (!runtimeOptions) {
+    runtimeOptions = nextOptions
+    return runtimeOptions
   }
 
-  for (const key of Object.keys(runtimeMonacoOptions)) {
+  for (const key of Object.keys(runtimeOptions)) {
     if (!(key in nextOptions))
-      delete runtimeMonacoOptions[key]
+      delete runtimeOptions[key]
   }
-  Object.assign(runtimeMonacoOptions, nextOptions)
-  return runtimeMonacoOptions
+  Object.assign(runtimeOptions, nextOptions)
+  return runtimeOptions
 }
 
-const monacoStructuralSignature = computed(() => JSON.stringify({
-  diffLineStyle: resolvedMonacoOptions.value?.diffLineStyle ?? 'background',
-  diffUnchangedRegionStyle: resolvedMonacoOptions.value?.diffUnchangedRegionStyle ?? 'line-info',
-  diffHideUnchangedRegions: resolvedMonacoOptions.value?.diffHideUnchangedRegions ?? true,
-  renderSideBySide: resolvedMonacoOptions.value?.renderSideBySide ?? true,
-  enableSplitViewResizing: resolvedMonacoOptions.value?.enableSplitViewResizing ?? true,
-  ignoreTrimWhitespace: resolvedMonacoOptions.value?.ignoreTrimWhitespace ?? true,
-  originalEditable: resolvedMonacoOptions.value?.originalEditable ?? false,
+const runtimeStructuralSignature = computed(() => JSON.stringify({
+  diffLineStyle: resolvedRuntimeOptions.value?.diffLineStyle ?? 'background',
+  diffUnchangedRegionStyle: resolvedRuntimeOptions.value?.diffUnchangedRegionStyle ?? 'line-info',
+  diffHideUnchangedRegions: resolvedRuntimeOptions.value?.diffHideUnchangedRegions ?? true,
+  renderSideBySide: resolvedRuntimeOptions.value?.renderSideBySide ?? true,
+  enableSplitViewResizing: resolvedRuntimeOptions.value?.enableSplitViewResizing ?? true,
+  ignoreTrimWhitespace: resolvedRuntimeOptions.value?.ignoreTrimWhitespace ?? true,
+  originalEditable: resolvedRuntimeOptions.value?.originalEditable ?? false,
 }))
 
-// Runtime options are fixed in 2.0.0 (monacoOptions prop removed); the editor
+// Runtime options are fixed in 2.0.0; the editor
 // simply receives the latest computed defaults.
 watch(
   () => [viewportReady.value],
   () => {
-    syncRuntimeMonacoOptions()
+    syncRuntimeOptions()
     if (!createEditor || !viewportReady.value)
       return
 
@@ -1361,8 +1360,8 @@ watch(
     props.darkTheme,
     props.lightTheme,
     props.themes,
-    resolvedMonacoOptions.value?.theme,
-    resolvedMonacoOptions.value?.diffAppearance,
+    resolvedRuntimeOptions.value?.theme,
+    resolvedRuntimeOptions.value?.diffAppearance,
     runtimeReady.value,
     editorCreated.value,
     viewportReady.value,
@@ -1376,9 +1375,9 @@ watch(
 )
 
 watch(
-  () => [monacoStructuralSignature.value, runtimeReady.value, viewportReady.value] as const,
+  () => [runtimeStructuralSignature.value, runtimeReady.value, viewportReady.value] as const,
   async ([nextSignature, ready, visible], [prevSignature]) => {
-    syncRuntimeMonacoOptions()
+    syncRuntimeOptions()
     if (!isDiff.value)
       return
     if (!ready || !visible)

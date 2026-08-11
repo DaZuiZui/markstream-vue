@@ -2,7 +2,7 @@
 import type { BaseNode, HtmlPolicy, MarkdownIt, ParsedNode, ParseOptions } from 'stream-markdown-parser'
 import type { SmoothMarkdownStreamOptions } from '../../composables/useSmoothMarkdownStream'
 import type { VisibilityHandle } from '../../composables/viewportPriority'
-import type { CodeBlockNodeProps, CodeBlockPreviewPayload, CodeBlockTheme, D2BlockNodeProps, InfographicBlockNodeProps, MermaidBlockNodeProps, ShikiCodeBlockProps } from '../../types/component-props'
+import type { CodeBlockNodeProps, CodeBlockPreviewPayload, CodeBlockTheme, D2BlockNodeProps, InfographicBlockNodeProps, MermaidBlockNodeProps } from '../../types/component-props'
 import { normalizeShikiLanguage } from 'markstream-core'
 import { getMarkdown, mergeCustomHtmlTags, parseMarkdownToStructure, resolveCustomHtmlTags } from 'stream-markdown-parser'
 import { h as createVNode } from 'vue'
@@ -59,11 +59,10 @@ interface IdleDeadlineLike {
 
 type NodeRendererCodeBlockThemes
   = CodeBlockNodeProps['themes']
-    | ShikiCodeBlockProps['themes']
+    | readonly string[]
 
 type NodeRendererCodeBlockProps
   = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
-    & Partial<Omit<ShikiCodeBlockProps, 'themes'>>
     & {
       themes?: NodeRendererCodeBlockThemes
     }
@@ -116,18 +115,8 @@ export interface NodeRendererProps {
   infographicProps?: Partial<Omit<InfographicBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   /** Global tooltip toggle for link/code-block renderers (default: true) */
   showTooltips?: boolean
-  /**
-   * Theme names or theme objects preloaded for enhanced (stream-diffs) code
-   * blocks. When Shiki code blocks are used, only string theme names are
-   * forwarded to stream-markdown; theme objects are ignored.
-   */
+  /** Theme names or theme objects preloaded for enhanced code blocks. */
   themes?: CodeBlockTheme[]
-  /**
-   * Shiki language preload list forwarded to stream-markdown.
-   *
-   * Used when a custom `code_block` or language renderer uses stream-markdown.
-   */
-  langs?: readonly string[]
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -1864,9 +1853,7 @@ const nodeComponents = {
 }
 const indexPrefix = computed(() => (props.indexKey != null ? String(props.indexKey) : 'markdown-renderer'))
 const codeBlockExtraProps = computed(() => getCodeBlockExtraProps(props.codeBlockProps))
-const builtinCodeBlockExtraProps = computed(() =>
-  getCodeBlockExtraProps(props.codeBlockProps, { omit: ['langs'] }),
-)
+const builtinCodeBlockExtraProps = computed(() => getCodeBlockExtraProps(props.codeBlockProps))
 const codeBlockBindings = computed(() => ({
   // streaming behavior control for CodeBlockNode
   stream: props.codeBlockStream,
@@ -1880,7 +1867,6 @@ const codeBlockBindings = computed(() => ({
 }))
 const customCodeBlockBindings = computed(() => ({
   ...codeBlockBindings.value,
-  langs: props.langs,
   ...codeBlockExtraProps.value,
 }))
 
@@ -1890,7 +1876,7 @@ function countCodeLines(value: unknown) {
 }
 
 function estimateBuiltinCodeBlockHeight(node: ParsedNode) {
-  // Fixed default metrics; the codeBlockMonacoOptions prop was removed in 2.0.0.
+  // Fixed default metrics for the stream-diffs handoff.
   const lineHeight = 18
   const isDiff = Boolean((node as any).diff)
   const diffInline = false
@@ -2555,7 +2541,6 @@ watch(
       :code-block-max-width="props.codeBlockMaxWidth"
       :code-block-props="props.codeBlockProps"
       :themes="props.themes"
-      :langs="props.langs"
       :is-dark="props.isDark"
       :custom-html-tags="mergedParseOptions.customHtmlTags"
       :html-policy="resolvedHtmlPolicy"

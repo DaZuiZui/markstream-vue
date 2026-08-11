@@ -1,10 +1,10 @@
 let streamDiffsModule: any = null
 let importAttempted = false
-let pendingImport: Promise<MonacoRuntimeModule | null> | null = null
+let pendingImport: Promise<StreamDiffsRuntimeModule | null> | null = null
 let workersPreloaded = false
 let codeBlockRuntimeReady = false
 
-export interface MonacoRuntimeHelpers {
+export interface StreamDiffsRuntimeHelpers {
   createEditor?: (container: HTMLElement, code: string, language: string) => Promise<unknown> | unknown
   createDiffEditor?: (container: HTMLElement, original: string, modified: string, language: string) => Promise<unknown> | unknown
   updateCode?: (code: string, language?: string) => Promise<unknown> | unknown
@@ -17,8 +17,8 @@ export interface MonacoRuntimeHelpers {
   refreshDiffPresentation?: () => unknown
 }
 
-export interface MonacoRuntimeModule {
-  useMonaco: (options?: Record<string, unknown>) => MonacoRuntimeHelpers
+export interface StreamDiffsRuntimeModule {
+  useMonaco: (options?: Record<string, unknown>) => StreamDiffsRuntimeHelpers
   preloadMonacoWorkers?: () => Promise<unknown> | unknown
 }
 
@@ -31,7 +31,7 @@ export function resetCodeBlockRuntimeReadyForTest() {
 }
 
 export async function preloadCodeBlockRuntime() {
-  const runtime = await getUseMonaco()
+  const runtime = await getStreamDiffsRuntime()
   return !!runtime
 }
 
@@ -46,7 +46,7 @@ async function preloadWorkers(mod: any) {
     await mod.preloadMonacoWorkers()
 }
 
-export async function getUseMonaco(): Promise<MonacoRuntimeModule | null> {
+export async function getStreamDiffsRuntime(): Promise<StreamDiffsRuntimeModule | null> {
   if (streamDiffsModule)
     return streamDiffsModule
   if (pendingImport)

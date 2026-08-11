@@ -855,6 +855,51 @@ describe('markdownRender deferNodesUntilVisible', () => {
     }
   })
 
+  it('renders the live buffer tail during non-final content appends before IO fires', async () => {
+    const OriginalIO = globalThis.IntersectionObserver
+    const benchmarkWindow = window as any
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver as any)
+    benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__ = true
+
+    const createMarkdown = (count: number) =>
+      Array.from({ length: count }, (_, index) => `Paragraph ${index + 1}`).join('\n\n')
+
+    let wrapper: ReturnType<typeof mount> | null = null
+    try {
+      const MarkdownRender = (await import('../src/components/NodeRenderer')).default
+
+      wrapper = mount(MarkdownRender, {
+        props: {
+          content: createMarkdown(60),
+          deferNodesUntilVisible: true,
+          final: false,
+          initialRenderBatchSize: 40,
+          liveNodeBuffer: 10,
+          maxLiveNodes: 220,
+          viewportPriority: true,
+        },
+      })
+
+      await flushAll()
+      expect(wrapper.find('[data-node-index="59"] .node-placeholder').exists()).toBe(true)
+
+      await wrapper.setProps({ content: createMarkdown(65) })
+      await flushAll()
+
+      expect(wrapper.find('[data-node-index="54"] .node-placeholder').exists()).toBe(true)
+      for (let index = 55; index < 65; index++) {
+        const slot = wrapper.find(`[data-node-index="${index}"]`)
+        expect(slot.find('.node-placeholder').exists()).toBe(false)
+        expect(slot.find('.node-content').exists()).toBe(true)
+      }
+    }
+    finally {
+      wrapper?.unmount()
+      delete benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__
+      vi.stubGlobal('IntersectionObserver', OriginalIO as any)
+    }
+  })
+
   it('uses viewportPriorityOptions.rootMargin for deferred node shells', async () => {
     const OriginalIO = globalThis.IntersectionObserver
     const benchmarkWindow = window as any
@@ -945,6 +990,7 @@ describe('markdownRender deferNodesUntilVisible', () => {
           content: createMarkdown(220),
           batchRendering: false,
           deferNodesUntilVisible: true,
+          final: true,
           viewportPriority: true,
           viewportPriorityOptions: {
             maxTargets: 1,

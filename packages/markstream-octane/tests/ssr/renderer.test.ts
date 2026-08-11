@@ -1,12 +1,18 @@
 import type { ComponentBody } from 'octane'
 import type { NodeComponentProps } from '../../src/server'
 import { createElement, renderToStaticMarkup, renderToString } from 'octane/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
+  clearGlobalCustomComponents,
   MathBlockNode,
   MathInlineNode,
   NodeRenderer,
+  setCustomComponents,
 } from '../../src/server'
+
+afterEach(() => {
+  clearGlobalCustomComponents()
+})
 
 describe('markstream-octane SSR renderer', () => {
   it('renders Markdown with the native Octane server runtime', () => {
@@ -92,5 +98,30 @@ describe('markstream-octane SSR renderer', () => {
 
     expect(output.html).toContain('class="ssr-insight"')
     expect(output.html).toContain('SSR binding')
+  })
+
+  it('does not forward removed top-level langs during SSR', () => {
+    interface CodeBlockProbeProps extends NodeComponentProps {
+      langs?: readonly string[]
+    }
+    const CodeBlockProbe: ComponentBody<CodeBlockProbeProps> = props =>
+      createElement('div', {
+        'className': 'ssr-code-block-langs-probe',
+        'data-langs': JSON.stringify(props.langs ?? null),
+      })
+    setCustomComponents({ code_block: CodeBlockProbe })
+
+    const output = renderToStaticMarkup(NodeRenderer, {
+      nodes: [{
+        type: 'code_block',
+        language: 'ts',
+        code: 'export const value = 1',
+        raw: '```ts\nexport const value = 1\n```',
+      }],
+      langs: ['typescript'],
+    } as unknown as Parameters<typeof NodeRenderer>[0] & { langs: readonly string[] })
+
+    expect(output.html).toContain('class="ssr-code-block-langs-probe"')
+    expect(output.html).toContain('data-langs="null"')
   })
 })

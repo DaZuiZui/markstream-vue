@@ -2,9 +2,8 @@ import type { DefineComponent } from 'vue'
 import type { BaseNode } from 'stream-markdown-parser'
 import type {
   CodeBlockDiffHunkActionContext,
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
   CodeBlockNodeProps,
+  CodeBlockTheme,
   CustomComponents,
   D2BlockNodeProps,
   ImageNodeProps,
@@ -17,9 +16,8 @@ import type { NodeRendererProps } from '../../../src/types/node-renderer-props'
 export type {
   BaseNode,
   CodeBlockDiffHunkActionContext,
-  CodeBlockMonacoOptions,
-  CodeBlockMonacoTheme,
   CodeBlockNodeProps,
+  CodeBlockTheme,
   CustomComponents,
   D2BlockNodeProps,
   ImageNodeProps,
@@ -33,7 +31,6 @@ export {
   CodeBlockNode,
   D2BlockNode,
   ImageNode,
-  MarkdownCodeBlockNode,
   MermaidBlockNode,
   PreCodeNode,
   createKaTeXWorkerFromCDN,
@@ -43,7 +40,7 @@ export {
   enableMermaid,
   getRegisteredThemes,
   getMarkdown,
-  getUseMonaco,
+  getStreamDiffsRuntime,
   parseMarkdownToStructure,
   preloadExtendedLanguageIcons,
   registerIconTheme,

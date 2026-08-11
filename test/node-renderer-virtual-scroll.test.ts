@@ -2893,7 +2893,7 @@ describe('node renderer virtual-scroll coordination', () => {
     wrapper.unmount()
   })
 
-  it('does not change pre renderer virtual layout key when monaco options change', async () => {
+  it('does not change the pre renderer virtual layout key when themes change', async () => {
     const NodeRenderer = (await import('../src/components/NodeRenderer')).default
     const wrapper = mount(NodeRenderer, {
       props: {
@@ -2902,6 +2902,7 @@ describe('node renderer virtual-scroll coordination', () => {
         fade: false,
         viewportPriority: false,
         codeRenderer: 'pre',
+        themes: ['vitesse-light'],
         virtualScroll: {
           enabled: true,
           sessionKey: 'pre-layout-key',
@@ -2916,12 +2917,7 @@ describe('node renderer virtual-scroll coordination', () => {
     const initialKey = (wrapper.vm as any).captureVirtualState()?.measurementKey
     expect(initialKey).toContain('code-pre')
 
-    await wrapper.setProps({
-      codeBlockMonacoOptions: {
-        fontSize: 18,
-        lineHeight: 28,
-      },
-    })
+    await wrapper.setProps({ themes: ['vitesse-dark'] })
     await flushAll()
 
     expect((wrapper.vm as any).captureVirtualState()?.measurementKey).toBe(initialKey)

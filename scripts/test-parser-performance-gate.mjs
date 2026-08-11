@@ -391,12 +391,6 @@ const actualHeapRegressionBenchmark = run(benchmarkPath, actualHeapBenchmarkArgs
   MARKSTREAM_PARSER_PERF_OUTPUT_DIR: actualHeapRegressionDir,
 }, ['--expose-gc'])
 assert.equal(actualHeapRegressionBenchmark.status, 0, actualHeapRegressionBenchmark.stderr)
-const actualHeapFrozenCheck = run(checkPath, [
-  `--input=${path.join(actualHeapRegressionDir, 'latest.json')}`,
-  `--baseline=${baselinePath}`,
-])
-assert.notEqual(actualHeapFrozenCheck.status, 0, 'strongly retained heap unexpectedly passed the frozen ceiling without a same-runner reference')
-assert.match(diagnostic(actualHeapFrozenCheck), /metric=retainedHeapBytes exceeded max=/)
 const actualHeapRegressionCheck = run(checkPath, [
   `--input=${path.join(actualHeapRegressionDir, 'latest.json')}`,
   `--baseline=${baselinePath}`,

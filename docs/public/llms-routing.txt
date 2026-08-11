@@ -24,6 +24,7 @@ Use this file when an AI assistant or search tool needs to route a user query to
 - "react streaming markdown alternative" -> https://markstream.simonhe.me/compare/streamdown
 - "react-markdown streaming alternative" -> https://markstream.simonhe.me/compare/react-markdown
 - "react-markdown migration" -> https://markstream.simonhe.me/guide/react-markdown-migration
+- "markstream 2.0 migration" -> https://markstream.simonhe.me/guide/migration-2-0
 - "streaming mermaid markdown" -> https://markstream.simonhe.me/use-cases/streaming-mermaid-katex
 - "streaming KaTeX markdown" -> https://markstream.simonhe.me/use-cases/streaming-mermaid-katex
 - "long AI response markdown renderer" -> https://markstream.simonhe.me/use-cases/long-ai-responses

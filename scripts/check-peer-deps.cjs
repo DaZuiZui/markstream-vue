@@ -32,7 +32,11 @@ for (const packageJsonPath of packageJsonPaths) {
     const isOptional = !!peerDependenciesMeta[peerName]?.optional
 
     try {
-      const resolvedPackageJson = requireFromPackage.resolve(`${peerName}/package.json`)
+      const resolvedPackageJson = requireFromPackage.resolve.paths(peerName)
+        ?.map(searchPath => path.join(searchPath, peerName, 'package.json'))
+        .find(candidate => fs.existsSync(candidate))
+      if (!resolvedPackageJson)
+        throw new Error(`Unable to resolve ${peerName}`)
       const installedPackageJson = JSON.parse(fs.readFileSync(resolvedPackageJson, 'utf8'))
       console.log(`  OK   ${peerName}@${installedPackageJson.version}${isOptional ? ' (optional)' : ''}`)
     }
