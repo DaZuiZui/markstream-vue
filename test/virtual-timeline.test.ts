@@ -86,8 +86,8 @@ function timelineItemSource(threadKey: string, itemKey: string, revision?: strin
   }
 }
 
-function timelineMarkdownMeasurementKey(widthBucket = 800, mode = 'docs', codeRenderer = 'stream-diffs') {
-  return [`:${widthBucket}`, mode, codeRenderer].join('\u0001')
+function timelineMarkdownMeasurementKey(widthBucket = 800, mode = 'docs', codeLayout = 'rich') {
+  return [`:${widthBucket}`, mode, codeLayout].join('\u0001')
 }
 
 function timelineMarkdownItemSource(threadKey: string, itemKey: string, revision?: string | number, widthBucket = 800) {
@@ -160,8 +160,8 @@ function installVirtualTimelineGeometryStub(defaultHeight = 80, width = 800) {
   })
 }
 
-function adapterMarkdownMeasurementKey(base = '', mode = 'docs', codeRenderer = 'stream-diffs') {
-  return [base, mode, codeRenderer].join('\u0001')
+function adapterMarkdownMeasurementKey(base = '', mode = 'docs', codeLayout = 'rich') {
+  return [base, mode, codeLayout].join('\u0001')
 }
 
 function adapterMarkdownItemSource(threadKey: string, itemKey: string, revision?: string | number) {
@@ -237,7 +237,7 @@ describe('virtual timeline API', () => {
     expect(markdownSlot.markdownProps.maxLiveNodes).toBe(50)
     expect(markdownSlot.markdownProps.liveNodeBuffer).toBe(16)
     expect(markdownSlot.markdownProps.mode).toBe('docs')
-    expect(markdownSlot.markdownProps.codeRenderer).toBe('stream-diffs')
+    expect(markdownSlot.markdownProps.renderCodeBlocksAsPre).toBe(false)
     expect(markdownSlot.markdownProps.virtualScroll.enabled).toBe(true)
     expect(markdownSlot.markdownProps.virtualScroll.threadKey).toBe('thread-a')
     expect(markdownSlot.markdownProps.virtualScroll.sessionKey).toBe('thread-a:a1:')
@@ -280,7 +280,7 @@ describe('virtual timeline API', () => {
     wrapper.unmount()
   })
 
-  it('defaults timeline chat mode markdown code renderer to pre', async () => {
+  it('defaults timeline chat mode to the enhanced code block renderer', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(480)
     vi.stubGlobal('ResizeObserver', class {
       observe() {}
@@ -318,12 +318,12 @@ describe('virtual timeline API', () => {
 
     const markdownSlot = slotProps.find(props => props.kind === 'assistant-markdown')
     expect(markdownSlot.markdownProps.mode).toBe('chat')
-    expect(markdownSlot.markdownProps.codeRenderer).toBe('pre')
+    expect(markdownSlot.markdownProps.renderCodeBlocksAsPre).toBe(false)
 
     wrapper.unmount()
   })
 
-  it('allows timeline chat mode to opt back into stream-diffs code renderer', async () => {
+  it('allows timeline chat mode to force plain pre code blocks', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(480)
     vi.stubGlobal('ResizeObserver', class {
       observe() {}
@@ -345,7 +345,7 @@ describe('virtual timeline API', () => {
         ],
         threadKey: 'thread-chat-rich',
         markdownMode: 'chat',
-        markdownCodeRenderer: 'stream-diffs',
+        renderCodeBlocksAsPre: true,
         overscan: 10,
         stickToBottom: false,
       },
@@ -362,12 +362,12 @@ describe('virtual timeline API', () => {
 
     const markdownSlot = slotProps.find(props => props.kind === 'assistant-markdown')
     expect(markdownSlot.markdownProps.mode).toBe('chat')
-    expect(markdownSlot.markdownProps.codeRenderer).toBe('stream-diffs')
+    expect(markdownSlot.markdownProps.renderCodeBlocksAsPre).toBe(true)
 
     wrapper.unmount()
   })
 
-  it('changes markdown virtual measurement key when markdown code renderer changes', async () => {
+  it('changes markdown virtual measurement key when the plain pre fallback changes', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
     vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(64)
@@ -392,7 +392,7 @@ describe('virtual timeline API', () => {
         ],
         threadKey: 'renderer-key-change',
         markdownMode: 'docs',
-        markdownCodeRenderer: 'stream-diffs',
+        renderCodeBlocksAsPre: false,
         overscan: 10,
         stickToBottom: false,
       },
@@ -409,11 +409,11 @@ describe('virtual timeline API', () => {
 
     const firstSlot = slotProps.filter(props => props.kind === 'assistant-markdown').at(-1)
     const firstKey = firstSlot.markdownProps.virtualScroll.measurementKey
-    expect(firstKey).toBe(timelineMarkdownMeasurementKey(800, 'docs', 'stream-diffs'))
+    expect(firstKey).toBe(timelineMarkdownMeasurementKey(800, 'docs', 'rich'))
 
     slotProps.length = 0
     await wrapper.setProps({
-      markdownCodeRenderer: 'pre',
+      renderCodeBlocksAsPre: true,
     })
     await flushAll()
     await nextTick()
@@ -927,7 +927,7 @@ describe('virtual timeline API', () => {
     scope.stop()
   })
 
-  it('passes markdown mode and code renderer through useMarkstreamVirtualAdapter', () => {
+  it('passes markdown mode and the plain pre fallback through useMarkstreamVirtualAdapter', () => {
     const item = {
       kind: 'assistant-markdown',
       id: 'a1',
@@ -954,14 +954,14 @@ describe('virtual timeline API', () => {
       items: [item],
       threadKey: 'thread-a',
       markdownMode: 'chat',
-      markdownCodeRenderer: 'pre',
+      renderCodeBlocksAsPre: true,
       virtualizer: adapter,
     }))!
 
     const props = controller.markdownProps(item, 0)
 
     expect(props.mode).toBe('chat')
-    expect(props.codeRenderer).toBe('pre')
+    expect(props.renderCodeBlocksAsPre).toBe(true)
     expect(props.virtualScroll!.measurementKey).toBe(adapterMarkdownMeasurementKey('', 'chat', 'pre'))
 
     scope.stop()
@@ -1017,7 +1017,7 @@ describe('virtual timeline API', () => {
     scope.stop()
   })
 
-  it('defaults adapter chat mode markdown code renderer to pre', () => {
+  it('defaults adapter chat mode to the enhanced code block renderer', () => {
     const item = {
       kind: 'assistant-markdown',
       id: 'a1',
@@ -1050,7 +1050,7 @@ describe('virtual timeline API', () => {
     const props = controller.markdownProps(item, 0)
 
     expect(props.mode).toBe('chat')
-    expect(props.codeRenderer).toBe('pre')
+    expect(props.renderCodeBlocksAsPre).toBe(false)
 
     scope.stop()
   })

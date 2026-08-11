@@ -1,7 +1,7 @@
-import type { NodeRendererCodeRenderer, NodeRendererProps } from '../../types/node-renderer-props'
+import type { NodeRendererProps } from '../../types/node-renderer-props'
 
 export interface VirtualRendererLayoutKeyOptions {
-  renderer: NodeRendererCodeRenderer
+  renderCodeBlocksAsPre: boolean
   isDark?: boolean
   codeBlockStream?: boolean
   codeBlockMinWidth?: NodeRendererProps['codeBlockMinWidth']
@@ -30,14 +30,11 @@ export function stringifyVirtualToken(value: unknown) {
 }
 
 export function buildVirtualRendererLayoutKey(options: VirtualRendererLayoutKeyOptions) {
-  const renderer = options.renderer
   const codeProps = options.codeBlockProps as Record<string, unknown> | undefined
 
   return [
     options.isDark ? 'dark' : 'light',
-    renderer === 'stream-diffs'
-      ? 'code-rich'
-      : 'code-pre',
+    options.renderCodeBlocksAsPre ? 'code-pre' : 'code-rich',
     options.codeBlockStream === false ? 'code-static' : 'code-stream',
     stringifyVirtualToken(options.codeBlockMinWidth),
     stringifyVirtualToken(options.codeBlockMaxWidth),

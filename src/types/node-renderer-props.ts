@@ -19,7 +19,6 @@ export type NodeRendererCodeBlockProps
     }
     & Record<string, unknown>
 export type NodeRendererMode = 'docs' | 'chat' | 'minimal'
-export type NodeRendererCodeRenderer = 'pre' | 'stream-diffs'
 export type NodeRendererTypewriter = boolean | 'simple' | 'precise'
 export type NodeRendererDomMode = 'full' | 'minimal'
 
@@ -322,9 +321,7 @@ export interface NodeRendererProps {
   codeBlockDarkTheme?: CodeBlockTheme
   /** Preferred light stream-diffs theme forwarded to every code block renderer. */
   codeBlockLightTheme?: CodeBlockTheme
-  /** Code block renderer. `renderCodeBlocksAsPre` still takes precedence when true. */
-  codeRenderer?: NodeRendererCodeRenderer
-  /** If true, render all `code_block` nodes as plain <pre><code> blocks instead of the full CodeBlockNode */
+  /** Force the built-in fenced-code path to PreCodeNode. Custom code block overrides keep priority. */
   renderCodeBlocksAsPre?: boolean
   /** Minimum width forwarded to CodeBlockNode (px or CSS unit) */
   codeBlockMinWidth?: string | number

@@ -1514,7 +1514,7 @@ const App = defineComponent({
           overscanPx: 1000000,
           stickToBottom: false,
           markdownMode: 'chat',
-          markdownCodeRenderer: 'pre',
+          renderCodeBlocksAsPre: true,
           markdownFade: false,
           restoreMaxLoadingMs: false,
           debug: true,

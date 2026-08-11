@@ -92,7 +92,7 @@ import FallbackComponent from './FallbackComponent.vue'
 import HeightEstimationProbes from './HeightEstimationProbes.vue'
 import { InfographicBlockNodeLoading } from './InfographicBlockNodeLoading'
 import { MermaidBlockNodeLoading } from './MermaidBlockNodeLoading'
-import { normalizeRendererMode, RENDERER_MODE_DEFAULTS, resolveNodeRendererCodeRenderer } from './rendererModeDefaults'
+import { normalizeRendererMode, RENDERER_MODE_DEFAULTS } from './rendererModeDefaults'
 import { buildVirtualMeasurementKey, buildVirtualRendererLayoutKey, stringifyVirtualToken } from './virtualLayoutKey'
 
 type RuntimeCodeBlockNode = ParsedNode & {
@@ -193,11 +193,7 @@ const resolvedMode = computed<NodeRendererMode>(() => normalizeRendererMode(reso
 const resolvedTypewriterCursorMode = computed(() => normalizeTypewriterCursorMode(resolveRendererProp('typewriter')))
 const typewriterEnabled = computed(() => resolvedTypewriterCursorMode.value !== 'off')
 const resolvedDomMode = computed<NodeRendererDomMode>(() => normalizeRendererDomMode(resolveRendererProp('domMode')))
-const resolvedCodeRenderer = computed(() => resolveNodeRendererCodeRenderer({
-  mode: resolvedMode.value,
-  codeRenderer: resolveRendererProp('codeRenderer'),
-  renderCodeBlocksAsPre: resolveRendererProp('renderCodeBlocksAsPre'),
-}))
+const resolvedRenderCodeBlocksAsPre = computed(() => resolveRendererProp('renderCodeBlocksAsPre') === true)
 const resolvedModeDefaults = computed(() => RENDERER_MODE_DEFAULTS[resolvedMode.value])
 const resolvedShowTooltipsProp = computed(() => resolveRendererProp('showTooltips') ?? resolvedModeDefaults.value.showTooltips)
 const resolvedFade = computed(() => resolveRendererProp('fade') ?? resolvedModeDefaults.value.fade)
@@ -228,8 +224,6 @@ const rendererProps = {
   get codeBlockStream() { return resolveRendererProp('codeBlockStream') },
   get codeBlockDarkTheme() { return resolveRendererProp('codeBlockDarkTheme') },
   get codeBlockLightTheme() { return resolveRendererProp('codeBlockLightTheme') },
-  get codeRenderer() { return resolveRendererProp('codeRenderer') },
-  get renderCodeBlocksAsPre() { return resolveRendererProp('renderCodeBlocksAsPre') },
   get codeBlockMinWidth() { return resolveRendererProp('codeBlockMinWidth') },
   get codeBlockMaxWidth() { return resolveRendererProp('codeBlockMaxWidth') },
   get codeBlockProps() { return resolveRendererProp('codeBlockProps') },
@@ -698,11 +692,10 @@ const nestedRendererProps = computed<Partial<NodeRendererProps>>(() => ({
   viewportPriorityOptions: resolvedViewportPriorityOptions.value,
   mode: resolvedMode.value,
   domMode: rendererProps.domMode,
-  codeRenderer: resolvedCodeRenderer.value,
   codeBlockStream: rendererProps.codeBlockStream,
   codeBlockDarkTheme: rendererProps.codeBlockDarkTheme,
   codeBlockLightTheme: rendererProps.codeBlockLightTheme,
-  renderCodeBlocksAsPre: rendererProps.renderCodeBlocksAsPre,
+  renderCodeBlocksAsPre: resolvedRenderCodeBlocksAsPre.value,
   codeBlockMinWidth: rendererProps.codeBlockMinWidth,
   codeBlockMaxWidth: rendererProps.codeBlockMaxWidth,
   codeBlockProps: rendererProps.codeBlockProps,
@@ -1610,7 +1603,7 @@ function setupExperimentResizeObserver() {
 }
 
 const codeBlockComponent = computed(() => {
-  if (resolvedCodeRenderer.value === 'pre')
+  if (resolvedRenderCodeBlocksAsPre.value)
     return PreCodeNode
   return CodeBlockNodeAsync
 })
@@ -1673,7 +1666,7 @@ function getEstimatedNodeHeightContext(width: number) {
     codeBlockEstimationEnabled.value,
     simpleTextProbeProfile.value,
     resolveCodeBlockShowHeader(),
-    resolvedCodeRenderer.value,
+    resolvedRenderCodeBlocksAsPre.value,
     customComponentsMap.value,
     heightEstimationExperimentRevision.value,
   ]
@@ -1905,10 +1898,8 @@ function isSameVirtualThreadKey(threadKey: string | undefined) {
 }
 
 function getVirtualRendererLayoutKey() {
-  const renderer = resolvedCodeRenderer.value
-
   return buildVirtualRendererLayoutKey({
-    renderer,
+    renderCodeBlocksAsPre: resolvedRenderCodeBlocksAsPre.value,
     isDark: rendererProps.isDark,
     codeBlockStream: rendererProps.codeBlockStream,
     codeBlockMinWidth: rendererProps.codeBlockMinWidth,
@@ -5424,7 +5415,7 @@ const renderedItems = computed(() => {
     }
 
     const usesPreCodeBindings = node.type === 'code_block'
-      && resolvedCodeRenderer.value === 'pre'
+      && resolvedRenderCodeBlocksAsPre.value
       && component === PreCodeNode
       && !getCustomCodeLanguageComponent(customComponentsMap.value, language)
     let bindings = { ...getBindingsFor(node, language, component) } as Record<string, unknown>
@@ -5566,7 +5557,7 @@ function getNodeComponent(node: ParsedNode, language?: string) {
     if (customForLanguage)
       return customForLanguage
 
-    if (resolvedCodeRenderer.value === 'pre') {
+    if (resolvedRenderCodeBlocksAsPre.value) {
       const customCodeBlock = customComponents.code_block
       return customCodeBlock || PreCodeNode
     }
@@ -5617,7 +5608,7 @@ function getBindingsFor(node: ParsedNode, language?: string, component?: unknown
 
     if (
       component
-      && resolvedCodeRenderer.value === 'pre'
+      && resolvedRenderCodeBlocksAsPre.value
       && !customLanguageComponent
       && component === PreCodeNode
     ) {

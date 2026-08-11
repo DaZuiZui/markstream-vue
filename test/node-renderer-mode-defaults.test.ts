@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest'
 import {
   normalizeRendererMode,
   RENDERER_MODE_DEFAULTS,
-  resolveNodeRendererCodeRenderer,
 } from '../src/components/NodeRenderer/rendererModeDefaults'
 
 describe('rendererModeDefaults', () => {
@@ -35,33 +34,5 @@ describe('rendererModeDefaults', () => {
       liveNodeBuffer: 0,
     })
     expect(RENDERER_MODE_DEFAULTS.minimal).toMatchObject(RENDERER_MODE_DEFAULTS.chat)
-  })
-
-  it('resolves code renderer defaults and legacy pre flag precedence', () => {
-    expect(resolveNodeRendererCodeRenderer({
-      mode: 'docs',
-      codeRenderer: undefined,
-      renderCodeBlocksAsPre: undefined,
-    })).toBe('stream-diffs')
-    expect(resolveNodeRendererCodeRenderer({
-      mode: 'chat',
-      codeRenderer: undefined,
-      renderCodeBlocksAsPre: undefined,
-    })).toBe('pre')
-    expect(resolveNodeRendererCodeRenderer({
-      mode: 'chat',
-      codeRenderer: 'stream-diffs',
-      renderCodeBlocksAsPre: false,
-    })).toBe('stream-diffs')
-    expect(resolveNodeRendererCodeRenderer({
-      mode: 'docs',
-      codeRenderer: 'stream-diffs',
-      renderCodeBlocksAsPre: true,
-    })).toBe('pre')
-    expect(resolveNodeRendererCodeRenderer({
-      mode: 'chat',
-      codeRenderer: undefined,
-      renderCodeBlocksAsPre: false,
-    })).toBe('stream-diffs')
   })
 })

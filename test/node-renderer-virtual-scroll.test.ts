@@ -2901,7 +2901,7 @@ describe('node renderer virtual-scroll coordination', () => {
         final: true,
         fade: false,
         viewportPriority: false,
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         themes: ['vitesse-light'],
         virtualScroll: {
           enabled: true,
