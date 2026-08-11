@@ -1,15 +1,21 @@
 ---
 name: markstream-migration
-description: Audit and migrate existing Markdown rendering to Markstream. Use when Codex needs to replace another renderer, classify direct vs custom vs plugin-heavy usage, preserve behavior during adoption, migrate custom renderers into scoped Markstream overrides, or decide when `nodes` streaming is worth adopting.
+description: Audit and migrate existing Markdown rendering to Markstream, or upgrade a markstream-vue 1.x integration to 2.x. Use when Codex needs to replace another renderer, classify direct vs custom vs plugin-heavy adoption, preserve behavior during adoption, migrate custom renderers into scoped Markstream overrides, decide when `nodes` streaming is worth adopting, or replace removed 1.x code-block dependencies, APIs, preview payloads, and parser types.
 ---
 
 # Markstream Migration
 
-Use this skill when a repo already renders Markdown and the task is to adopt Markstream safely.
+Use this skill when a repo already renders Markdown and the task is either to adopt Markstream safely or to upgrade an existing `markstream-vue` 1.x integration to 2.x.
 
-Read [references/adoption-checklist.md](references/adoption-checklist.md) before changing code.
+## Choose The Migration Route
 
-## Workflow
+Inspect `package.json`, the lockfile, imports, and renderer props before changing code.
+
+- If the repo already depends on `markstream-vue` 1.x, read [references/vue-1x-to-2x.md](references/vue-1x-to-2x.md) and follow **Route B**. Confirm the package dependency instead of routing only from shared names such as `MarkdownCodeBlockNode` or `InternalParseOptions`, which can also appear in other adapters.
+- Otherwise, when replacing `react-markdown`, `markdown-it`, `marked`, or another renderer with a Markstream package, read [references/adoption-checklist.md](references/adoption-checklist.md) and follow **Route A**.
+- If both apply, complete the 1.x to 2.x package and API upgrade first, then audit the separate renderer replacement as an adoption task.
+
+## Route A: Adopt Markstream From Another Renderer
 
 1. Audit the repo's current renderer usage.
    - Search for markdown renderers, plugin chains, raw HTML handling, security props, and custom renderers.
@@ -43,9 +49,31 @@ Read [references/adoption-checklist.md](references/adoption-checklist.md) before
    - Run the smallest relevant tests or build.
    - Report direct mappings, TODOs, and remaining verification work.
 
+## Route B: Upgrade markstream-vue 1.x To 2.x
+
+1. Freeze the current integration surface.
+   - Record the installed `markstream-vue` version and package-manager resolution.
+   - Find old code-block dependencies, renderer values, props, public types, runtime helpers, preview handlers, and direct parser imports.
+   - Identify the smallest build, typecheck, SSR, and code-block checks that prove the current behavior.
+2. Choose one release line.
+   - Use the coordinated beta family only after it is published and `next` resolves to that generation, or `markstream-vue@2` after stable release.
+   - Check registry versions and dist-tags before editing the manifest; repository version bumps do not prove that a package is installable.
+   - Install only the adapter used by the application. Add parser or core directly only when the application imports it directly.
+   - Keep packages on the same prerelease generation; do not mix unrelated beta versions.
+3. Apply only the required dependency and API changes from [references/vue-1x-to-2x.md](references/vue-1x-to-2x.md).
+   - Remove both former code-block runtimes. Rename supported `monacoOptions` / `codeBlockMonacoOptions` fields to the shared `codeBlockOptions` contract and delete unsupported Monaco-only fields.
+   - Add `stream-diffs` only when enhanced code or diff blocks are required; otherwise use the plain fallback.
+   - Preserve the existing Markdown, diagram, math, HTML-policy, worker, CSS, streaming, and virtualization setup unless a documented 2.x break requires a change.
+4. Validate the migrated behavior and leave a rollback path.
+   - Check package resolution, public types, preview payload consumers, normal and diff fences, themes, responsive diff layout, and SSR or packed installs where relevant.
+   - Report the exact 1.x version or legacy dist-tag that restores the previous line.
+
 ## Default Decisions
 
 - Renderer swap first, streaming optimization second.
+- Do not treat an existing Markstream version upgrade as a renderer-adoption rewrite.
+- For 1.x to 2.x, preserve application behavior outside the documented code-block and parser changes.
+- Keep a coordinated beta family on one prerelease generation and make rollback explicit before changing dependencies.
 - Smooth streaming is an intermediate option between "just content" and "full nodes migration": it paces visible output without requiring AST control.
 - Preserve safety over feature parity when HTML or security rules are involved.
 - Prefer explicit TODOs over vague claims.
@@ -55,6 +83,7 @@ Read [references/adoption-checklist.md](references/adoption-checklist.md) before
 
 ## Useful Doc Targets
 
+- `docs/guide/migration-2-0.md`
 - `docs/guide/react-markdown-migration.md`
 - `docs/guide/react-markdown-migration-cookbook.md`
 - `docs/guide/ai-chat-streaming.md`
