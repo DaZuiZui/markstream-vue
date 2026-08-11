@@ -4,12 +4,12 @@ description: How the optional stream-diffs runtime powers CodeBlockNode with min
 keywords:
   - code block runtime
   - stream-diffs runtime
-  - monaco compatibility
+  - runtime preload
   - code editor surface
 ---
 # Code Block Runtime
 
-This page documents the optional `stream-diffs` runtime used by `CodeBlockNode`. In 2.0 the previous Monaco-based options API and the `stream-monaco` fallback were removed: `stream-diffs` is the only enhanced code block surface, and code/diff behavior uses its built-in defaults.
+This page documents the optional `stream-diffs` runtime used by `CodeBlockNode`. In 2.0 the `stream-monaco` fallback is removed and `stream-diffs` is the only enhanced code-block surface. Supported configuration is exposed through the renderer-neutral `CodeBlockOptions` API.
 
 ## Install
 
@@ -50,9 +50,22 @@ Completion, visibility, and unmount are `CodeBlockNode` concerns. They are not `
 
 ## Theming
 
-Use the `theme` / `darkTheme` / `lightTheme` / `themes` props for light/dark themes. `CodeBlockNode` sends theme changes to its mounted surface without recreating the Vue component.
+Use `theme` with either a registered string name or `{ dark, light }`. The `themes` prop is the `[dark, light]` name pair available to the runtime. `CodeBlockNode` sends theme changes to its mounted surface without recreating the Vue component.
 
-The former `monacoOptions` / `codeBlockMonacoOptions` props are removed in 2.0 with no replacement; code and diff options fall back to the `stream-diffs` built-in defaults.
+Monaco JSON theme objects are not renamed into the 2.0 API. Use `registerCustomTheme` from `stream-diffs/pierre`, then pass the registered name.
+
+## Options handoff
+
+Direct `CodeBlockNode` usage and the top-level `NodeRenderer` / `MarkdownRender` API both accept `codeBlockOptions`. The same `CodeBlockOptions` contract is available across Vue 3, React, Octane, Svelte, Angular, and Vue 2.
+
+The supported surface includes:
+
+- host-managed typography and layout: `fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, and `tabSize`;
+- File options such as `disableLineNumbers`, `overflow`, highlighting limits, and virtualization/highlighter controls;
+- FileDiff layout, indicators, unchanged-region folding, and line-diff controls;
+- line/token interactions, selection callbacks, annotations, `onController`, and `workerManager`.
+
+Markstream applies the host-managed fields to both the streaming `<pre>` and finalized surface, then forwards the remaining supported fields to `stream-diffs`. Theme, language/content, streaming state, the single header, mount/reveal timing, and disposal remain host-owned and take precedence over conflicting runtime values.
 
 ## Optional preload
 
@@ -68,4 +81,4 @@ This only warms the optional module. It does not create a surface, finalize a st
 
 ## Diff interactions
 
-Diff blocks keep the same adapter boundary. The enhanced diff surface (folding, unchanged-region handling, inline vs side-by-side layout) is driven by `stream-diffs` built-in defaults; there is no per-block diff options prop in 2.0.
+Diff blocks keep the same adapter boundary. The enhanced diff surface uses `stream-diffs` defaults unless the corresponding `codeBlockOptions` fields are supplied. For example, `diffStyle`, `expandUnchanged`, `collapsedContextThreshold`, `hunkSeparators`, `lineDiffType`, and `parseDiffOptions` configure layout and folding.

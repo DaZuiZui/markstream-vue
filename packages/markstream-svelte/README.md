@@ -2,7 +2,7 @@
 
 Svelte 5 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, custom components, Mermaid, KaTeX, stream-diffs code blocks, D2, and Infographic.
 
-The coordinated 2.0 family beta will use `markstream-svelte@next`. Before installing, verify that `npm view markstream-svelte@next version` reports `0.1.0-beta.1`. It removes the former Monaco code-block API in favor of `stream-diffs`; read the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+The coordinated 2.0 family beta will use `markstream-svelte@next`. Before installing, verify that `npm view markstream-svelte@next version` reports `0.1.0-beta.1`. It removes the former Monaco code-block API in favor of `stream-diffs`; read the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
 
 ```bash
 pnpm add markstream-svelte@next svelte@^5 stream-diffs
@@ -44,6 +44,7 @@ pnpm add katex mermaid stream-diffs @terrastruct/d2 @antv/infographic
 
 ```svelte
 <script lang="ts">
+  import type { CodeBlockOptions } from 'markstream-svelte'
   import { CodeBlockNode } from 'markstream-svelte'
 
   const node = {
@@ -52,12 +53,18 @@ pnpm add katex mermaid stream-diffs @terrastruct/d2 @antv/infographic
     code: 'const answer = 42',
     raw: 'const answer = 42',
   }
+
+  const codeBlockOptions: CodeBlockOptions = {
+    overflow: 'wrap',
+    diffStyle: 'unified',
+    enableLineSelection: true,
+  }
 </script>
 
-<CodeBlockNode {node} isDark showLineNumbers showHeader />
+<CodeBlockNode {node} {codeBlockOptions} isDark showHeader />
 ```
 
-Component-level options: `isDark`, `showLineNumbers` (default `true`), `showHeader`. When `stream-diffs` is not installed, the block renders as a plain `<pre>`.
+Direct `CodeBlockNode` and top-level `MarkdownRender` both accept `codeBlockOptions`. It covers host-managed typography/layout and supported File/FileDiff, interaction, annotation, and callback fields; `maxHeight` and the single symmetric `padding` value use numeric CSS pixels. Use `codeBlockProps` for header/toolbar controls. Theme values are registered names and `themes` is the `[dark, light]` pair. An old Monaco JSON theme is not accepted directly: first convert it to a Shiki `ThemeRegistration`, then call `registerCustomTheme(name, loader)` from `stream-diffs/pierre`; see the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0). When `stream-diffs` is not installed, the block renders as a plain `<pre>`.
 
 ## Basic Usage
 

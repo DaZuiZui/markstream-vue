@@ -18,10 +18,10 @@ The 2.0 headline breaking change: the Monaco-based code block API and the Shiki-
 
 Tracked in [issue #615](https://github.com/Simon-He95/markstream-vue/issues/615) and merged into the `2.0.0` integration branch by [PR #619](https://github.com/Simon-He95/markstream-vue/pull/619).
 
-- [x] Remove `monacoOptions` / `codeBlockMonacoOptions` and all `CodeBlockMonaco*` params/APIs (no replacement; diff options fall back to stream-diffs built-in defaults)
+- [x] Replace `monacoOptions` / `codeBlockMonacoOptions` with the shared `codeBlockOptions` / `CodeBlockOptions` contract across all six adapters; remove Monaco-only public types
 - [x] Delete the `stream-markdown` `MarkdownCodeBlockNode` component and its styles
-- [x] Rename `codeRenderer` value `'monaco'` → `'stream-diffs'`; drop the `'shiki'` renderer kind
-- [x] Rename public identifiers to drop Monaco naming (`CodeBlockTheme`, `resolveLanguageId`, `getStreamDiffsRuntime`)
+- [x] Remove `codeRenderer`, `markdownCodeRenderer`, and `NodeRendererCodeRenderer`; use `stream-diffs` automatically, `renderCodeBlocksAsPre` for plain output, and scoped custom components for replacement renderers
+- [x] Use renderer-neutral public identifiers (`CodeBlockTheme`, `CodeBlockThemePair`, `CodeBlockOptions`, `resolveLanguageId`, `preloadCodeBlockRuntime`) without exposing the raw runtime module
 - [x] Migrate vue2 / react / svelte / angular / octane to stream-diffs only
 - [x] Update tests and snapshots; full suite green (313 files / 2684 tests)
 - [x] Clean playgrounds (deps, vite config, sandbox pages)

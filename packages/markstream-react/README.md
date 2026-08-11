@@ -4,7 +4,7 @@ React/Next.js streaming Markdown renderer for AI chat, SSE/WebSocket output, lon
 
 `markstream-react` is the React renderer in the Markstream family. It renders raw Markdown strings with `content`, and it can also accept pre-parsed `nodes` when a worker or store already owns parsing.
 
-The coordinated 2.0 family beta will use `markstream-react@next`. Before installing, verify that `npm view markstream-react@next version` reports `0.1.0-beta.1`. It removes the Monaco and Shiki code-block APIs in favor of `stream-diffs`; read the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+The coordinated 2.0 family beta will use `markstream-react@next`. Before installing, verify that `npm view markstream-react@next version` reports `0.1.0-beta.1`. It removes the Monaco and Shiki code-block APIs in favor of `stream-diffs`; read the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
 
 ```bash
 pnpm add markstream-react@next stream-diffs
@@ -149,7 +149,7 @@ import 'katex/dist/katex.min.css'
 
 ## Enhanced Code Blocks
 
-Code blocks use `stream-diffs` across all Markstream packages: `stream-diffs` is preferred (smaller runtime, no `monaco-editor`), and a plain `<pre>` is rendered when it is not installed.
+`stream-diffs` powers enhanced code blocks across all Markstream packages (smaller runtime, no `monaco-editor`); a plain `<pre>` is rendered when it is not installed.
 
 Install the runtime:
 
@@ -160,6 +160,7 @@ pnpm add stream-diffs
 `CodeBlockNode` renders a single code block with the header, toolbar, and a `stream-diffs` File / FileDiff surface. Use it directly for one-off blocks, or let `MarkdownRender` resolve it automatically for code blocks in your Markdown:
 
 ```tsx
+import type { CodeBlockOptions } from 'markstream-react'
 import { CodeBlockNode } from 'markstream-react'
 
 const node = {
@@ -169,12 +170,18 @@ const node = {
   raw: 'const answer = 42',
 }
 
+const codeBlockOptions: CodeBlockOptions = {
+  overflow: 'wrap',
+  diffStyle: 'unified',
+  enableLineSelection: true,
+}
+
 export function CodeBlock() {
-  return <CodeBlockNode node={node} isDark showLineNumbers showHeader />
+  return <CodeBlockNode node={node} codeBlockOptions={codeBlockOptions} isDark showHeader />
 }
 ```
 
-Component-level options: `isDark` / `darkTheme` / `lightTheme` for theming, `showLineNumbers`, `showHeader`, and `stream` / `loading` for streaming states.
+Direct `CodeBlockNode` and top-level `MarkdownRender` both accept `codeBlockOptions`. The shared `CodeBlockOptions` type covers host-managed typography/layout plus supported File/FileDiff, interaction, annotation, and callback fields; `maxHeight` and the single symmetric `padding` value use numeric CSS pixels. Keep header/toolbar controls in `codeBlockProps`. Theme values are registered names: use `darkTheme` / `lightTheme` for the active names and `themes` for the `[dark, light]` pair to preload. An old Monaco JSON theme is not accepted directly: first convert it to a Shiki `ThemeRegistration`, then call `registerCustomTheme(name, loader)` from `stream-diffs/pierre`; see the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0).
 
 ## Tailwind
 

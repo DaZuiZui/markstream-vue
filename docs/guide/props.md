@@ -36,7 +36,6 @@ Experimental/internal props: `indexKey`, `renderAsFragment`, `debugPerformance`,
 | `html-policy` | `'safe' \| 'escape' \| 'trusted'` | `'safe'` | Controls `html_block` / `html_inline` rendering. `safe` blocks active/embed/form tags, `escape` shows literal HTML text, and `trusted` keeps the older broad HTML behavior while still removing scripts and unsafe attrs. |
 | `mode` | `'docs' \| 'chat' \| 'minimal'` | `'docs'` | Preset renderer tuning. Use `chat` for AI/SSE output, `docs` for rich document surfaces, and `minimal` for lightweight non-chat surfaces. |
 | `dom-mode` | `'full' \| 'minimal'` | `'full'` | Best-effort DOM structure mode. `minimal` skips per-node `.node-slot` / `.node-content` wrappers only when wrappers are not needed; it falls back to `full` for fade, batching, deferral, virtualization, host virtual-scroll, typewriter, or custom components. Disable those features explicitly when you need stable minimal output. |
-| `code-renderer` | `'pre' \| 'stream-diffs'` | Mode-dependent | Selects the regular fenced-code renderer. `docs` mode defaults to the enhanced `stream-diffs` surface; `chat` and `minimal` default to plain `<pre><code>`. `render-code-blocks-as-pre=true` takes precedence. |
 | `custom-markdown-it` | `(md: MarkdownIt) => MarkdownIt` | – | Customize the internal MarkdownIt instance (add plugins, tweak options). |
 | `debug-performance` | `boolean` | `false` | Logs parse/render timing, virtualization stats, and `parse(stream)` details such as `streamMode` / `streamDelta` (dev only). |
 | `typewriter` | `boolean \| 'simple' \| 'precise'` | `false` | Shows the blinking typewriter cursor while streamed content grows. `true` / `'precise'` uses Range-based precise positioning; `'simple'` uses a lightweight CSS cursor. |
@@ -168,7 +167,7 @@ Use `html-policy="escape"` when you want literal HTML text to stay visible inste
 
 | Flag | Default | What it does |
 | ---- | ------- | ------------ |
-| `render-code-blocks-as-pre` | `false` | Render non‑Mermaid/Infographic/D2 `code_block` nodes as `<pre><code>` (uses `PreCodeNode`). Mermaid/infographic/D2 blocks still route to their dedicated nodes unless you override them via `setCustomComponents`. |
+| `render-code-blocks-as-pre` | `false` | Force the built-in fenced-code path to `<pre><code>` (uses `PreCodeNode`). Scoped language or `code_block` overrides registered with `setCustomComponents` keep priority. |
 | `code-block-stream` | `true` | Stream code blocks as content arrives. Disable to keep the enhanced surface in a loading state until the final chunk lands—useful when incomplete code causes parser hiccups. |
 | `viewport-priority` | `true` | Defers heavy work (code blocks, Mermaid, D2, KaTeX) when elements are offscreen. Turn off if you need deterministic renders for PDF/print pipelines. |
 | `defer-nodes-until-visible` | `true` | When enabled, heavy nodes can render as placeholders until they approach the viewport (non-virtualized mode only). |
@@ -195,15 +194,23 @@ These props are forwarded to `CodeBlockNode` (but **not** to Mermaid/D2/Infograp
 
 - `code-block-dark-theme`, `code-block-light-theme`
 - `code-block-min-width`, `code-block-max-width`
+- `code-block-options` (`CodeBlockOptions`, forwarded from the renderer to ordinary `CodeBlockNode` instances and supported by direct `CodeBlockNode` usage under the same name)
 - `code-block-props` (extra code-block props such as `showHeader`, `showFontSizeButtons`, `showTooltips`, `htmlPreviewAllowScripts`, and `htmlPreviewSandbox`, plus custom forwarded keys that are not structural renderer keys like `node`, `key`, `ref`, `ctx`, `renderNode`, `indexKey`, `__proto__`, `prototype`, or `constructor`)
-- `themes` (theme list forwarded to the `stream-diffs` adapter when present)
+- `themes` (the `[dark, light]` registered theme-name pair)
 
-Code and diff options are not configurable per block in 2.0; the enhanced `CodeBlockNode` uses the `stream-diffs` built-in defaults. `htmlPreviewAllowScripts` and `htmlPreviewSandbox` only affect the built-in `CodeBlockNode` inline HTML iframe preview; they do not affect `previewCode` event handlers or external artifact renderers.
+`code-block-options` and `code-block-props` serve different layers. Use `code-block-options` for host-managed typography/layout (`fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, `tabSize`) and supported File/FileDiff runtime fields. Use `code-block-props` for the component shell and toolbar. Theme, code/language, stream state, the single header, mount/reveal timing, and disposal remain host-owned and override conflicting runtime values. `htmlPreviewAllowScripts` and `htmlPreviewSandbox` only affect the built-in `CodeBlockNode` inline HTML iframe preview; they do not affect `previewCode` event handlers or external artifact renderers.
 
 `code-block-props` is also strongly typed through the renderer props surface, so you can reuse it without falling back to `any`:
 
 ```ts twoslash
-import type { NodeRendererProps } from 'markstream-vue'
+import type { CodeBlockOptions, NodeRendererProps } from 'markstream-vue'
+
+const codeBlockOptions: CodeBlockOptions = {
+  fontSize: 13,
+  overflow: 'wrap',
+  diffStyle: 'unified',
+  enableLineSelection: true,
+}
 
 const codeBlockProps: NonNullable<NodeRendererProps['codeBlockProps']> = {
   showHeader: false,
@@ -212,6 +219,8 @@ const codeBlockProps: NonNullable<NodeRendererProps['codeBlockProps']> = {
   htmlPreviewAllowScripts: false,
 }
 ```
+
+Pass both at the renderer top level: `:code-block-options="codeBlockOptions"` and `:code-block-props="codeBlockProps"`. A directly mounted `CodeBlockNode` accepts the same `codeBlockOptions` object. Direct `CodeBlockNode.theme` accepts a registered string name or `{ dark, light }`; register old Monaco JSON theme objects with `registerCustomTheme` from `stream-diffs/pierre`, then reference the registered name.
 
 ## Diagram node props forwarded from `MarkdownRender`
 

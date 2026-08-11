@@ -64,7 +64,7 @@ pnpm lint
    - 深度嵌套列表中混合标记
    - 转义括号等特殊场景
    - 流式代码围栏的异常输入
-3. 为需要 DOM 或 Worker 的插件（Mermaid、KaTeX、Monaco）补充集成测试，并考虑在 CI 中加入基于 Playwright 的浏览器流程。
+3. 为需要 DOM 或 Worker 的插件（Mermaid、KaTeX worker 与 `stream-diffs` 代码块 surface）补充集成测试，并考虑在 CI 中加入基于 Playwright 的浏览器流程。
 
 如果需要，我可以：
 1. 立即扩充快照的元信息。

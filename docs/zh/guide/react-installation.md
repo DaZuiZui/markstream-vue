@@ -1,6 +1,6 @@
 ---
 title: React 安装
-description: 在 React 应用中安装 markstream-react，介绍通过 pnpm、npm 与 yarn 的安装方式，以及 Shiki 等可选 peer 依赖的配置。
+description: 在 React 应用中安装 markstream-react，介绍通过 pnpm、npm 与 yarn 的安装方式，以及 stream-diffs 等可选 peer 依赖的配置。
 keywords:
   - React 安装
   - markstream-react
@@ -40,7 +40,7 @@ markstream-react 通过可选的对等依赖支持各种功能。只安装你需
 | D2 图表 | `@terrastruct/d2` | `pnpm add @terrastruct/d2` |
 | 数学公式渲染（KaTeX） | `katex` | `pnpm add katex` |
 
-增强代码块使用可选的对等依赖 `stream-diffs`。未安装时会回退渲染普通 `<pre>`。代码与 diff 选项使用 `stream-diffs` 内置默认值，主题通过 `darkTheme` / `lightTheme` / `themes` 控制。
+增强代码块使用可选的对等依赖 `stream-diffs`。未安装时会回退渲染普通 `<pre>`。直接 `CodeBlockNode` 与顶层 `MarkdownRender` 都接收 `codeBlockOptions`；已注册的主题名称通过 `darkTheme` / `lightTheme` 传入，`themes` 是用于预加载的 `[dark, light]` 对。
 
 ## 可选：在 Vite / Vite 兼容打包器中启用线程外 Worker
 
@@ -109,7 +109,7 @@ npm install stream-diffs mermaid @terrastruct/d2 katex
 pnpm add stream-diffs
 ```
 
-`stream-diffs` 为增强的 `CodeBlockNode` 运行时提供代码与 diff 的默认配置。未安装时会回退渲染普通 `<pre>`。需要自定义行为时，可通过 `setCustomComponents` 覆盖 `code_block` 渲染器：
+`stream-diffs` 提供增强 `CodeBlockNode` runtime。受支持的配置使用 `codeBlockOptions`；未安装时会回退渲染普通 `<pre>`。需要自定义行为时，可通过 `setCustomComponents` 覆盖 `code_block` 渲染器：
 
 ```tsx
 import { setCustomComponents } from 'markstream-react'
@@ -120,13 +120,14 @@ setCustomComponents({
       node={node}
       isDark={isDark}
       stream={ctx?.codeBlockStream}
+      codeBlockOptions={ctx?.codeBlockOptions}
       {...(ctx?.codeBlockProps || {})}
     />
   ),
 })
 ```
 
-主题通过 `darkTheme` / `lightTheme` / `themes` 属性控制。
+主题值是已注册的 string 名称。直接 `CodeBlockNode` 使用 `darkTheme` / `lightTheme`，`themes` 是用于预加载的 `[dark, light]` 对；旧 JSON theme object 需先调用 `stream-diffs/pierre` 的 `registerCustomTheme`，再传入注册名称。
 
 #### Mermaid 图表
 

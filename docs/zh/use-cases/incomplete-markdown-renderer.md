@@ -63,7 +63,7 @@ async function appendChunk(chunk: string) {
 
 ### 未闭合代码 fence
 
-Markstream 让未闭合 fence 保持可读，而不是把文档其余部分当作最终的高亮代码来处理。当闭合 fence 到达时，代码块渲染器可以根据你的设置升级为 Monaco、Shiki 或普通 `pre` 块。
+Markstream 让未闭合 fence 保持可读，而不是把文档其余部分当作最终的高亮代码来处理。当闭合 fence 到达时，代码块渲染器会根据安装情况切换为增强的 `stream-diffs` surface 或普通 `pre` 块。
 
 ### 部分表格
 

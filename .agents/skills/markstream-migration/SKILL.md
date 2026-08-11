@@ -61,7 +61,7 @@ Inspect `package.json`, the lockfile, imports, and renderer props before changin
    - Install only the adapter used by the application. Add parser or core directly only when the application imports it directly.
    - Keep packages on the same prerelease generation; do not mix unrelated beta versions.
 3. Apply only the required dependency and API changes from [references/vue-1x-to-2x.md](references/vue-1x-to-2x.md).
-   - Remove both former code-block runtimes and their options.
+   - Remove both former code-block runtimes. Rename supported `monacoOptions` / `codeBlockMonacoOptions` fields to the shared `codeBlockOptions` contract and delete unsupported Monaco-only fields.
    - Add `stream-diffs` only when enhanced code or diff blocks are required; otherwise use the plain fallback.
    - Preserve the existing Markdown, diagram, math, HTML-policy, worker, CSS, streaming, and virtualization setup unless a documented 2.x break requires a change.
 4. Validate the migrated behavior and leave a rollback path.

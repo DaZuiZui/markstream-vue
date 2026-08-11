@@ -211,7 +211,7 @@ setCustomComponents('docs', {
 - **同伴依赖**：`stream-diffs`
 - **常见问题**：增强 surface 会等待代码块结束流式输出并进入视口
 
-如果代码块本身就是产品体验的一部分，用它最合适。`stream-diffs` 与框架无关，Vue 的 mount/unmount 决策保留在 `CodeBlockNode`。代码与 diff 选项使用 `stream-diffs` 内置默认值。
+如果代码块本身就是产品体验的一部分，用它最合适。`stream-diffs` 与框架无关，Vue 的 mount/unmount 决策保留在 `CodeBlockNode`。受支持的 code/diff 行为通过直接或 renderer 顶层 `codeBlockOptions` 配置。
 
 深入页面： [CodeBlockNode](/zh/guide/code-block-node)、[Code Block Runtime](/zh/guide/code-block-runtime)
 

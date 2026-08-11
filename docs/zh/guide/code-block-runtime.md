@@ -4,12 +4,12 @@ description: 说明 markstream-vue 的代码块 Runtime，介绍 CodeBlockNode �
 keywords:
   - 代码块 Runtime
   - stream-diffs
-  - Monaco
+  - runtime 预热
 ---
 
 # 代码块 Runtime
 
-本页说明 `CodeBlockNode` 使用的可选 `stream-diffs` runtime。2.0 移除了旧的 Monaco 选项 API 与 `stream-monaco` 回退：`stream-diffs` 是唯一增强型代码块 surface，代码与 diff 行为使用其内置默认值。
+本页说明 `CodeBlockNode` 使用的可选 `stream-diffs` runtime。2.0 移除了 `stream-monaco` 回退，`stream-diffs` 是唯一增强型代码块 surface；受支持的配置统一通过与 renderer 无关的 `CodeBlockOptions` API 暴露。
 
 ## 安装
 
@@ -50,9 +50,22 @@ CodeBlockNode                          controller + DOM surface
 
 ## 主题
 
-明暗主题请使用 `theme` / `darkTheme` / `lightTheme` / `themes` props。`CodeBlockNode` 会把主题变化传给已挂载的 surface，不会重建 Vue 组件。
+`theme` 可传已注册的 string 名称或 `{ dark, light }`；`themes` 是 runtime 可用的 `[dark, light]` 名称对。`CodeBlockNode` 会把主题变化传给已挂载的 surface，不会重建 Vue 组件。
 
-2.0 已移除 `monacoOptions` / `codeBlockMonacoOptions` props，且无替代方案；代码与 diff 选项回退到 `stream-diffs` 内置默认值。
+Monaco JSON theme object 不会在 2.0 中直接改名。自定义主题需先调用 `stream-diffs/pierre` 的 `registerCustomTheme`，再传入注册名称。
+
+## Options 透传
+
+直接使用 `CodeBlockNode`，或通过顶层 `NodeRenderer` / `MarkdownRender`，都可以传 `codeBlockOptions`。Vue 3、React、Octane、Svelte、Angular 与 Vue 2 使用同一套 `CodeBlockOptions` 约定。
+
+受支持的 surface 包括：
+
+- 宿主管理的排版与布局：`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`；
+- File 配置，例如 `disableLineNumbers`、`overflow`、高亮长度限制，以及虚拟化/高亮器控制；
+- FileDiff 布局、indicator、未变化区域折叠与 line diff 控制；
+- line/token 交互、selection callback、annotation、`onController` 与 `workerManager`。
+
+Markstream 会把宿主管理字段同时应用到流式 `<pre>` 与最终 surface，再把其余受支持字段传给 `stream-diffs`。主题、语言/内容、流式状态、唯一 header、挂载/显示时机与释放仍由宿主管理，优先于冲突的 runtime 值。
 
 ## 可选预热
 
@@ -68,4 +81,4 @@ void preloadCodeBlockRuntime()
 
 ## Diff 交互
 
-diff block 使用相同的适配边界。增强 diff surface（折叠、未变化区域处理、inline/side-by-side 布局）由 `stream-diffs` 内置默认值驱动；2.0 不再提供按代码块配置的 diff options prop。
+diff block 使用相同的适配边界。未提供对应 `codeBlockOptions` 时，增强 diff surface 使用 `stream-diffs` 默认值；可通过 `diffStyle`、`expandUnchanged`、`collapsedContextThreshold`、`hunkSeparators`、`lineDiffType` 与 `parseDiffOptions` 配置布局和折叠。

@@ -22,23 +22,22 @@ keywords:
 
 - `node` — code_block 节点（必需）
 - `loading`、`stream`、`isShowPreview`
-- 2.0 不再支持按块（per-block）配置 code/diff 选项，增强 surface 使用 `stream-diffs` 内置默认值。主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 设置。
+- `codeBlockOptions` — 与 renderer 无关的排版、布局、File/FileDiff、交互、annotation 与 callback 配置；`NodeRenderer` / `MarkdownRender` 顶层也提供同名 prop。
+- `theme` — 已注册的 string 名称或 `{ dark, light }`；`themes` 是要加载的 `[dark, light]` 名称对。
 - 头部控制：`showHeader`、`showCollapseButton`、`showCopyButton`、`showExpandButton`、`showPreviewButton`、`showFontSizeButtons`、`showTooltips`
 - HTML preview sandbox：`htmlPreviewAllowScripts` 默认 `false`，`htmlPreviewSandbox` 可直接覆盖 iframe sandbox token
 
 内置 inline HTML preview 默认使用 `sandbox=""`，因此不可信预览文档不会默认执行脚本，也不会继承宿主页面 origin。`htmlPreviewSandbox` 的优先级高于 `htmlPreviewAllowScripts`；传入 `htmlPreviewSandbox=""` 会保留完整 sandbox，不传 `htmlPreviewSandbox` 时由 `htmlPreviewAllowScripts` 控制，而 `null` 这类无效非 string override 会回退到安全默认值。只有在可信 demo 场景下才建议显式开启 `htmlPreviewAllowScripts`；对于不可信预览内容，不要把 `allow-scripts` 和 `allow-same-origin` 组合在一起。
 
-增强 diff 模式下的默认行为：
+未提供 `codeBlockOptions` override 时，最终 enhanced diff 的默认行为：
 
-- `diffHideUnchangedRegions: { enabled: true, contextLineCount: 2, minimumLineCount: 4, revealLineCount: 5 }`
-- `diffLineStyle: 'background'`
-- `diffAppearance: 'auto'`
-- `diffUnchangedRegionStyle: 'line-info'`
-- `diffHunkActionsOnHover: true`
-- `diffHunkHoverHideDelayMs: 160`
+- `diffStyle: 'split'`
+- `expandUnchanged: false`
+- `collapsedContextThreshold: 5`
+- `hunkSeparators: 'line-info'`
+- `parseDiffOptions: { context: 2 }`
 
-这些是 `stream-diffs` 的内置默认值；2.0 不再提供按块覆盖的 prop。
-当使用 `diffAppearance: 'auto'` 时，`CodeBlockNode` 会先根据当前明暗外观解析成实际的 light/dark，再传给自身的 `stream-diffs` adapter。
+fallback 与最终 surface 使用同一组折叠配置；流式状态不会覆盖用户设置的 `expandUnchanged`。即使提供 `codeBlockOptions`，主题、内容/语言、header、挂载/显示时机与释放仍由宿主管理。
 
 Diff 代码块的内置 header 现在也会显示 `- / +` 行数统计。
 
@@ -114,6 +113,36 @@ function runSnippet() {}
 </template>
 ```
 
+### 配置代码 surface
+
+```vue
+<script setup lang="ts">
+import type { CodeBlockNodeProps, CodeBlockOptions } from 'markstream-vue'
+import { CodeBlockNode } from 'markstream-vue'
+
+const node = {
+  type: 'code_block',
+  language: 'ts',
+  code: 'const answer = 42',
+  raw: 'const answer = 42',
+} satisfies CodeBlockNodeProps['node']
+
+const codeBlockOptions: CodeBlockOptions = {
+  fontSize: 13,
+  lineHeight: 20,
+  overflow: 'wrap',
+  disableLineNumbers: true,
+  enableLineSelection: true,
+}
+</script>
+
+<template>
+  <CodeBlockNode :node="node" :code-block-options="codeBlockOptions" />
+</template>
+```
+
+`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding` 与 `tabSize` 由宿主管理，以确保 fallback 与最终 surface 的几何一致。其余受支持字段传给 `stream-diffs`；header 与 toolbar 继续使用独立的组件 props。
+
 ### 自定义加载占位符
 
 ```vue twoslash
@@ -169,8 +198,7 @@ const themes = [
     </button>
     <MarkdownRender
       :is-dark="isDark"
-      code-block-dark-theme="vitesse-dark"
-      code-block-light-theme="vitesse-light"
+      :code-block-props="{ theme: { dark: 'vitesse-dark', light: 'vitesse-light' } }"
       :themes="themes"
       :content="content"
     />
@@ -214,8 +242,7 @@ const themes = [
 <template>
   <MarkdownRender
     :is-dark="isDark"
-    code-block-dark-theme="vitesse-dark"
-    code-block-light-theme="vitesse-light"
+    :code-block-props="{ theme: { dark: 'vitesse-dark', light: 'vitesse-light' } }"
     :themes="themes"
     :content="content"
   />
@@ -232,14 +259,11 @@ const themes = [
 
 <!-- 固定主题（忽略 isDark） -->
 <CodeBlockNode theme="monokai" />
-
-<!-- 主题对象（固定，忽略 isDark） -->
-<CodeBlockNode :theme="{ name: 'my-theme', colors: { ... } }" />
 ```
 
-使用 `{ light, dark }` 配对时，组件根据 `isDark` prop 自动切换。
+使用 `{ dark, light }` 配对时，组件根据 `isDark` prop 自动切换。
 
-`themes` prop 只接受一个 `[深色, 浅色]` 二元主题对。
+`themes` prop 只接受一个 `[深色, 浅色]` 二元主题对。旧 Monaco JSON theme object 在 2.0 中不是有效的 `theme` 值；先调用 `stream-diffs/pierre` 的 `registerCustomTheme`，再传入注册名称。
 
 > **向后兼容：** `darkTheme` / `lightTheme` props 仍然可用但已废弃。推荐使用统一的 `theme` prop。
 
@@ -248,8 +272,8 @@ const themes = [
 | Prop | 直接使用 CodeBlockNode | 通过 MarkdownRender |
 |------|---------------------|-------------------|
 | `isDark` | 直接传给 `<CodeBlockNode :is-dark="isDark" />` | 通过 `<MarkdownRender :is-dark="isDark" />` 传入并自动转发 |
-| 主题 | `:theme="{ light: 'vitesse-light', dark: 'vitesse-dark' }"` | `:code-block-dark-theme="'vitesse-dark'"` `:code-block-light-theme="'vitesse-light'"` (兼容) |
-| 深色/浅色主题对 | `:themes="['vitesse-dark', 'vitesse-light']"` | `:themes="['vitesse-dark', 'vitesse-light']"` |
+| 主题 | `:theme="{ dark: 'vitesse-dark', light: 'vitesse-light' }"` | `:code-block-props="{ theme: { dark: 'vitesse-dark', light: 'vitesse-light' } }"` |
+| 主题对 | `:themes="['vitesse-dark', 'vitesse-light']"` | `:themes="['vitesse-dark', 'vitesse-light']"` |
 
 ## 注意事项
 

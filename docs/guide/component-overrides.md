@@ -167,7 +167,7 @@ Every custom renderer receives the basics:
 
 The renderer also forwards feature-specific props:
 
-- regular code block overrides receive `stream`, `theme`, `darkTheme`, `lightTheme`, `themes`, `minWidth`, `maxWidth`, and anything passed through `codeBlockProps` (`theme` is the recommended field; `darkTheme` / `lightTheme` remain for compatibility)
+- regular code block overrides receive `stream`, `theme`, `darkTheme`, `lightTheme`, `themes`, `minWidth`, `maxWidth`, the top-level `codeBlockOptions` object, and anything passed through `codeBlockProps` (`theme` is the recommended child prop; `darkTheme` / `lightTheme` remain for compatibility)
 - Mermaid, D2, and infographic overrides receive the corresponding `mermaidProps`, `d2Props`, or `infographicProps`
 - link and list overrides inherit tooltip and typewriter-related bindings from the parent renderer
 

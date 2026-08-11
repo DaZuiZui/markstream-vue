@@ -13,7 +13,7 @@ keywords:
 
 ## 加载 contract
 
-`getStreamDiffsRuntime()` 是 loader 导出名（2.0 从历史名称 `getUseMonaco` 重命名而来）。它动态导入的是 `stream-diffs`，不是 `stream-diffs/vue`。返回的 adapter 只提供 `CodeBlockNode` 需要的 editor-compatible 能力：创建、更新、主题、测量和释放。
+Markstream 使用内部缓存 loader 动态导入 `stream-diffs`，而不是 `stream-diffs/vue`。adapter 只提供 `CodeBlockNode` 所需的少量能力：创建、更新、主题、测量与释放。原始 loader/module 刻意不属于 Markstream 公开 API。
 
 ```text
 CodeBlockNode                 markstream-vue runtime                stream-diffs
@@ -47,6 +47,8 @@ import { preloadCodeBlockRuntime } from 'markstream-vue'
 
 void preloadCodeBlockRuntime()
 ```
+
+历史 `getUseMonaco` 只是用于预热代码块 runtime 时，公开替代项就是这个函数。确实要自行管理 controller 的高级代码应直接从 `stream-diffs` 导入 API 与类型，不要依赖 Markstream 的内部 adapter。
 
 ## 主题
 

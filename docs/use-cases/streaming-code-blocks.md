@@ -68,7 +68,7 @@ For an enhanced code block surface (syntax highlighting plus diff interactions),
 pnpm add stream-diffs
 ```
 
-When `stream-diffs` is installed, `CodeBlockNode` mounts a File or FileDiff surface once the fence completes and enters the viewport. Code and diff options use the `stream-diffs` built-in defaults. When `stream-diffs` is absent, the block falls back to a plain `<pre><code>` representation.
+When `stream-diffs` is installed, `CodeBlockNode` mounts a File or FileDiff surface once the fence completes and enters the viewport. Supported configuration comes from direct or renderer-level `codeBlockOptions`. When `stream-diffs` is absent, the block falls back to a plain `<pre><code>` representation.
 
 For mobile WebViews or conservative bundles, use plain `pre` rendering:
 

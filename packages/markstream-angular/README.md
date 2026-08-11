@@ -2,7 +2,7 @@
 
 Angular 20+ standalone component for streaming Markdown: AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown states, long documents, Mermaid, KaTeX, streaming code blocks, D2, infographic blocks, custom HTML tags, and cross-framework playground parity.
 
-The coordinated 2.0 family beta will use `markstream-angular@next`. Before installing, verify that `npm view markstream-angular@next version` reports `0.1.0-beta.1`. It removes the former Monaco code-block API in favor of `stream-diffs`; read the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+The coordinated 2.0 family beta will use `markstream-angular@next`. Before installing, verify that `npm view markstream-angular@next version` reports `0.1.0-beta.1`. It removes the former Monaco code-block API in favor of `stream-diffs`; read the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
 
 ```bash
 pnpm add markstream-angular@next stream-diffs
@@ -70,12 +70,17 @@ class CodeBlockComponent {
     darkTheme: 'vitesse-dark',
     lightTheme: 'vitesse-light',
     themes: ['vitesse-dark', 'vitesse-light'],
+    codeBlockOptions: {
+      overflow: 'wrap',
+      diffStyle: 'unified',
+      enableLineSelection: true,
+    },
     stream: true,
   }
 }
 ```
 
-Component state and themes go through the `props` input: `isDark`, `darkTheme` / `lightTheme` / `themes`, `loading`, `stream`. Code and diff options use the `stream-diffs` built-in defaults and are not configurable per block.
+Direct component state goes through the `props` input. Both direct `CodeBlockNode` props and top-level `MarkstreamAngularComponent` props accept `codeBlockOptions`; it covers host-managed typography/layout and supported File/FileDiff, interaction, annotation, and callback fields. `maxHeight` and the single symmetric `padding` value use numeric CSS pixels. Use `codeBlockProps` for header/toolbar controls. Theme values are registered names and `themes` is the `[dark, light]` pair. An old Monaco JSON theme is not accepted directly: first convert it to a Shiki `ThemeRegistration`, then call `registerCustomTheme(name, loader)` from `stream-diffs/pierre`; see the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0).
 
 ## Quick Start
 

@@ -58,18 +58,24 @@ npm view "$PACKAGE@next" version
 
 | 1.x API 或依赖 | 2.0 迁移方式 |
 | --- | --- |
-| `codeRenderer: 'monaco'` 或 `'shiki'` | 要保留增强代码块时改为 `codeRenderer: 'stream-diffs'`；普通回退使用 `'pre'`。 |
-| `CodeBlockMonacoTheme` / `CodeBlockMonacoThemeObject` | `CodeBlockTheme` / `CodeBlockThemeObject` |
+| `codeRenderer: 'monaco'`、`'shiki'` 或 `'pre'` | 删除。增强代码块会自动使用 `stream-diffs`；原 `'pre'` 值改用 `renderCodeBlocksAsPre`，带作用域的自定义渲染器使用 `setCustomComponents(customId, { code_block: ... })`。 |
+| `markdownCodeRenderer` / `NodeRendererCodeRenderer` | 删除。Timeline 与 virtual adapter 只有在需要普通输出时才设置 `renderCodeBlocksAsPre: true`；增强路径无需 selector。 |
+| string 形式的 `CodeBlockMonacoTheme` | string 形式的 `CodeBlockTheme`；明暗选择可用 `CodeBlockThemePair`（`{ dark, light }`）。 |
+| Monaco JSON theme object / `CodeBlockMonacoThemeObject` | 不能直接转换。先改成 Shiki `ThemeRegistration`，再用 `stream-diffs/pierre` 的 `registerCustomTheme(name, loader)` 注册，最后传入注册名称。 |
 | `CodeBlockMonacoLanguage` | 删除。语言标识改为读取 code fence，并由 `resolveLanguageId` 规范化。 |
-| `CodeBlockMonacoOptions` | 删除；不提供公开的编辑器选项替代项。 |
+| `CodeBlockMonacoOptions` | 对于受支持且与 renderer 无关的字段，改为 `CodeBlockOptions`。 |
 | `resolveMonacoLanguageId` | `resolveLanguageId` |
-| `getUseMonaco` | `getStreamDiffsRuntime` |
+| 只用于预热的 `getUseMonaco` | `preloadCodeBlockRuntime` |
+| 用于直接调用 runtime 的 `getUseMonaco` | 从 `stream-diffs` 导入高级 API；Markstream 不公开原始 runtime module。 |
 | `MarkdownCodeBlockNode` 与 React / Octane 导出的 `MarkdownCodeBlockNodeProps` | `CodeBlockNode` / `CodeBlockNodeProps`，或普通 `pre` 回退 |
 | `ShikiCodeBlockProps` / 顶层 `langs` | 删除。需要时继续使用 `themes`；语言预加载列表不再是 renderer prop。 |
 | `MarkdownCodeBlockPreviewPayload` | `CodeBlockPreviewPayload`；按下方示例更新 handler 结构。 |
-| `monacoOptions` / `codeBlockMonacoOptions` | 删除；没有 adapter options 替代项。 |
+| 直接 `CodeBlockNode.monacoOptions` | `CodeBlockNode.codeBlockOptions` |
+| `MarkdownRender.codeBlockMonacoOptions` | 顶层 `MarkdownRender.codeBlockOptions` |
 | `stream-monaco` / `stream-markdown` | 删除两个依赖。 |
 | `stream-diffs` | 增强代码块的可选 peer。 |
+
+1.x 里，直接挂载的 `CodeBlockNode` 接收 `monacoOptions`，而 `MarkdownRender` 用 `codeBlockMonacoOptions` 向下透传这些配置。2.0 的两个入口统一使用与 renderer 无关的 `codeBlockOptions`。协调发布的每个 adapter 都在直接 `CodeBlockNode` 以及顶层 `NodeRenderer` / `MarkdownRender` 上公开该字段。`codeBlockProps` 仍是另一组组件外壳配置，例如 header 与 toolbar 控制。
 
 迁移前：
 
@@ -86,13 +92,50 @@ npm view "$PACKAGE@next" version
 ```vue
 <MarkdownRender
   :content="content"
-  code-renderer="stream-diffs"
   :is-dark="isDark"
+  :code-block-options="codeBlockOptions"
   :themes="['vitesse-dark', 'vitesse-light']"
 />
 ```
 
-主题选择仍是公开 API。底层编辑器尺寸、换行、diff 算法与 adapter CSS 选项不再是 renderer props。
+`CodeBlockOptions` 包含由宿主协调的排版与布局字段（`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`），以及受支持的 `stream-diffs` 配置，例如 `disableLineNumbers`、`overflow`、高亮限制、diff 布局和折叠、line/token 交互、annotation、selection callback、`onController` 与 `workerManager`。主题选择、语言与流式内容、唯一 header、挂载/显示时机和释放仍由 Markstream 管理；冲突的原始 runtime key 不能覆盖这些宿主职责。如果 1.x 使用不同的上下 padding，迁移时需选择一个统一的 px 数值；2.0 无法通过 `codeBlockOptions` 保留不对称 padding。
+
+常见配置不是简单的字段改名：
+
+| 1.x 配置 | 2.0 配置 |
+| --- | --- |
+| `MAX_HEIGHT: number` | 单位为 CSS px 的 `maxHeight: number`。string 值需要显式换算。 |
+| `wordWrap: 'on'` / `'off'` | `overflow: 'wrap'` / `'scroll'`。`wordWrapColumn` 或 `bounded` 需要人工选择其中一种行为。 |
+| `renderSideBySide: true` / `false` | `diffStyle: 'split'` / `'unified'` |
+| `diffUnchangedRegionStyle` | `hunkSeparators` |
+| `diffHideUnchangedRegions` | 没有单个对象可直接替换。把 `false` / `{ enabled: false }` 改成 `expandUnchanged: true`，把 `true` / `{ enabled: true }` 改成 `expandUnchanged: false`。用 `parseDiffOptions.context` 控制上下文、`collapsedContextThreshold` 控制何时折叠、`expansionLineCount` 控制每次展开行数。新旧算法并不相同，需要重新调节阈值。 |
+
+主题值是名称，而不是 Monaco theme JSON。直接 `CodeBlockNode.theme` 接收固定 string 或 `{ dark, light }`，`themes` 是用于加载的 `[dark, light]` 名称对。注册前必须先把旧 Monaco theme 转为 Shiki theme 格式；尤其不能直接复用 Monaco `rules`，需要改成 Shiki `tokenColors` 或 `settings`：
+
+```ts
+import type { ThemeRegistration } from 'stream-diffs/pierre'
+import { registerCustomTheme } from 'stream-diffs/pierre'
+
+const themeName = 'acme-dark'
+const acmeDark: ThemeRegistration = {
+  name: themeName,
+  type: 'dark',
+  colors: {
+    'editor.background': '#0d1117',
+    'editor.foreground': '#c9d1d9',
+  },
+  tokenColors: [
+    {
+      scope: ['comment'],
+      settings: { foreground: '#8b949e', fontStyle: 'italic' },
+    },
+  ],
+}
+
+registerCustomTheme(themeName, async () => acmeDark)
+```
+
+注册后传入 `themeName`，不要直接传旧 Monaco 对象。内置 `CodeBlockNode` 会自动启用；应用自有 renderer 时使用带作用域的 `setCustomComponents(customId, { code_block: MyCodeBlock })`。Mermaid、D2 与 Infographic fence 使用各自的专用组件 key，需要时应分别覆盖。
 
 ### Preview 事件 payload
 
@@ -116,21 +159,9 @@ function handlePreview({ node, artifactType, artifactTitle, id }: CodeBlockPrevi
 }
 ```
 
-### 底层 runtime 类型重命名
+### 底层 runtime 访问
 
-以下包根导出随 runtime 一起重命名。它们描述 `stream-diffs` adapter surface，不会恢复已移除的 renderer options。
-
-| 1.x 类型 | 2.0 类型 |
-| --- | --- |
-| `MonacoDiffEditorViewLike` | `StreamDiffsDiffEditorViewLike` |
-| `MonacoDiffLineChangeLike` | `StreamDiffsDiffLineChangeLike` |
-| `MonacoDisposableLike` | `StreamDiffsDisposableLike` |
-| `MonacoEditorViewLike` | `StreamDiffsEditorViewLike` |
-| `MonacoHelpers` | `StreamDiffsHelpers` |
-| `MonacoModelLike` | `StreamDiffsModelLike` |
-| `MonacoModule` | `StreamDiffsModule` |
-| `MonacoNamespaceLike` | `StreamDiffsNamespaceLike` |
-| `MonacoRuntimeOptions` | `StreamDiffsRuntimeOptions` |
+旧的根级 `Monaco*` runtime 类型与 `getUseMonaco` 不会改名为另一份公开的 `stream-diffs` API。应用只需预热 Markstream 的可选代码块 module 时使用 `preloadCodeBlockRuntime()`。确实要自行管理 runtime controller 的高级应用，应直接从 `stream-diffs` 导入函数与类型，并自行负责该 controller 的生命周期。
 
 ## Parser 类型
 
@@ -158,7 +189,8 @@ const parseOptions: ParseOptions = {
 
 ## 验证清单
 
-- 删除 `stream-monaco`、`stream-markdown` 与已移除的代码块 props。
+- 删除 `stream-monaco`、`stream-markdown` 与旧代码块 prop 名称。
+- 把受支持的 `monacoOptions` / `codeBlockMonacoOptions` 字段改为 `codeBlockOptions`，Monaco-only 字段需逐项审查，不要直接复制。
 - 需要增强代码块时安装 `stream-diffs`。
 - 在明暗主题中验证普通与 diff fence。
 - 在应用实际宽度下验证 inline 与 side-by-side diff。

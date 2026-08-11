@@ -40,7 +40,7 @@ markstream-react supports various features through optional peer dependencies. I
 | D2 Diagrams | `@terrastruct/d2` | `pnpm add @terrastruct/d2` |
 | Math Rendering (KaTeX) | `katex` | `pnpm add katex` |
 
-Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Code and diff options use `stream-diffs` built-in defaults, and theming is controlled through `darkTheme` / `lightTheme` / `themes`.
+Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Direct `CodeBlockNode` and top-level `MarkdownRender` both accept `codeBlockOptions`; registered theme names use `darkTheme` / `lightTheme`, with `themes` as the `[dark, light]` preload pair.
 
 ## Optional: off-thread workers in Vite / Vite-compatible bundlers
 
@@ -109,7 +109,7 @@ Requires `stream-diffs`:
 pnpm add stream-diffs
 ```
 
-`stream-diffs` powers the enhanced `CodeBlockNode` runtime with built-in defaults for code and diff options. When it is not installed, code blocks fall back to a plain `<pre>`. You can override the `code_block` renderer via `setCustomComponents` for custom behavior:
+`stream-diffs` powers the enhanced `CodeBlockNode` runtime. Configure its supported surface through `codeBlockOptions`; when it is not installed, code blocks fall back to a plain `<pre>`. You can override the `code_block` renderer via `setCustomComponents` for custom behavior:
 
 ```tsx
 import { setCustomComponents } from 'markstream-react'
@@ -120,13 +120,14 @@ setCustomComponents({
       node={node}
       isDark={isDark}
       stream={ctx?.codeBlockStream}
+      codeBlockOptions={ctx?.codeBlockOptions}
       {...(ctx?.codeBlockProps || {})}
     />
   ),
 })
 ```
 
-Theming is controlled through the `darkTheme` / `lightTheme` / `themes` props.
+Theme values are registered string names. Use `darkTheme` / `lightTheme` for direct `CodeBlockNode` and `themes` for the `[dark, light]` preload pair; register former JSON theme objects with `registerCustomTheme` from `stream-diffs/pierre` and pass the resulting name.
 
 #### Mermaid Diagrams
 

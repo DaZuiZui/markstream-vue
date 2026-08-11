@@ -16,6 +16,7 @@ Use this skill when the host app is Vue 2 on Vue CLI or another Webpack 4-style 
    - Use `createKaTeXWorkerFromCDN(...)` and `createMermaidWorkerFromCDN(...)` when workers are needed.
 5. Prefer stable code block defaults over brittle wiring.
    - In Webpack 4-era repos, `stream-diffs` (or plain `<pre>`) is the only code block runtime — there is no Monaco/`stream-monaco` fallback and no `MarkdownCodeBlockNode`.
+   - Use top-level `code-block-options` or direct `CodeBlockNode.code-block-options` for the shared renderer-neutral option contract. Keep header/toolbar props in `code-block-props`.
    - For AI chat or streaming UIs, keep `content` and use built-in smooth streaming first.
      - `smooth-streaming="auto"` is the default and activates when `typewriter=true` or `max-live-nodes <= 0`.
      - `typewriter` only controls the blinking cursor and defaults to `false`.

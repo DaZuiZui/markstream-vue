@@ -2,11 +2,12 @@
 
 ### ⚠ Breaking changes
 
-- Remove the Monaco and `stream-markdown` code-block runtimes, their peers, `MarkdownCodeBlockNode`, React / Octane `MarkdownCodeBlockNodeProps`, `ShikiCodeBlockProps`, the top-level `langs` prop, and the `CodeBlockMonaco*` public types and props.
+- Remove the Monaco and `stream-markdown` code-block runtimes, their peers, `MarkdownCodeBlockNode`, React / Octane `MarkdownCodeBlockNodeProps`, `ShikiCodeBlockProps`, the top-level `langs` prop, and Monaco-named public types and props.
 - Use `stream-diffs` as the only enhanced code-block surface; without the optional peer, code fences fall back to plain `<pre><code>` rendering.
-- Remove `codeRenderer` values `monaco` and `shiki`. `monacoOptions` and `codeBlockMonacoOptions` have no replacement.
-- Replace `CodeBlockMonacoTheme` with `CodeBlockTheme`, `resolveMonacoLanguageId` with `resolveLanguageId`, and `getUseMonaco` with `getStreamDiffsRuntime`.
-- Replace the low-level `MonacoDiffEditorViewLike`, `MonacoDiffLineChangeLike`, `MonacoDisposableLike`, `MonacoEditorViewLike`, `MonacoHelpers`, `MonacoModelLike`, `MonacoModule`, `MonacoNamespaceLike`, and `MonacoRuntimeOptions` types with their `StreamDiffs*` counterparts.
+- Remove `codeRenderer`, `markdownCodeRenderer`, and the `NodeRendererCodeRenderer` type. Enhanced code blocks use `stream-diffs` automatically; use `renderCodeBlocksAsPre` for plain `<pre><code>` output or `setCustomComponents(customId, { code_block: ... })` for a scoped custom renderer.
+- Replace direct `monacoOptions`, wrapper-level `codeBlockMonacoOptions`, and `CodeBlockMonacoOptions` with the shared `codeBlockOptions` / `CodeBlockOptions` API on direct `CodeBlockNode` and top-level `NodeRenderer` / `MarkdownRender` across Vue 3, React, Octane, Svelte, Angular, and Vue 2. `maxHeight` is a numeric pixel value, and `padding` is one symmetric numeric pixel value rather than separate top and bottom values.
+- Replace string `CodeBlockMonacoTheme` with string `CodeBlockTheme` and `{ dark, light }` theme pairs. Monaco JSON theme objects have no direct rename; register one with `registerCustomTheme` from `stream-diffs/pierre` and pass its name. `themes` is the `[dark, light]` name pair.
+- Replace `resolveMonacoLanguageId` with `resolveLanguageId`. For historical `getUseMonaco` preload usage, use `preloadCodeBlockRuntime`; import advanced controller APIs directly from `stream-diffs` instead of relying on a Markstream raw-runtime getter or copied `StreamDiffs*` types.
 - For consumers that directly used the removed `MarkdownCodeBlockNode`, replace `MarkdownCodeBlockPreviewPayload` with `CodeBlockPreviewPayload`; those handlers now receive `{ node, artifactType, artifactTitle, id }` instead of `{ type, content, title }`. Existing `CodeBlockNode` and `MarkdownRender` handlers already use the common payload.
 - Replace the parser-only `InternalParseOptions` type with the public `ParseOptions` contract.
 

@@ -7,7 +7,7 @@ Vue 2.6 / 2.7 compatibility renderer for legacy Vue 2 apps that need streaming M
 
 For Vue 3 or new Vue/Nuxt projects, use `markstream-vue` instead.
 
-The coordinated 2.0 family beta will use `markstream-vue2@next`. Before installing, verify that `npm view markstream-vue2@next version` reports `0.1.0-beta.1`. It removes the Monaco and Shiki code-block APIs in favor of `stream-diffs`; read the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+The coordinated 2.0 family beta will use `markstream-vue2@next`. Before installing, verify that `npm view markstream-vue2@next version` reports `0.1.0-beta.1`. It removes the Monaco and Shiki code-block APIs in favor of `stream-diffs`; read the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
 
 ```bash
 # Vue 2.7
@@ -197,7 +197,7 @@ Notes:
 
 ## Enhanced Code Blocks
 
-Code blocks use `stream-diffs` across all Markstream packages: `stream-diffs` is preferred (smaller runtime, no `monaco-editor`), and a plain `<pre>` is rendered when it is not installed.
+`stream-diffs` powers enhanced code blocks across all Markstream packages (smaller runtime, no `monaco-editor`); a plain `<pre>` is rendered when it is not installed.
 
 Install the runtime:
 
@@ -209,8 +209,15 @@ pnpm add stream-diffs
 
 ```vue
 <script lang="ts">
+import type { CodeBlockOptions } from 'markstream-vue2'
 import { CodeBlockNode } from 'markstream-vue2'
 import Vue from 'vue'
+
+const codeBlockOptions: CodeBlockOptions = {
+  overflow: 'wrap',
+  diffStyle: 'unified',
+  enableLineSelection: true,
+}
 
 export default Vue.extend({
   components: { CodeBlockNode },
@@ -222,17 +229,18 @@ export default Vue.extend({
         code: 'const answer = 42',
         raw: 'const answer = 42',
       },
+      codeBlockOptions,
     }
   },
 })
 </script>
 
 <template>
-  <CodeBlockNode :node="node" is-dark show-line-numbers show-header />
+  <CodeBlockNode :node="node" :code-block-options="codeBlockOptions" is-dark show-header />
 </template>
 ```
 
-Component props (kebab-case in templates): `is-dark`, `show-line-numbers`, `show-header`. Vue 2.6 apps need `@vue/composition-api`; see the Webpack 4 notes above if you use Vue CLI 4.
+Direct `CodeBlockNode` and top-level `MarkdownRender` both accept `code-block-options`. The shared `CodeBlockOptions` type covers host-managed typography/layout plus supported File/FileDiff, interaction, annotation, and callback fields; `maxHeight` and the single symmetric `padding` value use numeric CSS pixels. Use `code-block-props` for header/toolbar controls. Theme values are registered names and `themes` is the `[dark, light]` pair. An old Monaco JSON theme is not accepted directly: first convert it to a Shiki `ThemeRegistration`, then call `registerCustomTheme(name, loader)` from `stream-diffs/pierre`; see the [coordinated 2.0 family migration guide](https://markstream.simonhe.me/guide/migration-2-0). Vue 2.6 apps need `@vue/composition-api`; see the Webpack 4 notes above if you use Vue CLI 4.
 
 ## Language-specific code block overrides
 
@@ -376,7 +384,7 @@ module.exports = {
 ## Notes
 
 - The Vue 2 package is a compatibility port for legacy Vue 2 apps and mirrors the Vue 3 renderer feature set where practical (virtualization, streaming code blocks, stream-diffs, Mermaid, KaTeX, tooltip singleton).
-- Optional peers are still required for those features (`stream-diffs` for the recommended enhanced code blocks, `mermaid`, `katex`, etc.).
+- Optional peers are still required for those features (`stream-diffs` for enhanced code blocks, `mermaid`, `katex`, etc.).
 - Custom node components are supported via `setCustomComponents` from `markstream-vue2`.
 - If you only render short static Markdown, a smaller Vue 2 Markdown component may be a simpler fit.
 

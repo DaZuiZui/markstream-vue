@@ -17,10 +17,10 @@ keywords:
 
 跟踪于 [issue #615](https://github.com/Simon-He95/markstream-vue/issues/615)，并已通过 [PR #619](https://github.com/Simon-He95/markstream-vue/pull/619) 合入 `2.0.0` 集成分支。
 
-- [x] 移除 `monacoOptions` / `codeBlockMonacoOptions` 与全部 `CodeBlockMonaco*` 参数/API（无替代；diff 选项回退 stream-diffs 内置默认值）
+- [x] 在六个 adapter 中统一用 `codeBlockOptions` / `CodeBlockOptions` 替换 `monacoOptions` / `codeBlockMonacoOptions`，并移除 Monaco-only 公开类型
 - [x] 删除 `stream-markdown` 的 `MarkdownCodeBlockNode` 组件及其样式
-- [x] `codeRenderer` 取值 `'monaco'` → `'stream-diffs'`；删除 `'shiki'` 渲染器类型
-- [x] 公共标识符去 Monaco 命名（`CodeBlockTheme`、`resolveLanguageId`、`getStreamDiffsRuntime`）
+- [x] 删除 `codeRenderer`、`markdownCodeRenderer` 与 `NodeRendererCodeRenderer`；自动使用 `stream-diffs`，普通输出用 `renderCodeBlocksAsPre`，自定义 renderer 用带作用域的组件覆盖
+- [x] 使用与 renderer 无关的公开标识符（`CodeBlockTheme`、`CodeBlockThemePair`、`CodeBlockOptions`、`resolveLanguageId`、`preloadCodeBlockRuntime`），不公开原始 runtime module
 - [x] vue2 / react / svelte / angular / octane 迁移到仅 stream-diffs
 - [x] 更新测试与快照；全量测试通过（313 文件 / 2684 用例）
 - [x] 清理 playground（依赖、vite 配置、sandbox 页面）

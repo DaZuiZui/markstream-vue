@@ -16,10 +16,10 @@ Use this skill when the host app is Nuxt and SSR boundaries matter.
 4. Import `markstream-vue/index.css` from a client-safe app shell or plugin.
    - The root JS import does not inject styles; use `markstream-vue/index.css` or `markstream-vue/index.px.css` explicitly.
 5. Start with `content`, choose the renderer mode by surface, and move to `nodes` plus `final` only when the UI needs custom AST control.
-   - Use `mode="chat"` for AI chat or SSE output. It uses lightweight batches, `<pre>` code rendering by default, `fade=false`, and `max-live-nodes=0`; `smooth-streaming="auto"` paces visible output.
-   - Use `mode="docs"` for rich document surfaces. It is the default, enables larger batches, tooltips, fade, and enhanced `stream-diffs` code blocks when the peer is installed.
+   - Use `mode="chat"` for AI chat or SSE output. It uses lightweight batches, `fade=false`, and `max-live-nodes=0`; `smooth-streaming="auto"` paces visible output.
+   - Use `mode="docs"` for rich document surfaces. It is the default and enables larger batches, tooltips, and fade.
    - Use `mode="minimal"` for lightweight non-chat surfaces.
-   - Choose regular fenced-code rendering with `code-renderer="stream-diffs" | "pre"`. `stream-diffs` renders enhanced File/Diff code blocks; `pre` needs no code peer.
+   - Regular fenced code uses the built-in renderer, enhanced by `stream-diffs` when the optional peer is installed. Use `render-code-blocks-as-pre` for a forced plain path or `setCustomComponents(customId, { code_block: ... })` for a scoped application-owned renderer.
    - `typewriter` only controls the blinking cursor and defaults to `false`. Prefer `typewriter="simple"` for high-frequency chat.
    - When overriding mode defaults on a high-frequency stream, pair smooth streaming with `:fade="false"` to avoid delta fade stacking with high-commit pacing.
    - **Streaming vs recovering history**: in chat UIs the same `MarkdownRender` starts streaming and later switches to history when `final=true`.
@@ -38,6 +38,7 @@ Use this skill when the host app is Nuxt and SSR boundaries matter.
 - Avoid import-time access to browser globals from server code paths.
 - Treat the enhanced code runtime, Mermaid workers, and similar heavy peers as client-only unless the repo already has a proven SSR pattern.
 - Enhanced code blocks in every Markstream package use `stream-diffs`; do not install `stream-monaco`.
+- Use top-level `code-block-options` for supported built-in code-surface configuration. Keep theme, code/language, streaming lifecycle, header, mounting, reveal, and disposal under Markstream's control.
 - Keep `html-policy="safe"` and Mermaid strict mode unless the task is preserving trusted legacy rendering.
 - If a trusted client-only surface needs older behavior, opt out locally with `html-policy="trusted"` and `:mermaid-props="{ isStrict: false }"`, and document why that surface is trusted.
 

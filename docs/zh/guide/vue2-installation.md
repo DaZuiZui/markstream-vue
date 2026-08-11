@@ -189,7 +189,7 @@ markstream-vue2 通过可选的对等依赖支持各种功能。只安装你需�
 | D2 图表 | `@terrastruct/d2` | `pnpm add @terrastruct/d2` |
 | 数学公式渲染（KaTeX） | `katex` | `pnpm add katex` |
 
-增强代码块使用可选的对等依赖 `stream-diffs`。未安装时会回退渲染普通 `<pre>`。代码与 diff 选项使用 `stream-diffs` 内置默认值，主题通过 `darkTheme` / `lightTheme` / `themes` 控制。
+增强代码块使用可选的对等依赖 `stream-diffs`。未安装时会回退渲染普通 `<pre>`。直接 `CodeBlockNode` 与顶层 `MarkdownRender` 都接收 `code-block-options`；主题使用已注册名称，`themes` 是 `[dark, light]` 对。
 
 ## Vue 2.6.x 设置
 
@@ -290,9 +290,9 @@ if (mermaidWorker)
 
 如果你希望继续使用 `markstream-vue2/index.css` 这类导入路径，需要在 `vue.config.js` 里做 `resolve.alias` 映射（见 `playground-vue2-cli/vue.config.js`）。
 
-### 代码块：推荐用 `stream-diffs` 覆盖
+### 代码块：安装 `stream-diffs` 启用增强 surface
 
-增强代码块运行时（`stream-diffs`）是 markstream-vue2 中唯一的代码块渲染器。未安装该可选对等依赖时，会回退渲染普通 `<pre>`。对于 Webpack 4，`stream-diffs` 是推荐（也是唯一）的代码块运行时——没有 Monaco 回退。
+增强代码块运行时（`stream-diffs`）是 markstream-vue2 中唯一的代码块渲染器。未安装该可选对等依赖时，会回退渲染普通 `<pre>`。对于 Webpack 4，它仍然是唯一的增强 runtime；不存在 Monaco 回退。
 
 1) 安装可选对等依赖：
 

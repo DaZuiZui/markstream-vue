@@ -58,18 +58,24 @@ Keep existing framework peers compatible instead of upgrading only part of a fra
 
 | 1.x API or dependency | 2.0 migration |
 | --- | --- |
-| `codeRenderer: 'monaco'` or `'shiki'` | Use `codeRenderer: 'stream-diffs'` to keep enhanced blocks, or `'pre'` for the plain fallback. |
-| `CodeBlockMonacoTheme` / `CodeBlockMonacoThemeObject` | `CodeBlockTheme` / `CodeBlockThemeObject` |
+| `codeRenderer: 'monaco'`, `'shiki'`, or `'pre'` | Remove it. Enhanced blocks use `stream-diffs` automatically. Replace the old `'pre'` value with `renderCodeBlocksAsPre`; use `setCustomComponents(customId, { code_block: ... })` for a scoped custom renderer. |
+| `markdownCodeRenderer` / `NodeRendererCodeRenderer` | Remove them. Timeline and virtual-adapter callers that require plain output should set `renderCodeBlocksAsPre: true`; the enhanced path needs no selector. |
+| `CodeBlockMonacoTheme` string | `CodeBlockTheme` string. A light/dark selection can use `CodeBlockThemePair` (`{ dark, light }`). |
+| Monaco JSON theme object / `CodeBlockMonacoThemeObject` | No direct conversion. Translate it to a Shiki `ThemeRegistration`, register it with `registerCustomTheme(name, loader)` from `stream-diffs/pierre`, then pass the registered name. |
 | `CodeBlockMonacoLanguage` | Remove it. Language identifiers now come from the code fence and are normalized by `resolveLanguageId`. |
-| `CodeBlockMonacoOptions` | Remove it. There is no public editor-options replacement. |
+| `CodeBlockMonacoOptions` | `CodeBlockOptions` for the supported renderer-neutral fields. |
 | `resolveMonacoLanguageId` | `resolveLanguageId` |
-| `getUseMonaco` | `getStreamDiffsRuntime` |
+| `getUseMonaco` used only for preload | `preloadCodeBlockRuntime` |
+| `getUseMonaco` used to call the runtime directly | Import the advanced API from `stream-diffs`; Markstream does not expose its raw runtime module. |
 | `MarkdownCodeBlockNode` and the React / Octane `MarkdownCodeBlockNodeProps` export | `CodeBlockNode` / `CodeBlockNodeProps`, or the plain `pre` fallback |
 | `ShikiCodeBlockProps` / top-level `langs` | Remove them. Keep `themes` when needed; language preload lists are no longer renderer props. |
 | `MarkdownCodeBlockPreviewPayload` | `CodeBlockPreviewPayload`; update the handler shape as shown below. |
-| `monacoOptions` / `codeBlockMonacoOptions` | Remove them. There is no adapter-options replacement. |
+| Direct `CodeBlockNode.monacoOptions` | `CodeBlockNode.codeBlockOptions` |
+| `MarkdownRender.codeBlockMonacoOptions` | Top-level `MarkdownRender.codeBlockOptions` |
 | `stream-monaco` / `stream-markdown` | Remove both dependencies. |
 | `stream-diffs` | Optional peer for enhanced code blocks. |
+
+In 1.x, a directly mounted `CodeBlockNode` accepted `monacoOptions`, while `MarkdownRender` exposed `codeBlockMonacoOptions` to forward that configuration. In 2.0 both entry points use the same renderer-neutral name: `codeBlockOptions`. Every coordinated adapter exposes it on its direct `CodeBlockNode` and as a top-level `NodeRenderer` / `MarkdownRender` prop. `codeBlockProps` remains the separate bag for component chrome such as header and toolbar controls.
 
 Before:
 
@@ -86,13 +92,50 @@ After:
 ```vue
 <MarkdownRender
   :content="content"
-  code-renderer="stream-diffs"
   :is-dark="isDark"
+  :code-block-options="codeBlockOptions"
   :themes="['vitesse-dark', 'vitesse-light']"
 />
 ```
 
-Theme selection remains public. Low-level editor sizing, wrapping, diff-algorithm, and adapter CSS options are no longer renderer props.
+`CodeBlockOptions` includes host-managed typography and layout (`fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, `tabSize`) plus supported `stream-diffs` options such as `disableLineNumbers`, `overflow`, highlighting limits, diff layout and folding, line/token interactions, annotations, selection callbacks, `onController`, and `workerManager`. Markstream still owns theme selection, language and streamed content, its single header, mounting/reveal timing, and disposal; conflicting raw runtime keys cannot override those host responsibilities. If 1.x used different top and bottom padding values, choose one symmetric pixel value during migration; 2.0 cannot preserve asymmetric padding through `codeBlockOptions`.
+
+Common option migrations are not field-for-field renames:
+
+| 1.x option | 2.0 option |
+| --- | --- |
+| `MAX_HEIGHT: number` | `maxHeight: number` in CSS pixels. Convert string values explicitly. |
+| `wordWrap: 'on'` / `'off'` | `overflow: 'wrap'` / `'scroll'`. Choose one of those behaviors manually for `wordWrapColumn` or `bounded`. |
+| `renderSideBySide: true` / `false` | `diffStyle: 'split'` / `'unified'` |
+| `diffUnchangedRegionStyle` | `hunkSeparators` |
+| `diffHideUnchangedRegions` | There is no single replacement object. Map `false` / `{ enabled: false }` to `expandUnchanged: true`, and `true` / `{ enabled: true }` to `expandUnchanged: false`. Use `parseDiffOptions.context` for surrounding context, `collapsedContextThreshold` for when a region collapses, and `expansionLineCount` for reveal size. Tune the thresholds because the old and new algorithms are not identical. |
+
+Theme values are names, not Monaco theme JSON. Direct `CodeBlockNode.theme` accepts a fixed string or `{ dark, light }`; `themes` is the `[dark, light]` name pair used for loading. Convert an old Monaco theme to Shiki's theme format before registering it; in particular, Monaco `rules` are not Shiki token rules and must be translated to `tokenColors` or `settings`:
+
+```ts
+import type { ThemeRegistration } from 'stream-diffs/pierre'
+import { registerCustomTheme } from 'stream-diffs/pierre'
+
+const themeName = 'acme-dark'
+const acmeDark: ThemeRegistration = {
+  name: themeName,
+  type: 'dark',
+  colors: {
+    'editor.background': '#0d1117',
+    'editor.foreground': '#c9d1d9',
+  },
+  tokenColors: [
+    {
+      scope: ['comment'],
+      settings: { foreground: '#8b949e', fontStyle: 'italic' },
+    },
+  ],
+}
+
+registerCustomTheme(themeName, async () => acmeDark)
+```
+
+Pass `themeName` after registration. Do not pass the former Monaco object directly. The built-in `CodeBlockNode` is automatic; use a scoped `setCustomComponents(customId, { code_block: MyCodeBlock })` mapping when the application owns the renderer. Mermaid, D2, and Infographic fences use their dedicated component keys and must be overridden separately when needed.
 
 ### Preview event payload
 
@@ -116,21 +159,9 @@ function handlePreview({ node, artifactType, artifactTitle, id }: CodeBlockPrevi
 }
 ```
 
-### Low-level runtime type renames
+### Low-level runtime access
 
-These root exports follow the runtime rename. They describe the `stream-diffs` adapter surface; they do not restore the removed renderer options.
-
-| 1.x type | 2.0 type |
-| --- | --- |
-| `MonacoDiffEditorViewLike` | `StreamDiffsDiffEditorViewLike` |
-| `MonacoDiffLineChangeLike` | `StreamDiffsDiffLineChangeLike` |
-| `MonacoDisposableLike` | `StreamDiffsDisposableLike` |
-| `MonacoEditorViewLike` | `StreamDiffsEditorViewLike` |
-| `MonacoHelpers` | `StreamDiffsHelpers` |
-| `MonacoModelLike` | `StreamDiffsModelLike` |
-| `MonacoModule` | `StreamDiffsModule` |
-| `MonacoNamespaceLike` | `StreamDiffsNamespaceLike` |
-| `MonacoRuntimeOptions` | `StreamDiffsRuntimeOptions` |
+The old root-level `Monaco*` runtime types and `getUseMonaco` are not renamed into a second public copy of the `stream-diffs` API. Use `preloadCodeBlockRuntime()` when the application only needs to warm Markstream's optional code-block module. Advanced applications that intentionally own a runtime controller should import its functions and types directly from `stream-diffs` and manage that controller's lifecycle themselves.
 
 ## Parser types
 
@@ -158,7 +189,8 @@ Applications already pinned to `^1.x` stay on the 1.x line. The beta cutover mov
 
 ## Verification checklist
 
-- Remove `stream-monaco`, `stream-markdown`, and removed code-block props.
+- Remove `stream-monaco`, `stream-markdown`, and the old code-block prop names.
+- Rename supported `monacoOptions` / `codeBlockMonacoOptions` fields to `codeBlockOptions` and review unsupported Monaco-only fields instead of copying them blindly.
 - Add `stream-diffs` if enhanced code blocks are required.
 - Exercise normal and diff fences in light and dark themes.
 - Verify inline and side-by-side diffs at the widths used by your application.

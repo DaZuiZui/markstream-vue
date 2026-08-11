@@ -360,9 +360,11 @@ Choose the renderer mode by surface:
 ```
 
 Use `mode="minimal"` when you want the same lightweight defaults as `chat`, but prefer a neutral mode name for non-chat surfaces. Avoid combining high-frequency `smooth-streaming` with `fade`; it can turn a steady stream into repeated opacity restarts.
-For the same chat message, do not switch from `mode="chat"` to `mode="docs"` only because `final` changed. Keep the mode stable and switch pacing/animation props (`smooth-streaming`, `typewriter`, `fade`) instead; `docs` changes the default code renderer and layout strategy.
-For docs pages that do not need enhanced code blocks, set `:render-code-blocks-as-pre="true"`. If you want the rich `CodeBlockNode` UI and File/Diff rendering, install `stream-diffs`; otherwise the renderer intentionally falls back to `<pre>` rendering.
+For the same chat message, do not switch from `mode="chat"` to `mode="docs"` only because `final` changed. Keep the mode stable and switch pacing/animation props (`smooth-streaming`, `typewriter`, `fade`) instead; `docs` changes the layout strategy.
+For surfaces that do not need enhanced code blocks, set `:render-code-blocks-as-pre="true"`. If you want the rich `CodeBlockNode` UI and File/Diff rendering, install `stream-diffs`; otherwise the renderer intentionally falls back to `<pre>` rendering. To own ordinary fenced-code rendering, register a scoped `code_block` with `setCustomComponents`.
 `stream-diffs` is a framework-agnostic DOM runtime. `CodeBlockNode` owns the Vue-side decision of when to replace the streaming `<pre>` with its finalized File or FileDiff surface.
+
+Use the top-level `code-block-options` prop to configure the built-in surface; direct `CodeBlockNode` usage accepts the same `codeBlockOptions` object. `CodeBlockOptions` is shared across all six framework adapters. It covers host-managed typography/layout (`fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, `tabSize`) plus supported File/FileDiff, interaction, annotation, and callback fields. Theme, code/language, stream state, header, mounting, reveal, and disposal remain host-owned.
 
 Renderer CSS is scoped under an internal `.markstream-vue` container to minimize global style conflicts. If you render exported node components outside of `MarkdownRender`, wrap them in an element with class `markstream-vue`.
 
@@ -377,6 +379,8 @@ Prefer the unified code-block `theme` prop for new integrations. When you render
   :content="doc"
 />
 ```
+
+Theme values are registered names: direct `CodeBlockNode.theme` accepts a fixed string or `{ dark, light }`, and `themes` is the `[dark, light]` pair to load. A former Monaco JSON theme object is not renamed directly; call `registerCustomTheme` from `stream-diffs/pierre`, then pass the registered name.
 
 `code-block-props` forwards user-facing code block props only. Structural renderer keys such as `node`, `key`, `ref`, `ctx`, `renderNode`, `indexKey`, `__proto__`, `prototype`, and `constructor` are ignored.
 
@@ -664,7 +668,7 @@ If markstream-vue helps your work, you can support ongoing maintenance with one 
 - Full history: [CHANGELOG.md](./CHANGELOG.md)
 - 2.0 beta candidate:
   - After `npm view markstream-vue@next version` reports `2.0.0-beta.1`, install `markstream-vue@next` with `stream-diffs`; stable 1.x remains available through `@1`.
-  - Monaco, `stream-markdown`, and their public code-block APIs are removed.
+  - Monaco and `stream-markdown` runtimes and Monaco-named APIs are removed; supported code-block options move to `codeBlockOptions`.
   - Read [Migrating from 1.x to 2.0](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
 - 1.0 launch notes:
   - Stable Vue 3 renderer API, SSR imports, CSS exports, Tailwind export, worker client exports, and safe HTML defaults.

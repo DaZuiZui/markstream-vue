@@ -1,11 +1,11 @@
 ---
 title: Features
-description: Capability overview of markstream-vue covering progressive Mermaid and D2, streaming diffs, Monaco code rendering, and parse hooks.
+description: Capability overview of markstream-vue covering progressive Mermaid and D2, stream-diffs code rendering, and parse hooks.
 keywords:
   - markdown features
   - progressive mermaid
   - streaming diff code blocks
-  - monaco code rendering
+  - stream-diffs code rendering
   - parse hooks
 ---
 # Features

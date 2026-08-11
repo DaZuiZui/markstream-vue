@@ -14,7 +14,7 @@ faq:
     answer: 当回复经常超过数十 KB、包含大量块，或导致滚动和布局工作变得明显时，请启用虚拟化。
   - question: 单条长消息必须使用 virtual-scroll 吗？
     answer: 通常不需要。先使用节点级虚拟化；virtual-scroll 用于协调多条消息的外层时间线虚拟化器。
-  - question: 离屏的 Mermaid 或 Monaco 块仍会立即渲染吗？
+  - question: 离屏的 Mermaid 或增强代码块仍会立即渲染吗？
     answer: 当启用视口优先级和 defer-until-visible 路径时不会。重型块可以保持空闲，直到接近视口为止。
 ---
 # 长 AI 回答渲染与虚拟化
@@ -52,7 +52,7 @@ Markstream 使用视口感知渲染来约束 live DOM 节点的数量：
 
 ## 视口感知的重型块
 
-Mermaid 图、Monaco 代码块和其他重型块在屏幕外时保持空闲：
+Mermaid 图、增强代码块和其他重型块在屏幕外时保持空闲：
 
 ```vue
 <MarkdownRender
