@@ -29,7 +29,7 @@ describe('optional stream-diffs dependency', () => {
 
   it('treats an empty optional-peer stub as unavailable', async () => {
     vi.resetModules()
-    vi.doMock('stream-diffs', () => ({
+    vi.doMock('stream-diffs/markstream', () => ({
       default: {},
     }))
 

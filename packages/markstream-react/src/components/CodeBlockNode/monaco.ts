@@ -19,7 +19,7 @@ export async function getStreamDiffsRuntime() {
 
   pendingImport = (async () => {
     try {
-      const diffs = await import('stream-diffs')
+      const diffs = await import('stream-diffs/markstream')
       if (diffs?.useMonaco) {
         await preloadStreamDiffs(diffs)
         mod = diffs

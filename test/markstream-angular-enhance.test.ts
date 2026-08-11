@@ -5,6 +5,7 @@ const {
   monacoCleanup,
   monacoCreateDiffEditor,
   monacoCreateEditor,
+  monacoSetTheme,
   monacoUseMonacoOptions,
   canParseOffthread,
   findPrefixOffthread,
@@ -17,6 +18,7 @@ const {
   monacoCreateDiffEditor: vi.fn(async (container: HTMLElement, original: string, modified: string, language: string) => {
     container.innerHTML = `<div data-monaco-diff="1" data-language="${language}" data-original="${original}" data-modified="${modified}"></div>`
   }),
+  monacoSetTheme: vi.fn(async () => {}),
   monacoUseMonacoOptions: [] as Array<Record<string, unknown>>,
   canParseOffthread: vi.fn(async () => true),
   findPrefixOffthread: vi.fn(async () => null),
@@ -91,7 +93,7 @@ vi.mock('../packages/markstream-angular/src/optional/monaco', () => ({
       return {
         createEditor: monacoCreateEditor,
         createDiffEditor: monacoCreateDiffEditor,
-        async setTheme() {},
+        setTheme: monacoSetTheme,
         cleanupEditor: monacoCleanup,
       }
     }),
@@ -103,6 +105,7 @@ describe('markstream-angular enhanceRenderedHtml', () => {
     monacoCleanup.mockReset()
     monacoCreateEditor.mockClear()
     monacoCreateDiffEditor.mockClear()
+    monacoSetTheme.mockClear()
     monacoUseMonacoOptions.length = 0
     canParseOffthread.mockReset()
     findPrefixOffthread.mockReset()
@@ -151,9 +154,10 @@ describe('markstream-angular enhanceRenderedHtml', () => {
       fontSize: 15,
       lineHeight: 24,
       fontFamily: 'Menlo',
-      padding: { top: 12, bottom: 12 },
       disableFileHeader: true,
     })
+    expect(monacoUseMonacoOptions[1]?.padding).toBeUndefined()
+    expect(shell.querySelectorAll<HTMLElement>('.markstream-angular-enhanced-block__body--code')[1]?.style.getPropertyValue('--diffs-gap-block')).toBe('12px')
 
     const copyButton = shell.querySelector<HTMLButtonElement>('.markstream-angular-enhanced-block__action')
     copyButton?.click()
@@ -161,6 +165,105 @@ describe('markstream-angular enhanceRenderedHtml', () => {
 
     handle.dispose()
     expect(monacoCleanup).toHaveBeenCalledTimes(2)
+  })
+
+  it('cleans up and restores the pre fallback when enhancement is cancelled during editor creation', async () => {
+    monacoCleanup.mockClear()
+    let cancelled = false
+    monacoCreateEditor.mockImplementationOnce(async (container: HTMLElement, code: string, language: string) => {
+      container.innerHTML = `<div data-monaco="1" data-language="${language}">${code}</div>`
+      cancelled = true
+    })
+    const root = document.createElement('div')
+    root.innerHTML = '<pre data-markstream-code-block="1" data-markstream-language="ts"><code class="language-ts">const value = 1</code></pre>'
+
+    await enhanceRenderedHtml(root, {
+      codeBlockOptions: { overflow: 'scroll' },
+      final: true,
+      isCancelled: () => cancelled,
+    })
+
+    expect(monacoCleanup).toHaveBeenCalledTimes(1)
+    expect(root.querySelector('.markstream-angular-enhanced-block')).toBeNull()
+    const fallback = root.querySelector('pre[data-markstream-code-block="1"]') as HTMLElement | null
+    expect(fallback?.textContent).toContain('const value = 1')
+    expect(fallback?.style.whiteSpace).toBe('pre')
+  })
+
+  it('uses component theme precedence in the static code enhancer', async () => {
+    monacoCleanup.mockClear()
+    monacoCreateEditor.mockClear()
+    monacoSetTheme.mockClear()
+    monacoUseMonacoOptions.length = 0
+    const root = document.createElement('div')
+    const source = Array.from({ length: 20 }, (_, index) => `const value${index} = ${index}`).join('\n')
+    root.innerHTML = `<pre data-markstream-code-block="1" data-markstream-language="ts"><code class="language-ts">${source}</code></pre>`
+
+    const handle = await enhanceRenderedHtml(root, {
+      codeBlockOptions: { maxHeight: 123 },
+      codeBlockProps: {
+        theme: { dark: 'pair-dark', light: 'pair-light' },
+        themes: ['tuple-dark', 'tuple-light'],
+      },
+      codeBlockDarkTheme: 'top-dark',
+      codeBlockLightTheme: 'top-light',
+      final: true,
+      isDark: true,
+      themes: ['top-tuple-dark', 'top-tuple-light'],
+    })
+
+    expect(monacoUseMonacoOptions[0]).toMatchObject({
+      theme: 'pair-dark',
+      themes: ['tuple-dark', 'tuple-light'],
+    })
+    expect(monacoSetTheme).toHaveBeenCalledWith('pair-dark')
+    const enhancedBody = root.querySelector<HTMLElement>('.markstream-angular-enhanced-block__body--code')
+    expect(enhancedBody?.style.maxHeight).toBe('123px')
+    expect(enhancedBody?.style.minHeight).toBe('123px')
+    expect(enhancedBody?.style.overflow).toBe('auto')
+    handle.dispose()
+    const fallback = root.querySelector('pre') as HTMLElement | null
+    expect(fallback?.style.maxHeight).toBe('123px')
+    expect(fallback?.style.overflow).toBe('auto')
+
+    monacoUseMonacoOptions.length = 0
+    monacoSetTheme.mockClear()
+    const tupleRoot = document.createElement('div')
+    tupleRoot.innerHTML = '<pre data-markstream-code-block="1" data-markstream-language="ts"><code class="language-ts">const tuple = true</code></pre>'
+    const tupleHandle = await enhanceRenderedHtml(tupleRoot, {
+      final: true,
+      isDark: false,
+      themes: ['tuple-dark', 'tuple-light'],
+    })
+    expect(monacoUseMonacoOptions[0]?.theme).toBe('tuple-light')
+    expect(monacoSetTheme).toHaveBeenCalledWith('tuple-light')
+    tupleHandle.dispose()
+  })
+
+  it('cleans up and restores the pre fallback when cancelled during theme application', async () => {
+    monacoCleanup.mockClear()
+    monacoCreateEditor.mockClear()
+    monacoSetTheme.mockClear()
+    let cancelled = false
+    let resolveTheme!: () => void
+    monacoSetTheme.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      resolveTheme = resolve
+    }))
+    const root = document.createElement('div')
+    root.innerHTML = '<pre data-markstream-code-block="1" data-markstream-language="ts"><code class="language-ts">const value = 1</code></pre>'
+
+    const enhancement = enhanceRenderedHtml(root, {
+      final: true,
+      isCancelled: () => cancelled,
+    })
+    await vi.waitFor(() => expect(monacoSetTheme).toHaveBeenCalledTimes(1))
+    cancelled = true
+    resolveTheme()
+    await enhancement
+
+    expect(monacoCleanup).toHaveBeenCalledTimes(1)
+    expect(root.querySelector('.markstream-angular-enhanced-block')).toBeNull()
+    expect(root.querySelector('pre[data-markstream-code-block="1"]')?.textContent).toContain('const value = 1')
   })
 
   it('skips heavy code/diagram upgrades while content is still streaming', async () => {

@@ -233,6 +233,7 @@ const themes = [
   'vitesse-light',
 ]
 const selectedTheme = useLocalStorage<string>('vmr-settings-selected-theme', 'vitesse-dark')
+const codeBlockThemes = computed(() => [selectedTheme.value, selectedTheme.value] as const)
 
 // 格式化主题名称显示
 function formatThemeName(themeName: string) {
@@ -763,7 +764,7 @@ onBeforeUnmount(() => {
           :content="content"
           :code-block-dark-theme="selectedTheme || undefined"
           :code-block-light-theme="selectedTheme || undefined"
-          :themes="themes"
+          :themes="codeBlockThemes"
           :custom-html-tags="['thinking']"
           :is-dark="isDark"
           :parse-options="parseOptions"

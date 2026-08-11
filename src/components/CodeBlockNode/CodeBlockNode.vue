@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { CodeBlockNodeProps, CodeBlockPreviewPayload, CodeBlockTheme } from '../../types/component-props'
-import type { StreamDiffsDiffEditorViewLike, StreamDiffsDisposableLike, StreamDiffsEditorViewLike, StreamDiffsNamespaceLike, StreamDiffsRuntimeOptions } from './streamDiffs'
+import type { CodeBlockNodeProps, CodeBlockPreviewPayload, CodeBlockTheme, CodeBlockThemeProp } from '../../types/component-props'
+import type { StreamDiffsDiffEditorViewLike, StreamDiffsDisposableLike, StreamDiffsEditorViewLike, StreamDiffsModule, StreamDiffsNamespaceLike, StreamDiffsRuntimeOptions } from './streamDiffs'
 import { computed, getCurrentInstance, inject, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, shallowRef, useAttrs, watch } from 'vue'
 import { useSafeI18n } from '../../composables/useSafeI18n'
 // Tooltip is provided as a singleton via composable to avoid many DOM nodes
@@ -13,12 +13,7 @@ import { MARKSTREAM_NODE_LIFECYCLE_KEY } from '../../utils/nodeLifecycle'
 import { resolveLanguageIcon } from '../../utils/resolveLanguageIcon'
 import { safeCancelRaf, safeRaf } from '../../utils/safeRaf'
 import PreCodeNode from '../PreCodeNode'
-import {
-  defaultDiffHideUnchangedRegions,
-  isDiffCodeBlock,
-  resolveCodeBlockHeader,
-  resolveDiffInlineLayout,
-} from './codeBlockHeader'
+import { isDiffCodeBlock, resolveCodeBlockHeader } from './codeBlockHeader'
 import CodeBlockShell from './CodeBlockShell.vue'
 import HtmlPreviewFrame from './HtmlPreviewFrame.vue'
 import {
@@ -33,11 +28,12 @@ const props = withDefaults(
   }>(),
   {
     isShowPreview: true,
-    darkTheme: 'vitesse-dark',
-    lightTheme: 'vitesse-light',
+    darkTheme: undefined,
+    lightTheme: undefined,
     isDark: false,
     loading: true,
     stream: true,
+    showLineNumbers: undefined,
     enableFontSizeControl: true,
     minWidth: undefined,
     maxWidth: undefined,
@@ -55,6 +51,10 @@ const emits = defineEmits<{
   (e: 'previewCode', payload: CodeBlockPreviewPayload): void
   (e: 'copy', code: string): void
 }>()
+
+const effectiveShowLineNumbers = computed(() => {
+  return props.showLineNumbers ?? (props.codeBlockOptions?.disableLineNumbers !== true)
+})
 
 const attrs = useAttrs()
 const lifecycle = inject(MARKSTREAM_NODE_LIFECYCLE_KEY, null)
@@ -232,40 +232,16 @@ let createEditorPromise: Promise<void> | null = null
 let editorRuntimeCreationPromise: Promise<void> | null = null
 let streamDiffsRuntimePromise: Promise<void> | null = null
 let detectLanguage: (code: string) => string = () => String(props.node.language ?? 'plaintext')
-let setTheme: (theme: CodeBlockTheme | undefined) => Promise<void> | void = async () => {}
+let setTheme: (theme: CodeBlockThemeProp | undefined) => Promise<void> | void = async () => {}
 let pendingDiffResultErrorFilterInstalled = false
 let pendingDiffResultErrorFilterCleanup: (() => void) | null = null
 const editorHeightSyncDisposables: StreamDiffsDisposableLike[] = []
 const inlineFoldProxyCleanups: Array<() => void> = []
 let streamDiffsRuntimeOptions: StreamDiffsRuntimeOptions | null = null
+let streamDiffsModule: StreamDiffsModule | null = null
 const isDiff = computed(() => isDiffCodeBlock(props.node))
 const diffStats = ref({ removed: 0, added: 0 })
 const diffStatsAriaLabel = computed(() => `-${diffStats.value.removed} +${diffStats.value.added}`)
-const disabledDiffHideUnchangedRegions = Object.freeze({
-  ...defaultDiffHideUnchangedRegions,
-  enabled: false,
-  revealLineCount: 0,
-})
-function shouldUseInlineDiffLayout(options: Record<string, unknown>) {
-  const width = container.value?.getBoundingClientRect?.().width
-    || container.value?.clientWidth
-    || (typeof window === 'undefined' ? 0 : window.innerWidth)
-  return resolveDiffInlineLayout(options, width)
-}
-
-function resolveDiffScrollbar(raw: Record<string, unknown>) {
-  const rawScrollbar = raw.scrollbar && typeof raw.scrollbar === 'object'
-    ? raw.scrollbar as Record<string, unknown>
-    : {}
-
-  return {
-    ...rawScrollbar,
-    verticalScrollbarSize: 0,
-    horizontalScrollbarSize: 0,
-    ...(shouldUseInlineDiffLayout(raw) ? { horizontal: 'hidden' } : {}),
-  }
-}
-
 function resolveDiffRenderPair(original: string, updated: string) {
   return {
     original: getDisplayCode(original),
@@ -331,50 +307,45 @@ function refreshDiffPresentationSafely() {
 }
 
 const resolvedEditorOptions = computed(() => {
+  const raw = { ...(props.codeBlockOptions || {}) } as Record<string, unknown>
+  for (const key of [
+    'theme',
+    'themes',
+    'themeType',
+    'language',
+    'languages',
+    'stream',
+    'disableFileHeader',
+    'onThemeChange',
+    'renderCustomHeader',
+    'renderHeaderMetadata',
+    'renderHeaderPrefix',
+    'maxHeight',
+    'padding',
+    'tabSize',
+  ])
+    delete raw[key]
+
   if (!isDiff.value) {
-    return {
-      lineDecorationsWidth: 0,
-      lineNumbersMinChars: 2,
-      glyphMargin: false,
-    } as Record<string, unknown>
+    return raw
   }
-  const streamPreviewDiff = props.stream !== false && props.loading !== false
-  const activeDiffHideUnchangedRegions = streamPreviewDiff
-    ? { ...disabledDiffHideUnchangedRegions }
-    : { ...defaultDiffHideUnchangedRegions }
-  const diffWordWrap = 'off'
+  const parseDiffOptions = raw.parseDiffOptions && typeof raw.parseDiffOptions === 'object'
+    ? raw.parseDiffOptions as Record<string, unknown>
+    : {}
   const diffDefaults = {
-    maxComputationTime: 0,
-    diffAlgorithm: 'legacy',
-    ignoreTrimWhitespace: false,
-    renderIndicators: true,
-    diffUpdateThrottleMs: 120,
-    renderLineHighlight: 'none',
-    renderLineHighlightOnlyWhenFocus: true,
-    selectionHighlight: false,
-    occurrencesHighlight: 'off',
-    matchBrackets: 'never',
-    lineDecorationsWidth: 4,
-    lineNumbersMinChars: 2,
-    glyphMargin: false,
-    padding: { top: 0, bottom: 0 },
-    minimap: { enabled: false },
-    renderOverviewRuler: false,
-    overviewRulerBorder: false,
-    hideCursorInOverviewRuler: true,
-    scrollBeyondLastLine: false,
-    diffWordWrap,
-    renderSideBySide: true,
-    diffHideUnchangedRegions: activeDiffHideUnchangedRegions,
-    useInlineViewWhenSpaceIsLimited: false,
-    diffLineStyle: 'background',
-    diffAppearance: 'auto',
-    diffUnchangedRegionStyle: 'line-info',
-    diffHunkActionsOnHover: false,
+    diffStyle: 'split',
+    expandUnchanged: false,
+    collapsedContextThreshold: 5,
+    hunkSeparators: 'line-info',
+    parseDiffOptions: { context: 2 },
   }
   return {
     ...diffDefaults,
-    scrollbar: resolveDiffScrollbar({}),
+    ...raw,
+    parseDiffOptions: {
+      ...diffDefaults.parseDiffOptions,
+      ...parseDiffOptions,
+    },
   } as Record<string, unknown>
 })
 
@@ -393,10 +364,6 @@ const editorSurfaceIsDark = computed(() => {
 const effectiveDiffAppearance = computed<'light' | 'dark'>(() => {
   if (!isDiff.value)
     return editorSurfaceIsDark.value ? 'dark' : 'light'
-
-  const explicit = resolvedEditorOptions.value?.diffAppearance
-  if (explicit === 'light' || explicit === 'dark')
-    return explicit
 
   return editorSurfaceIsDark.value ? 'dark' : 'light'
 })
@@ -424,33 +391,36 @@ let editorCreationFailureRetryInProgress = false
 let editorCreationFailureKeyRetriedKey: string | null = null
 let diffEditorCreatedWhileStreaming = false
 const preFallbackWrap = computed(() => {
-  if (isDiff.value)
-    return resolvedEditorOptions.value?.diffWordWrap === 'on'
-  // Keep consistent with CodeBlockNode's default `wordWrap: 'on'`.
-  return true
+  return props.codeBlockOptions?.overflow !== 'scroll'
 })
 const preFallbackDiffInline = computed(() => {
   if (!isDiff.value)
     return false
 
-  return shouldUseInlineDiffLayout((resolvedEditorOptions.value ?? {}) as Record<string, unknown>)
+  return resolvedEditorOptions.value?.diffStyle === 'unified'
 })
 const preFallbackDiffHideUnchangedRegions = computed(() => {
   // stream-diffs keeps unchanged-region folding disabled while a diff is streaming,
   // but the fallback pre must keep its final folded geometry. Otherwise the
   // fallback expands all unchanged rows and visibly jumps when the editor reveals.
-  return { ...defaultDiffHideUnchangedRegions }
-})
-function resolvePreFallbackDiffCollapse() {
-  // The fallback pre always uses the default unchanged-region folding geometry.
-  const options = defaultDiffHideUnchangedRegions
-  const contextLineCount = Math.max(0, Math.floor(options.contextLineCount ?? 2))
-  const minimumLineCount = Math.max(1, Math.floor(options.minimumLineCount ?? 4))
+  if (resolvedEditorOptions.value?.expandUnchanged === true)
+    return false
+
+  const contextLineCount = Number((resolvedEditorOptions.value?.parseDiffOptions as Record<string, unknown> | undefined)?.context)
+  const collapsedContextThreshold = Number(resolvedEditorOptions.value?.collapsedContextThreshold)
+  const context = Number.isFinite(contextLineCount) && contextLineCount >= 0
+    ? Math.floor(contextLineCount)
+    : 2
+  const threshold = Number.isFinite(collapsedContextThreshold) && collapsedContextThreshold >= 0
+    ? Math.floor(collapsedContextThreshold)
+    : 5
   return {
-    contextLineCount,
-    collapsedContextThreshold: contextLineCount + minimumLineCount - 1,
+    enabled: true,
+    contextLineCount: context,
+    minimumLineCount: Math.max(1, threshold - context + 1),
+    revealLineCount: 5,
   }
-}
+})
 function isHostScrollManagedCodeBlockElement(el?: HTMLElement | null) {
   if (hostScrollManaged?.value === true)
     return true
@@ -509,6 +479,38 @@ const preCodeNode = computed(() => {
     diff: true,
   }
 })
+
+function initializeStreamDiffsHelpers(mod: StreamDiffsModule) {
+  const det = mod.detectLanguage
+  if (typeof det === 'function')
+    detectLanguage = det
+  if (typeof mod.useMonaco !== 'function')
+    return false
+
+  streamDiffsModule = mod
+  streamDiffsRuntimeOptions = buildStreamDiffsRuntimeOptions()
+  const helpers = mod.useMonaco(streamDiffsRuntimeOptions)
+  if (!helpers)
+    return false
+
+  createEditor = helpers.createEditor || createEditor
+  createDiffEditor = helpers.createDiffEditor || createDiffEditor
+  updateCode = helpers.updateCode || updateCode
+  updateDiffCode = helpers.updateDiff || updateDiffCode
+  finalizeCode = helpers.finalizeCode || finalizeCode
+  finalizeDiff = helpers.finalizeDiff || finalizeDiff
+  getEditor = helpers.getEditor || getEditor
+  getEditorView = helpers.getEditorView || getEditorView
+  getDiffEditorView = helpers.getDiffEditorView || getDiffEditorView
+  cleanupEditor = helpers.cleanupEditor || cleanupEditor
+  safeClean = helpers.safeClean || helpers.cleanupEditor || safeClean
+  refreshDiffPresentation = helpers.refreshDiffPresentation || refreshDiffPresentation
+  setTheme = helpers.setTheme || setTheme
+  whenRuntimeVisualReady = helpers.whenVisualReady || null
+  runtimeReady.value = true
+  return true
+}
+
 async function ensureMonacoRuntime() {
   if (typeof window === 'undefined' || isUnmounted)
     return
@@ -529,30 +531,7 @@ async function ensureMonacoRuntime() {
         usePreCodeRender.value = true
         return
       }
-      const useMonaco = mod.useMonaco
-      const det = mod.detectLanguage
-      if (typeof det === 'function')
-        detectLanguage = det
-      if (typeof useMonaco !== 'function')
-        return
-
-      streamDiffsRuntimeOptions = buildStreamDiffsRuntimeOptions()
-      const helpers = useMonaco(streamDiffsRuntimeOptions)
-      createEditor = helpers.createEditor || createEditor
-      createDiffEditor = helpers.createDiffEditor || createDiffEditor
-      updateCode = helpers.updateCode || updateCode
-      updateDiffCode = helpers.updateDiff || updateDiffCode
-      finalizeCode = helpers.finalizeCode || finalizeCode
-      finalizeDiff = helpers.finalizeDiff || finalizeDiff
-      getEditor = helpers.getEditor || getEditor
-      getEditorView = helpers.getEditorView || getEditorView
-      getDiffEditorView = helpers.getDiffEditorView || getDiffEditorView
-      cleanupEditor = helpers.cleanupEditor || cleanupEditor
-      safeClean = helpers.safeClean || helpers.cleanupEditor || safeClean
-      refreshDiffPresentation = helpers.refreshDiffPresentation || refreshDiffPresentation
-      setTheme = helpers.setTheme || setTheme
-      whenRuntimeVisualReady = helpers.whenVisualReady || null
-      runtimeReady.value = true
+      initializeStreamDiffsHelpers(mod)
     }
     catch (err) {
       if (isUnmounted)
@@ -576,7 +555,9 @@ const codeFontMax = 36
 const codeFontStep = 1
 const defaultPreFallbackFontSize = 12
 const defaultPreFallbackLineHeight = 18
-const defaultCodeFontSize = ref<number>(Number.NaN)
+const defaultCodeFontSize = ref<number>(
+  typeof props.codeBlockOptions?.fontSize === 'number' ? props.codeBlockOptions.fontSize : Number.NaN,
+)
 const codeFontSize = ref<number>(defaultCodeFontSize.value)
 // Set by syncFallbackFontMetricsFromEditor() after Monaco renders; drive preFallback* computeds.
 const measuredEditorFontSize = ref<number | null>(null)
@@ -591,6 +572,9 @@ const preFallbackFontSize = computed(() => {
   const measured = measuredEditorFontSize.value
   if (typeof measured === 'number' && Number.isFinite(measured) && measured > 0)
     return measured
+  const fromOptions = props.codeBlockOptions?.fontSize
+  if (typeof fromOptions === 'number' && Number.isFinite(fromOptions) && fromOptions > 0)
+    return fromOptions
   const fromState = codeFontSize.value
   if (typeof fromState === 'number' && Number.isFinite(fromState) && fromState > 0)
     return fromState
@@ -600,6 +584,9 @@ const preFallbackLineHeight = computed(() => {
   const measured = measuredEditorLineHeight.value
   if (typeof measured === 'number' && Number.isFinite(measured) && measured > 0)
     return measured
+  const fromOptions = props.codeBlockOptions?.lineHeight
+  if (typeof fromOptions === 'number' && Number.isFinite(fromOptions) && fromOptions > 0)
+    return fromOptions
   if (preFallbackFontSize.value === defaultPreFallbackFontSize)
     return defaultPreFallbackLineHeight
   return Math.max(12, Math.round(preFallbackFontSize.value * 1.5))
@@ -614,12 +601,18 @@ function hasDiffSourcePair() {
   return props.node.originalCode != null || props.node.updatedCode != null
 }
 const preFallbackTabSize = computed(() => {
-  // stream-diffs default is 4.
+  const fromOptions = props.codeBlockOptions?.tabSize
+  if (typeof fromOptions === 'number' && Number.isFinite(fromOptions) && fromOptions > 0)
+    return fromOptions
   return 4
 })
 const preFallbackVerticalPadding = computed(() => {
+  const padding = props.codeBlockOptions?.padding
   const defaultPadding = isDiff.value ? 0 : 8
-  return { top: defaultPadding, bottom: defaultPadding }
+  const value = typeof padding === 'number' && Number.isFinite(padding) && padding >= 0
+    ? padding
+    : defaultPadding
+  return { top: value, bottom: value }
 })
 // Keep computed height tight to content. Extra padding caused visible bottom gap.
 const CONTENT_PADDING = 0
@@ -741,6 +734,7 @@ function getDiffVisualVars(isDark: boolean) {
 }
 
 const preFallbackStyle = computed(() => {
+  const fontFamily = props.codeBlockOptions?.fontFamily
   const cappedEstimatedContentHeight = capEditorContentHeight(estimatedVisibleContentHeight.value)
   const cappedLocalMinHeight = capEditorContentHeight(preFallbackLocalMinHeight.value)
   const useStreamingLocalHeight = shouldUseStreamingLocalPreFallbackHeight()
@@ -763,6 +757,9 @@ const preFallbackStyle = computed(() => {
               minHeight: `${cappedLocalMinHeight}px`,
             }
           : {}),
+    ...(typeof fontFamily === 'string' && fontFamily.trim()
+      ? { fontFamily: fontFamily.trim() }
+      : {}),
   } as Record<string, string | number>
 
   style['--markstream-pre-line-number-top'] = `${preFallbackVerticalPadding.value.top}px`
@@ -1069,12 +1066,9 @@ function getVerticalPaddingSafe(editor: StreamDiffsEditorViewLike | null | undef
   }
   catch {}
 
-  const rawPadding = (resolvedEditorOptions.value as Record<string, unknown> | undefined)?.padding as { top?: unknown, bottom?: unknown } | undefined
-  if (typeof rawPadding?.top === 'number' || typeof rawPadding?.bottom === 'number') {
-    const top = typeof rawPadding?.top === 'number' && Number.isFinite(rawPadding.top) ? Math.max(0, rawPadding.top) : 0
-    const bottom = typeof rawPadding?.bottom === 'number' && Number.isFinite(rawPadding.bottom) ? Math.max(0, rawPadding.bottom) : 0
-    return top + bottom
-  }
+  const configuredPadding = props.codeBlockOptions?.padding
+  if (typeof configuredPadding === 'number' && Number.isFinite(configuredPadding))
+    return Math.max(0, configuredPadding) * 2
 
   return isDiff.value ? 24 : 0
 }
@@ -1311,8 +1305,7 @@ function hasLanguageHighlightReady(root: HTMLElement | null | undefined) {
 }
 
 function expectsDiffLineNumberGutter() {
-  const options = resolvedEditorOptions.value as Record<string, unknown> | undefined
-  return options?.lineNumbers !== 'off'
+  return effectiveShowLineNumbers.value
 }
 
 function syncEstimatedDiffStats() {
@@ -1364,6 +1357,11 @@ function refreshDiffStats() {
 function ensureFontBaseline() {
   if (Number.isFinite(codeFontSize.value) && (codeFontSize.value as number) > 0 && Number.isFinite(defaultCodeFontSize.value))
     return codeFontSize.value as number
+  if (typeof props.codeBlockOptions?.fontSize === 'number') {
+    defaultCodeFontSize.value = props.codeBlockOptions.fontSize
+    codeFontSize.value = props.codeBlockOptions.fontSize
+    return props.codeBlockOptions.fontSize
+  }
   const actual = readActualFontSizeFromEditor()
   if (actual && actual > 0) {
     defaultCodeFontSize.value = actual
@@ -1644,6 +1642,11 @@ function syncEditorCssVars() {
   // - `--diffs-gap-block`: only set when the consumer explicitly configures
   //   padding — the default 8px gap already matches the fallback.
   targetEl.style.setProperty('--diffs-tab-size', String(preFallbackTabSize.value))
+  const configuredPadding = props.codeBlockOptions?.padding
+  if (typeof configuredPadding === 'number')
+    targetEl.style.setProperty('--diffs-gap-block', `${preFallbackVerticalPadding.value.top}px`)
+  else
+    targetEl.style.removeProperty('--diffs-gap-block')
   // stream-diffs usually applies theme variables on the shell / editor surface;
   // try to read from there, falling back to the editor host element.
   const editorRoot = (editorEl.querySelector('.stream-diffs-shell') || editorEl) as HTMLElement
@@ -2714,7 +2717,7 @@ async function updateDiffCodeWithSettledResult(original: string, updated: string
 }
 
 function getMaxHeightValue(): number {
-  return 500
+  return props.codeBlockOptions?.maxHeight ?? 500
 }
 
 // Check if the language is previewable (HTML or SVG)
@@ -3208,7 +3211,14 @@ async function runEditorCreation(el: HTMLElement) {
     return
   editorRuntimeCreated.value = true
 
-  if (!shouldFreezeVisibleDiffFallbackMetrics()) {
+  const configuredFontSize = props.codeBlockOptions?.fontSize
+  if (typeof configuredFontSize === 'number' && Number.isFinite(configuredFontSize) && configuredFontSize > 0) {
+    const editor = creationKind === 'diff' ? getDiffEditorView() : getEditorView()
+    editor?.updateOptions?.({ fontSize: configuredFontSize, automaticLayout: false })
+    defaultCodeFontSize.value = configuredFontSize
+    codeFontSize.value = configuredFontSize
+  }
+  else if (!shouldFreezeVisibleDiffFallbackMetrics()) {
     const actual = readActualFontSizeFromEditor()
     if (actual && actual > 0) {
       defaultCodeFontSize.value = actual
@@ -3476,16 +3486,17 @@ function getPreferredColorScheme(): CodeBlockTheme | undefined {
     // Fixed theme — always this theme regardless of isDark
     return t as CodeBlockTheme
   }
-  // Backward compat: darkTheme / lightTheme
-  return props.isDark ? props.darkTheme : props.lightTheme
+  const explicitTheme = props.isDark ? props.darkTheme : props.lightTheme
+  if (explicitTheme)
+    return explicitTheme
+  const configuredThemes = props.themes
+  if (configuredThemes)
+    return props.isDark ? configuredThemes[0] : configuredThemes[1]
+  return props.isDark ? 'vitesse-dark' : 'vitesse-light'
 }
 
 function getThemeName(theme: CodeBlockTheme | null | undefined) {
-  if (typeof theme === 'string')
-    return theme
-  if (theme && typeof theme === 'object' && 'name' in theme)
-    return String(theme.name)
-  return null
+  return typeof theme === 'string' ? theme : null
 }
 
 function isSameRequestedTheme(a: CodeBlockTheme | null | undefined, b: CodeBlockTheme | null | undefined) {
@@ -3503,30 +3514,7 @@ function isFixedTheme(): boolean {
 }
 
 function resolveRequestedTheme() {
-  const preferred = getPreferredColorScheme()
-  const explicit = resolvedEditorOptions.value?.theme as CodeBlockTheme | undefined
-  const requested = preferred ?? explicit
-
-  // Object themes are self-contained — trust them directly, skip availability check
-  if (requested != null && typeof requested === 'object')
-    return requested
-
-  const availableThemes = Array.isArray(props.themes) ? props.themes : []
-  if (!availableThemes.length || requested == null)
-    return requested
-
-  const requestedName = getThemeName(requested)
-  const availableNames = availableThemes
-    .map(theme => getThemeName(theme))
-    .filter((name): name is string => !!name)
-  if (!requestedName || availableNames.includes(requestedName))
-    return requested
-
-  const explicitName = getThemeName(explicit)
-  if (explicit != null && explicitName && availableNames.includes(explicitName))
-    return explicit
-
-  return availableThemes[0]
+  return getPreferredColorScheme()
 }
 
 async function themeUpdate(options: { appearanceOnly?: boolean } = {}) {
@@ -3562,12 +3550,6 @@ async function themeUpdate(options: { appearanceOnly?: boolean } = {}) {
 }
 
 function themeLooksDark(theme: CodeBlockTheme | null | undefined) {
-  // For object themes, try to detect from editor.background luminance
-  if (theme && typeof theme === 'object' && theme.colors?.['editor.background']) {
-    const lum = getColorLuminance(theme.colors['editor.background'])
-    if (lum != null)
-      return lum < 128
-  }
   const themeName = getThemeName(theme) ?? ''
   const normalized = themeName.toLowerCase()
   if (!normalized)
@@ -3601,56 +3583,21 @@ function themeLooksDark(theme: CodeBlockTheme | null | undefined) {
     && !lightTokens.some(token => normalized.includes(token))
 }
 
-function addRuntimeLanguage(languages: string[], language: unknown) {
-  if (typeof language !== 'string')
-    return
-
-  const canonical = normalizeLanguageIdentifier(language)
-  const languageId = resolveLanguageId(canonical)
-  const grammarId = ['plain', 'objectivec', 'objectivecpp'].includes(canonical)
-    ? languageId
-    : canonical
-  for (const value of [grammarId, languageId]) {
-    if (value && !languages.includes(value))
-      languages.push(value)
-  }
-}
-
-const runtimeMonacoLanguages = computed(() => {
-  const languages: string[] = []
-  const configured = resolvedEditorOptions.value?.languages
-  if (Array.isArray(configured)) {
-    for (const language of configured)
-      addRuntimeLanguage(languages, language)
-  }
-
-  if (hasCompletedStreamingFenceInfo())
-    addRuntimeLanguage(languages, props.node.language)
-  addRuntimeLanguage(languages, codeLanguage.value)
-  addRuntimeLanguage(languages, runtimeLanguage.value)
-  addRuntimeLanguage(languages, 'plaintext')
-  return languages
-})
-
 function buildStreamDiffsRuntimeOptions() {
   const nextOptions = {
-    wordWrap: 'on',
-    wrappingIndent: 'same',
-    themes: props.themes,
+    overflow: 'wrap',
     ...(resolvedEditorOptions.value || {}),
-    languages: runtimeMonacoLanguages.value,
+    themes: props.themes,
     stream: false,
+    MAX_HEIGHT: props.codeBlockOptions?.maxHeight ?? 500,
     fontSize: preFallbackFontSize.value,
     lineHeight: preFallbackEffectiveLineHeight.value,
     theme: resolveRequestedTheme(),
+    themeType: props.isDark ? 'dark' : 'light',
+    disableLineNumbers: !effectiveShowLineNumbers.value,
     // CodeBlockShell owns the file header for every enhanced code block.
     // Pierre's header would otherwise duplicate that chrome for File surfaces.
     disableFileHeader: true,
-    ...(isDiff.value
-      ? {
-          diffAppearance: effectiveDiffAppearance.value,
-        }
-      : {}),
     onThemeChange() {
       syncEditorCssVars()
     },
@@ -3665,30 +3612,6 @@ function buildStreamDiffsRuntimeOptions() {
     : ''
   nextOptions.unsafeCSS = `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
 ${configuredUnsafeCSS}`.trim()
-
-  if (isDiff.value) {
-    nextOptions.wordWrap = preFallbackWrap.value ? 'on' : 'off'
-    const collapse = resolvePreFallbackDiffCollapse()
-    nextOptions.unsafeCSS += `
-pre { column-gap: 0; }
-pre > code { column-gap: 0; padding-block: 0; }
-[data-separator="line-info"] { margin-top: 0; }
-`
-    if (collapse) {
-      nextOptions.parseDiffOptions = {
-        ...(nextOptions.parseDiffOptions as Record<string, unknown> | undefined),
-        context: collapse.contextLineCount,
-      }
-      nextOptions.collapsedContextThreshold = collapse.collapsedContextThreshold
-      nextOptions.expandUnchanged = false
-      nextOptions.hunkSeparators = 'line-info'
-      nextOptions.unsafeCSS += '[data-separator="line-info"][data-separator-last] { height: 28px; }\n'
-    }
-    else {
-      nextOptions.expandUnchanged = true
-      nextOptions.hunkSeparators = 'simple'
-    }
-  }
 
   return nextOptions
 }
@@ -3731,23 +3654,30 @@ function resolveRuntimeFontFamily() {
   return readVisiblePreFallbackFontFamily()
 }
 
-const monacoStructuralSignature = computed(() => JSON.stringify({
-  diffLineStyle: resolvedEditorOptions.value?.diffLineStyle ?? 'background',
-  diffUnchangedRegionStyle: resolvedEditorOptions.value?.diffUnchangedRegionStyle ?? 'line-info',
-  diffHideUnchangedRegions: { ...defaultDiffHideUnchangedRegions },
-  renderSideBySide: resolvedEditorOptions.value?.renderSideBySide ?? true,
-  useInlineViewWhenSpaceIsLimited: resolvedEditorOptions.value?.useInlineViewWhenSpaceIsLimited ?? false,
-  enableSplitViewResizing: resolvedEditorOptions.value?.enableSplitViewResizing ?? true,
-  ignoreTrimWhitespace: resolvedEditorOptions.value?.ignoreTrimWhitespace ?? true,
-  originalEditable: resolvedEditorOptions.value?.originalEditable ?? false,
-}))
-
 const editorCreationOptionsRevision = ref(0)
+const monacoStructuralSignature = computed(() => String(editorCreationOptionsRevision.value))
+let deferredRuntimeOptionsRecreation = false
 
 watch(
-  () => [props.theme, props.themes, props.lightTheme, props.darkTheme] as const,
+  () => props.codeBlockOptions?.fontSize,
+  (fontSize) => {
+    const nextFontSize = typeof fontSize === 'number' && Number.isFinite(fontSize) && fontSize > 0
+      ? fontSize
+      : defaultPreFallbackFontSize
+    defaultCodeFontSize.value = nextFontSize
+    codeFontSize.value = nextFontSize
+    measuredEditorFontSize.value = null
+    measuredEditorLineHeight.value = null
+    measuredEditorCharacterWidth.value = null
+  },
+)
+
+watch(
+  () => [props.codeBlockOptions, props.showLineNumbers] as const,
   () => {
     editorCreationOptionsRevision.value += 1
+    if (props.stream === false && props.loading !== false)
+      deferredRuntimeOptionsRecreation = true
   },
   { deep: true },
 )
@@ -3847,14 +3777,16 @@ watch(editorCreationFailureKey, async () => {
 // Watch for viewport readiness and try to keep the stream-diffs editor options
 // in sync with the current font size.
 watch(
-  () => [viewportReady.value],
+  () => [props.codeBlockOptions, viewportReady.value],
   () => {
     syncStreamDiffsRuntimeOptions()
     if (!createEditor || !viewportReady.value)
       return
 
     const ed = isDiff.value ? getDiffEditorView() : getEditorView()
-    const applying = Number.isFinite(codeFontSize.value) ? (codeFontSize.value as number) : undefined
+    const applying = typeof props.codeBlockOptions?.fontSize === 'number'
+      ? props.codeBlockOptions.fontSize
+      : (Number.isFinite(codeFontSize.value) ? (codeFontSize.value as number) : undefined)
     if (typeof applying === 'number' && Number.isFinite(applying) && applying > 0) {
       ed?.updateOptions?.({ fontSize: applying })
     }
@@ -3886,8 +3818,11 @@ watch(
       return
     if (nextSignature === prevSignature)
       return
-    if (props.stream === false && props.loading !== false)
+    if (props.stream === false && props.loading !== false) {
+      deferredRuntimeOptionsRecreation = true
       return
+    }
+    deferredRuntimeOptionsRecreation = false
     const pendingCreation = createEditorPromise
     if (pendingCreation) {
       try {
@@ -3905,6 +3840,8 @@ watch(
       clearEditorHeightSyncBindings()
       clearInlineFoldProxies()
       safeClean()
+      if (streamDiffsModule)
+        initializeStreamDiffsHelpers(streamDiffsModule)
       await nextTick()
       await ensureEditorCreation(codeEditor.value as HTMLElement, { allowStaleContentRetry: false })
     }
@@ -3914,6 +3851,17 @@ watch(
       editorDisplayReady.value = false
       markEditorCreationFailed()
     }
+  },
+  { flush: 'post' },
+)
+
+watch(
+  () => [props.loading, viewportReady.value] as const,
+  ([loading, visible]) => {
+    if (loading !== false || !visible || !deferredRuntimeOptionsRecreation)
+      return
+    deferredRuntimeOptionsRecreation = false
+    editorCreationOptionsRevision.value += 1
   },
   { flush: 'post' },
 )
@@ -3938,6 +3886,8 @@ async function retryFailedEditorCreationAfterStreamingSettled() {
     clearEditorHeightSyncBindings()
     clearInlineFoldProxies()
     safeClean()
+    if (streamDiffsModule)
+      initializeStreamDiffsHelpers(streamDiffsModule)
     await nextTick()
 
     try {
@@ -4114,7 +4064,7 @@ onUnmounted(() => {
     :style="preFallbackStyle"
     :node="preCodeNode"
     :loading="props.loading"
-    :show-line-numbers="true"
+    :show-line-numbers="effectiveShowLineNumbers"
     :diff-inline="preFallbackDiffInline"
     :diff-hide-unchanged-regions="preFallbackDiffHideUnchangedRegions"
   />
@@ -4202,7 +4152,7 @@ onUnmounted(() => {
           :class="{ 'is-wrap': preFallbackWrap }"
           :style="preFallbackStyle"
           :node="preCodeNode"
-          :show-line-numbers="true"
+          :show-line-numbers="effectiveShowLineNumbers"
           :diff-inline="preFallbackDiffInline"
           :diff-hide-unchanged-regions="preFallbackDiffHideUnchangedRegions"
         />

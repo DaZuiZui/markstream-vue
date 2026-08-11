@@ -139,16 +139,13 @@ export type {
 } from './renderMarkdownHtml'
 export { sanitizeHtmlContent } from './sanitizeHtmlContent'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
+  CodeBlockOptions,
   CodeBlockTheme,
-  CodeBlockThemeObject,
+  CodeBlockThemePair,
+  CodeBlockThemeProp,
+  CodeBlockThemes,
 } from './types/monaco'
 export {
   getLanguageIcon,

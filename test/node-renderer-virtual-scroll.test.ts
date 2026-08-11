@@ -82,7 +82,7 @@ function makeDefaultVirtualMeasurementKey(host = '') {
       'light',
       'code-rich',
       'code-stream',
-      ...Array.from({ length: 8 }, () => ''),
+      ...Array.from({ length: 24 }, () => ''),
     ].join('\u0000'),
   ].join('\u0000')
 }

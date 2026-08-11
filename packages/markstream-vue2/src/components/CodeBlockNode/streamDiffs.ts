@@ -18,7 +18,7 @@ export async function getStreamDiffsRuntime() {
     return null
 
   try {
-    const diffs = await import('stream-diffs')
+    const diffs = await import('stream-diffs/markstream')
     if (typeof diffs?.useMonaco === 'function') {
       mod = diffs
       await preload(mod)
@@ -31,4 +31,8 @@ export async function getStreamDiffsRuntime() {
 
   importAttempted = true
   return null
+}
+
+export async function preloadCodeBlockRuntime() {
+  return Boolean(await getStreamDiffsRuntime())
 }

@@ -4,6 +4,7 @@ import type {
   StreamingComponentMap,
 } from '../packages/markstream-react/src/customComponents'
 import type { NodeRendererProps } from '../packages/markstream-react/src/types'
+import type { CodeBlockOptions } from '../packages/markstream-react/src/types/component-props'
 import type { NodeComponentProps } from '../packages/markstream-react/src/types/node-component'
 import {
   defineHtmlComponents,
@@ -63,6 +64,11 @@ const definedHtmlComponents = defineHtmlComponents({
   'tree-node': TreeNode,
 })
 
+const codeBlockOptions = {
+  onLineClick: (_event: { lineNumber: number }) => {},
+  onController: (controller: { dispose: () => void }) => controller.dispose(),
+} satisfies CodeBlockOptions
+
 defineStreamingComponents({
   // @ts-expect-error streamingComponents require parser-backed NodeComponentProps.
   badge: Badge,
@@ -113,6 +119,7 @@ void streamingComponents
 void htmlComponents
 void definedStreamingComponents
 void definedHtmlComponents
+void codeBlockOptions
 void rendererElement
 void wrongHtmlRendererElement
 void wrongStreamingRendererElement

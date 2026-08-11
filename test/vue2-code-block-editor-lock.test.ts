@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
@@ -255,8 +257,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
         loading: false,
         showHeader: false,
         isDark: false,
-        darkTheme: 'vitesse-dark',
-        lightTheme: 'vitesse-light',
+        themes: ['tuple-dark', 'tuple-light'],
       },
     })
 
@@ -268,12 +269,54 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
     expect(options.fontFamily).toBe('"SF Mono", Monaco, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace')
     expect(options.fontSize).toBe(12)
     expect(options.lineHeight).toBe(18)
-    expect(options.padding).toEqual({ top: 8, bottom: 8 })
-    expect(options.tabSize).toBe(4)
-    expect(options.themes).toEqual(['vitesse-dark', 'vitesse-light'])
-    expect(options.languages).toEqual(expect.arrayContaining(['tsx', 'plaintext']))
+    expect(options.padding).toBeUndefined()
+    expect(options.tabSize).toBeUndefined()
+    expect(options.themes).toEqual(['tuple-dark', 'tuple-light'])
+    expect(options.theme).toBe('tuple-light')
+    expect(options.languages).toBeUndefined()
 
     wrapper.unmount()
+  })
+
+  it('lets the direct showLineNumbers prop override neutral options on enhanced surfaces', async () => {
+    const helpers = getStreamMonacoHelpers()
+    const mountBlock = (showLineNumbers: boolean, disableLineNumbers: boolean) => mount(CodeBlockNode as any, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'export const value = 1',
+          raw: '```ts\nexport const value = 1\n```',
+        },
+        loading: false,
+        showHeader: false,
+        showLineNumbers,
+        codeBlockOptions: { disableLineNumbers },
+      },
+    })
+
+    const enabled = mountBlock(true, true)
+    await waitForCreateEditorCalls(1, helpers)
+    expect(helpers.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
+    enabled.unmount()
+
+    resetStreamMonacoHelpers()
+    const disabled = mountBlock(false, false)
+    await waitForCreateEditorCalls(1, helpers)
+    expect(helpers.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(true)
+    disabled.unmount()
+  })
+
+  it('keeps deferred runtime option recreation wired to static loading settlement', () => {
+    const source = readFileSync(resolve(process.cwd(), 'packages/markstream-vue2/src/components/CodeBlockNode/CodeBlockNode.vue'), 'utf8')
+
+    expect(source).toContain('deferredRuntimeOptionsRecreation = true')
+    expect(source).toContain('() => [props.loading, viewportReady.value] as const')
+    expect(source).toContain('if (loading !== false || !visible || !deferredRuntimeOptionsRecreation)')
+    expect(source).toContain('initializeRuntimeHelpers(createRuntimeHelpersFactory)')
+    expect(source).toContain('let editorCreationGeneration = 0')
+    expect(source).toContain('if (createEditorPromise === tracked)')
+    expect(source).toContain('generation !== editorCreationGeneration')
   })
 
   it('updates diff themes without recreating the diff editor when isDark toggles', async () => {
@@ -364,7 +407,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
     const panes = wrapper.element.querySelectorAll('.markstream-pre__diff-pane')
     expect(panes).toHaveLength(2)
     const options = helpers.useMonaco.mock.calls[0]?.[0]
-    expect(options.languages).toEqual(expect.arrayContaining(['json', 'plaintext']))
+    expect(options.languages).toBeUndefined()
     expect(wrapper.element.querySelector('.markstream-pre__diff-pane--original')?.textContent).toContain('"version": "0.0.49"')
     expect(wrapper.element.querySelector('.markstream-pre__diff-pane--modified')?.textContent).toContain('"version": "0.0.54-beta.1"')
     expect(wrapper.element.querySelector('.markstream-pre__diff-pane--original .markstream-pre__diff-line--removed')?.textContent).toContain('"version": "0.0.49"')

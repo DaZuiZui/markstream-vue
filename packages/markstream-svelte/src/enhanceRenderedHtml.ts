@@ -1,4 +1,5 @@
 import type { NodeRendererCodeBlockProps, NodeRendererD2Props, NodeRendererInfographicProps, NodeRendererMermaidProps } from './components/shared/node-helpers'
+import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemes } from './types/monaco'
 import { toSafeMermaidSvgMarkup } from 'stream-markdown-parser'
 import { getD2 } from './optional/d2'
 import { getInfographic } from './optional/infographic'
@@ -61,7 +62,11 @@ export interface EnhanceRenderedHtmlOptions {
   d2ThemeId?: number | null
   d2DarkThemeId?: number | null
   showTooltips?: boolean
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
+  codeBlockDarkTheme?: CodeBlockTheme
+  codeBlockLightTheme?: CodeBlockTheme
+  themes?: CodeBlockThemes
   mermaidProps?: NodeRendererMermaidProps
   d2Props?: NodeRendererD2Props
   infographicProps?: NodeRendererInfographicProps
@@ -124,9 +129,15 @@ export async function enhanceRenderedHtml(
 
     if (!options.renderCodeBlocksAsPre)
       await renderCodeBlock(root, cleanupFns, options, isActive)
+    if (!isActive())
+      return handle
   }
 
+  if (!isActive())
+    return handle
   enhanceFootnotes(root, cleanupFns)
+  if (!isActive())
+    return handle
   enhanceTooltips(root, cleanupFns, options)
 
   return handle
@@ -614,11 +625,27 @@ async function renderCodeBlock(
   options: EnhanceRenderedHtmlOptions,
   isActive: () => boolean,
 ) {
+  const preNodes = Array.from(root.querySelectorAll<HTMLElement>('pre[data-markstream-code-block="1"]'))
+  const fallbackWhiteSpace = options.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'
+  const maxHeight = options.codeBlockOptions?.maxHeight
+  for (const pre of preNodes) {
+    const codeNode = pre.querySelector<HTMLElement>('code')
+    if (!codeNode)
+      continue
+    const normalizedLanguage = resolveCodeLanguage(pre, codeNode).trim().toLowerCase()
+    if (normalizedLanguage === 'mermaid' || normalizedLanguage === 'infographic' || normalizedLanguage === 'd2' || normalizedLanguage === 'd2lang')
+      continue
+    pre.style.whiteSpace = fallbackWhiteSpace
+    if (typeof maxHeight === 'number') {
+      pre.style.maxHeight = `${maxHeight}px`
+      pre.style.overflow = 'auto'
+    }
+  }
+
   const streamDiffsModule = await getStreamDiffsRuntime()
   if (!streamDiffsModule || typeof streamDiffsModule.useMonaco !== 'function' || !isActive())
     return
 
-  const preNodes = Array.from(root.querySelectorAll<HTMLElement>('pre[data-markstream-code-block="1"]'))
   for (const pre of preNodes) {
     if (!isActive())
       return
@@ -633,9 +660,9 @@ async function renderCodeBlock(
 
     const source = codeNode.textContent || ''
     const diff = pre.dataset.markstreamDiff === '1'
+    const originalCode = decodeDataPayload(pre.dataset.markstreamOriginal)
     const updatedCode = decodeDataPayload(pre.dataset.markstreamUpdated)
     const runtimeLanguage = resolveLanguage(rawLanguage)
-    const renderLanguage = diff ? 'plaintext' : runtimeLanguage
     const shell = createEnhancedBlockShell(
       'code',
       diff ? `Diff / ${runtimeLanguage}` : `Code / ${runtimeLanguage}`,
@@ -647,7 +674,12 @@ async function renderCodeBlock(
       },
     )
     shell.body.classList.add('markstream-svelte-enhanced-block__body--code')
-    shell.body.style.minHeight = `${estimateCodeBlockHeight(diff ? updatedCode || source : source, diff)}px`
+    const estimatedHeight = estimateCodeBlockHeight(diff ? updatedCode || source : source, diff)
+    shell.body.style.minHeight = `${typeof maxHeight === 'number' ? Math.min(estimatedHeight, maxHeight) : estimatedHeight}px`
+    if (typeof maxHeight === 'number') {
+      shell.body.style.maxHeight = `${maxHeight}px`
+      shell.body.style.overflow = 'auto'
+    }
     const originalPre = pre.cloneNode(true) as HTMLElement
     let helpers: ReturnType<typeof streamDiffsModule.useMonaco> | null = null
     let restored = false
@@ -661,44 +693,117 @@ async function renderCodeBlock(
       catch {
         // Ignore cleanup failures during fallback.
       }
-      if (shell.wrapper.isConnected)
+      if (shell.wrapper.parentNode)
         shell.wrapper.replaceWith(originalPre.cloneNode(true))
     }
     pre.replaceWith(shell.wrapper)
 
+    const userOptions = { ...(options.codeBlockOptions ?? {}) } as Record<string, any>
+    for (const key of [
+      'maxHeight',
+      'padding',
+      'tabSize',
+      'theme',
+      'themes',
+      'themeType',
+      'language',
+      'languages',
+      'stream',
+      'disableFileHeader',
+      'onThemeChange',
+      'renderCustomHeader',
+      'renderHeaderMetadata',
+      'renderHeaderPrefix',
+    ])
+      delete userOptions[key]
+    const parseDiffOptions = userOptions.parseDiffOptions && typeof userOptions.parseDiffOptions === 'object'
+      ? userOptions.parseDiffOptions as Record<string, unknown>
+      : {}
+    const nativeOptions = diff
+      ? {
+          diffStyle: 'split',
+          expandUnchanged: false,
+          collapsedContextThreshold: 5,
+          hunkSeparators: 'line-info',
+          ...userOptions,
+          parseDiffOptions: { context: 2, ...parseDiffOptions },
+        }
+      : userOptions
+    const configuredTheme = options.codeBlockProps?.theme
+    const runtimeThemes = [
+      options.codeBlockProps?.darkTheme ?? options.codeBlockProps?.themes?.[0] ?? options.codeBlockDarkTheme ?? options.themes?.[0] ?? 'vitesse-dark',
+      options.codeBlockProps?.lightTheme ?? options.codeBlockProps?.themes?.[1] ?? options.codeBlockLightTheme ?? options.themes?.[1] ?? 'vitesse-light',
+    ]
+    const requestedTheme = typeof configuredTheme === 'string'
+      ? configuredTheme
+      : configuredTheme && typeof configuredTheme === 'object'
+        ? (options.isDark ? configuredTheme.dark : configuredTheme.light)
+        : options.isDark
+          ? options.codeBlockProps?.darkTheme ?? options.codeBlockProps?.themes?.[0] ?? options.codeBlockDarkTheme ?? options.themes?.[0] ?? 'vitesse-dark'
+          : options.codeBlockProps?.lightTheme ?? options.codeBlockProps?.themes?.[1] ?? options.codeBlockLightTheme ?? options.themes?.[1] ?? 'vitesse-light'
+    const configuredUnsafeCSS = typeof nativeOptions.unsafeCSS === 'string' ? nativeOptions.unsafeCSS : ''
+    const showLineNumbers = options.codeBlockProps?.showLineNumbers
+      ?? options.codeBlockOptions?.disableLineNumbers !== true
+
+    const syncGeometry = () => {
+      shell.body.style.setProperty('--diffs-tab-size', String(options.codeBlockOptions?.tabSize ?? 4))
+      if (typeof options.codeBlockOptions?.padding === 'number')
+        shell.body.style.setProperty('--diffs-gap-block', `${options.codeBlockOptions.padding}px`)
+      else
+        shell.body.style.removeProperty('--diffs-gap-block')
+    }
+    syncGeometry()
+
     helpers = streamDiffsModule.useMonaco({
-      themes: ['vitesse-dark', 'vitesse-light'],
-      languages: Array.from(new Set([runtimeLanguage, 'plaintext'])),
-      readOnly: true,
-      minimap: { enabled: false },
-      lineNumbers: 'on',
-      wordWrap: 'off',
-      revealDebounceMs: 75,
-      MAX_HEIGHT: 500,
-      fontSize: 13,
+      overflow: 'wrap',
+      ...nativeOptions,
+      themes: runtimeThemes,
+      theme: requestedTheme,
+      themeType: options.isDark ? 'dark' : 'light',
+      disableLineNumbers: !showLineNumbers,
+      MAX_HEIGHT: options.codeBlockOptions?.maxHeight ?? 500,
+      fontSize: options.codeBlockOptions?.fontSize ?? 13,
+      lineHeight: options.codeBlockOptions?.lineHeight,
+      fontFamily: options.codeBlockOptions?.fontFamily,
+      unsafeCSS: `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
+${configuredUnsafeCSS}`.trim(),
+      disableFileHeader: true,
+      stream: false,
+      onThemeChange: syncGeometry,
     })
     cleanupFns.push(restoreOriginalPre)
 
     try {
-      // Vue and React wire diff surfaces through dedicated components.
-      // Svelte enhances static HTML after the fact, so a single-surface
-      // surface is used here that still preserves the diff source text.
-      await helpers.createEditor(
-        shell.body,
-        source,
-        renderLanguage,
-      )
+      if (diff && typeof helpers.createDiffEditor === 'function') {
+        await helpers.createDiffEditor(
+          shell.body,
+          originalCode,
+          updatedCode || source,
+          runtimeLanguage,
+        )
+      }
+      else {
+        await helpers.createEditor?.(
+          shell.body,
+          source,
+          runtimeLanguage,
+        )
+      }
       if (!isActive()) {
         restoreOriginalPre()
         return
       }
 
-      await helpers.setTheme?.(options.isDark ? 'vitesse-dark' : 'vitesse-light')
+      await helpers.setTheme?.(requestedTheme)
       if (!isActive()) {
         restoreOriginalPre()
         return
       }
       await waitForRenderFrame()
+      if (!isActive()) {
+        restoreOriginalPre()
+        return
+      }
       if (!hasVisibleCodeContent(shell.body, source))
         throw new Error('Code editor rendered no visible code content.')
 

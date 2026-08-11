@@ -154,13 +154,14 @@ export class NodeRendererComponent implements NodeRendererProps, OnChanges, OnIn
   @Input() renderCodeBlocksAsPre = false
   @Input() codeBlockMinWidth?: string | number
   @Input() codeBlockMaxWidth?: string | number
+  @Input() codeBlockOptions?: NodeRendererProps['codeBlockOptions']
   @Input() codeBlockProps?: NodeRendererProps['codeBlockProps']
   @Input() mermaidProps?: NodeRendererProps['mermaidProps']
   @Input() d2Props?: NodeRendererProps['d2Props']
   @Input() infographicProps?: NodeRendererProps['infographicProps']
   @Input() customComponents?: NodeRendererProps['customComponents']
   @Input() showTooltips = true
-  @Input() themes?: string[]
+  @Input() themes?: NodeRendererProps['themes']
   @Input() isDark = false
   @Input() customId?: string
   @Input() indexKey?: number | string
@@ -960,7 +961,11 @@ export class NodeRendererComponent implements NodeRendererProps, OnChanges, OnIn
       d2ThemeId: this.d2Props?.themeId ?? null,
       d2DarkThemeId: this.d2Props?.darkThemeId ?? null,
       showTooltips: this.showTooltips,
+      codeBlockOptions: this.codeBlockOptions,
       codeBlockProps: this.codeBlockProps,
+      codeBlockDarkTheme: this.codeBlockDarkTheme,
+      codeBlockLightTheme: this.codeBlockLightTheme,
+      themes: this.themes,
       mermaidProps: this.mermaidProps,
       d2Props: this.d2Props,
       infographicProps: this.infographicProps,

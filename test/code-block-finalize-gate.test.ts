@@ -222,6 +222,229 @@ describe('codeBlockNode final Diffs gate', () => {
     wrapper.unmount()
   })
 
+  it('merges neutral options before host invariants and recreates when options change', async () => {
+    const runtime = helpers()
+    const onLineClick = vi.fn()
+    const consumerThemeChange = vi.fn()
+    const node = {
+      type: 'code_block' as const,
+      language: 'typescript',
+      code: '',
+      raw: '```diff\n-const before = 1\n+const after = 2\n```',
+      diff: true,
+      originalCode: 'const before = 1',
+      updatedCode: 'const after = 2',
+      loading: false,
+    }
+    const codeBlockOptions = {
+      maxHeight: 420,
+      padding: 6,
+      tabSize: 8,
+      fontSize: 16,
+      lineHeight: 24,
+      fontFamily: 'Fira Code',
+      diffStyle: 'unified' as const,
+      parseDiffOptions: { context: 7, ignoreWhitespace: true },
+      disableLineNumbers: true,
+      onLineClick,
+      unsafeCSS: '.consumer-rule { color: red; }',
+      theme: 'consumer-theme',
+      stream: true,
+      disableFileHeader: false,
+      onThemeChange: consumerThemeChange,
+    }
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node,
+        loading: false,
+        stream: true,
+        showHeader: false,
+        isDark: true,
+        theme: 'github-dark',
+        themes: ['github-dark', 'github-light'],
+        codeBlockOptions,
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createDiffEditor).toHaveBeenCalledTimes(1))
+
+    const firstOptions = runtime.useMonaco.mock.calls[0]?.[0]
+    expect(firstOptions).toMatchObject({
+      MAX_HEIGHT: 420,
+      fontSize: 16,
+      lineHeight: 24,
+      fontFamily: 'Fira Code',
+      diffStyle: 'unified',
+      disableLineNumbers: true,
+      stream: false,
+      disableFileHeader: true,
+      theme: 'github-dark',
+      themes: ['github-dark', 'github-light'],
+    })
+    expect(firstOptions.parseDiffOptions).toEqual({ context: 7, ignoreWhitespace: true })
+    expect(firstOptions.onLineClick).toBe(onLineClick)
+    expect(firstOptions.onThemeChange).not.toBe(consumerThemeChange)
+    expect(firstOptions.maxHeight).toBeUndefined()
+    expect(firstOptions.padding).toBeUndefined()
+    expect(firstOptions.tabSize).toBeUndefined()
+    expect(firstOptions.unsafeCSS.indexOf('[data-file], [data-diff]')).toBeLessThan(firstOptions.unsafeCSS.indexOf('.consumer-rule'))
+
+    const editorHost = wrapper.get('.code-editor-container').element as HTMLElement
+    expect(editorHost.style.getPropertyValue('--diffs-tab-size')).toBe('8')
+    expect(editorHost.style.getPropertyValue('--diffs-gap-block')).toBe('6px')
+
+    await wrapper.setProps({
+      codeBlockOptions: {
+        ...codeBlockOptions,
+        diffStyle: 'split',
+      },
+    })
+    await vi.waitFor(() => {
+      expect(runtime.useMonaco).toHaveBeenCalledTimes(2)
+      expect(runtime.createDiffEditor).toHaveBeenCalledTimes(2)
+    })
+    expect(runtime.useMonaco.mock.calls[1]?.[0]?.diffStyle).toBe('split')
+
+    wrapper.unmount()
+  })
+
+  it('restores the default font size when codeBlockOptions.fontSize is removed', async () => {
+    const runtime = helpers()
+    const createdTypography: Array<{ fontSize: number, lineHeight: number }> = []
+    runtime.createEditor.mockImplementation(async (container: HTMLElement) => {
+      const options = runtime.useMonaco.mock.calls.at(-1)?.[0]
+      createdTypography.push({ fontSize: options?.fontSize, lineHeight: options?.lineHeight })
+      installFinalDiffsDom(container)
+    })
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const value = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        codeBlockOptions: { fontSize: 16 },
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createEditor).toHaveBeenCalledTimes(1))
+    expect(createdTypography[0]).toEqual({ fontSize: 16, lineHeight: 24 })
+
+    let resolveVisualReady!: (ready: boolean) => void
+    runtime.whenVisualReady = vi.fn(() => new Promise<boolean>((resolve) => {
+      resolveVisualReady = resolve
+    }))
+    await wrapper.setProps({ codeBlockOptions: {} })
+    await vi.waitFor(() => {
+      expect(runtime.useMonaco).toHaveBeenCalledTimes(2)
+      expect(runtime.createEditor).toHaveBeenCalledTimes(2)
+    })
+
+    expect(createdTypography[1]).toEqual({ fontSize: 12, lineHeight: 18 })
+    expect((wrapper.get('pre.code-pre-fallback').element as HTMLElement).style.fontSize).toBe('12px')
+
+    resolveVisualReady(true)
+    wrapper.unmount()
+  })
+
+  it('lets the direct showLineNumbers prop override neutral options on enhanced surfaces', async () => {
+    const runtime = helpers()
+    const mountBlock = (showLineNumbers: boolean, disableLineNumbers: boolean) => mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const value = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        showLineNumbers,
+        codeBlockOptions: { disableLineNumbers },
+      },
+    })
+
+    const enabled = mountBlock(true, true)
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.useMonaco).toHaveBeenCalledTimes(1))
+    expect(runtime.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
+    enabled.unmount()
+
+    observers.length = 0
+    resetHelpers()
+    const disabled = mountBlock(false, false)
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.useMonaco).toHaveBeenCalledTimes(1))
+    expect(runtime.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(true)
+    disabled.unmount()
+  })
+
+  it('selects theme pairs and tuples by host precedence', async () => {
+    const runtime = helpers()
+    const mountBlock = (props: Record<string, unknown>) => mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const value = true', false),
+        loading: false,
+        showHeader: false,
+        stream: true,
+        ...props,
+      },
+    })
+
+    const tuple = mountBlock({ isDark: false, themes: ['tuple-dark', 'tuple-light'] })
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.useMonaco).toHaveBeenCalledTimes(1))
+    expect(runtime.useMonaco.mock.calls[0]?.[0]?.theme).toBe('tuple-light')
+    tuple.unmount()
+
+    observers.length = 0
+    resetHelpers()
+    const pair = mountBlock({
+      isDark: true,
+      theme: { dark: 'pair-dark', light: 'pair-light' },
+      themes: ['tuple-dark', 'tuple-light'],
+    })
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.useMonaco).toHaveBeenCalledTimes(1))
+    expect(runtime.useMonaco.mock.calls[0]?.[0]?.theme).toBe('pair-dark')
+    pair.unmount()
+  })
+
+  it('recreates deferred static runtime options after loading settles', async () => {
+    const runtime = helpers()
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const staticValue = true', false),
+        loading: false,
+        stream: false,
+        showHeader: false,
+        codeBlockOptions: { diffStyle: 'unified' },
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createEditor).toHaveBeenCalledTimes(1))
+
+    await wrapper.setProps({ loading: true })
+    await wrapper.setProps({ codeBlockOptions: { diffStyle: 'split' } })
+    await flush()
+    expect(runtime.useMonaco).toHaveBeenCalledTimes(1)
+    expect(runtime.createEditor).toHaveBeenCalledTimes(1)
+
+    await wrapper.setProps({ loading: false })
+    await vi.waitFor(() => {
+      expect(runtime.useMonaco).toHaveBeenCalledTimes(2)
+      expect(runtime.createEditor).toHaveBeenCalledTimes(2)
+    })
+    expect(runtime.useMonaco.mock.calls[1]?.[0]?.diffStyle).toBe('split')
+
+    wrapper.unmount()
+  })
+
   it('keeps the fallback until stream-diffs commits its first visual frame', async () => {
     const runtime = helpers()
     let resolveVisualReady!: (ready: boolean) => void
@@ -495,7 +718,7 @@ describe('codeBlockNode final Diffs gate', () => {
     wrapper.unmount()
   })
 
-  it('accepts a theme name that matches an object in the theme pool', async () => {
+  it('accepts a fixed theme name with a dark/light theme tuple', async () => {
     const runtime = helpers()
     const wrapper = mount(DeferredCodeBlockNode, {
       props: {
@@ -504,7 +727,7 @@ describe('codeBlockNode final Diffs gate', () => {
         stream: true,
         showHeader: false,
         theme: 'github-dark',
-        themes: [{ name: 'github-dark' }],
+        themes: ['github-dark', 'github-light'],
       },
     })
 

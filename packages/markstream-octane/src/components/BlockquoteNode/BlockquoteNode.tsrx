@@ -18,6 +18,7 @@ export function BlockquoteNode(props: NodeComponentProps<{ type: 'blockquote', c
               viewportPriority
               codeBlockStream={ctx.codeBlockStream}
               renderCodeBlocksAsPre={ctx.renderCodeBlocksAsPre}
+              codeBlockOptions={ctx.codeBlockOptions}
               codeBlockProps={ctx.codeBlockProps}
               themes={ctx.codeBlockThemes?.themes}
               codeBlockDarkTheme={ctx.codeBlockThemes?.darkTheme}

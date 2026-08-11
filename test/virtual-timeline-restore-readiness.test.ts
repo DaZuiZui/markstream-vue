@@ -1708,6 +1708,49 @@ describe('virtual timeline restore visual readiness', () => {
     wrapper.unmount()
   })
 
+  it('applies neutral code block options during async loading without leaking them to the DOM', async () => {
+    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const wrapper = mount(CodeBlockNodeLoading as any, {
+      props: {
+        codeBlockOptions: {
+          disableLineNumbers: true,
+          fontFamily: 'Fira Code',
+          fontSize: 16,
+          lineHeight: 24,
+          maxHeight: 120,
+          overflow: 'scroll',
+          padding: 6,
+          tabSize: 8,
+        },
+        estimatedContentHeightPx: 240,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'const x = 1',
+          raw: '```ts\nconst x = 1\n```',
+          loading: true,
+        },
+        showLineNumbers: true,
+      },
+    })
+
+    const root = wrapper.get('.code-block-container')
+    const pre = wrapper.get('pre.code-pre-fallback')
+    expect(root.attributes('codeblockoptions')).toBeUndefined()
+    expect(root.attributes('showlinenumbers')).toBeUndefined()
+    expect(pre.attributes('data-markstream-line-numbers')).toBe('1')
+    expect((pre.element as HTMLElement).style.fontFamily).toBe('Fira Code')
+    expect((pre.element as HTMLElement).style.fontSize).toBe('16px')
+    expect((pre.element as HTMLElement).style.lineHeight).toBe('24px')
+    expect((pre.element as HTMLElement).style.maxHeight).toBe('120px')
+    expect((pre.element as HTMLElement).style.overflow).toBe('auto')
+    expect((pre.element as HTMLElement).style.paddingTop).toBe('6px')
+    expect((pre.element as HTMLElement).style.paddingBottom).toBe('6px')
+    expect((pre.element as HTMLElement).style.tabSize).toBe('8')
+    expect((pre.element as HTMLElement).style.whiteSpace).toBe('pre')
+    wrapper.unmount()
+  })
+
   it('reserves preview-only and diff-only header chrome while loading', async () => {
     const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
     const disabledActions = {

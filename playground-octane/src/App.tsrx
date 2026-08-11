@@ -250,6 +250,7 @@ export default function App() {
   const streamDelayRangeLabel = `${normalizedChunkDelayRange.min}-${normalizedChunkDelayRange.max}ms`
   const {
     content,
+    isStreaming,
     start: startStreamSimulation,
     stop: stopStreamSimulation,
   } = useStreamSimulator({
@@ -262,7 +263,7 @@ export default function App() {
     sliceMode: streamSliceMode,
     transportMode: streamTransportMode,
   })
-  const themeOptions = useMemo(() => Array.from(THEMES), [])
+  const themeOptions = useMemo(() => [selectedTheme, selectedTheme] as const, [selectedTheme])
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const settingsRootRef = useRef<HTMLDivElement | null>(null)
   const isCompactSettings = useMediaQuery('(max-width: 1023px)')
@@ -792,6 +793,7 @@ export default function App() {
             <div className="chatbot-renderer-shell">
               <MemoizedNodeRenderer
                 content={content}
+                final={!isStreaming}
                 codeBlockDarkTheme={selectedTheme}
                 codeBlockLightTheme={selectedTheme}
                 themes={themeOptions}

@@ -85,6 +85,7 @@
     : window.localStorage.getItem('vueuse-color-scheme') === 'dark'
       || (window.localStorage.getItem('vueuse-color-scheme') == null && window.matchMedia?.('(prefers-color-scheme: dark)').matches)
   let selectedTheme = window.localStorage.getItem('vmr-settings-selected-theme') || 'vitesse-dark'
+  $: codeBlockThemes = [selectedTheme, selectedTheme] as const
   let chunkSizeMin = Number(window.localStorage.getItem('vmr-settings-stream-chunk-size-min') || 2)
   let chunkSizeMax = Number(window.localStorage.getItem('vmr-settings-stream-chunk-size-max') || 7)
   let chunkDelayMin = Number(window.localStorage.getItem('vmr-settings-stream-delay-min') || 14)
@@ -684,7 +685,7 @@
               codeBlockLightTheme={selectedTheme}
               renderCodeBlocksAsPre={renderMode === 'pre'}
               customComponents={renderMode === 'markdown' ? markdownModeComponents : undefined}
-              {themes}
+              themes={codeBlockThemes}
               {isDark}
               customId={PLAYGROUND_CUSTOM_ID}
               customHtmlTags={PLAYGROUND_CUSTOM_HTML_TAGS}
@@ -758,7 +759,7 @@
             codeBlockLightTheme={selectedTheme}
             renderCodeBlocksAsPre={false}
             customComponents={undefined}
-            {themes}
+            themes={codeBlockThemes}
             {isDark}
             customId={PLAYGROUND_CUSTOM_ID}
             customHtmlTags={PLAYGROUND_CUSTOM_HTML_TAGS}

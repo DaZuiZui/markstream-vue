@@ -94,12 +94,14 @@ describe('virtual layout key helpers', () => {
       'code-static',
       '320',
       '100%',
+      ...Array.from({ length: 15 }, () => ''),
       'true',
       'false',
       'true',
       'false',
       'true',
       'false',
+      '',
     ].join('\u0000'))
   })
 

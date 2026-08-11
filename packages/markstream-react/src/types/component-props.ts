@@ -1,16 +1,9 @@
 import type { CSSProperties } from 'react'
 import type { CodeBlockNode } from 'stream-markdown-parser'
 
-export interface CodeBlockThemeObject {
-  name: string
-  base?: string
-  inherit?: boolean
-  colors?: Record<string, string>
-  rules?: Array<Record<string, unknown>>
-  [key: string]: unknown
-}
+export type CodeBlockTheme = string
 
-export type CodeBlockTheme = string | CodeBlockThemeObject
+export type CodeBlockThemes = readonly [dark: string, light: string]
 
 export interface CommonCodeBlockProps {
   showHeader?: boolean
@@ -29,26 +22,62 @@ export type CodeBlockDiffHideUnchangedRegions
   = | boolean
     | CodeBlockDiffHideUnchangedRegionsOptions
 
-export type CodeBlockDiffLineStyle = 'background' | 'bar'
-
-export type CodeBlockDiffAppearance = 'auto' | 'light' | 'dark'
-
-export type CodeBlockDiffUnchangedRegionStyle = 'line-info' | 'line-info-basic' | 'metadata' | 'simple'
-
-export type CodeBlockDiffHunkActionKind = 'revert' | 'stage'
-
-export type CodeBlockDiffHunkSide = 'upper' | 'lower'
-
-export interface CodeBlockDiffHunkActionContext {
-  action: CodeBlockDiffHunkActionKind
-  side: CodeBlockDiffHunkSide
-  lineChange: unknown
-  originalModel: unknown
-  modifiedModel: unknown
+export interface CodeBlockOptions {
+  fontSize?: number
+  lineHeight?: number
+  fontFamily?: string
+  maxHeight?: number
+  padding?: number
+  tabSize?: number
+  disableLineNumbers?: boolean
+  overflow?: 'scroll' | 'wrap'
+  disableVirtualizationBuffers?: boolean
+  preferredHighlighter?: 'shiki-js' | 'shiki-wasm'
+  useCSSClasses?: boolean
+  useTokenTransformer?: boolean
+  tokenizeMaxLineLength?: number
+  tokenizeMaxLength?: number
+  unsafeCSS?: string
+  diffStyle?: 'unified' | 'split'
+  diffIndicators?: 'classic' | 'bars' | 'none'
+  disableBackground?: boolean
+  hunkSeparators?: 'simple' | 'metadata' | 'line-info' | 'line-info-basic'
+  expandUnchanged?: boolean
+  collapsedContextThreshold?: number
+  lineDiffType?: 'word-alt' | 'word' | 'char' | 'none'
+  maxLineDiffLength?: number
+  expansionLineCount?: number
+  parseDiffOptions?: Record<string, unknown>
+  lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line'
+  enableTokenInteractionsOnWhitespace?: boolean
+  enableGutterUtility?: boolean
+  enableLineSelection?: boolean
+  controlledSelection?: boolean
+  onGutterUtilityClick?: (...args: any[]) => unknown
+  onLineClick?: (...args: any[]) => unknown
+  onLineNumberClick?: (...args: any[]) => unknown
+  onLineEnter?: (...args: any[]) => unknown
+  onLineLeave?: (...args: any[]) => unknown
+  onTokenClick?: (...args: any[]) => unknown
+  onTokenEnter?: (...args: any[]) => unknown
+  onTokenLeave?: (...args: any[]) => unknown
+  onLineSelected?: (...args: any[]) => unknown
+  onLineSelectionStart?: (...args: any[]) => unknown
+  onLineSelectionChange?: (...args: any[]) => unknown
+  onLineSelectionEnd?: (...args: any[]) => unknown
+  getLineIndex?: (...args: any[]) => unknown
+  renderAnnotation?: (...args: any[]) => unknown
+  renderGutterUtility?: (...args: any[]) => unknown
+  onPostRender?: (...args: any[]) => unknown
+  mergeConflict?: boolean
+  lineAnnotations?: unknown[]
+  onController?: (controller: any) => void
+  workerManager?: unknown
 }
 
 export interface CodeBlockNodeProps extends CommonCodeBlockProps {
   node: CodeBlockNode
+  codeBlockOptions?: CodeBlockOptions
   isDark?: boolean
   loading?: boolean
   stream?: boolean
@@ -58,7 +87,7 @@ export interface CodeBlockNodeProps extends CommonCodeBlockProps {
   enableFontSizeControl?: boolean
   minWidth?: string | number
   maxWidth?: string | number
-  themes?: CodeBlockTheme[]
+  themes?: CodeBlockThemes
   showPreviewButton?: boolean
   showCollapseButton?: boolean
   showFontSizeButtons?: boolean

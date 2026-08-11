@@ -84,7 +84,7 @@ const mermaidEnabled = useLocalStorage<boolean>('vmr-test-mermaid-enabled', isMe
 
 // 预加载 stream-diffs 运行时
 if (process.client) {
-  import('markstream-vue').then(({ getStreamDiffsRuntime }) => getStreamDiffsRuntime()).catch(() => {})
+  import('markstream-vue').then(({ preloadCodeBlockRuntime }) => preloadCodeBlockRuntime()).catch(() => {})
   setKaTeXWorker(new KatexWorker())
   setMermaidWorker(new MermaidWorker())
 }

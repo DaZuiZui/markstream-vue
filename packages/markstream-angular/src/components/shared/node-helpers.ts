@@ -1,7 +1,7 @@
 import type { SmoothMarkdownStreamOptions } from 'markstream-core'
 import type { BaseNode, HtmlPolicy, MarkdownIt, ParsedNode, ParseOptions } from 'stream-markdown-parser'
 import type { CustomComponentMap } from '../../customComponents'
-import type { CodeBlockTheme } from '../../types/monaco'
+import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemeProp, CodeBlockThemes } from '../../types/monaco'
 import {
   getHtmlTagFromContent,
   getMarkdown,
@@ -32,9 +32,10 @@ export interface CodeBlockPreviewPayload {
 
 export type NodeRendererCodeBlockProps = Partial<{
   stream: boolean
+  theme: CodeBlockThemeProp
   darkTheme: CodeBlockTheme
   lightTheme: CodeBlockTheme
-  themes: CodeBlockTheme[]
+  themes: CodeBlockThemes
   minWidth: string | number
   maxWidth: string | number
   isShowPreview: boolean
@@ -45,8 +46,10 @@ export type NodeRendererCodeBlockProps = Partial<{
   showPreviewButton: boolean
   showCollapseButton: boolean
   showFontSizeButtons: boolean
+  showLineNumbers: boolean
   htmlPreviewAllowScripts: boolean
   htmlPreviewSandbox: string
+  codeBlockOptions?: never
 }> & Record<string, unknown>
 
 export type NodeRendererMermaidProps = Partial<{
@@ -112,13 +115,14 @@ export interface NodeRendererProps {
   renderCodeBlocksAsPre?: boolean
   codeBlockMinWidth?: string | number
   codeBlockMaxWidth?: string | number
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   mermaidProps?: NodeRendererMermaidProps
   d2Props?: NodeRendererD2Props
   infographicProps?: NodeRendererInfographicProps
   customComponents?: CustomComponentMap
   showTooltips?: boolean
-  themes?: CodeBlockTheme[]
+  themes?: CodeBlockThemes
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -156,13 +160,14 @@ export interface AngularRenderContext {
   customHtmlTags?: readonly string[]
   parseOptions?: ParseOptions
   customMarkdownIt?: (md: MarkdownIt) => MarkdownIt
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   mermaidProps?: NodeRendererMermaidProps
   d2Props?: NodeRendererD2Props
   infographicProps?: NodeRendererInfographicProps
   customComponents?: CustomComponentMap
   codeBlockThemes?: {
-    themes?: CodeBlockTheme[]
+    themes?: CodeBlockThemes
     darkTheme?: CodeBlockTheme
     lightTheme?: CodeBlockTheme
     minWidth?: string | number
@@ -219,6 +224,7 @@ export function buildRenderContext(
     customHtmlTags,
     parseOptions: props.parseOptions,
     customMarkdownIt: props.customMarkdownIt,
+    codeBlockOptions: props.codeBlockOptions,
     codeBlockProps: props.codeBlockProps,
     mermaidProps: props.mermaidProps,
     d2Props: props.d2Props,

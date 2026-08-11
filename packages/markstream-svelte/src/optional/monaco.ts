@@ -1,7 +1,7 @@
 let streamDiffsModule: any = null
 let importAttempted = false
 let pendingImport: Promise<StreamDiffsRuntimeModule | null> | null = null
-let workersPreloaded = false
+let runtimePreloaded = false
 let codeBlockRuntimeReady = false
 
 export interface StreamDiffsRuntimeHelpers {
@@ -19,7 +19,7 @@ export interface StreamDiffsRuntimeHelpers {
 
 export interface StreamDiffsRuntimeModule {
   useMonaco: (options?: Record<string, unknown>) => StreamDiffsRuntimeHelpers
-  preloadMonacoWorkers?: () => Promise<unknown> | unknown
+  preloadStreamDiffs?: () => Promise<unknown> | unknown
 }
 
 export function isCodeBlockRuntimeReady() {
@@ -35,15 +35,12 @@ export async function preloadCodeBlockRuntime() {
   return !!runtime
 }
 
-async function preloadWorkers(mod: any) {
-  if (workersPreloaded)
+async function preloadRuntime(mod: any) {
+  if (runtimePreloaded)
     return
-  workersPreloaded = true
-  const existingEnv = (globalThis as any)?.MonacoEnvironment
-  if (existingEnv && (typeof existingEnv.getWorker === 'function' || typeof existingEnv.getWorkerUrl === 'function'))
-    return
-  if (typeof mod?.preloadMonacoWorkers === 'function')
-    await mod.preloadMonacoWorkers()
+  runtimePreloaded = true
+  if (typeof mod?.preloadStreamDiffs === 'function')
+    await mod.preloadStreamDiffs()
 }
 
 export async function getStreamDiffsRuntime(): Promise<StreamDiffsRuntimeModule | null> {
@@ -58,11 +55,11 @@ export async function getStreamDiffsRuntime(): Promise<StreamDiffsRuntimeModule 
     // `stream-diffs` is the only supported code-block runtime in 2.0. The
     // heavy `stream-monaco` / `monaco-editor` fallback has been removed.
     try {
-      const candidate = await import('stream-diffs')
+      const candidate = await import('stream-diffs/markstream')
       if (typeof (candidate as any)?.useMonaco !== 'function')
         return null
       streamDiffsModule = candidate
-      await preloadWorkers(streamDiffsModule)
+      await preloadRuntime(streamDiffsModule)
       codeBlockRuntimeReady = true
       return streamDiffsModule
     }

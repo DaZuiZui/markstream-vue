@@ -99,6 +99,7 @@ export default defineConfig(({ mode }) => {
           'katex/contrib/mhchem',
           'mermaid',
           'stream-diffs',
+          'stream-diffs/markstream',
           'stream-monaco',
           'stream-markdown',
           'stream-markdown-parser',

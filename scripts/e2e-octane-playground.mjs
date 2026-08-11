@@ -184,27 +184,29 @@ async function main() {
     }
 
     const javascriptBlock = homeRenderer.locator('.code-block-container').filter({ hasText: 'const { app, BrowserWindow }' }).first()
-    // stream-diffs renders its finalized surface inside a `diffs-container`
-    // shadow root; the `.stream-diffs-finalized` marker appears once the
-    // stream controller has been finalized and the highlighted surface is up.
-    await javascriptBlock.locator('.stream-diffs-shell .stream-diffs-finalized').first().waitFor({ timeout: 30000 })
+    await javascriptBlock.locator('.stream-diffs-shell diffs-container').first().waitFor({ state: 'attached', timeout: 30000 })
+    await page.waitForFunction(() => {
+      const block = Array.from(document.querySelectorAll('.code-block-container'))
+        .find(element => element.textContent?.includes('const { app, BrowserWindow }'))
+      const diffsContainer = block?.querySelector('.stream-diffs-shell diffs-container')
+      return (diffsContainer?.shadowRoot?.querySelectorAll('[data-line]').length ?? 0) > 0
+    }, undefined, { timeout: 30000 })
     const javascriptState = await javascriptBlock.evaluate((element) => {
-      const finalized = element.querySelector('.stream-diffs-shell .stream-diffs-finalized')
-      const diffsContainer = finalized?.querySelector('diffs-container')
+      const diffsContainer = element.querySelector('.stream-diffs-shell diffs-container')
       const shadowPre = diffsContainer?.shadowRoot?.querySelector('pre')
-      const renderedLineCount = shadowPre?.querySelectorAll('[data-line-type]').length ?? 0
+      const renderedLineCount = shadowPre?.querySelectorAll('[data-line]').length ?? 0
       const fallback = element.querySelector('.code-editor-fallback-surface')
       return {
         hasCode: element.textContent?.includes('mainWindow') && element.textContent.includes('loadURL'),
         hasStreamDiffs: Boolean(element.querySelector('.stream-diffs-shell')),
-        finalized: Boolean(finalized),
+        ready: Boolean(diffsContainer && shadowPre),
         renderedLineCount,
         fallbackHidden: !fallback || getComputedStyle(fallback).display === 'none',
       }
     })
     assert(javascriptState.hasCode, 'The JavaScript code block rendered without its source code')
     assert(javascriptState.hasStreamDiffs, 'The JavaScript code block did not retain its stream-diffs editor')
-    assert(javascriptState.finalized && javascriptState.renderedLineCount > 0, 'The JavaScript code block did not finalize its stream-diffs surface')
+    assert(javascriptState.ready && javascriptState.renderedLineCount > 0, 'The JavaScript code block did not render its static stream-diffs surface')
     assert(javascriptState.fallbackHidden, 'The code fallback remained visible after stream-diffs became ready')
 
     const settingsPanel = page.locator('.settings-panel')

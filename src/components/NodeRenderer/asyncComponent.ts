@@ -113,6 +113,8 @@ export const CodeBlockNodeLoading = defineComponent({
     'isDark',
     'loading',
     'stream',
+    'codeBlockOptions',
+    'showLineNumbers',
     'theme',
     'darkTheme',
     'lightTheme',
@@ -153,25 +155,47 @@ export const CodeBlockNodeLoading = defineComponent({
         displayLanguage,
         isDiff,
       )
+      const codeBlockOptions = props.codeBlockOptions ?? {}
       const diffInline = isDiff && (props.estimatedDiffInline
-        ?? resolveDiffInlineLayout({}, typeof window === 'undefined' ? 0 : window.innerWidth))
+        ?? resolveDiffInlineLayout(codeBlockOptions as unknown as Record<string, unknown>, typeof window === 'undefined' ? 0 : window.innerWidth))
       const isSurfaceDark = props.isDark === true
-      const fontSize = 12
-      const lineHeight = fontSize === 12 ? 18 : Math.max(12, Math.round(fontSize * 1.5))
-      const tabSize = 4
+      const fontSize = typeof codeBlockOptions.fontSize === 'number' && Number.isFinite(codeBlockOptions.fontSize) && codeBlockOptions.fontSize > 0
+        ? codeBlockOptions.fontSize
+        : 12
+      const lineHeight = typeof codeBlockOptions.lineHeight === 'number' && Number.isFinite(codeBlockOptions.lineHeight) && codeBlockOptions.lineHeight > 0
+        ? codeBlockOptions.lineHeight
+        : fontSize === 12 ? 18 : Math.max(12, Math.round(fontSize * 1.5))
+      const tabSize = typeof codeBlockOptions.tabSize === 'number' && Number.isFinite(codeBlockOptions.tabSize) && codeBlockOptions.tabSize > 0
+        ? codeBlockOptions.tabSize
+        : 4
       const defaultPadding = isDiff ? 0 : 8
-      const paddingTop = defaultPadding
-      const paddingBottom = defaultPadding
-      const fontFamily = ''
+      const padding = typeof codeBlockOptions.padding === 'number' && Number.isFinite(codeBlockOptions.padding) && codeBlockOptions.padding >= 0
+        ? codeBlockOptions.padding
+        : defaultPadding
+      const paddingTop = padding
+      const paddingBottom = padding
+      const fontFamily = typeof codeBlockOptions.fontFamily === 'string' ? codeBlockOptions.fontFamily.trim() : ''
+      const maxHeight = typeof codeBlockOptions.maxHeight === 'number' && Number.isFinite(codeBlockOptions.maxHeight) && codeBlockOptions.maxHeight > 0
+        ? codeBlockOptions.maxHeight
+        : 500
+      const fallbackMaxHeight = !isDiff && typeof props.estimatedContentHeightPx === 'number' && Number.isFinite(props.estimatedContentHeightPx)
+        ? Math.min(maxHeight, Math.ceil(props.estimatedContentHeightPx))
+        : maxHeight
+      const showLineNumbers = props.showLineNumbers ?? (codeBlockOptions.disableLineNumbers !== true)
       const preStyle = {
         'fontSize': `${fontSize}px`,
         'lineHeight': `${lineHeight}px`,
         'tabSize': tabSize,
         'paddingTop': `${paddingTop}px`,
         'paddingBottom': `${paddingBottom}px`,
+        'maxHeight': `${fallbackMaxHeight}px`,
+        'overflow': 'auto',
+        'whiteSpace': codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
         '--markstream-pre-line-number-top': `${paddingTop}px`,
         ...(isDiff ? { '--markstream-pre-diff-line-height': `${lineHeight}px` } : {}),
-        ...(fontFamily ? { '--markstream-code-font-family': fontFamily } : {}),
+        ...(fontFamily
+          ? { '--markstream-code-font-family': fontFamily, fontFamily }
+          : {}),
       }
       const actionPlaceholder = () => h('button', {
         'class': 'code-action-btn inline-flex items-center justify-center p-[var(--ms-action-btn-padding)] rounded leading-none shrink-0',
@@ -307,11 +331,13 @@ export const CodeBlockNodeLoading = defineComponent({
           h(PreCodeNode, {
             'node': props.node,
             'loading': props.loading,
-            'showLineNumbers': true,
-            'reservedHeightPx': isDiff ? undefined : props.estimatedContentHeightPx,
+            'showLineNumbers': showLineNumbers,
+            'reservedHeightPx': isDiff || props.estimatedContentHeightPx == null
+              ? undefined
+              : Math.min(props.estimatedContentHeightPx, maxHeight),
             'diffInline': diffInline,
             'diffHideUnchangedRegions': isDiff
-              ? resolveDiffHideUnchangedRegionsOption(undefined)
+              ? resolveDiffHideUnchangedRegionsOption(codeBlockOptions)
               : undefined,
             'class': 'code-pre-fallback',
             'style': preStyle,

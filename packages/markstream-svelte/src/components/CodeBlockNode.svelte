@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CodeBlockTheme } from '../types/monaco'
+  import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemeProp, CodeBlockThemes } from '../types/monaco'
   import type { SvelteRenderableNode, SvelteRenderContext } from './shared/node-helpers'
   import { onDestroy, onMount, tick } from 'svelte'
   import { useSafeI18n } from '../i18n/useSafeI18n'
@@ -17,9 +17,11 @@
     isDark?: boolean | undefined
     loading?: boolean | undefined
     stream?: boolean | undefined
+    codeBlockOptions?: CodeBlockOptions | undefined
+    theme?: CodeBlockThemeProp | undefined
     darkTheme?: CodeBlockTheme | undefined
     lightTheme?: CodeBlockTheme | undefined
-    themes?: CodeBlockTheme[] | undefined
+    themes?: CodeBlockThemes | undefined
     minWidth?: string | number | undefined
     maxWidth?: string | number | undefined
     isShowPreview?: boolean
@@ -41,6 +43,8 @@
     isDark = undefined,
     loading = undefined,
     stream = undefined,
+    codeBlockOptions = undefined,
+    theme = undefined,
     darkTheme = undefined,
     lightTheme = undefined,
     themes = undefined,
@@ -54,30 +58,14 @@
     showPreviewButton = true,
     showCollapseButton = true,
     showFontSizeButtons = true,
-    showLineNumbers = true,
+    showLineNumbers = undefined,
     htmlPreviewAllowScripts = false,
     htmlPreviewSandbox = undefined
   }: Props = $props()
 
   const { t } = useSafeI18n()
-  const defaultDiffHideUnchangedRegions = Object.freeze({
-    enabled: true,
-    contextLineCount: 2,
-    minimumLineCount: 4,
-    revealLineCount: 5,
-  })
-  const disabledDiffHideUnchangedRegions = Object.freeze({
-    enabled: false,
-    contextLineCount: 0,
-    minimumLineCount: Number.POSITIVE_INFINITY,
-    revealLineCount: 0,
-  })
   const streamingLanguageTokens = ['javascript', 'plaintext', 'shellscript', 'typescript']
   const defaultPreFallbackFontFamily = '"SF Mono", Monaco, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace'
-  // 2.0 keeps stream-diffs adapter options internal.
-  // anymore. stream-diffs is configured entirely by the component-level
-  // defaults below, so all option reads fall back to these reasonable values.
-  const defaultEditorOptions = Object.freeze({}) as Record<string, unknown>
 
   function resolveRecoverableFallbackLanguage(error: unknown) {
     const message = error instanceof Error ? error.message : String(error ?? '')
@@ -152,6 +140,7 @@
   let lastLayoutWidth: number | null = $state(null)
   let lastLayoutHeight: number | null = $state(null)
   let lastThemeRequest = $state('')
+  let lastRuntimeInstallationConfig: unknown
   let languageRetryTimer: ReturnType<typeof setTimeout> | null = $state(null)
   let loadingSettledRefreshPromise: Promise<void> | null = $state(null)
   let loadingSettledRefreshTimer: ReturnType<typeof setTimeout> | null = $state(null)
@@ -172,14 +161,21 @@
   let resolvedStream = $derived(stream ?? context?.codeBlockStream ?? true)
   let resolvedIsDark = $derived(isDark ?? context?.isDark ?? false)
   let resolvedThemes = $derived(context?.codeBlockThemes)
+  let resolvedCodeBlockOptions = $derived(codeBlockOptions ?? context?.codeBlockOptions)
+  let effectiveShowLineNumbers = $derived(showLineNumbers ?? resolvedCodeBlockOptions?.disableLineNumbers !== true)
+  let runtimeInstallationConfig = $derived.by(() => {
+    const parseDiffOptions = resolvedCodeBlockOptions?.parseDiffOptions
+    return {
+      options: { ...(resolvedCodeBlockOptions ?? {}) },
+      parseDiffOptions: parseDiffOptions && typeof parseDiffOptions === 'object'
+        ? { ...parseDiffOptions }
+        : parseDiffOptions,
+      showLineNumbers: effectiveShowLineNumbers,
+    }
+  })
   let resolvedRuntimeOptions = $derived(buildResolvedRuntimeOptions())
-  let requestedTheme = $derived(getThemeName(
-    resolvedIsDark
-      ? darkTheme ?? resolvedThemes?.darkTheme
-      : lightTheme ?? resolvedThemes?.lightTheme,
-    resolvedIsDark ? 'vitesse-dark' : 'vitesse-light',
-  ))
-  let defaultCodeFontSize = $derived(Number(defaultEditorOptions.fontSize) || 12)
+  let requestedTheme = $derived(resolveRequestedTheme())
+  let defaultCodeFontSize = $derived(readPositiveMetric(resolvedCodeBlockOptions?.fontSize) ?? 12)
   let minWidthValue = $derived(resolveCssSize(minWidth ?? resolvedThemes?.minWidth))
   let maxWidthValue = $derived(resolveCssSize(maxWidth ?? resolvedThemes?.maxWidth))
   let containerStyle = $derived([
@@ -239,10 +235,18 @@
     void runtimeLanguage
     void requestedTheme
     void resolvedRuntimeOptions
+    void resolvedCodeBlockOptions
+    void runtimeInstallationConfig
     void codeFontSize
     void expanded
-    if (mounted)
+    if (mounted) {
+      if (lastRuntimeInstallationConfig !== runtimeInstallationConfig) {
+        lastRuntimeInstallationConfig = runtimeInstallationConfig
+        codeFontSize = defaultCodeFontSize
+        cleanupEditor()
+      }
       void syncEditor()
+    }
   })
 
   onMount(() => {
@@ -280,29 +284,30 @@
   }
 
   function getCodeLineHeight() {
-    return readPositiveMetric(defaultEditorOptions.lineHeight)
+    return readPositiveMetric(resolvedCodeBlockOptions?.lineHeight)
       ?? (codeFontSize === 12 ? 18 : Math.max(12, Math.round(codeFontSize * 1.5)))
   }
 
   function getCodePadding() {
-    const padding = defaultEditorOptions.padding as Record<string, unknown> | undefined
+    const padding = resolvedCodeBlockOptions?.padding
     const defaultPadding = diff ? 0 : 8
+    const value = readNonNegativeMetric(padding) ?? defaultPadding
     return {
-      top: readNonNegativeMetric(padding?.top) ?? defaultPadding,
-      bottom: readNonNegativeMetric(padding?.bottom) ?? defaultPadding,
+      top: value,
+      bottom: value,
     }
   }
 
   function getCodeFontFamily() {
-    return typeof defaultEditorOptions.fontFamily === 'string' && defaultEditorOptions.fontFamily.trim()
-      ? defaultEditorOptions.fontFamily.trim()
+    return typeof resolvedCodeBlockOptions?.fontFamily === 'string' && resolvedCodeBlockOptions.fontFamily.trim()
+      ? resolvedCodeBlockOptions.fontFamily.trim()
       : defaultPreFallbackFontFamily
   }
 
   function buildPreFallbackStyle() {
     const padding = getCodePadding()
     const fontFamily = getCodeFontFamily()
-    const tabSize = readPositiveMetric(defaultEditorOptions.tabSize) ?? 4
+    const tabSize = readPositiveMetric(resolvedCodeBlockOptions?.tabSize) ?? 4
     const lineHeight = getCodeLineHeight()
     return [
       `--markstream-code-font-family: ${fontFamily}`,
@@ -318,139 +323,97 @@
       `padding-bottom: ${padding.bottom}px`,
       `padding-left: var(--markstream-code-padding-left, 52px)`,
       `tab-size: ${tabSize}`,
+      `max-height: ${getMaxHeightValue()}px`,
+      'overflow: auto',
+      `white-space: ${resolvedCodeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'}`,
     ].join('; ')
   }
 
-  function getThemeName(theme: CodeBlockTheme | undefined, fallback: string) {
+  function isThemePair(value: unknown): value is { dark: string, light: string } {
+    return !!value && typeof value === 'object' && typeof (value as any).dark === 'string' && typeof (value as any).light === 'string'
+  }
+
+  function resolveRequestedTheme() {
     if (typeof theme === 'string' && theme)
       return theme
-    if (theme && typeof theme === 'object' && typeof (theme as any).name === 'string')
-      return String((theme as any).name)
-    return fallback
+    if (isThemePair(theme))
+      return resolvedIsDark ? theme.dark : theme.light
+    const directTheme = resolvedIsDark ? darkTheme : lightTheme
+    if (directTheme)
+      return directTheme
+    if (themes)
+      return resolvedIsDark ? themes[0] : themes[1]
+    const contextTheme = resolvedIsDark ? resolvedThemes?.darkTheme : resolvedThemes?.lightTheme
+    if (contextTheme)
+      return contextTheme
+    if (resolvedThemes?.themes)
+      return resolvedIsDark ? resolvedThemes.themes[0] : resolvedThemes.themes[1]
+    return resolvedIsDark ? 'vitesse-dark' : 'vitesse-light'
   }
 
-  function buildThemeList() {
-    const list: CodeBlockTheme[] = ['vitesse-dark', 'vitesse-light']
-    const add = (item: CodeBlockTheme | undefined) => {
-      if (item)
-        list.push(item)
-    }
-    add(darkTheme ?? resolvedThemes?.darkTheme)
-    add(lightTheme ?? resolvedThemes?.lightTheme)
-    for (const item of resolvedThemes?.themes || [])
-      add(item)
-    for (const item of themes || [])
-      add(item)
-    return list
-  }
-
-  function resolveDiffHideUnchangedRegionsOption(value: unknown) {
-    if (typeof value === 'boolean')
-      return value
-    if (value && typeof value === 'object') {
-      const raw = value as Record<string, unknown>
-      return {
-        ...defaultDiffHideUnchangedRegions,
-        ...raw,
-        enabled: raw.enabled ?? true,
-      }
-    }
-    return { ...defaultDiffHideUnchangedRegions }
+  function buildThemeList(): [dark: string, light: string] {
+    return [
+      darkTheme ?? themes?.[0] ?? resolvedThemes?.darkTheme ?? resolvedThemes?.themes?.[0] ?? 'vitesse-dark',
+      lightTheme ?? themes?.[1] ?? resolvedThemes?.lightTheme ?? resolvedThemes?.themes?.[1] ?? 'vitesse-light',
+    ]
   }
 
   function buildResolvedRuntimeOptions() {
-    const raw = { ...defaultEditorOptions } as Record<string, any>
-    const maxHeight = expanded ? 900 : (raw.MAX_HEIGHT ?? 500)
-    const baseOptions = {
-      readOnly: true,
-      minimap: { enabled: false },
-      lineNumbers: 'on',
-      wordWrap: 'on',
-      wrappingIndent: 'same',
-      revealDebounceMs: 75,
-    }
-    const padding = getCodePadding()
-    const configuredUnsafeCSS = typeof raw.unsafeCSS === 'string' ? raw.unsafeCSS : ''
-    const unsafeCSS = `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
-${configuredUnsafeCSS}`.trim()
-    const finalOptions = {
-      MAX_HEIGHT: maxHeight,
+    const userOptions = { ...(resolvedCodeBlockOptions ?? {}) } as Record<string, any>
+    for (const key of [
+      'maxHeight',
+      'padding',
+      'tabSize',
+      'theme',
+      'themes',
+      'themeType',
+      'language',
+      'languages',
+      'stream',
+      'disableFileHeader',
+      'onThemeChange',
+      'renderCustomHeader',
+      'renderHeaderMetadata',
+      'renderHeaderPrefix',
+    ])
+      delete userOptions[key]
+
+    const parseDiffOptions = userOptions.parseDiffOptions && typeof userOptions.parseDiffOptions === 'object'
+      ? userOptions.parseDiffOptions as Record<string, unknown>
+      : {}
+    const nativeOptions = diff
+      ? {
+          diffStyle: 'split',
+          expandUnchanged: false,
+          collapsedContextThreshold: 5,
+          hunkSeparators: 'line-info',
+          ...userOptions,
+          parseDiffOptions: {
+            context: 2,
+            ...parseDiffOptions,
+          },
+        }
+      : userOptions
+    const configuredUnsafeCSS = typeof nativeOptions.unsafeCSS === 'string' ? nativeOptions.unsafeCSS : ''
+
+    return {
+      overflow: 'wrap',
+      ...nativeOptions,
+      MAX_HEIGHT: expanded ? 900 : (resolvedCodeBlockOptions?.maxHeight ?? 500),
       fontFamily: getCodeFontFamily(),
       fontSize: codeFontSize,
       lineHeight: getCodeLineHeight(),
-      // stream-diffs expects a boolean (`disableLineNumbers: options.lineNumbers === false`);
-      // passing 'off'/'on' strings would always be truthy and defeat showLineNumbers={false}.
-      lineNumbers: showLineNumbers !== false,
-      padding,
-      unsafeCSS,
-      // The component owns the streaming fallback and file header. Initialize
-      // stream-diffs in final mode so the revealed surface has highlighting,
-      // line numbers, and the same geometry as the fallback.
+      disableLineNumbers: !effectiveShowLineNumbers,
+      unsafeCSS: `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
+${configuredUnsafeCSS}`.trim(),
       disableFileHeader: true,
       stream: false,
       themes: buildThemeList(),
-    }
-
-    if (!diff) {
-      return {
-        ...baseOptions,
-        ...raw,
-        ...finalOptions,
-      }
-    }
-
-    const diffHideUnchangedRegions = raw.diffHideUnchangedRegions === undefined
-      ? { ...defaultDiffHideUnchangedRegions }
-      : resolveDiffHideUnchangedRegionsOption(raw.diffHideUnchangedRegions)
-    const hideUnchangedRegions = raw.hideUnchangedRegions === undefined
-      ? undefined
-      : resolveDiffHideUnchangedRegionsOption(raw.hideUnchangedRegions)
-    const streamPreviewDiff = resolvedStream !== false && resolvedLoading !== false
-    const activeDiffHideUnchangedRegions = streamPreviewDiff
-      ? { ...disabledDiffHideUnchangedRegions }
-      : diffHideUnchangedRegions
-    const activeHideUnchangedRegions = streamPreviewDiff
-      ? { ...disabledDiffHideUnchangedRegions }
-      : hideUnchangedRegions
-    const experimental = {
-      ...((raw.experimental as Record<string, unknown> | undefined) ?? {}),
-    }
-    const diffUnchangedRegionStyle = raw.diffUnchangedRegionStyle ?? 'line-info'
-    const diffDefaults = {
-      maxComputationTime: 0,
-      diffAlgorithm: 'legacy',
-      ignoreTrimWhitespace: false,
-      renderIndicators: true,
-      diffUpdateThrottleMs: 120,
-      renderLineHighlight: 'none',
-      renderLineHighlightOnlyWhenFocus: true,
-      selectionHighlight: false,
-      occurrencesHighlight: 'off',
-      matchBrackets: 'never',
-      lineDecorationsWidth: 4,
-      lineNumbersMinChars: 2,
-      glyphMargin: false,
-      renderOverviewRuler: false,
-      overviewRulerBorder: false,
-      hideCursorInOverviewRuler: true,
-      scrollBeyondLastLine: false,
-      diffHideUnchangedRegions: activeDiffHideUnchangedRegions,
-      useInlineViewWhenSpaceIsLimited: raw.useInlineViewWhenSpaceIsLimited ?? false,
-      diffLineStyle: 'background',
-      diffAppearance: 'auto',
-      diffUnchangedRegionStyle,
-      diffHunkActionsOnHover: false,
-      experimental,
-    }
-
-    return {
-      ...baseOptions,
-      ...diffDefaults,
-      ...raw,
-      experimental,
-      ...(activeHideUnchangedRegions === undefined ? {} : { hideUnchangedRegions: activeHideUnchangedRegions }),
-      diffHideUnchangedRegions: activeDiffHideUnchangedRegions,
-      ...finalOptions,
+      themeType: resolvedIsDark ? 'dark' : 'light',
+      onThemeChange() {
+        syncEditorGeometryVars()
+        scheduleEditorHeightSync()
+      },
     }
   }
 
@@ -477,9 +440,10 @@ ${configuredUnsafeCSS}`.trim()
     if (ensureRuntimePromise)
       return ensureRuntimePromise
 
-    ensureRuntimePromise = (async () => {
+    const runtimeId = lifecycleId
+    const pending = (async () => {
       const mod = await getStreamDiffsRuntime()
-      if (!mounted)
+      if (!mounted || lifecycleId !== runtimeId)
         return
       if (!mod || typeof mod.useMonaco !== 'function') {
         useFallback = true
@@ -488,11 +452,16 @@ ${configuredUnsafeCSS}`.trim()
 
       helpers = mod.useMonaco(syncRuntimeOptions())
       await Promise.resolve(helpers.setTheme?.(requestedTheme))
+      if (!mounted || lifecycleId !== runtimeId)
+        return
       lastThemeRequest = requestedTheme
-    })().finally(() => {
-      ensureRuntimePromise = null
+    })()
+    const tracked = pending.finally(() => {
+      if (ensureRuntimePromise === tracked)
+        ensureRuntimePromise = null
     })
-    return ensureRuntimePromise
+    ensureRuntimePromise = tracked
+    return tracked
   }
 
   function queueThemeSync() {
@@ -509,8 +478,16 @@ ${configuredUnsafeCSS}`.trim()
     if (!mounted || !shouldRender || !editorHost || collapsed || shouldDelayEditor || shouldDeferStreamingLanguage)
       return
 
-    await ensureRuntime()
-    if (!mounted || useFallback || !helpers)
+    const runtimeId = lifecycleId
+    try {
+      await ensureRuntime()
+    }
+    catch (error) {
+      if (mounted && lifecycleId === runtimeId)
+        markEditorFallback(error)
+      return
+    }
+    if (!mounted || lifecycleId !== runtimeId || useFallback || !helpers)
       return
     syncRuntimeOptions()
 
@@ -529,6 +506,7 @@ ${configuredUnsafeCSS}`.trim()
         return
     }
 
+    const operationId = lifecycleId
     try {
       if (diff && typeof helpers.updateDiff === 'function')
         await Promise.resolve(helpers.updateDiff(originalCode, updatedCode || code, runtimeLanguage))
@@ -546,7 +524,8 @@ ${configuredUnsafeCSS}`.trim()
       scheduleEditorHeightSync()
     }
     catch (error) {
-      markEditorFallback(error)
+      if (mounted && lifecycleId === operationId)
+        markEditorFallback(error)
     }
   }
 
@@ -615,26 +594,35 @@ ${configuredUnsafeCSS}`.trim()
     if (!editorHost || !helpers || createEditorPromise)
       return createEditorPromise
 
+    const activeHelpers = helpers
     const creationId = ++lifecycleId
     editorReady = false
-    createEditorPromise = (async () => {
+    const pending = (async () => {
       try {
         cleanupEditor(false)
-        if (!mounted || !editorHost || lifecycleId !== creationId)
+        if (!mounted || !editorHost || lifecycleId !== creationId || helpers !== activeHelpers)
           return
         editorHost.replaceChildren()
         lastLayoutWidth = null
         lastLayoutHeight = null
 
         editorStreamMode = false
-        if (kind === 'diff' && typeof helpers.createDiffEditor === 'function') {
-          await helpers.createDiffEditor(editorHost, originalCode, updatedCode || code, runtimeLanguage)
-          await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, runtimeLanguage))
+        if (kind === 'diff' && typeof activeHelpers.createDiffEditor === 'function') {
+          await activeHelpers.createDiffEditor(editorHost, originalCode, updatedCode || code, runtimeLanguage)
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
+          await Promise.resolve(activeHelpers.updateDiff?.(originalCode, updatedCode || code, runtimeLanguage))
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
           editorKind = 'diff'
         }
         else {
-          await helpers.createEditor(editorHost, code, runtimeLanguage)
-          await Promise.resolve(helpers.updateCode?.(code, runtimeLanguage))
+          await activeHelpers.createEditor(editorHost, code, runtimeLanguage)
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
+          await Promise.resolve(activeHelpers.updateCode?.(code, runtimeLanguage))
+          if (!mounted || lifecycleId !== creationId || helpers !== activeHelpers)
+            return
           editorKind = 'single'
         }
         applyEditorOptions()
@@ -651,15 +639,17 @@ ${configuredUnsafeCSS}`.trim()
         scheduleEditorHeightSync()
       }
       catch (error) {
-        if (mounted) {
+        if (mounted && lifecycleId === creationId && helpers === activeHelpers) {
           markEditorFallback(error)
         }
       }
-    })().finally(() => {
-      createEditorPromise = null
+    })()
+    const tracked = pending.finally(() => {
+      if (createEditorPromise === tracked)
+        createEditorPromise = null
     })
-
-    return createEditorPromise
+    createEditorPromise = tracked
+    return tracked
   }
 
   function refreshEditorAfterLoadingSettled() {
@@ -720,6 +710,11 @@ ${configuredUnsafeCSS}`.trim()
   }
 
   function cleanupEditor(disposeHelpers = true) {
+    if (disposeHelpers) {
+      lifecycleId += 1
+      createEditorPromise = null
+      ensureRuntimePromise = null
+    }
     clearEditorHeightSyncBindings()
     cancelEditorHeightSync()
     try {
@@ -756,10 +751,10 @@ ${configuredUnsafeCSS}`.trim()
   function syncEditorGeometryVars() {
     if (!editorHost)
       return
-    const tabSize = readPositiveMetric(defaultEditorOptions.tabSize) ?? 4
+    const tabSize = readPositiveMetric(resolvedCodeBlockOptions?.tabSize) ?? 4
     editorHost.style.setProperty('--diffs-tab-size', String(tabSize))
-    const rawPadding = defaultEditorOptions.padding
-    const hasConfiguredPadding = Boolean(rawPadding && typeof rawPadding === 'object')
+    const rawPadding = resolvedCodeBlockOptions?.padding
+    const hasConfiguredPadding = typeof rawPadding === 'number'
     if (hasConfiguredPadding)
       editorHost.style.setProperty('--diffs-gap-block', `${getCodePadding().top}px`)
     else
@@ -767,11 +762,7 @@ ${configuredUnsafeCSS}`.trim()
   }
 
   function getMaxHeightValue() {
-    const raw = resolvedRuntimeOptions.MAX_HEIGHT
-    if (raw === 'none' || raw == null)
-      return Number.POSITIVE_INFINITY
-    const value = typeof raw === 'number' ? raw : Number.parseFloat(String(raw))
-    return Number.isFinite(value) && value > 0 ? value : 500
+    return resolvedCodeBlockOptions?.maxHeight ?? 500
   }
 
   function scheduleEditorHeightSync() {
@@ -1115,7 +1106,7 @@ ${configuredUnsafeCSS}`.trim()
             class="code-pre-fallback"
             enhanceable={false}
             node={preFallbackNode}
-            showLineNumbers={showLineNumbers !== false}
+            showLineNumbers={effectiveShowLineNumbers}
             style={preFallbackStyle}
           />
         </div>

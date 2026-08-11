@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { BaseNode, MarkdownIt, ParseOptions } from 'stream-markdown-parser'
+import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemes } from '../types/component-props'
 import type { NodeRendererProps } from './NodeRenderer/NodeRenderer.vue'
 import { getMarkdown, mergeCustomHtmlTags, parseMarkdownToStructure, resolveCustomHtmlTags } from 'stream-markdown-parser'
 import { defineComponent } from 'vue-demi'
@@ -26,14 +27,15 @@ export default defineComponent({
       type: Boolean,
       default: true,
     },
-    codeBlockDarkTheme: null,
-    codeBlockLightTheme: null,
+    codeBlockDarkTheme: String as unknown as () => CodeBlockTheme | undefined,
+    codeBlockLightTheme: String as unknown as () => CodeBlockTheme | undefined,
     renderCodeBlocksAsPre: Boolean,
     codeBlockMinWidth: [String, Number],
     codeBlockMaxWidth: [String, Number],
-    codeBlockProps: Object as unknown as () => Record<string, any> | undefined,
+    codeBlockOptions: Object as unknown as () => CodeBlockOptions | undefined,
+    codeBlockProps: Object as unknown as () => NodeRendererProps['codeBlockProps'],
     showTooltips: Boolean,
-    themes: Array as unknown as () => string[] | undefined,
+    themes: Array as unknown as () => CodeBlockThemes | undefined,
     isDark: Boolean,
     customId: [String, Number],
     indexKey: [String, Number],
@@ -105,6 +107,7 @@ export default defineComponent({
         renderCodeBlocksAsPre: this.renderCodeBlocksAsPre,
         codeBlockMinWidth: this.codeBlockMinWidth,
         codeBlockMaxWidth: this.codeBlockMaxWidth,
+        codeBlockOptions: this.codeBlockOptions as NodeRendererProps['codeBlockOptions'],
         codeBlockProps: this.codeBlockProps,
         showTooltips: this.showTooltips,
         themes: this.themes,
@@ -143,6 +146,7 @@ export default defineComponent({
           renderCodeBlocksAsPre: this.renderCodeBlocksAsPre,
           codeBlockMinWidth: this.codeBlockMinWidth,
           codeBlockMaxWidth: this.codeBlockMaxWidth,
+          codeBlockOptions: this.codeBlockOptions,
           codeBlockProps: this.codeBlockProps,
           themes: this.themes,
           isDark: this.isDark,

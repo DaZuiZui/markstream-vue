@@ -129,7 +129,7 @@ function renderCustomCodeBlockComponent(
   return Octane.createElement(component, {
     key,
     node,
-    loading: Boolean(node.loading),
+    loading: Boolean(node.loading) || ctx.final === false,
     stream: ctx.codeBlockStream,
     customId: ctx.customId,
     isDark: ctx.isDark,
@@ -141,6 +141,7 @@ function renderCustomCodeBlockComponent(
     onCopy: ctx.events.onCopy,
     onPreviewCode,
     ...extraProps,
+    codeBlockOptions: ctx.codeBlockOptions,
     ...specialProps,
     ctx,
     renderNode,
@@ -280,17 +281,25 @@ function renderCodeBlock(
 
   if (ctx.renderCodeBlocksAsPre || language === 'mermaid') {
     const extraProps = getCodeBlockExtraProps(ctx.codeBlockProps)
+    const configuredShowLineNumbers = extraProps.showLineNumbers
+    const disableLineNumbers = ctx.codeBlockOptions?.disableLineNumbers
+    const overflow = ctx.codeBlockOptions?.overflow
     return Octane.createElement(PreCodeNode, {
       key,
       node,
-      showLineNumbers: extraProps.showLineNumbers === true,
+      style: overflow ? { whiteSpace: overflow === 'scroll' ? 'pre' : 'pre-wrap' } : undefined,
+      showLineNumbers: typeof configuredShowLineNumbers === 'boolean'
+        ? configuredShowLineNumbers
+        : typeof disableLineNumbers === 'boolean'
+          ? !disableLineNumbers
+          : false,
     })
   }
 
   return Octane.createElement(MonacoCodeBlockNode, {
     key,
     node,
-    loading: Boolean(node.loading),
+    loading: Boolean(node.loading) || ctx.final === false,
     stream: ctx.codeBlockStream,
     themes: ctx.codeBlockThemes?.themes,
     darkTheme: ctx.codeBlockThemes?.darkTheme,
@@ -300,6 +309,7 @@ function renderCodeBlock(
     isDark: ctx.isDark,
     onCopy: ctx.events.onCopy,
     ...getCodeBlockExtraProps(ctx.codeBlockProps),
+    codeBlockOptions: ctx.codeBlockOptions,
   })
 }
 

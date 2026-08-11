@@ -1,7 +1,8 @@
 import type { ComponentBody } from 'octane'
 import type { NodeComponentProps, NodeRendererProps } from '../../src/index'
-import { cleanup, fireEvent, render } from '@octanejs/testing-library'
+import { cleanup, fireEvent, render, waitFor } from '@octanejs/testing-library'
 import { createElement } from 'octane'
+import { useMonaco } from 'stream-diffs/markstream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearGlobalCustomComponents,
@@ -76,6 +77,285 @@ describe('markstream-octane client renderer', () => {
     const pre = container.querySelector('pre[data-markstream-line-numbers="1"]')
     expect(pre).not.toBeNull()
     expect(pre?.querySelector('.markstream-pre__line-numbers-text')?.textContent).toBe('1\n2')
+  })
+
+  it('forwards neutral codeBlockOptions to stream-diffs with host fields authoritative', async () => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    mockedUseMonaco.mockClear()
+    const onLineClick = vi.fn()
+    const consumerThemeChange = vi.fn()
+    const { container } = render(NodeRenderer, {
+      props: {
+        ...stableRendererProps,
+        content: '```diff\n-const a = 1\n+const a = 2\n```',
+        final: true,
+        isDark: true,
+        codeBlockDarkTheme: 'github-dark',
+        codeBlockLightTheme: 'github-light',
+        themes: ['github-dark', 'github-light'] as const,
+        codeBlockProps: { showLineNumbers: false },
+        codeBlockOptions: {
+          maxHeight: 420,
+          padding: 4,
+          tabSize: 8,
+          fontSize: 16,
+          lineHeight: 24,
+          fontFamily: 'Fira Code',
+          diffStyle: 'unified',
+          diffIndicators: 'bars',
+          parseDiffOptions: { context: 7, ignoreWhitespace: true },
+          enableLineSelection: true,
+          onLineClick,
+          unsafeCSS: '.consumer-rule { color: red; }',
+          theme: 'consumer-theme',
+          themeType: 'consumer',
+          themes: ['consumer-dark', 'consumer-light'],
+          language: 'consumer-language',
+          languages: ['consumer-language'],
+          stream: true,
+          disableFileHeader: false,
+          onThemeChange: consumerThemeChange,
+        } as any,
+      },
+    })
+
+    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledOnce())
+
+    const options = mockedUseMonaco.mock.calls[0]?.[0] as Record<string, any>
+    expect(options).toMatchObject({
+      MAX_HEIGHT: 420,
+      fontSize: 16,
+      lineHeight: 24,
+      fontFamily: 'Fira Code',
+      diffStyle: 'unified',
+      diffIndicators: 'bars',
+      enableLineSelection: true,
+      stream: false,
+      disableFileHeader: true,
+      disableLineNumbers: true,
+      theme: 'github-dark',
+      themeType: 'dark',
+      themes: ['github-dark', 'github-light'],
+    })
+    expect(options.parseDiffOptions).toEqual({ context: 7, ignoreWhitespace: true })
+    expect(options.onLineClick).toBe(onLineClick)
+    expect(options.onThemeChange).not.toBe(consumerThemeChange)
+    expect(options.language).toBeUndefined()
+    expect(options.languages).toBeUndefined()
+    expect(options.unsafeCSS).toContain('[data-file], [data-diff]')
+    expect(options.unsafeCSS).toContain('.consumer-rule { color: red; }')
+    expect(options.maxHeight).toBeUndefined()
+    expect(options.padding).toBeUndefined()
+    expect(options.tabSize).toBeUndefined()
+
+    const editorHost = container.querySelector('.code-editor-container') as HTMLElement | null
+    const fallback = container.querySelector('pre.code-fallback-plain') as HTMLElement | null
+    expect(editorHost?.style.maxHeight).toBe('420px')
+    expect(editorHost?.style.getPropertyValue('--diffs-tab-size')).toBe('8')
+    expect(editorHost?.style.getPropertyValue('--diffs-gap-block')).toBe('4px')
+    expect(fallback?.style.fontSize).toBe('16px')
+    expect(fallback?.style.lineHeight).toBe('24px')
+    expect(fallback?.style.paddingTop).toBe('4px')
+    expect(fallback?.style.paddingBottom).toBe('4px')
+    expect(fallback?.style.tabSize).toBe('8')
+    expect(fallback?.style.maxHeight).toBe('420px')
+    expect(fallback?.style.overflow).toBe('auto')
+  })
+
+  it.each([
+    ['javasc', 'javascript'],
+    ['rus', 'rust'],
+  ])('uses plaintext while the streaming %s fence language is incomplete, then resolves %s', async (partialLanguage, completeLanguage) => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    const helpers = mockedUseMonaco.getMockImplementation()?.({}) as any
+    mockedUseMonaco.mockClear()
+    helpers.createEditor.mockClear()
+    helpers.updateCode.mockClear()
+    const view = render(NodeRenderer, {
+      props: {
+        ...stableRendererProps,
+        content: `\`\`\`${partialLanguage}\nconst value = 1`,
+        final: false,
+        codeBlockProps: { showHeader: false },
+      },
+    })
+
+    await waitFor(() => expect(helpers.createEditor).toHaveBeenCalled())
+    expect(helpers.createEditor.mock.calls[0]?.[2]).toBe('plaintext')
+
+    view.rerender({
+      props: {
+        ...stableRendererProps,
+        content: `\`\`\`${completeLanguage}\nconst value = 1\n\`\`\``,
+        final: true,
+        codeBlockProps: { showHeader: false },
+      },
+    })
+    await waitFor(() => expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === completeLanguage)).toBe(true))
+    expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === partialLanguage)).toBe(false)
+  })
+
+  it.each(['java', 'c'])('preserves the complete %s language while streaming and final', async (language) => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    const helpers = mockedUseMonaco.getMockImplementation()?.({}) as any
+    mockedUseMonaco.mockClear()
+    helpers.createEditor.mockClear()
+    helpers.updateCode.mockClear()
+    const content = `\`\`\`${language}\nconst value = 1\n\`\`\``
+    const view = render(NodeRenderer, {
+      props: {
+        ...stableRendererProps,
+        content,
+        final: false,
+        codeBlockProps: { showHeader: false },
+      },
+    })
+
+    await waitFor(() => expect(helpers.createEditor).toHaveBeenCalled())
+    expect(helpers.createEditor.mock.calls[0]?.[2]).toBe(language)
+
+    view.rerender({
+      props: {
+        ...stableRendererProps,
+        content,
+        final: true,
+        codeBlockProps: { showHeader: false },
+      },
+    })
+    await waitFor(() => expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === language)).toBe(true))
+    expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === 'plaintext')).toBe(false)
+  })
+
+  it('recreates the runtime when codeBlockOptions identity changes', async () => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    mockedUseMonaco.mockClear()
+    const firstOnLineClick = vi.fn()
+    const secondOnLineClick = vi.fn()
+    const baseProps = {
+      ...stableRendererProps,
+      content: '```ts\nconst value = 1\n```',
+      final: true,
+    }
+    const view = render(NodeRenderer, {
+      props: {
+        ...baseProps,
+        codeBlockOptions: {
+          overflow: 'scroll' as const,
+          onLineClick: firstOnLineClick,
+        },
+      },
+    })
+    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledOnce())
+
+    view.rerender({
+      props: {
+        ...baseProps,
+        codeBlockOptions: {
+          overflow: 'wrap' as const,
+          onLineClick: secondOnLineClick,
+        },
+      },
+    })
+    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledTimes(2))
+
+    const options = mockedUseMonaco.mock.calls[1]?.[0] as Record<string, any>
+    expect(options.overflow).toBe('wrap')
+    expect(options.onLineClick).toBe(secondOnLineClick)
+  })
+
+  it('restores default typography before recreating after fontSize is removed', async () => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    const originalImplementation = mockedUseMonaco.getMockImplementation()
+    const helpers = originalImplementation?.({}) as any
+    let activeOptions: Record<string, any> | undefined
+    const createdTypography: Array<{ fontSize: number, lineHeight: number }> = []
+    const createdFallbackTypography: Array<{ fontSize: string, lineHeight: string }> = []
+    mockedUseMonaco.mockClear()
+    helpers.createEditor.mockClear()
+    mockedUseMonaco.mockImplementation((options) => {
+      activeOptions = options as Record<string, any> | undefined
+      return helpers
+    })
+    helpers.createEditor.mockImplementation(async () => {
+      createdTypography.push({ fontSize: activeOptions?.fontSize, lineHeight: activeOptions?.lineHeight })
+      const fallback = document.querySelector('pre.code-fallback-plain') as HTMLElement | null
+      createdFallbackTypography.push({
+        fontSize: fallback?.style.fontSize ?? '',
+        lineHeight: fallback?.style.lineHeight ?? '',
+      })
+    })
+    const baseProps = {
+      ...stableRendererProps,
+      content: '```ts\nconst value = 1\n```',
+      final: true,
+    }
+    const view = render(NodeRenderer, {
+      props: {
+        ...baseProps,
+        codeBlockOptions: { fontSize: 16 },
+      },
+    })
+    await waitFor(() => expect(helpers.createEditor).toHaveBeenCalledOnce())
+    expect(createdTypography[0]).toEqual({ fontSize: 16, lineHeight: 24 })
+    expect(createdFallbackTypography[0]).toEqual({ fontSize: '16px', lineHeight: '24px' })
+
+    view.rerender({
+      props: {
+        ...baseProps,
+        codeBlockOptions: {},
+      },
+    })
+    await waitFor(() => expect(helpers.createEditor).toHaveBeenCalledTimes(2))
+    expect(createdTypography[1]).toEqual({ fontSize: 12, lineHeight: 18 })
+    expect(createdFallbackTypography[1]).toEqual({ fontSize: '12px', lineHeight: '18px' })
+
+    helpers.createEditor.mockImplementation(async () => {})
+    if (originalImplementation)
+      mockedUseMonaco.mockImplementation(originalImplementation)
+  })
+
+  it('selects a tuple-only theme by host color mode', async () => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    mockedUseMonaco.mockClear()
+    render(NodeRenderer, {
+      props: {
+        ...stableRendererProps,
+        content: '```ts\nconst value = 1\n```',
+        final: true,
+        isDark: false,
+        themes: ['tuple-dark', 'tuple-light'],
+      },
+    })
+    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledOnce())
+    expect((mockedUseMonaco.mock.calls[0]?.[0] as Record<string, any>).theme).toBe('tuple-light')
+  })
+
+  it('recreates the runtime when direct line-number precedence changes', async () => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    mockedUseMonaco.mockClear()
+    const baseProps = {
+      ...stableRendererProps,
+      codeBlockOptions: { disableLineNumbers: true },
+      content: '```ts\nconst value = 1\n```',
+      final: true,
+    }
+    const view = render(NodeRenderer, {
+      props: {
+        ...baseProps,
+        codeBlockProps: { showLineNumbers: true },
+      },
+    })
+    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledOnce())
+    expect((mockedUseMonaco.mock.calls[0]?.[0] as Record<string, any>).disableLineNumbers).toBe(false)
+
+    view.rerender({
+      props: {
+        ...baseProps,
+        codeBlockProps: { showLineNumbers: false },
+      },
+    })
+    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledTimes(2))
+    expect((mockedUseMonaco.mock.calls[1]?.[0] as Record<string, any>).disableLineNumbers).toBe(true)
   })
 
   it('updates the same mounted renderer as streamed content grows', () => {

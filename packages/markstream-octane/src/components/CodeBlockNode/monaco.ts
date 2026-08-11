@@ -1,4 +1,4 @@
-import { preload } from '../NodeRenderer/preloadStreamDiffs'
+import { preloadStreamDiffs } from '../NodeRenderer/preloadStreamDiffs'
 
 let mod: any = null
 let importAttempted = false
@@ -11,8 +11,8 @@ export async function getStreamDiffsRuntime() {
   if (importAttempted)
     return null
   try {
-    mod = await import('stream-diffs')
-    await preload(mod)
+    mod = await import('stream-diffs/markstream')
+    await preloadStreamDiffs(mod)
     return mod
   }
   catch {

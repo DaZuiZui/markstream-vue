@@ -1,4 +1,4 @@
-export * from '../components/CodeBlockNode/streamDiffs'
+export { preloadCodeBlockRuntime } from '../components/CodeBlockNode/streamDiffs'
 export * from './languageIcon'
 export * from './nestedHtml'
 export * from './nestedNodes'

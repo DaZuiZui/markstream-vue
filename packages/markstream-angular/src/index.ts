@@ -123,16 +123,13 @@ export { sanitizeHtmlContent } from './sanitizeHtmlContent'
 export { SmoothMarkdownStreamService } from './services/smooth-markdown-stream.service'
 export type { SmoothMarkdownStreamOptions } from './services/smooth-markdown-stream.service'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
+  CodeBlockOptions,
   CodeBlockTheme,
-  CodeBlockThemeObject,
+  CodeBlockThemePair,
+  CodeBlockThemeProp,
+  CodeBlockThemes,
 } from './types/monaco'
 export {
   getLanguageIcon,

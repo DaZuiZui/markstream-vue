@@ -2,13 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * Verifies the stream-diffs-only loader contract shared by all framework
- * packages: `stream-diffs` is the sole enhanced-code-block runtime, and a
+ * packages: `stream-diffs/markstream` is the sole enhanced-code-block runtime, and a
  * null result lets callers degrade to <pre> rendering.
  */
 
 interface LoaderModule {
   useMonaco?: (options?: unknown) => unknown
-  preloadMonacoWorkers?: () => Promise<unknown>
+  preloadStreamDiffs?: () => Promise<unknown>
   default?: LoaderModule
 }
 
@@ -22,8 +22,7 @@ const LOADERS = [
 function runtimeModule(useMonacoResult: Record<string, string>) {
   const runtime = {
     useMonaco: () => useMonacoResult,
-    preloadStreamDiffsWorkers: async () => {},
-    preloadMonacoWorkers: async () => {},
+    preloadStreamDiffs: async () => {},
   }
   // Loaders normalize through `mod.default ?? mod`, so expose both shapes.
   return {
@@ -46,7 +45,7 @@ afterEach(() => {
 
 describe('stream-diffs-only code block loader', () => {
   it.each(LOADERS)('%s loader loads stream-diffs when available', async (_name, loaderPath, exportName) => {
-    vi.doMock('stream-diffs', () => runtimeModule({ runtime: 'stream-diffs' }))
+    vi.doMock('stream-diffs/markstream', () => runtimeModule({ runtime: 'stream-diffs' }))
 
     const loader = await getLoader(loaderPath, exportName)
     const modules = await Promise.all([loader(), loader()])
@@ -55,7 +54,7 @@ describe('stream-diffs-only code block loader', () => {
   })
 
   it.each(LOADERS)('%s loader returns null when stream-diffs is absent', async (_name, loaderPath, exportName) => {
-    vi.doMock('stream-diffs', () => {
+    vi.doMock('stream-diffs/markstream', () => {
       throw new Error('stream-diffs not installed')
     })
 
@@ -71,9 +70,9 @@ describe('stream-diffs-only code block loader', () => {
     }))
     const runtime = {
       useMonaco: () => ({ runtime: 'stream-diffs' }),
-      preloadStreamDiffsWorkers: preload,
+      preloadStreamDiffs: preload,
     }
-    vi.doMock('stream-diffs', () => runtime)
+    vi.doMock('stream-diffs/markstream', () => runtime)
 
     const loader = await getLoader('../../packages/markstream-react/src/components/CodeBlockNode/monaco.ts', 'getStreamDiffsRuntime')
     const first = loader()
@@ -93,10 +92,10 @@ describe('stream-diffs-only code block loader', () => {
   })
 
   it('does not cache the React runtime when preload fails', async () => {
-    vi.doMock('stream-diffs', () => ({
+    vi.doMock('stream-diffs/markstream', () => ({
       useMonaco: () => ({ runtime: 'stream-diffs' }),
-      preloadStreamDiffsWorkers: vi.fn(async () => {
-        throw new Error('worker preload failed')
+      preloadStreamDiffs: vi.fn(async () => {
+        throw new Error('runtime preload failed')
       }),
     }))
 

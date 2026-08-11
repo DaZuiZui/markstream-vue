@@ -226,6 +226,7 @@ const rendererProps = {
   get codeBlockLightTheme() { return resolveRendererProp('codeBlockLightTheme') },
   get codeBlockMinWidth() { return resolveRendererProp('codeBlockMinWidth') },
   get codeBlockMaxWidth() { return resolveRendererProp('codeBlockMaxWidth') },
+  get codeBlockOptions() { return resolveRendererProp('codeBlockOptions') },
   get codeBlockProps() { return resolveRendererProp('codeBlockProps') },
   get mermaidProps() { return resolveRendererProp('mermaidProps') },
   get d2Props() { return resolveRendererProp('d2Props') },
@@ -698,6 +699,7 @@ const nestedRendererProps = computed<Partial<NodeRendererProps>>(() => ({
   renderCodeBlocksAsPre: resolvedRenderCodeBlocksAsPre.value,
   codeBlockMinWidth: rendererProps.codeBlockMinWidth,
   codeBlockMaxWidth: rendererProps.codeBlockMaxWidth,
+  codeBlockOptions: rendererProps.codeBlockOptions,
   codeBlockProps: rendererProps.codeBlockProps,
   mermaidProps: rendererProps.mermaidProps,
   d2Props: rendererProps.d2Props,
@@ -1904,6 +1906,7 @@ function getVirtualRendererLayoutKey() {
     codeBlockStream: rendererProps.codeBlockStream,
     codeBlockMinWidth: rendererProps.codeBlockMinWidth,
     codeBlockMaxWidth: rendererProps.codeBlockMaxWidth,
+    codeBlockOptions: rendererProps.codeBlockOptions,
     codeBlockProps: rendererProps.codeBlockProps,
   })
 }
@@ -5256,11 +5259,13 @@ const codeBlockBindings = computed(() => ({
   maxWidth: rendererProps.codeBlockMaxWidth,
   ...(typeof resolvedShowTooltips.value === 'boolean' ? { showTooltips: resolvedShowTooltips.value } : {}),
   ...builtinCodeBlockExtraProps.value,
+  codeBlockOptions: rendererProps.codeBlockOptions,
 }))
 
 const customCodeBlockBindings = computed(() => ({
   ...codeBlockBindings.value,
   ...codeBlockExtraProps.value,
+  codeBlockOptions: rendererProps.codeBlockOptions,
 }))
 
 function pickBoolean(value: unknown) {
@@ -5277,8 +5282,14 @@ const preCodeBlockBindings = computed(() => {
   const bindings: Record<string, unknown> = {}
 
   const showLineNumbers = pickBoolean(source.showLineNumbers)
-  if (showLineNumbers !== undefined)
-    bindings.showLineNumbers = showLineNumbers
+  const disableLineNumbers = rendererProps.codeBlockOptions?.disableLineNumbers
+  bindings.showLineNumbers = showLineNumbers
+    ?? (typeof disableLineNumbers === 'boolean' ? !disableLineNumbers : false)
+  if (rendererProps.codeBlockOptions?.overflow) {
+    bindings.style = {
+      whiteSpace: rendererProps.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+    }
+  }
 
   const diffInline = pickBoolean(source.diffInline)
   if (diffInline !== undefined)
