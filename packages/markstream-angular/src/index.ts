@@ -130,7 +130,7 @@ export type {
   CodeBlockThemePair,
   CodeBlockThemeProp,
   CodeBlockThemes,
-} from './types/monaco'
+} from './types/codeBlock'
 export {
   getLanguageIcon,
   languageMap,

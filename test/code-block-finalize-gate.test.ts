@@ -45,7 +45,7 @@ class IntersectionObserverStub {
 }
 
 function helpers() {
-  return (globalThis as any).__streamMonacoHelpers
+  return (globalThis as any).__streamDiffsHelpers
 }
 
 function installFinalDiffsDom(container: HTMLElement) {
@@ -65,7 +65,7 @@ function resetHelpers() {
     getContentHeight: () => 18,
   }
 
-  runtime.useMonaco.mockReset().mockImplementation(() => runtime)
+  runtime.createCodeBlockRuntime.mockReset().mockImplementation(() => runtime)
   runtime.createEditor.mockReset().mockImplementation(async (container: HTMLElement) => {
     installFinalDiffsDom(container)
   })
@@ -140,13 +140,13 @@ describe('codeBlockNode final Diffs gate', () => {
     await flush()
     expect(wrapper.find('pre.code-pre-fallback').exists()).toBe(true)
     expect(wrapper.get('[data-markstream-code-block="1"]').attributes('data-markstream-code-block-state')).toBe('streaming')
-    expect(runtime.useMonaco).not.toHaveBeenCalled()
+    expect(runtime.createCodeBlockRuntime).not.toHaveBeenCalled()
     expect(runtime.createEditor).not.toHaveBeenCalled()
     expect(observers.at(-1)?.options.rootMargin).toBe('0px')
 
     observers.at(-1)?.emit()
     await flush()
-    expect(runtime.useMonaco).not.toHaveBeenCalled()
+    expect(runtime.createCodeBlockRuntime).not.toHaveBeenCalled()
     expect(runtime.createEditor).not.toHaveBeenCalled()
 
     await wrapper.setProps({
@@ -200,16 +200,16 @@ describe('codeBlockNode final Diffs gate', () => {
     })
 
     await flush()
-    expect(runtime.useMonaco).not.toHaveBeenCalled()
+    expect(runtime.createCodeBlockRuntime).not.toHaveBeenCalled()
     expect(runtime.createEditor).not.toHaveBeenCalled()
 
     observers.at(-1)?.emit()
     await vi.waitFor(() => {
-      expect(runtime.useMonaco).toHaveBeenCalledTimes(1)
+      expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1)
       expect(runtime.createEditor).toHaveBeenCalledTimes(1)
-      expect(runtime.useMonaco.mock.calls[0]?.[0]?.stream).toBe(false)
-      expect(runtime.useMonaco.mock.calls[0]?.[0]?.disableFileHeader).toBe(true)
-      expect(runtime.useMonaco.mock.calls[0]?.[0]?.unsafeCSS).toContain('--diffs-min-number-column-width-default: 2ch !important')
+      expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.stream).toBe(false)
+      expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.disableFileHeader).toBe(true)
+      expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.unsafeCSS).toContain('--diffs-min-number-column-width-default: 2ch !important')
       expect(wrapper.find('diffs-container').exists()).toBe(true)
       expect(wrapper.find('pre.code-pre-fallback').exists()).toBe(false)
       expect(wrapper.get('[data-markstream-code-block="1"]').attributes('data-markstream-code-block-state')).toBe('settled')
@@ -270,7 +270,7 @@ describe('codeBlockNode final Diffs gate', () => {
     observers.at(-1)?.emit()
     await vi.waitFor(() => expect(runtime.createDiffEditor).toHaveBeenCalledTimes(1))
 
-    const firstOptions = runtime.useMonaco.mock.calls[0]?.[0]
+    const firstOptions = runtime.createCodeBlockRuntime.mock.calls[0]?.[0]
     expect(firstOptions).toMatchObject({
       MAX_HEIGHT: 420,
       fontSize: 16,
@@ -302,10 +302,10 @@ describe('codeBlockNode final Diffs gate', () => {
       },
     })
     await vi.waitFor(() => {
-      expect(runtime.useMonaco).toHaveBeenCalledTimes(2)
+      expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(2)
       expect(runtime.createDiffEditor).toHaveBeenCalledTimes(2)
     })
-    expect(runtime.useMonaco.mock.calls[1]?.[0]?.diffStyle).toBe('split')
+    expect(runtime.createCodeBlockRuntime.mock.calls[1]?.[0]?.diffStyle).toBe('split')
 
     wrapper.unmount()
   })
@@ -314,7 +314,7 @@ describe('codeBlockNode final Diffs gate', () => {
     const runtime = helpers()
     const createdTypography: Array<{ fontSize: number, lineHeight: number }> = []
     runtime.createEditor.mockImplementation(async (container: HTMLElement) => {
-      const options = runtime.useMonaco.mock.calls.at(-1)?.[0]
+      const options = runtime.createCodeBlockRuntime.mock.calls.at(-1)?.[0]
       createdTypography.push({ fontSize: options?.fontSize, lineHeight: options?.lineHeight })
       installFinalDiffsDom(container)
     })
@@ -339,7 +339,7 @@ describe('codeBlockNode final Diffs gate', () => {
     }))
     await wrapper.setProps({ codeBlockOptions: {} })
     await vi.waitFor(() => {
-      expect(runtime.useMonaco).toHaveBeenCalledTimes(2)
+      expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(2)
       expect(runtime.createEditor).toHaveBeenCalledTimes(2)
     })
 
@@ -366,8 +366,8 @@ describe('codeBlockNode final Diffs gate', () => {
     const enabled = mountBlock(true, true)
     await flush()
     observers.at(-1)?.emit()
-    await vi.waitFor(() => expect(runtime.useMonaco).toHaveBeenCalledTimes(1))
-    expect(runtime.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
+    await vi.waitFor(() => expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1))
+    expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
     enabled.unmount()
 
     observers.length = 0
@@ -375,8 +375,8 @@ describe('codeBlockNode final Diffs gate', () => {
     const disabled = mountBlock(false, false)
     await flush()
     observers.at(-1)?.emit()
-    await vi.waitFor(() => expect(runtime.useMonaco).toHaveBeenCalledTimes(1))
-    expect(runtime.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(true)
+    await vi.waitFor(() => expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1))
+    expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.disableLineNumbers).toBe(true)
     disabled.unmount()
   })
 
@@ -395,8 +395,8 @@ describe('codeBlockNode final Diffs gate', () => {
     const tuple = mountBlock({ isDark: false, themes: ['tuple-dark', 'tuple-light'] })
     await flush()
     observers.at(-1)?.emit()
-    await vi.waitFor(() => expect(runtime.useMonaco).toHaveBeenCalledTimes(1))
-    expect(runtime.useMonaco.mock.calls[0]?.[0]?.theme).toBe('tuple-light')
+    await vi.waitFor(() => expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1))
+    expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.theme).toBe('tuple-light')
     tuple.unmount()
 
     observers.length = 0
@@ -408,8 +408,8 @@ describe('codeBlockNode final Diffs gate', () => {
     })
     await flush()
     observers.at(-1)?.emit()
-    await vi.waitFor(() => expect(runtime.useMonaco).toHaveBeenCalledTimes(1))
-    expect(runtime.useMonaco.mock.calls[0]?.[0]?.theme).toBe('pair-dark')
+    await vi.waitFor(() => expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1))
+    expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.theme).toBe('pair-dark')
     pair.unmount()
   })
 
@@ -432,15 +432,15 @@ describe('codeBlockNode final Diffs gate', () => {
     await wrapper.setProps({ loading: true })
     await wrapper.setProps({ codeBlockOptions: { diffStyle: 'split' } })
     await flush()
-    expect(runtime.useMonaco).toHaveBeenCalledTimes(1)
+    expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1)
     expect(runtime.createEditor).toHaveBeenCalledTimes(1)
 
     await wrapper.setProps({ loading: false })
     await vi.waitFor(() => {
-      expect(runtime.useMonaco).toHaveBeenCalledTimes(2)
+      expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(2)
       expect(runtime.createEditor).toHaveBeenCalledTimes(2)
     })
-    expect(runtime.useMonaco.mock.calls[1]?.[0]?.diffStyle).toBe('split')
+    expect(runtime.createCodeBlockRuntime.mock.calls[1]?.[0]?.diffStyle).toBe('split')
 
     wrapper.unmount()
   })
@@ -675,7 +675,7 @@ describe('codeBlockNode final Diffs gate', () => {
     })
     await vi.waitFor(() => {
       expect(runtime.createDiffEditor).toHaveBeenCalledTimes(1)
-      expect(runtime.useMonaco.mock.calls[0]?.[0]?.stream).toBe(false)
+      expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.stream).toBe(false)
       expect(wrapper.find('diffs-container').exists()).toBe(true)
       expect(wrapper.find('pre.code-pre-fallback').exists()).toBe(false)
       expect(wrapper.get('[data-markstream-code-block="1"]').attributes('data-markstream-code-block-state')).toBe('settled')
@@ -734,12 +734,12 @@ describe('codeBlockNode final Diffs gate', () => {
     await flush()
     observers.at(-1)?.emit()
     await vi.waitFor(() => {
-      expect(runtime.useMonaco).toHaveBeenCalledTimes(1)
+      expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1)
       expect(runtime.createEditor).toHaveBeenCalledTimes(1)
       expect(wrapper.find('diffs-container').exists()).toBe(true)
       expect(wrapper.find('pre.code-pre-fallback').exists()).toBe(false)
     })
-    expect(runtime.useMonaco.mock.calls[0]?.[0]?.theme).toBe('github-dark')
+    expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.theme).toBe('github-dark')
     wrapper.unmount()
   })
 })

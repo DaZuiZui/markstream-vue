@@ -4,20 +4,20 @@ import { nextTick } from 'vue'
 import CodeBlockNode from '../src/components/CodeBlockNode/CodeBlockNode.vue'
 import { resetCodeBlockRuntimeReadyForTest } from '../src/components/CodeBlockNode/runtime'
 
-function getStreamMonacoHelpers() {
-  return (globalThis as any).__streamMonacoHelpers
+function getStreamDiffsHelpers() {
+  return (globalThis as any).__streamDiffsHelpers
 }
 
 function resetHelpers() {
   resetCodeBlockRuntimeReadyForTest()
-  const helpers = getStreamMonacoHelpers()
+  const helpers = getStreamDiffsHelpers()
   const makeEditorView = () => ({
     getModel: () => ({ getLineCount: () => 1 }),
     getOption: () => 18,
     updateOptions: vi.fn(),
     layout: vi.fn(),
   })
-  helpers.useMonaco.mockReset().mockImplementation(() => helpers)
+  helpers.createCodeBlockRuntime.mockReset().mockImplementation(() => helpers)
   helpers.createEditor.mockReset().mockImplementation(async () => {})
   helpers.createDiffEditor.mockReset().mockImplementation(async () => {})
   helpers.updateCode.mockReset()
@@ -94,8 +94,8 @@ describe('diff CodeBlockNode fallback height stability', () => {
   })
 
   it('keeps diff fallback height owned by its rendered rows when an estimate is set', async () => {
-    const helpers = getStreamMonacoHelpers()
-    // Hold createDiffEditor so Monaco is never "ready" during this test
+    const helpers = getStreamDiffsHelpers()
+    // Hold createDiffEditor so the enhanced surface is never ready during this test.
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
 
     const originalCode = 'const a = 1\nconst b = 2\nconst c = 3\n'
@@ -132,7 +132,7 @@ describe('diff CodeBlockNode fallback height stability', () => {
   })
 
   it('keeps the default diff fallback padding aligned with the final surface', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
 
     const wrapper = mount(CodeBlockNode, {
@@ -157,13 +157,13 @@ describe('diff CodeBlockNode fallback height stability', () => {
     const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
     expect(pre.style.paddingTop).toBe('0px')
     expect(pre.style.paddingBottom).toBe('0px')
-    expect(helpers.useMonaco.mock.calls[0]?.[0]?.padding).toBeUndefined()
+    expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.padding).toBeUndefined()
 
     wrapper.unmount()
   })
 
   it('does not reserve the full source height for a folded diff fallback', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
 
     const tenLines = Array.from({ length: 10 }, (_, i) => `const x${i} = ${i}`).join('\n')
@@ -199,7 +199,7 @@ describe('diff CodeBlockNode fallback height stability', () => {
   })
 
   it('releases the fallback height when unchanged diff rows are folded', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
       const height = this.matches('pre.code-pre-fallback') ? 360 : 0
@@ -245,14 +245,14 @@ describe('diff CodeBlockNode fallback height stability', () => {
   })
 
   it('does not reserve an extra side-by-side diff fallback row for terminal newline', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
 
     const patch = [
       '{',
       '  "dependencies": {',
-      '-   "stream-monaco": "^0.0.45",',
-      '+   "stream-monaco": "link:~/Github/stream-monaco",',
+      '-   "stream-diffs": "^0.0.1",',
+      '+   "stream-diffs": "^0.0.2",',
       '    "tailwind-merge": "^3.6.0"',
       '  }',
       '}',
@@ -286,18 +286,18 @@ describe('diff CodeBlockNode fallback height stability', () => {
   })
 
   it('does not stretch a near-max side-by-side diff fallback with empty space', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
 
     const patch = [
-      'const diffCodeBlockMonacoOptions = computed<CodeBlockMonacoOptions>(() => ({',
-      '  ...codeBlockMonacoOptions.value,',
+      'const diffCodeBlockOptions = computed<CodeBlockOptions>(() => ({',
+      '  ...codeBlockOptions.value,',
       '  padding: { top: 0, bottom: 0 },',
       '-lineDecorationsWidth: 0,',
       '+lineDecorationsWidth: 4,',
       '  glyphMargin: false,',
       '  wordWrap: "off",',
-      '  renderSideBySide: false,',
+      '  diffStyle: "unified",',
       '  margin: 0,',
       '  padding: 0,',
       '  overflow-x: auto,',
@@ -310,12 +310,12 @@ describe('diff CodeBlockNode fallback height stability', () => {
       '+ --context-panel-diff-line-number-box-width: calc(var(--context-panel-diff-line-number-padding-left) + var(--context-panel-diff-line-number-width) + var(--context-panel-diff-line-number-padding-right));',
       '+ --context-panel-diff-content-left: calc(var(--context-panel-diff-gutter-marker-width) + var(--context-panel-diff-line-number-box-width) + var(--context-panel-diff-line-number-gap-to-code));',
       '+ --context-panel-diff-right-reserve-width: 7.8px;',
-      '+ --stream-monaco-gutter-marker-width: var(--context-panel-diff-gutter-marker-width);',
-      '+ --stream-monaco-line-number-left: var(--context-panel-diff-gutter-marker-width);',
-      '+ --stream-monaco-line-number-width: var(--context-panel-diff-line-number-width);',
-      '+ --stream-monaco-line-number-padding-left: var(--context-panel-diff-line-number-padding-left);',
-      '+ --stream-monaco-line-number-padding-right: var(--context-panel-diff-line-number-padding-right);',
-      '+ --stream-monaco-line-number-gap-to-code: var(--context-panel-diff-line-number-gap-to-code);',
+      '+ --markstream-diff-gutter-marker-width: var(--context-panel-diff-gutter-marker-width);',
+      '+ --markstream-diff-line-number-left: var(--context-panel-diff-gutter-marker-width);',
+      '+ --markstream-diff-line-number-width: var(--context-panel-diff-line-number-width);',
+      '+ --markstream-diff-line-number-padding-left: var(--context-panel-diff-line-number-padding-left);',
+      '+ --markstream-diff-line-number-padding-right: var(--context-panel-diff-line-number-padding-right);',
+      '+ --markstream-diff-line-number-gap-to-code: var(--context-panel-diff-line-number-gap-to-code);',
       '}))',
     ].join('\n')
 
@@ -344,8 +344,8 @@ describe('diff CodeBlockNode fallback height stability', () => {
     wrapper.unmount()
   })
 
-  it('diff fallback is visible before Monaco diff editor becomes ready', async () => {
-    const helpers = getStreamMonacoHelpers()
+  it('keeps the diff fallback visible before the enhanced surface becomes ready', async () => {
+    const helpers = getStreamDiffsHelpers()
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
 
     const wrapper = mount(CodeBlockNode, {
@@ -367,7 +367,7 @@ describe('diff CodeBlockNode fallback height stability', () => {
 
     await flushPendingMicrotasks()
 
-    // Fallback pre must be visible (not hidden) while Monaco hasn't loaded
+    // The fallback pre remains visible while the runtime is loading.
     const pre = wrapper.find('pre.code-pre-fallback')
     expect(pre.exists()).toBe(true)
     expect(pre.isVisible()).toBe(true)

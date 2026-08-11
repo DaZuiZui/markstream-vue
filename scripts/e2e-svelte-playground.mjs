@@ -140,10 +140,6 @@ async function main() {
       window.localStorage.setItem('vmr-settings-stream-delay-min', '8')
       window.localStorage.setItem('vmr-settings-stream-delay-max', '8')
       window.localStorage.setItem('vmr-settings-stream-burstiness', '0')
-      if (window.localStorage.getItem('__markstream-svelte-e2e-render-mode-seeded') !== 'true') {
-        window.localStorage.setItem('vmr-test-render-mode', 'pre')
-        window.localStorage.setItem('__markstream-svelte-e2e-render-mode-seeded', 'true')
-      }
       window.__markstreamSvelteMermaidWorkerMessages = []
       const originalPostMessage = Worker.prototype.postMessage
       Worker.prototype.postMessage = function patchedPostMessage(message, ...args) {
@@ -418,7 +414,6 @@ async function main() {
     }, homeRendererSelector, { timeout: 15000 })
     await page.waitForFunction(() => document.querySelectorAll('.chatbot-messages .thinking-node .markstream-svelte').length > 0, null, { timeout: 30000 })
 
-    await page.evaluate(() => window.localStorage.setItem('vmr-test-render-mode', 'stream-diffs'))
     await page.goto(`http://${host}:${port}/test`, { waitUntil: 'load' })
     await page.locator(testRendererSelector).waitFor({ state: 'visible', timeout: 15000 })
     await page.waitForFunction(() => document.querySelector('.workspace-card--preview')?.textContent?.includes('Markstream Test Lab'), null, { timeout: 15000 })

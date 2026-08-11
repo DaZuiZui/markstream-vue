@@ -21,17 +21,8 @@ export function resolveDiffHideUnchangedRegionsOption(value: unknown): CodeBlock
   return { ...defaultDiffHideUnchangedRegions }
 }
 
-export function resolveDiffInlineLayout(options: Record<string, unknown>, width: number) {
-  if (options.renderSideBySide === false)
-    return true
-  if (options.useInlineViewWhenSpaceIsLimited !== true)
-    return false
-
-  const rawBreakpoint = options.renderSideBySideInlineBreakpoint
-  const breakpoint = typeof rawBreakpoint === 'number' && Number.isFinite(rawBreakpoint)
-    ? rawBreakpoint
-    : 900
-  return width > 0 && width <= breakpoint
+export function resolveDiffInlineLayout(options: Record<string, unknown>) {
+  return options.diffStyle === 'unified'
 }
 
 export function parseCodeFenceInfo(raw: string) {

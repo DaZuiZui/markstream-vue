@@ -131,12 +131,10 @@ export default defineConfig(({ mode }) => {
             '@floating-ui/dom',
             'katex/contrib/mhchem',
             'katex/dist/contrib/mhchem',
-            'stream-monaco',
             'stream-diffs',
             'stream-markdown',
             'stream-markdown-parser',
             'markstream-core',
-            'monaco-editor',
             'shiki',
           ].includes(id)
         },

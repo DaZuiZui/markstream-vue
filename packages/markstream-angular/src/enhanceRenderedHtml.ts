@@ -1,11 +1,11 @@
 import type { NodeRendererCodeBlockProps, NodeRendererD2Props, NodeRendererInfographicProps, NodeRendererMermaidProps } from './components/shared/node-helpers'
-import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemes } from './types/monaco'
+import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemes } from './types/codeBlock'
 import { toSafeMermaidSvgMarkup } from 'stream-markdown-parser'
 import { getD2 } from './optional/d2'
 import { getInfographic } from './optional/infographic'
 import { getKatex } from './optional/katex'
 import { getMermaid } from './optional/mermaid'
-import { getUseMonaco } from './optional/monaco'
+import { getStreamDiffsRuntime } from './optional/streamDiffs'
 import { extractRenderedSvg, toSafeSvgMarkup } from './sanitizeSvg'
 import { resolveLanguageId } from './utils/languageIcon'
 import { normalizeKaTeXRenderInput } from './utils/normalizeKaTeXRenderInput'
@@ -612,8 +612,8 @@ async function renderCodeBlocks(
     }
   }
 
-  const monacoModule = await getUseMonaco()
-  if (!monacoModule || typeof monacoModule.useMonaco !== 'function' || !isActive())
+  const runtimeModule = await getStreamDiffsRuntime()
+  if (!runtimeModule || typeof runtimeModule.createCodeBlockRuntime !== 'function' || !isActive())
     return
 
   for (const pre of preNodes) {
@@ -728,7 +728,7 @@ async function renderCodeBlocks(
     }
     syncGeometry()
 
-    const helpers = monacoModule.useMonaco({
+    const helpers = runtimeModule.createCodeBlockRuntime({
       overflow: 'wrap',
       ...nativeOptions,
       themes: runtimeThemes,
@@ -784,9 +784,9 @@ ${configuredUnsafeCSS}`.trim(),
         }
         return
       }
-      shell.wrapper.dataset.markstreamMonaco = '1'
+      shell.wrapper.dataset.markstreamEnhanced = '1'
       if (diff)
-        shell.wrapper.dataset.markstreamMonacoDiff = '1'
+        shell.wrapper.dataset.markstreamEnhancedDiff = '1'
       cleanupFns.push(() => {
         try {
           helpers.cleanupEditor?.()

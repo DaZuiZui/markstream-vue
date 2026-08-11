@@ -1,5 +1,5 @@
 import type { AfterViewInit, ElementRef, OnChanges, OnDestroy } from '@angular/core'
-import type { CodeBlockOptions, CodeBlockTheme } from '../../types/monaco'
+import type { CodeBlockOptions, CodeBlockTheme } from '../../types/codeBlock'
 import type { AngularRenderableNode, AngularRenderContext } from '../shared/node-helpers'
 import { CommonModule } from '@angular/common'
 import {
@@ -11,7 +11,7 @@ import {
   ViewChild,
 } from '@angular/core'
 import { useSafeI18n } from '../../i18n/useSafeI18n'
-import { getUseMonaco } from '../../optional/monaco'
+import { getStreamDiffsRuntime } from '../../optional/streamDiffs'
 import { getLanguageIcon, languageMap, normalizeLanguageIdentifier, resolveLanguageId } from '../../utils/languageIcon'
 import { PreCodeNodeComponent } from '../PreCodeNode/PreCodeNode.component'
 import { getString } from '../shared/node-helpers'
@@ -27,7 +27,7 @@ function readPositiveCodeMetric(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
-interface MonacoHelpers {
+interface StreamDiffsHelpers {
   createEditor?: (container: HTMLElement, code: string, language: string) => Promise<unknown> | unknown
   createDiffEditor?: (container: HTMLElement, original: string, modified: string, language: string) => Promise<unknown> | unknown
   updateCode?: (code: string, language?: string) => Promise<unknown> | unknown
@@ -85,8 +85,8 @@ function extractCodeBlockFileLabel(raw: unknown) {
       [class.is-dark]="resolvedIsDark"
       [class.is-plain-text]="isPlainTextLanguage"
       [class.is-rendering]="resolvedLoading"
-      [attr.data-markstream-monaco]="editorReady && !useFallback ? '1' : null"
-      [attr.data-markstream-monaco-diff]="editorReady && isDiff && !useFallback ? '1' : null"
+      [attr.data-markstream-enhanced]="editorReady && !useFallback ? 'true' : 'false'"
+      [attr.data-markstream-enhanced-diff]="editorReady && isDiff && !useFallback ? '1' : null"
       [ngStyle]="containerStyle"
     >
       <div
@@ -297,7 +297,7 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
   defaultFontSize = defaultCodeFontSize
   fontSize = defaultCodeFontSize
 
-  private helpers: MonacoHelpers | null = null
+  private helpers: StreamDiffsHelpers | null = null
   private runtimeOptions: Record<string, any> | null = null
   private createPromise: Promise<void> | null = null
   private syncPromise: Promise<void> | null = null
@@ -766,10 +766,10 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
 
     const creationId = this.lifecycleId
     const pending = (async () => {
-      const monacoModule = await getUseMonaco()
+      const runtimeModule = await getStreamDiffsRuntime()
       if (this.destroyed || this.lifecycleId !== creationId)
         return
-      if (!monacoModule || typeof monacoModule.useMonaco !== 'function') {
+      if (!runtimeModule || typeof runtimeModule.createCodeBlockRuntime !== 'function') {
         this.useFallback = true
         return
       }
@@ -777,7 +777,7 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
       const options = this.buildRuntimeOptions()
 
       this.runtimeOptions = options
-      this.helpers = monacoModule.useMonaco(options)
+      this.helpers = runtimeModule.createCodeBlockRuntime(options)
     })()
     const tracked = pending.finally(() => {
       if (this.createPromise === tracked)
@@ -983,7 +983,7 @@ ${configuredUnsafeCSS}`.trim(),
       ? this.helpers?.getDiffEditorView?.()
       : this.helpers?.getEditorView?.()
     try {
-      view?.updateOptions?.({ fontSize: this.fontSize, automaticLayout: this.expanded })
+      view?.updateOptions?.({ fontSize: this.fontSize })
       if (this.editorKind === 'diff' && typeof view?.getModifiedEditor === 'function')
         view.getModifiedEditor()?.updateOptions?.({ fontSize: this.fontSize })
     }
@@ -1005,11 +1005,6 @@ ${configuredUnsafeCSS}`.trim(),
       : this.helpers?.getEditorView?.()
     if (!view)
       return
-
-    try {
-      view.updateOptions?.({ automaticLayout: this.expanded })
-    }
-    catch {}
 
     const height = this.resolveEditorHeight(view, maxHeight)
     host.style.height = `${height}px`

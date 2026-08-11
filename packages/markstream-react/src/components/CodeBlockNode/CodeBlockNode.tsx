@@ -7,8 +7,8 @@ import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonToolti
 import { getLanguageIcon, languageMap, normalizeLanguageIdentifier, resolveLanguageId, subscribeLanguageIconsRevision } from '../../utils/languageIcon'
 import { defaultCodeFontSize, readPositiveCodeMetric, resolveCodeTypography } from './codeTypography'
 import { HtmlPreviewFrame } from './HtmlPreviewFrame'
-import { getStreamDiffsRuntime } from './monaco'
 import { PreCodeNode } from './PreCodeNode'
+import { getStreamDiffsRuntime } from './streamDiffs'
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
@@ -383,11 +383,6 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeReactE
       return
 
     const maxHeight = getMaxHeightValue()
-    try {
-      view.updateOptions?.({ automaticLayout: nextExpanded })
-    }
-    catch {}
-
     const isDiffEditor = editorKindRef.current === 'diff'
     const heightPriority = isDiffEditor ? 'important' : ''
 
@@ -822,7 +817,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeReactE
           setUseFallback(true)
           return
         }
-        const createRuntimeHelpers = (mod as any).useMonaco
+        const createRuntimeHelpers = (mod as any).createCodeBlockRuntime
         const detectLanguage = (mod as any).detectLanguage
         if (typeof detectLanguage === 'function')
           detectLanguageRef.current = detectLanguage

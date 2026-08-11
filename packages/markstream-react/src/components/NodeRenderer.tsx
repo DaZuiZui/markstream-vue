@@ -22,7 +22,7 @@ import {
 import { useSmoothMarkdownStream } from '../hooks/useSmoothMarkdownStream'
 import { renderNode } from '../renderers/renderNode'
 import { normalizeLanguageIdentifier } from '../utils/languageIcon'
-import { getStreamDiffsRuntime } from './CodeBlockNode/monaco'
+import { getStreamDiffsRuntime } from './CodeBlockNode/streamDiffs'
 
 const DEFAULT_PROPS: Required<Pick<NodeRendererProps, 'codeBlockStream'
   | 'typewriter'

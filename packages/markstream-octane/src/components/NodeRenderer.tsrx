@@ -24,7 +24,7 @@ import {
 import { useSmoothMarkdownStream } from '../hooks/useSmoothMarkdownStream'
 import { renderNode } from '../renderers/renderNode.tsrx'
 import { normalizeLanguageIdentifier } from '../utils/languageIcon'
-import { getStreamDiffsRuntime } from './CodeBlockNode/monaco'
+import { getStreamDiffsRuntime } from './CodeBlockNode/streamDiffs'
 
 const DEFAULT_PROPS: Required<Pick<NodeRendererProps, 'codeBlockStream'
   | 'typewriter'
@@ -1227,7 +1227,7 @@ export function NodeRenderer<
       return
     if (props.renderCodeBlocksAsPre)
       return
-    // Octane renderer improvement: prefetch Monaco (and preload workers) in idle time
+    // Prefetch the optional code-block runtime in idle time.
     // so the first visible code block doesn't pay the full dynamic import cost.
     const hasCodeBlock = parsedNodes.some((node) => {
       if ((node as any)?.type !== 'code_block')

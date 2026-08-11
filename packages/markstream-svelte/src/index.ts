@@ -117,7 +117,7 @@ export {
   isCodeBlockRuntimeReady,
   preloadCodeBlockRuntime,
   resetCodeBlockRuntimeReadyForTest,
-} from './optional/monaco'
+} from './optional/streamDiffs'
 export {
   parseNestedMarkdownToNodes,
 } from './parseNestedMarkdownToNodes'
@@ -146,7 +146,7 @@ export type {
   CodeBlockThemePair,
   CodeBlockThemeProp,
   CodeBlockThemes,
-} from './types/monaco'
+} from './types/codeBlock'
 export {
   getLanguageIcon,
   languageMap,

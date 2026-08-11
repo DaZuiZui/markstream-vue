@@ -147,10 +147,6 @@ export default defineConfig(({ mode }) => {
             return true
           if (/node_modules\/stream-diffs(?:\/|$)/.test(id))
             return true
-          if (id === 'stream-monaco' || id.startsWith('stream-monaco/'))
-            return true
-          if (/node_modules\/stream-monaco(?:\/|$)/.test(id))
-            return true
           if (id === '@terrastruct/d2' || id.startsWith('@terrastruct/d2/'))
             return true
           if (/node_modules\/@terrastruct\/d2(?:\/|$)/.test(id))
@@ -170,7 +166,6 @@ export default defineConfig(({ mode }) => {
             'katex',
             'mermaid',
             'katex/contrib/mhchem',
-            'stream-monaco',
             'stream-diffs',
             'stream-markdown',
             'stream-markdown-parser',
@@ -178,7 +173,6 @@ export default defineConfig(({ mode }) => {
             '@antv/infographic',
             '@terrastruct/d2',
             '@floating-ui/dom',
-            'monaco-editor',
             'shiki',
           ].includes(id)
         },

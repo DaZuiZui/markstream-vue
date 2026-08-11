@@ -1,7 +1,8 @@
-import { preload } from '../NodeRenderer/preloadStreamDiffs'
+import { preloadStreamDiffs } from '../NodeRenderer/preloadStreamDiffs'
 
 let mod: any = null
 let importAttempted = false
+let pendingImport: Promise<any | null> | null = null
 
 function normalizeStreamDiffsModule(value: any) {
   const source = typeof value?.createCodeBlockRuntime === 'function' || typeof value?.useMonaco === 'function'
@@ -17,35 +18,36 @@ function normalizeStreamDiffsModule(value: any) {
   }
 }
 
-/**
- * Resolve the optional stream-diffs code-block runtime.
- *
- * stream-diffs is the only supported enhanced code/diff renderer for
- * markstream-vue2. If it is not installed we return null and the caller falls
- * back to plain `<pre><code>` rendering (PreCodeNode).
- */
+/** Resolve the optional stream-diffs code-block runtime. */
 export async function getStreamDiffsRuntime() {
+  if (pendingImport)
+    return pendingImport
   if (mod)
     return mod
   if (importAttempted)
     return null
 
-  try {
-    const diffs = normalizeStreamDiffsModule(await import('stream-diffs/markstream'))
-    if (diffs) {
-      mod = diffs
-      await preload(mod)
-      return mod
+  pendingImport = (async () => {
+    try {
+      const diffs = normalizeStreamDiffsModule(await import('stream-diffs/markstream'))
+      if (diffs) {
+        await preloadStreamDiffs(diffs)
+        mod = diffs
+        return mod
+      }
     }
-  }
-  catch {
-    // stream-diffs is not installed.
-  }
+    catch {
+      // stream-diffs is not installed; the component falls back to the <pre>.
+    }
 
-  importAttempted = true
-  return null
-}
+    importAttempted = true
+    return null
+  })()
 
-export async function preloadCodeBlockRuntime() {
-  return Boolean(await getStreamDiffsRuntime())
+  try {
+    return await pendingImport
+  }
+  finally {
+    pendingImport = null
+  }
 }

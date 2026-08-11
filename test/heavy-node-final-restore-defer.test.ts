@@ -470,7 +470,7 @@ describe('final restore heavy-node deferral', () => {
       layout: vi.fn(),
       getContentHeight: () => 20,
     }
-    const monacoHelpers = {
+    const streamDiffsHelpers = {
       createEditor: vi.fn(async (container: HTMLElement, code: string) => {
         editorCode = code
         const surface = document.createElement('diffs-container')
@@ -488,9 +488,9 @@ describe('final restore heavy-node deferral', () => {
       refreshDiffPresentation: vi.fn(),
       setTheme: vi.fn(async () => {}),
     }
-    const useMonaco = vi.fn(() => monacoHelpers)
+    const createCodeBlockRuntime = vi.fn(() => streamDiffsHelpers)
     const streamDiffsLoader = vi.fn(async () => ({
-      useMonaco,
+      createCodeBlockRuntime,
       detectLanguage: () => 'typescript',
     }))
     vi.doMock('../src/components/CodeBlockNode/streamDiffs', () => ({
@@ -608,7 +608,7 @@ describe('final restore heavy-node deferral', () => {
         expect(countHistoryImageRequests()).toBe(1)
         expect(image.attributes('src')).toBe('https://example.com/history-integration.png')
         expect(streamDiffsLoader).toHaveBeenCalledTimes(1)
-        expect(monacoHelpers.createEditor).toHaveBeenCalledTimes(1)
+        expect(streamDiffsHelpers.createEditor).toHaveBeenCalledTimes(1)
         expect(enhancedCodeTarget.attributes('data-markstream-enhanced')).toBe('true')
         expect(enhancedCodeTarget.text()).toContain('code-semantic')
         expect(katexLoader).toHaveBeenCalledTimes(1)

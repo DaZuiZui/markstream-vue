@@ -100,7 +100,6 @@ export default defineConfig(({ mode }) => {
           'mermaid',
           'stream-diffs',
           'stream-diffs/markstream',
-          'stream-monaco',
           'stream-markdown',
           'stream-markdown-parser',
           'markstream-core',

@@ -307,7 +307,7 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
-  it('matches side-by-side Monaco unchanged-region folding before handoff', () => {
+  it('matches side-by-side enhanced unchanged-region folding before handoff', () => {
     const originalLines = [
       'import { computed, ref } from \'vue\'',
       '',
@@ -393,7 +393,7 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
-  it('does not collapse fewer hidden rows than Monaco minimumLineCount', () => {
+  it('does not collapse fewer hidden rows than the enhanced minimumLineCount', () => {
     const originalLines = ['one', 'two', 'three', 'old', ...Array.from({ length: 8 }, (_, index) => `tail${index}`)]
     const modifiedLines = [...originalLines]
     modifiedLines[3] = 'new'
@@ -704,7 +704,7 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
-  it('aligns side-by-side source changes with Monaco spacer rows before handoff', () => {
+  it('aligns side-by-side source changes with enhanced spacer rows before handoff', () => {
     const wrapper = mount(PreCodeNode, {
       props: {
         showLineNumbers: true,

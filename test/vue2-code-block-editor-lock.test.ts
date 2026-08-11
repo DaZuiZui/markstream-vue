@@ -6,8 +6,8 @@ import { nextTick } from 'vue'
 import CodeBlockNode from '../packages/markstream-vue2/src/components/CodeBlockNode/CodeBlockNode.vue'
 import { CodeBlockNodeLoading } from '../packages/markstream-vue2/src/components/NodeRenderer/asyncComponent'
 
-interface StreamMonacoHelpers {
-  useMonaco: ReturnType<typeof vi.fn>
+interface StreamDiffsHelpers {
+  createCodeBlockRuntime: ReturnType<typeof vi.fn>
   createEditor: ReturnType<typeof vi.fn>
   createDiffEditor: ReturnType<typeof vi.fn>
   updateCode: ReturnType<typeof vi.fn>
@@ -22,12 +22,12 @@ interface StreamMonacoHelpers {
   whenVisualReady?: ReturnType<typeof vi.fn>
 }
 
-function getStreamMonacoHelpers(): StreamMonacoHelpers {
-  return (globalThis as any).__streamMonacoHelpers
+function getStreamDiffsHelpers(): StreamDiffsHelpers {
+  return (globalThis as any).__streamDiffsHelpers
 }
 
-function resetStreamMonacoHelpers() {
-  const helpers = getStreamMonacoHelpers()
+function resetStreamDiffsHelpers() {
+  const helpers = getStreamDiffsHelpers()
   const makeEditorView = () => ({
     getModel: () => ({ getLineCount: () => 1 }),
     getOption: () => 14,
@@ -35,7 +35,7 @@ function resetStreamMonacoHelpers() {
     layout: vi.fn(),
   })
 
-  helpers.useMonaco.mockReset().mockImplementation(() => helpers)
+  helpers.createCodeBlockRuntime.mockReset().mockImplementation(() => helpers)
   helpers.createEditor.mockReset().mockImplementation(async () => {})
   helpers.createDiffEditor.mockReset().mockImplementation(async () => {})
   helpers.updateCode.mockReset()
@@ -62,7 +62,7 @@ async function flushPendingMicrotasks() {
   await new Promise<void>(resolve => setTimeout(resolve, 0))
 }
 
-async function waitForCreateEditorCalls(expected: number, helpers: StreamMonacoHelpers, timeout = 1000) {
+async function waitForCreateEditorCalls(expected: number, helpers: StreamDiffsHelpers, timeout = 1000) {
   const start = Date.now()
   while (helpers.createEditor.mock.calls.length < expected) {
     if (Date.now() - start > timeout)
@@ -71,7 +71,7 @@ async function waitForCreateEditorCalls(expected: number, helpers: StreamMonacoH
   }
 }
 
-async function waitForCreateDiffEditorCalls(expected: number, helpers: StreamMonacoHelpers, timeout = 1000) {
+async function waitForCreateDiffEditorCalls(expected: number, helpers: StreamDiffsHelpers, timeout = 1000) {
   const start = Date.now()
   while (helpers.createDiffEditor.mock.calls.length < expected) {
     if (Date.now() - start > timeout)
@@ -129,11 +129,11 @@ describe('markstream-vue2 codeBlockNode async loading surface', () => {
 
 describe('markstream-vue2 codeBlockNode theme updates', () => {
   beforeEach(() => {
-    resetStreamMonacoHelpers()
+    resetStreamDiffsHelpers()
   })
 
   it('keeps the pre fallback visible until the runtime reports highlighted output ready', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     let resolveVisualReady: ((ready: boolean) => void) | undefined
     const visualReady = new Promise<boolean>((resolve) => {
       resolveVisualReady = resolve
@@ -173,7 +173,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
   })
 
   it('keeps the pre fallback when the runtime cannot confirm highlighted output', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     helpers.whenVisualReady = vi.fn(async () => false)
 
     const wrapper = mount(CodeBlockNode as any, {
@@ -200,7 +200,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
   })
 
   it('updates single-editor themes without recreating the editor when isDark toggles', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
 
     const wrapper = mount(CodeBlockNode as any, {
       props: {
@@ -244,7 +244,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
   })
 
   it('passes active themes and syntax languages to stream-diffs', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
 
     const wrapper = mount(CodeBlockNode as any, {
       props: {
@@ -263,7 +263,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
 
     await waitForCreateEditorCalls(1, helpers)
 
-    const options = helpers.useMonaco.mock.calls[0]?.[0]
+    const options = helpers.createCodeBlockRuntime.mock.calls[0]?.[0]
     expect(options.stream).toBe(false)
     expect(options.disableFileHeader).toBe(true)
     expect(options.fontFamily).toBe('"SF Mono", Monaco, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace')
@@ -279,7 +279,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
   })
 
   it('lets the direct showLineNumbers prop override neutral options on enhanced surfaces', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const mountBlock = (showLineNumbers: boolean, disableLineNumbers: boolean) => mount(CodeBlockNode as any, {
       props: {
         node: {
@@ -297,13 +297,13 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
 
     const enabled = mountBlock(true, true)
     await waitForCreateEditorCalls(1, helpers)
-    expect(helpers.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
+    expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
     enabled.unmount()
 
-    resetStreamMonacoHelpers()
+    resetStreamDiffsHelpers()
     const disabled = mountBlock(false, false)
     await waitForCreateEditorCalls(1, helpers)
-    expect(helpers.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(true)
+    expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.disableLineNumbers).toBe(true)
     disabled.unmount()
   })
 
@@ -320,7 +320,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
   })
 
   it('updates diff themes without recreating the diff editor when isDark toggles', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
 
     const wrapper = mount(CodeBlockNode as any, {
       props: {
@@ -369,7 +369,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
   })
 
   it('renders a two-pane diff fallback with stream-diffs-aligned metrics before the diff editor is ready', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     let resolveCreateDiffEditor: (() => void) | undefined
 
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>((resolve) => {
@@ -406,7 +406,7 @@ describe('markstream-vue2 codeBlockNode theme updates', () => {
 
     const panes = wrapper.element.querySelectorAll('.markstream-pre__diff-pane')
     expect(panes).toHaveLength(2)
-    const options = helpers.useMonaco.mock.calls[0]?.[0]
+    const options = helpers.createCodeBlockRuntime.mock.calls[0]?.[0]
     expect(options.languages).toBeUndefined()
     expect(wrapper.element.querySelector('.markstream-pre__diff-pane--original')?.textContent).toContain('"version": "0.0.49"')
     expect(wrapper.element.querySelector('.markstream-pre__diff-pane--modified')?.textContent).toContain('"version": "0.0.54-beta.1"')

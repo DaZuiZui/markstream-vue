@@ -6,6 +6,7 @@ import type { StreamTransportMode } from '../composables/useStreamSimulator'
 import { Icon } from '@iconify/vue'
 import { useRouter } from 'vue-router'
 import MarkdownRender from '../../../src/components/NodeRenderer'
+import { preloadCodeBlockRuntime } from '../../../src/exports'
 import { setCustomComponents } from '../../../src/utils/nodeComponents'
 import KatexWorker from '../../../src/workers/katexRenderer.worker?worker&inline'
 import { setKaTeXWorker } from '../../../src/workers/katexWorkerClient'
@@ -109,7 +110,7 @@ const {
 
 // 预加载 stream-diffs 运行时
 if (!isBenchmarkMode)
-  import('../../../src/components/CodeBlockNode/streamDiffs').then(({ getStreamDiffsRuntime }) => getStreamDiffsRuntime()).catch(() => {})
+  void preloadCodeBlockRuntime()
 setKaTeXWorker(new KatexWorker())
 setMermaidWorker(new MermaidWorker())
 const router = useRouter()

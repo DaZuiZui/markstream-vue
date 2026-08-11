@@ -230,7 +230,7 @@ describe('release dependency gates', () => {
     expect(webVitalsScript).toContain('scroll.viewport = copyViewport(viewport)')
   })
 
-  it('keeps terminal Monaco pre fallbacks in the Web Vitals code block gate', () => {
+  it('keeps terminal pre fallbacks in the Web Vitals code block gate', () => {
     const webVitalsScript = readFileSync(resolve(process.cwd(), 'scripts/e2e-web-vitals-performance.mjs'), 'utf8')
 
     expect(webVitalsScript).toContain('const codeBlockScenarioExpectedCodeBlockCount = 12')
@@ -240,7 +240,7 @@ describe('release dependency gates', () => {
     expect(webVitalsScript).toContain('expected $' + '{codeBlockScenarioExpectedCodeBlockCount} code blocks')
   })
 
-  it('requires offscreen Monaco blocks to stay deferred before scripted scroll', () => {
+  it('requires offscreen enhanced blocks to stay deferred before scripted scroll', () => {
     const webVitalsScript = readFileSync(resolve(process.cwd(), 'scripts/e2e-web-vitals-performance.mjs'), 'utf8')
 
     expect(webVitalsScript).toContain('vmr-test-code-block-viewport-root-margin')

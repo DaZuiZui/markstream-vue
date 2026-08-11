@@ -354,7 +354,7 @@ async function frameStatsSince(page, stateName, baseline) {
   return frameStatsFromDeltas(await frameDeltasSince(page, stateName, baseline))
 }
 
-async function runScenario(browser, port, mode) {
+async function runScenario(browser, port) {
   const rootSelector = '.preview-surface'
   const sample = process.env.PLAYGROUND_SAMPLE || 'baseline'
   const benchmarkPath = '/test?benchmark=1'
@@ -367,7 +367,6 @@ async function runScenario(browser, port, mode) {
           origin: `http://${host}:${port}`,
           localStorage: [
             { name: 'vmr-test-sample', value: sample },
-            { name: 'vmr-test-render-mode', value: mode },
           ],
         },
       ],
@@ -387,7 +386,6 @@ async function runScenario(browser, port, mode) {
           origin: `http://${host}:${port}`,
           localStorage: [
             { name: 'vmr-test-sample', value: sample },
-            { name: 'vmr-test-render-mode', value: mode },
           ],
         },
       ],
@@ -573,7 +571,7 @@ async function runScenario(browser, port, mode) {
     const renderedMermaidCount = mermaids.filter(element => element.querySelector('svg')).length
     return {
       sample: localStorage.getItem('vmr-test-sample') ?? 'unknown',
-      mode: localStorage.getItem('vmr-test-render-mode') ?? 'unknown',
+      mode: 'stream-diffs',
       lcpMs: Number(state.lcpMs ?? 0),
       lcpElement: state.lcpElement ?? null,
       cls: Number(state.cls ?? 0),
@@ -743,7 +741,7 @@ async function run() {
     await waitForPort(port)
     browser = await chromium.launch(resolveChromeLaunchOptions())
 
-    const streamDiffsResult = await runScenario(browser, port, 'stream-diffs')
+    const streamDiffsResult = await runScenario(browser, port)
     results = {
       'stream-diffs': streamDiffsResult,
     }

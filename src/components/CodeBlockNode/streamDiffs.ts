@@ -70,21 +70,35 @@ export interface StreamDiffsHelpers {
 }
 
 export interface StreamDiffsModule {
-  useMonaco?: (options: StreamDiffsRuntimeOptions) => StreamDiffsHelpers | null | undefined
+  createCodeBlockRuntime: (options: StreamDiffsRuntimeOptions) => StreamDiffsHelpers | null | undefined
   detectLanguage?: (code: string) => string
   preloadStreamDiffs?: () => Promise<unknown> | unknown
+}
+
+interface StreamDiffsUpstreamModule {
+  createCodeBlockRuntime?: StreamDiffsModule['createCodeBlockRuntime']
+  useMonaco?: StreamDiffsModule['createCodeBlockRuntime']
+  detectLanguage?: StreamDiffsModule['detectLanguage']
+  preloadStreamDiffs?: StreamDiffsModule['preloadStreamDiffs']
 }
 
 let mod: StreamDiffsModule | null = null
 let loadingPromise: Promise<StreamDiffsModule | null> | null = null
 
 function normalizeStreamDiffsModule(value: unknown): StreamDiffsModule | null {
-  const moduleValue = value as StreamDiffsModule | undefined
-  if (typeof moduleValue?.useMonaco === 'function')
-    return moduleValue
+  const moduleValue = value as StreamDiffsUpstreamModule | undefined
+  const source = typeof moduleValue?.createCodeBlockRuntime === 'function' || typeof moduleValue?.useMonaco === 'function'
+    ? moduleValue
+    : (value as { default?: unknown } | undefined)?.default as StreamDiffsUpstreamModule | undefined
+  const factory = source?.createCodeBlockRuntime ?? source?.useMonaco
+  if (typeof factory !== 'function')
+    return null
 
-  const defaultValue = (value as { default?: unknown } | undefined)?.default as StreamDiffsModule | undefined
-  return typeof defaultValue?.useMonaco === 'function' ? defaultValue : null
+  return {
+    createCodeBlockRuntime: options => factory.call(source, options),
+    detectLanguage: source?.detectLanguage?.bind(source),
+    preloadStreamDiffs: source?.preloadStreamDiffs?.bind(source),
+  }
 }
 
 export async function preloadCodeBlockRuntime() {

@@ -1,8 +1,8 @@
 import type { ComponentBody } from 'octane'
+import type { Mock } from 'vitest'
 import type { NodeComponentProps, NodeRendererProps } from '../../src/index'
 import { cleanup, fireEvent, render, waitFor } from '@octanejs/testing-library'
 import { createElement } from 'octane'
-import { useMonaco } from 'stream-diffs/markstream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearGlobalCustomComponents,
@@ -19,6 +19,10 @@ const stableRendererProps = {
   smoothStreaming: false,
   viewportPriority: false,
 } satisfies NodeRendererProps
+
+function getRuntimeFactoryMock() {
+  return (globalThis as any).__streamDiffsHelpers.createCodeBlockRuntime as Mock<(options?: Record<string, unknown>) => any>
+}
 
 afterEach(() => {
   cleanup()
@@ -80,8 +84,8 @@ describe('markstream-octane client renderer', () => {
   })
 
   it('forwards neutral codeBlockOptions to stream-diffs with host fields authoritative', async () => {
-    const mockedUseMonaco = vi.mocked(useMonaco)
-    mockedUseMonaco.mockClear()
+    const runtimeFactoryMock = getRuntimeFactoryMock()
+    runtimeFactoryMock.mockClear()
     const onLineClick = vi.fn()
     const consumerThemeChange = vi.fn()
     const { container } = render(NodeRenderer, {
@@ -119,9 +123,9 @@ describe('markstream-octane client renderer', () => {
       },
     })
 
-    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledOnce())
+    await waitFor(() => expect(runtimeFactoryMock).toHaveBeenCalledOnce())
 
-    const options = mockedUseMonaco.mock.calls[0]?.[0] as Record<string, any>
+    const options = runtimeFactoryMock.mock.calls[0]?.[0] as Record<string, any>
     expect(options).toMatchObject({
       MAX_HEIGHT: 420,
       fontSize: 16,
@@ -166,9 +170,9 @@ describe('markstream-octane client renderer', () => {
     ['javasc', 'javascript'],
     ['rus', 'rust'],
   ])('uses plaintext while the streaming %s fence language is incomplete, then resolves %s', async (partialLanguage, completeLanguage) => {
-    const mockedUseMonaco = vi.mocked(useMonaco)
-    const helpers = mockedUseMonaco.getMockImplementation()?.({}) as any
-    mockedUseMonaco.mockClear()
+    const runtimeFactoryMock = getRuntimeFactoryMock()
+    const helpers = runtimeFactoryMock.getMockImplementation()?.({}) as any
+    runtimeFactoryMock.mockClear()
     helpers.createEditor.mockClear()
     helpers.updateCode.mockClear()
     const view = render(NodeRenderer, {
@@ -196,9 +200,9 @@ describe('markstream-octane client renderer', () => {
   })
 
   it.each(['java', 'c'])('preserves the complete %s language while streaming and final', async (language) => {
-    const mockedUseMonaco = vi.mocked(useMonaco)
-    const helpers = mockedUseMonaco.getMockImplementation()?.({}) as any
-    mockedUseMonaco.mockClear()
+    const runtimeFactoryMock = getRuntimeFactoryMock()
+    const helpers = runtimeFactoryMock.getMockImplementation()?.({}) as any
+    runtimeFactoryMock.mockClear()
     helpers.createEditor.mockClear()
     helpers.updateCode.mockClear()
     const content = `\`\`\`${language}\nconst value = 1\n\`\`\``
@@ -227,8 +231,8 @@ describe('markstream-octane client renderer', () => {
   })
 
   it('recreates the runtime when codeBlockOptions identity changes', async () => {
-    const mockedUseMonaco = vi.mocked(useMonaco)
-    mockedUseMonaco.mockClear()
+    const runtimeFactoryMock = getRuntimeFactoryMock()
+    runtimeFactoryMock.mockClear()
     const firstOnLineClick = vi.fn()
     const secondOnLineClick = vi.fn()
     const baseProps = {
@@ -245,7 +249,7 @@ describe('markstream-octane client renderer', () => {
         },
       },
     })
-    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledOnce())
+    await waitFor(() => expect(runtimeFactoryMock).toHaveBeenCalledOnce())
 
     view.rerender({
       props: {
@@ -256,23 +260,23 @@ describe('markstream-octane client renderer', () => {
         },
       },
     })
-    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(runtimeFactoryMock).toHaveBeenCalledTimes(2))
 
-    const options = mockedUseMonaco.mock.calls[1]?.[0] as Record<string, any>
+    const options = runtimeFactoryMock.mock.calls[1]?.[0] as Record<string, any>
     expect(options.overflow).toBe('wrap')
     expect(options.onLineClick).toBe(secondOnLineClick)
   })
 
   it('restores default typography before recreating after fontSize is removed', async () => {
-    const mockedUseMonaco = vi.mocked(useMonaco)
-    const originalImplementation = mockedUseMonaco.getMockImplementation()
+    const runtimeFactoryMock = getRuntimeFactoryMock()
+    const originalImplementation = runtimeFactoryMock.getMockImplementation()
     const helpers = originalImplementation?.({}) as any
     let activeOptions: Record<string, any> | undefined
     const createdTypography: Array<{ fontSize: number, lineHeight: number }> = []
     const createdFallbackTypography: Array<{ fontSize: string, lineHeight: string }> = []
-    mockedUseMonaco.mockClear()
+    runtimeFactoryMock.mockClear()
     helpers.createEditor.mockClear()
-    mockedUseMonaco.mockImplementation((options) => {
+    runtimeFactoryMock.mockImplementation((options) => {
       activeOptions = options as Record<string, any> | undefined
       return helpers
     })
@@ -311,12 +315,12 @@ describe('markstream-octane client renderer', () => {
 
     helpers.createEditor.mockImplementation(async () => {})
     if (originalImplementation)
-      mockedUseMonaco.mockImplementation(originalImplementation)
+      runtimeFactoryMock.mockImplementation(originalImplementation)
   })
 
   it('selects a tuple-only theme by host color mode', async () => {
-    const mockedUseMonaco = vi.mocked(useMonaco)
-    mockedUseMonaco.mockClear()
+    const runtimeFactoryMock = getRuntimeFactoryMock()
+    runtimeFactoryMock.mockClear()
     render(NodeRenderer, {
       props: {
         ...stableRendererProps,
@@ -326,13 +330,13 @@ describe('markstream-octane client renderer', () => {
         themes: ['tuple-dark', 'tuple-light'],
       },
     })
-    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledOnce())
-    expect((mockedUseMonaco.mock.calls[0]?.[0] as Record<string, any>).theme).toBe('tuple-light')
+    await waitFor(() => expect(runtimeFactoryMock).toHaveBeenCalledOnce())
+    expect((runtimeFactoryMock.mock.calls[0]?.[0] as Record<string, any>).theme).toBe('tuple-light')
   })
 
   it('recreates the runtime when direct line-number precedence changes', async () => {
-    const mockedUseMonaco = vi.mocked(useMonaco)
-    mockedUseMonaco.mockClear()
+    const runtimeFactoryMock = getRuntimeFactoryMock()
+    runtimeFactoryMock.mockClear()
     const baseProps = {
       ...stableRendererProps,
       codeBlockOptions: { disableLineNumbers: true },
@@ -345,8 +349,8 @@ describe('markstream-octane client renderer', () => {
         codeBlockProps: { showLineNumbers: true },
       },
     })
-    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledOnce())
-    expect((mockedUseMonaco.mock.calls[0]?.[0] as Record<string, any>).disableLineNumbers).toBe(false)
+    await waitFor(() => expect(runtimeFactoryMock).toHaveBeenCalledOnce())
+    expect((runtimeFactoryMock.mock.calls[0]?.[0] as Record<string, any>).disableLineNumbers).toBe(false)
 
     view.rerender({
       props: {
@@ -354,8 +358,8 @@ describe('markstream-octane client renderer', () => {
         codeBlockProps: { showLineNumbers: false },
       },
     })
-    await waitFor(() => expect(mockedUseMonaco).toHaveBeenCalledTimes(2))
-    expect((mockedUseMonaco.mock.calls[1]?.[0] as Record<string, any>).disableLineNumbers).toBe(true)
+    await waitFor(() => expect(runtimeFactoryMock).toHaveBeenCalledTimes(2))
+    expect((runtimeFactoryMock.mock.calls[1]?.[0] as Record<string, any>).disableLineNumbers).toBe(true)
   })
 
   it('updates the same mounted renderer as streamed content grows', () => {

@@ -18,7 +18,7 @@ body:
     id: current-config
     attributes:
       label: Current config (if applicable)
-      description: 'Renderer props or parser options you are using (e.g., max-live-nodes, batchRendering, renderBatchSize, enableMermaid/Katex/Monaco, custom components).'
+      description: 'Renderer props or parser options you are using (e.g., max-live-nodes, batchRendering, renderBatchSize, Mermaid/KaTeX/code-block options, custom components).'
   - type: textarea
     id: suggested-solution
     attributes:

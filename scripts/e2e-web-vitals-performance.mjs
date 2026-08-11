@@ -46,7 +46,7 @@ const webVitalsPhaseBudgets = {
     // 2.0 baseline: stream-diffs mounts a windowed (virtualized) shell whose
     // first paint is viewport-sized, so the pre → surface handoff carries a
     // small once-off layout shift (measured ~0.09). Budget is the 2.0 baseline
-    // with headroom; 0.05 was calibrated against 1.x Monaco.
+    // with headroom; 0.05 was calibrated against the 1.x enhanced renderer.
     lcpMs: 5000,
     phaseElapsedMs: 10000,
     longTaskMaxMs: 1200,
@@ -1065,7 +1065,7 @@ async function runInteraction(page, label, action) {
   }
 }
 
-async function createScenarioContext(browser, port, shareId, content, renderMode, viewport, options = {}) {
+async function createScenarioContext(browser, port, shareId, content, viewport, options = {}) {
   const origin = `http://${host}:${port}`
   const context = await browser.newContext({
     viewport,
@@ -1077,7 +1077,6 @@ async function createScenarioContext(browser, port, shareId, content, renderMode
           origin,
           localStorage: [
             { name: `vmr-test-share:${shareId}`, value: JSON.stringify({ content }) },
-            { name: 'vmr-test-render-mode', value: renderMode },
             { name: 'vmr-test-code-stream', value: 'false' },
             { name: 'vmr-test-viewport-priority', value: 'true' },
             ...(options.codeBlockViewportRootMargin
@@ -1114,7 +1113,6 @@ async function runMillionRestoreScenario(browser, port) {
     port,
     shareId,
     content,
-    'pre',
     viewport,
   )
   const page = await context.newPage()
@@ -1125,7 +1123,7 @@ async function runMillionRestoreScenario(browser, port) {
   const beforeNavigate = metricMap(await client.send('Performance.getMetrics'))
   const traceClient = await startTrace(page)
 
-  await page.goto(`/test?benchmark=1&view=preview&share=${shareId}`, { waitUntil: 'load' })
+  await page.goto(`/test?benchmark=1&view=preview&share=${shareId}&renderCodeBlocksAsPre=1`, { waitUntil: 'load' })
   await waitForVisible(page, '.workspace-card--preview', messages)
   await waitForVisible(page, '.markdown-renderer', messages)
   await waitForParse(page)
@@ -1188,7 +1186,6 @@ async function runCodeBlockScenario(browser, port) {
     port,
     shareId,
     content,
-    'stream-diffs',
     viewport,
     {
       disableViewportPriorityIdleDrain: true,

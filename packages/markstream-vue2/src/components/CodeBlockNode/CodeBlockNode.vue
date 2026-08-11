@@ -226,7 +226,7 @@ if (typeof window !== 'undefined') {
         usePreCodeRender.value = true
         return
       }
-      const createRuntimeHelpers = (mod as any).useMonaco
+      const createRuntimeHelpers = (mod as any).createCodeBlockRuntime
       const det = (mod as any).detectLanguage
       if (typeof det === 'function')
         detectLanguage = det
@@ -791,15 +791,12 @@ function toggleExpand(e?: Event) {
     return
 
   if (isExpanded.value) {
-    // Expanded: enable automaticLayout and explicitly size container by lines
-    setAutomaticLayout(true)
     container.style.maxHeight = 'none'
     container.style.overflow = 'visible'
     updateExpandedHeight()
   }
   else {
     stopExpandAutoResize()
-    setAutomaticLayout(false)
     container.style.overflow = 'auto'
     updateCollapsedHeight()
   }
@@ -814,11 +811,8 @@ function toggleHeaderCollapse() {
         heightBeforeCollapse.value = rectH
     }
     stopExpandAutoResize()
-    setAutomaticLayout(false)
   }
   else {
-    if (isExpanded.value)
-      setAutomaticLayout(true)
     if (codeEditor.value && heightBeforeCollapse.value != null) {
       codeEditor.value.style.height = `${heightBeforeCollapse.value}px`
     }
@@ -841,7 +835,6 @@ watch(
     if (!(typeof size === 'number' && Number.isFinite(size) && size > 0))
       return
     editor.updateOptions({ fontSize: size })
-    // In automaticLayout mode, no manual height updates are needed
     if (isExpanded.value && !isCollapsed.value)
       scheduleEditorVisualSync()
   },
@@ -873,20 +866,6 @@ function previewCode() {
     showInlinePreview.value = !showInlinePreview.value
 }
 
-function setAutomaticLayout(expanded: boolean) {
-  try {
-    if (isDiff.value) {
-      const diff = getDiffEditorView()
-      diff?.updateOptions?.({ automaticLayout: expanded })
-    }
-    else {
-      const ed = getEditorView()
-      ed?.updateOptions?.({ automaticLayout: expanded })
-    }
-  }
-  catch {}
-}
-
 async function runEditorCreation(el: HTMLElement, generation: number) {
   if (!createEditor || isUnmounted || generation !== editorCreationGeneration)
     return
@@ -908,7 +887,7 @@ async function runEditorCreation(el: HTMLElement, generation: number) {
 
   const editor = isDiff.value ? getDiffEditorView() : getEditorView()
   if (typeof resolvedRuntimeOptions.value?.fontSize === 'number') {
-    editor?.updateOptions({ fontSize: resolvedRuntimeOptions.value.fontSize, automaticLayout: false })
+    editor?.updateOptions({ fontSize: resolvedRuntimeOptions.value.fontSize })
     defaultCodeFontSize.value = resolvedRuntimeOptions.value.fontSize
     codeFontSize.value = resolvedRuntimeOptions.value.fontSize
   }

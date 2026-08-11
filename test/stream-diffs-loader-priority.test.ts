@@ -7,21 +7,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
  */
 
 interface LoaderModule {
-  useMonaco?: (options?: unknown) => unknown
+  createCodeBlockRuntime?: (options?: unknown) => unknown
   preloadStreamDiffs?: () => Promise<unknown>
   default?: LoaderModule
 }
 
 const LOADERS = [
-  ['react', '../../packages/markstream-react/src/components/CodeBlockNode/monaco.ts', 'getStreamDiffsRuntime'],
-  ['svelte', '../../packages/markstream-svelte/src/optional/monaco.ts', 'getStreamDiffsRuntime'],
-  ['angular', '../../packages/markstream-angular/src/optional/monaco.ts', 'getUseMonaco'],
+  ['react', '../../packages/markstream-react/src/components/CodeBlockNode/streamDiffs.ts', 'getStreamDiffsRuntime'],
+  ['svelte', '../../packages/markstream-svelte/src/optional/streamDiffs.ts', 'getStreamDiffsRuntime'],
+  ['angular', '../../packages/markstream-angular/src/optional/streamDiffs.ts', 'getStreamDiffsRuntime'],
   ['vue2', '../../packages/markstream-vue2/src/components/CodeBlockNode/streamDiffs.ts', 'getStreamDiffsRuntime'],
 ] as const
 
-function runtimeModule(useMonacoResult: Record<string, string>) {
+function runtimeModule(runtimeHelpers: Record<string, string>) {
   const runtime = {
-    useMonaco: () => useMonacoResult,
+    createCodeBlockRuntime: () => runtimeHelpers,
+    detectLanguage: () => 'plaintext',
     preloadStreamDiffs: async () => {},
   }
   // Loaders normalize through `mod.default ?? mod`, so expose both shapes.
@@ -50,7 +51,7 @@ describe('stream-diffs-only code block loader', () => {
     const loader = await getLoader(loaderPath, exportName)
     const modules = await Promise.all([loader(), loader()])
     expect(modules.every(Boolean)).toBe(true)
-    expect(modules[0]?.useMonaco?.()).toEqual({ runtime: 'stream-diffs' })
+    expect(modules[0]?.createCodeBlockRuntime?.()).toEqual({ runtime: 'stream-diffs' })
   })
 
   it.each(LOADERS)('%s loader returns null when stream-diffs is absent', async (_name, loaderPath, exportName) => {
@@ -69,12 +70,13 @@ describe('stream-diffs-only code block loader', () => {
       releasePreload = resolve
     }))
     const runtime = {
-      useMonaco: () => ({ runtime: 'stream-diffs' }),
+      createCodeBlockRuntime: () => ({ runtime: 'stream-diffs' }),
+      detectLanguage: () => 'plaintext',
       preloadStreamDiffs: preload,
     }
     vi.doMock('stream-diffs/markstream', () => runtime)
 
-    const loader = await getLoader('../../packages/markstream-react/src/components/CodeBlockNode/monaco.ts', 'getStreamDiffsRuntime')
+    const loader = await getLoader('../../packages/markstream-react/src/components/CodeBlockNode/streamDiffs.ts', 'getStreamDiffsRuntime')
     const first = loader()
     await vi.waitFor(() => expect(preload).toHaveBeenCalledTimes(1))
 
@@ -93,13 +95,14 @@ describe('stream-diffs-only code block loader', () => {
 
   it('does not cache the React runtime when preload fails', async () => {
     vi.doMock('stream-diffs/markstream', () => ({
-      useMonaco: () => ({ runtime: 'stream-diffs' }),
+      createCodeBlockRuntime: () => ({ runtime: 'stream-diffs' }),
+      detectLanguage: () => 'plaintext',
       preloadStreamDiffs: vi.fn(async () => {
         throw new Error('runtime preload failed')
       }),
     }))
 
-    const loader = await getLoader('../../packages/markstream-react/src/components/CodeBlockNode/monaco.ts', 'getStreamDiffsRuntime')
+    const loader = await getLoader('../../packages/markstream-react/src/components/CodeBlockNode/streamDiffs.ts', 'getStreamDiffsRuntime')
     await expect(loader()).resolves.toBeNull()
     await expect(loader()).resolves.toBeNull()
   })
