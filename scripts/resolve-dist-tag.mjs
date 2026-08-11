@@ -48,7 +48,7 @@ export function resolveDistTagPlan(version, distTags = {}) {
   const requiredAliases = publishTag === 'next'
     && nextMajor !== null
     && candidate.major > nextMajor
-    && distTags['legacy-next'] !== distTags.next
+    && (distTags['legacy-next'] === undefined || distTags['legacy-next'] === distTags.next)
     ? [{ tag: 'legacy-next', version: distTags.next }]
     : []
   return { publishTag, requiredAliases }
