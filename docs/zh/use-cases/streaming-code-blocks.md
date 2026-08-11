@@ -67,7 +67,7 @@ defineProps<{
 pnpm add stream-diffs
 ```
 
-安装后，`CodeBlockNode` 会在 fence 足够完整并进入视口时挂载 File 或 FileDiff 表面。代码与 diff 选项使用 `stream-diffs` 的内置默认值。未安装该 peer 时会自动回退为普通 `<pre><code>`。
+安装后，`CodeBlockNode` 会在 fence 足够完整并进入视口时挂载 File 或 FileDiff 表面。受支持的配置来自直接或 renderer 顶层 `codeBlockOptions`。未安装该 peer 时会自动回退为普通 `<pre><code>`。
 
 对于移动端 WebView 或保守的包体，请使用普通 `pre` 渲染：
 

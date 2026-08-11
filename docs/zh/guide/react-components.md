@@ -71,15 +71,16 @@ markstream-react 提供与 markstream-vue 相同强大的组件，但专为 Reac
 
 | 属性 | 类型 | 描述 |
 |------|------|-------------|
-| `codeBlockDarkTheme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的深色主题 |
-| `codeBlockLightTheme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的浅色主题 |
+| `codeBlockDarkTheme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的已注册深色主题名称 |
+| `codeBlockLightTheme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的已注册浅色主题名称 |
 | `codeBlockMinWidth` | `string \| number` | 转发到 `CodeBlockNode` 的最小宽度 |
 | `codeBlockMaxWidth` | `string \| number` | 转发到 `CodeBlockNode` 的最大宽度 |
+| `codeBlockOptions` | `CodeBlockOptions` | 转发到每个普通 `CodeBlockNode` 的中性排版/布局与受支持 File/FileDiff 选项 |
 | `codeBlockProps` | `NodeRendererCodeBlockProps` | 额外转发到每个 `CodeBlockNode` 的 props |
 | `mermaidProps` | `Partial<Omit<MermaidBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 Mermaid 围栏和自定义 `mermaid` 渲染器的 props |
 | `d2Props` | `Partial<Omit<D2BlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 D2 围栏和自定义 `d2` 渲染器的 props |
 | `infographicProps` | `Partial<Omit<InfographicBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 infographic 围栏和自定义 `infographic` 渲染器的 props |
-| `themes` | `CodeBlockTheme[]` | 转发到 `CodeBlockNode` 的主题列表 |
+| `themes` | `readonly [CodeBlockTheme, CodeBlockTheme]` | 转发到 `CodeBlockNode` 的已注册 `[dark, light]` 主题名称对 |
 
 #### 重型渲染器 props 透传
 
@@ -116,7 +117,9 @@ markstream-react 提供与 markstream-vue 相同强大的组件，但专为 Reac
 />
 ```
 
-`NodeRendererCodeBlockProps` 会跟随公开的 `CodeBlockNode` props 结构（去掉 `node`），所以像 `showHeader`、`showFontSizeButtons`、`showTooltips` 这类字段都能直接获得补全，而不需要退回 `any`。
+`CodeBlockOptions` 是直接 `CodeBlockNode` 与 `NodeRenderer` 共享的独立顶层 prop。它包含宿主管理的 `fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`，以及受支持的 `stream-diffs` File/FileDiff、交互、annotation 与 callback 字段。主题、code/language、流式状态、header、挂载/显示时机与释放仍由宿主管理。
+
+`NodeRendererCodeBlockProps` 跟随公开的组件 shell props 结构（去掉 `node` 与 `codeBlockOptions`），所以像 `showHeader`、`showFontSizeButtons`、`showTooltips` 这类字段都能直接获得补全，而不需要退回 `any`。
 
 ```tsx
 import type { NodeRendererCodeBlockProps } from 'markstream-react'
@@ -228,7 +231,7 @@ function App({ content, isDone }: { content: string, isDone: boolean }) {
 
 ### CodeBlockNode
 
-功能丰富的代码块，由可选的对等依赖 `stream-diffs` 增强（未安装时会回退渲染普通 `<pre>`）。代码与 diff 选项使用 `stream-diffs` 内置默认值。
+功能丰富的代码块，由可选的对等依赖 `stream-diffs` 增强（未安装时会回退渲染普通 `<pre>`）。直接与 renderer 顶层配置都使用 `codeBlockOptions`。
 
 ```tsx
 import { CodeBlockNode } from 'markstream-react'

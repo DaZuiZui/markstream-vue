@@ -32,8 +32,19 @@ Other packages:
 
 ## Install markstream-vue
 
+The stable line remains 1.x. The coordinated 2.0 beta will use `next`; first verify
+that `npm view markstream-vue@next version` reports `2.0.0-beta.1`, then follow
+the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0):
+
 ```bash
-pnpm add markstream-vue
+pnpm add markstream-vue@next stream-diffs
+```
+
+During the beta, the untagged package remains on 1.x. Use `@1` when you want to
+pin the maintained 1.x line across the stable 2.0 cutover:
+
+```bash
+pnpm add markstream-vue@1
 ```
 
 ```vue
@@ -88,7 +99,9 @@ Start with the [framework overview](https://markstream.simonhe.me/frameworks) if
 
 ## Stability
 
-`markstream-vue` has a stable 1.x API contract. The current npm package may still use beta tags while the 1.0 release gate and cross-framework package family are finalized. The stable surface includes `MarkdownRender`, streaming content rendering, pre-parsed node rendering, the safe HTML policy, optional Mermaid / KaTeX / D2 / Infographic integrations, stream-diffs enhanced code blocks, virtual-scroll coordination, CSS exports, worker client subpaths, and SSR imports for Vite / Nuxt / VitePress.
+`markstream-vue` has a stable 1.x API contract. The breaking 2.0 line will be released through the npm `next` tag for validation before it can replace `latest`. It removes the Monaco and `stream-markdown` code-block runtimes and uses `stream-diffs` as the only enhanced code-block surface. See [Migrating from 1.x to 2.0](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+
+The stable surface includes `MarkdownRender`, streaming content rendering, pre-parsed node rendering, the safe HTML policy, optional Mermaid / KaTeX / D2 / Infographic integrations, enhanced code blocks, virtual-scroll coordination, CSS exports, worker client subpaths, and SSR imports for Vite / Nuxt / VitePress.
 
 Cross-framework renderers (`markstream-react`, `markstream-octane`, `markstream-svelte`, `markstream-angular`, `markstream-vue2`) are available and actively developed. Check each package page for API maturity, framework support, and known limitations.
 
@@ -178,6 +191,7 @@ npx skills add Simon-He95/markstream-vue
 Recommended usage:
 
 - `npx skills add Simon-He95/markstream-vue` is the primary path for Codex-compatible skill discovery because it reads `.agents/skills` directly from the GitHub repository
+- use the bundled `markstream-migration` skill when upgrading an existing Markstream 1.x application to 2.0
 - `markstream-vue@1.0` no longer exposes the `markstream-vue` CLI or any CLI `bin`; repository scripts such as `pnpm skills:list` and `pnpm prompts:list` are contributor-only helpers for cloned checkouts
 - prompts remain in the repository under `prompts/` for direct copying or future separate-package work
 
@@ -346,9 +360,11 @@ Choose the renderer mode by surface:
 ```
 
 Use `mode="minimal"` when you want the same lightweight defaults as `chat`, but prefer a neutral mode name for non-chat surfaces. Avoid combining high-frequency `smooth-streaming` with `fade`; it can turn a steady stream into repeated opacity restarts.
-For the same chat message, do not switch from `mode="chat"` to `mode="docs"` only because `final` changed. Keep the mode stable and switch pacing/animation props (`smooth-streaming`, `typewriter`, `fade`) instead; `docs` changes the default code renderer and layout strategy.
-For docs pages that do not need enhanced code blocks, set `:render-code-blocks-as-pre="true"`. If you want the rich `CodeBlockNode` UI and File/Diff rendering, install `stream-diffs`; otherwise the renderer intentionally falls back to `<pre>` rendering.
+For the same chat message, do not switch from `mode="chat"` to `mode="docs"` only because `final` changed. Keep the mode stable and switch pacing/animation props (`smooth-streaming`, `typewriter`, `fade`) instead; `docs` changes the layout strategy.
+For surfaces that do not need enhanced code blocks, set `:render-code-blocks-as-pre="true"`. If you want the rich `CodeBlockNode` UI and File/Diff rendering, install `stream-diffs`; otherwise the renderer intentionally falls back to `<pre>` rendering. To own ordinary fenced-code rendering, register a scoped `code_block` with `setCustomComponents`.
 `stream-diffs` is a framework-agnostic DOM runtime. `CodeBlockNode` owns the Vue-side decision of when to replace the streaming `<pre>` with its finalized File or FileDiff surface.
+
+Use the top-level `code-block-options` prop to configure the built-in surface; direct `CodeBlockNode` usage accepts the same `codeBlockOptions` object. `CodeBlockOptions` is shared across all six framework adapters. It covers host-managed typography/layout (`fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, `tabSize`) plus supported File/FileDiff, interaction, annotation, and callback fields. Theme, code/language, stream state, header, mounting, reveal, and disposal remain host-owned.
 
 Renderer CSS is scoped under an internal `.markstream-vue` container to minimize global style conflicts. If you render exported node components outside of `MarkdownRender`, wrap them in an element with class `markstream-vue`.
 
@@ -363,6 +379,8 @@ Prefer the unified code-block `theme` prop for new integrations. When you render
   :content="doc"
 />
 ```
+
+Theme values are registered names: direct `CodeBlockNode.theme` accepts a fixed string or `{ dark, light }`, and `themes` is the `[dark, light]` pair to load. A former Monaco JSON theme object is not renamed directly; call `registerCustomTheme` from `stream-diffs/pierre`, then pass the registered name.
 
 `code-block-props` forwards user-facing code block props only. Structural renderer keys such as `node`, `key`, `ref`, `ctx`, `renderNode`, `indexKey`, `__proto__`, `prototype`, and `constructor` are ignored.
 
@@ -648,6 +666,10 @@ If markstream-vue helps your work, you can support ongoing maintenance with one 
 
 - Latest: [Releases](https://github.com/Simon-He95/markstream-vue/releases) — see highlights and upgrade notes.
 - Full history: [CHANGELOG.md](./CHANGELOG.md)
+- 2.0 beta candidate:
+  - After `npm view markstream-vue@next version` reports `2.0.0-beta.1`, install `markstream-vue@next` with `stream-diffs`; stable 1.x remains available through `@1`.
+  - Monaco and `stream-markdown` runtimes and Monaco-named APIs are removed; supported code-block options move to `codeBlockOptions`.
+  - Read [Migrating from 1.x to 2.0](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
 - 1.0 launch notes:
   - Stable Vue 3 renderer API, SSR imports, CSS exports, Tailwind export, worker client exports, and safe HTML defaults.
   - `markstream-vue@1.0.0`, `markstream-core@1.0.0`, and `stream-markdown-parser@1.0.0` ship together.

@@ -147,7 +147,7 @@ Install the optional peer:
 pnpm add stream-diffs
 ```
 
-Enhanced code blocks (the `CodeBlockNode` runtime) use `stream-diffs` built-in defaults for code and diff options, with theming via `darkTheme` / `lightTheme` / `themes`. When `stream-diffs` is not installed, code blocks fall back to a plain `<pre>`.
+Enhanced code blocks use `stream-diffs` defaults and accept the shared `CodeBlockOptions` contract through direct `CodeBlockNode.codeBlockOptions` or top-level `MarkdownRender.codeBlockOptions`. Themes are registered names; `themes` is the `[dark, light]` pair. When `stream-diffs` is not installed, code blocks fall back to a plain `<pre>`.
 
 ```tsx
 import MarkdownRender from 'markstream-react'

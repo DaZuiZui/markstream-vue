@@ -18,6 +18,7 @@ markstream-vue2 提供与 markstream-vue 相同强大的组件，但专为 Vue 2
 ```ts
 import type {
   CodeBlockNodeProps,
+  CodeBlockOptions,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
@@ -85,15 +86,16 @@ import type { CodeBlockNode } from 'stream-markdown-parser'
 
 | 属性 | 类型 | 描述 |
 |------|------|-------------|
-| `code-block-dark-theme` | `any` | 转发到每个 `CodeBlockNode` 的深色主题 |
-| `code-block-light-theme` | `any` | 转发到每个 `CodeBlockNode` 的浅色主题 |
+| `code-block-dark-theme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的已注册深色主题名称 |
+| `code-block-light-theme` | `CodeBlockTheme` | 转发到每个 `CodeBlockNode` 的已注册浅色主题名称 |
 | `code-block-min-width` | `string \| number` | 转发到 `CodeBlockNode` 的最小宽度 |
 | `code-block-max-width` | `string \| number` | 转发到 `CodeBlockNode` 的最大宽度 |
+| `code-block-options` | `CodeBlockOptions` | 转发到每个普通 `CodeBlockNode` 的排版/布局与受支持 File/FileDiff 选项 |
 | `code-block-props` | `Record<string, any>` | 额外转发到每个 `CodeBlockNode` 的 props |
 | `mermaid-props` | `Partial<Omit<MermaidBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 Mermaid 围栏和自定义 `mermaid` 渲染器的 props |
 | `d2-props` | `Partial<Omit<D2BlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 D2 围栏和自定义 `d2` 渲染器的 props |
 | `infographic-props` | `Partial<Omit<InfographicBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | 额外转发到 infographic 围栏和自定义 `infographic` 渲染器的 props |
-| `themes` | `string[]` | 转发到 `CodeBlockNode` 的主题列表 |
+| `themes` | `readonly [string, string]` | 转发到 `CodeBlockNode` 的已注册 `[dark, light]` 主题名称对 |
 
 #### 重型渲染器 props 透传
 
@@ -154,7 +156,7 @@ export default {
 
 ### CodeBlockNode
 
-功能丰富的代码块，由可选的对等依赖 `stream-diffs` 增强（未安装时会回退渲染普通 `<pre>`）。代码与 diff 选项使用 `stream-diffs` 内置默认值。
+功能丰富的代码块，由可选的对等依赖 `stream-diffs` 增强（未安装时会回退渲染普通 `<pre>`）。直接 `CodeBlockNode` 与顶层 `MarkdownRender` 都接收 `codeBlockOptions`。
 
 ```vue
 <script>
@@ -169,6 +171,11 @@ export default {
         language: 'typescript',
         code: 'const greeting: string = "Hello"',
         raw: 'const greeting: string = "Hello"'
+      },
+      codeBlockOptions: {
+        overflow: 'wrap',
+        diffStyle: 'unified',
+        enableLineSelection: true
       }
     }
   },
@@ -187,6 +194,7 @@ export default {
   <div class="markstream-vue">
     <CodeBlockNode
       :node="codeNode"
+      :code-block-options="codeBlockOptions"
       :stream="true"
       @copy="handleCopy"
       @preview-code="handlePreviewCode"
@@ -194,6 +202,8 @@ export default {
   </div>
 </template>
 ```
+
+Markstream 会在 fallback 与最终 surface 之间协调 `fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding` 与 `tabSize`，并转发其他受支持的 File/FileDiff 字段。主题、内容/语言、流式状态、header、挂载、显示与释放仍由宿主管理。
 
 ## 数学组件
 

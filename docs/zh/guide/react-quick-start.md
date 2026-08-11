@@ -147,7 +147,7 @@ export default function MarkdownPage() {
 pnpm add stream-diffs
 ```
 
-增强代码块（`CodeBlockNode` 运行时）使用 `stream-diffs` 内置的代码与 diff 默认配置，主题通过 `darkTheme` / `lightTheme` / `themes` 控制。未安装 `stream-diffs` 时，代码块会回退渲染普通 `<pre>`。
+增强代码块默认使用 `stream-diffs` 配置，并通过直接 `CodeBlockNode.codeBlockOptions` 或顶层 `MarkdownRender.codeBlockOptions` 接收共享 `CodeBlockOptions`。主题使用已注册名称，`themes` 是 `[dark, light]` 对。未安装 `stream-diffs` 时，代码块会回退渲染普通 `<pre>`。
 
 ```tsx
 import MarkdownRender from 'markstream-react'

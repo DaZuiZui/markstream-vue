@@ -171,16 +171,19 @@
 - 步骤：
   - `CodeBlockNode` 是唯一的代码块渲染器，通过 `stream-diffs` 增强（diff 追踪、code/render 选项）
   - 如果应用层要提前预热，调用 `markstream-vue` 的 `preloadCodeBlockRuntime()`
-  - 设置 `code-renderer` 为 `'pre'`（纯文本）或 `'stream-diffs'`（增强）；无需额外 peer
-- 最小追问： “控制台是否有报错？你用的 `code-renderer` 值是什么？”
+  - 安装 `stream-diffs` 获得增强 surface；未安装时内置 renderer 会回退 `<pre><code>`
+  - 受支持选项通过顶层或直接 `codeBlockOptions` 传入；header/toolbar 设置留在 `codeBlockProps`
+  - `maxHeight` 与单个上下对称 `padding` 都使用 number 类型的 px 数值
+  - 设置 `render-code-blocks-as-pre` 强制普通路径，或通过带作用域的 `setCustomComponents(...)` 替换 `code_block`
+- 最小追问： “控制台是否有报错？是否安装 `stream-diffs`？是否强制普通路径或使用了自定义 `code_block`？”
 - 文档：`docs/guide/code-block-runtime.md`, `docs/guide/components.md`
 
 ### 想要轻量代码块（不装 diff）
 
 - 表述： “SSR 友好”, “减包体”
 - 步骤：
-  - 用 `code-renderer="pre"` 输出纯 `<pre>` 代码块（无 diff 追踪）
-  - 需要 diff 追踪时用 `code-renderer="stream-diffs"` 的 `CodeBlockNode`
+  - 用 `render-code-blocks-as-pre` 输出纯 `<pre>` 代码块（无 diff 追踪）
+  - 需要内置 `CodeBlockNode` 提供 diff 追踪时安装 `stream-diffs`
 - 最小追问： “需要 diff 追踪还是纯文本就行？”
 - 文档：`docs/guide/code-blocks.md`, `docs/guide/components.md`
 

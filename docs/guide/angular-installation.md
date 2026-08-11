@@ -43,7 +43,7 @@ Install only the heavy features you need:
 | D2 diagrams | `@terrastruct/d2` |
 | AntV infographic blocks | `@antv/infographic` |
 
-Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Code and diff options use `stream-diffs` built-in defaults, and theming is controlled through `darkTheme` / `lightTheme` / `themes`.
+Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Direct `CodeBlockNode` props and top-level renderer props both accept `codeBlockOptions`; registered theme names use `theme` and the `[dark, light]` `themes` pair.
 
 Quick install:
 

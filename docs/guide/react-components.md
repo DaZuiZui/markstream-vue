@@ -71,15 +71,16 @@ The primary component for rendering markdown content in React.
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `codeBlockDarkTheme` | `CodeBlockTheme` | Dark theme object forwarded to every `CodeBlockNode` |
-| `codeBlockLightTheme` | `CodeBlockTheme` | Light theme object forwarded to every `CodeBlockNode` |
+| `codeBlockDarkTheme` | `CodeBlockTheme` | Registered dark theme name forwarded to every `CodeBlockNode` |
+| `codeBlockLightTheme` | `CodeBlockTheme` | Registered light theme name forwarded to every `CodeBlockNode` |
 | `codeBlockMinWidth` | `string \| number` | Min width forwarded to `CodeBlockNode` |
 | `codeBlockMaxWidth` | `string \| number` | Max width forwarded to `CodeBlockNode` |
+| `codeBlockOptions` | `CodeBlockOptions` | Renderer-neutral typography/layout and supported File/FileDiff options forwarded to every ordinary `CodeBlockNode` |
 | `codeBlockProps` | `NodeRendererCodeBlockProps` | Extra props forwarded to every `CodeBlockNode` |
 | `mermaidProps` | `Partial<Omit<MermaidBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to Mermaid fences and custom `mermaid` renderers |
 | `d2Props` | `Partial<Omit<D2BlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to D2 fences and custom `d2` renderers |
 | `infographicProps` | `Partial<Omit<InfographicBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to infographic fences and custom `infographic` renderers |
-| `themes` | `CodeBlockTheme[]` | Theme list forwarded to `CodeBlockNode` |
+| `themes` | `readonly [CodeBlockTheme, CodeBlockTheme]` | Registered `[dark, light]` theme-name pair forwarded to `CodeBlockNode` |
 
 #### Heavy renderer prop forwarding
 
@@ -116,7 +117,9 @@ Trusted compatibility example:
 />
 ```
 
-`NodeRendererCodeBlockProps` follows the public `CodeBlockNode` prop surface except for `node`, so you get completion for flags like `showHeader`, `showFontSizeButtons`, and `showTooltips` without dropping to `any`.
+`CodeBlockOptions` is a separate top-level prop shared by direct `CodeBlockNode` and `NodeRenderer`. It includes host-managed `fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, and `tabSize`, plus supported `stream-diffs` File/FileDiff, interaction, annotation, and callback fields. Theme, code/language, streaming state, header, mount/reveal timing, and disposal remain host-owned.
+
+`NodeRendererCodeBlockProps` follows the public component-shell surface except for `node` and `codeBlockOptions`, so you get completion for flags like `showHeader`, `showFontSizeButtons`, and `showTooltips` without dropping to `any`.
 
 ```tsx
 import type { NodeRendererCodeBlockProps } from 'markstream-react'
@@ -228,7 +231,7 @@ This API split fixes discoverability and typing around the two component contrac
 
 ### CodeBlockNode
 
-Feature-rich code blocks enhanced by the optional `stream-diffs` runtime (falls back to a plain `<pre>` when the peer is not installed). Code and diff options use `stream-diffs` built-in defaults.
+Feature-rich code blocks enhanced by the optional `stream-diffs` runtime (falls back to a plain `<pre>` when the peer is not installed). Direct and renderer-level configuration uses `codeBlockOptions`.
 
 ```tsx
 import { CodeBlockNode } from 'markstream-react'

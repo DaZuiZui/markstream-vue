@@ -199,9 +199,10 @@ pnpm add markstream-angular@next
 
 ### From markstream-vue 1.x to 2.0
 1. Replace Monaco and stream-markdown code blocks with stream-diffs, or use the plain pre fallback.
-2. Remove monacoOptions, codeBlockMonacoOptions, stream-monaco, and stream-markdown.
-3. Use the renamed code-block helpers and the public ParseOptions contract.
-4. Full guide: https://markstream.simonhe.me/guide/migration-2-0
+2. Rename supported monacoOptions / codeBlockMonacoOptions fields to the shared codeBlockOptions / CodeBlockOptions API; maxHeight and symmetric padding are numeric pixel values. Remove stream-monaco and stream-markdown.
+3. Theme values are registered names: use a string or { dark, light }, keep themes as [dark, light], and register former JSON themes with registerCustomTheme from stream-diffs/pierre.
+4. Use preloadCodeBlockRuntime for preload-only code; import advanced controllers directly from stream-diffs. Use the public ParseOptions contract.
+5. Full guide: https://markstream.simonhe.me/guide/migration-2-0
 
 ### From react-markdown to markstream-react
 1. Replace import: react-markdown -> markstream-react.

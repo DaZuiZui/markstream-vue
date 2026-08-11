@@ -636,9 +636,10 @@ ${renderFeatureMatrix()}
 
 ### From markstream-vue 1.x to 2.0
 1. Replace Monaco and stream-markdown code blocks with stream-diffs, or use the plain pre fallback.
-2. Remove monacoOptions, codeBlockMonacoOptions, stream-monaco, and stream-markdown.
-3. Use the renamed code-block helpers and the public ParseOptions contract.
-4. Full guide: ${docsSiteUrl}/guide/migration-2-0
+2. Rename supported monacoOptions / codeBlockMonacoOptions fields to the shared codeBlockOptions / CodeBlockOptions API; maxHeight and symmetric padding are numeric pixel values. Remove stream-monaco and stream-markdown.
+3. Theme values are registered names: use a string or { dark, light }, keep themes as [dark, light], and register former JSON themes with registerCustomTheme from stream-diffs/pierre.
+4. Use preloadCodeBlockRuntime for preload-only code; import advanced controllers directly from stream-diffs. Use the public ParseOptions contract.
+5. Full guide: ${docsSiteUrl}/guide/migration-2-0
 
 ### From react-markdown to markstream-react
 1. Replace import: react-markdown -> markstream-react.
@@ -788,9 +789,10 @@ ${renderChineseFeatureMatrix()}
 
 ### 从 markstream-vue 1.x 迁移到 2.0
 1. 用 stream-diffs 替换 Monaco 与 stream-markdown 代码块，或使用普通 pre 回退。
-2. 删除 monacoOptions、codeBlockMonacoOptions、stream-monaco 与 stream-markdown。
-3. 使用重命名后的代码块 helper 与公开 ParseOptions 约定。
-4. 完整指南：${docsSiteUrl}/zh/guide/migration-2-0
+2. 把受支持的 monacoOptions / codeBlockMonacoOptions 字段改为共享 codeBlockOptions / CodeBlockOptions；maxHeight 与上下对称 padding 都是 number 类型且单位为 px。删除 stream-monaco 与 stream-markdown。
+3. 主题值使用已注册名称：传 string 或 { dark, light }，themes 保持 [dark, light]；旧 JSON 主题用 stream-diffs/pierre 的 registerCustomTheme 注册。
+4. 只需预热时使用 preloadCodeBlockRuntime；高级 controller 直接从 stream-diffs 导入。Parser 使用公开 ParseOptions 约定。
+5. 完整指南：${docsSiteUrl}/zh/guide/migration-2-0
 
 ### 从 react-markdown 迁移到 markstream-react
 1. 替换导入：react-markdown -> markstream-react。

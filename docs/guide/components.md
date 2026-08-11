@@ -213,7 +213,7 @@ setCustomComponents('docs', {
 - **Peer**: `stream-diffs`
 - **Common gotcha**: the enhanced surface waits for the block to finish streaming and enter the viewport
 
-Reach for this when the code block itself is part of the product experience. `stream-diffs` is framework-agnostic; Vue mount and unmount decisions stay in `CodeBlockNode`. Code and diff options use the `stream-diffs` built-in defaults.
+Reach for this when the code block itself is part of the product experience. `stream-diffs` is framework-agnostic; Vue mount and unmount decisions stay in `CodeBlockNode`. Configure supported code and diff behavior through direct or renderer-level `codeBlockOptions`.
 
 Deep dive: [CodeBlockNode](/guide/code-block-node), [Code Block Runtime](/guide/code-block-runtime)
 

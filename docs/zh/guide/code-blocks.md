@@ -34,7 +34,32 @@ npm i stream-diffs
 
 ### 配置
 
-增强的 `stream-diffs` surface 不暴露按块（per-block）的 options prop。代码与 diff 选项使用 `stream-diffs` 内置默认值，因此不再需要 `monaco-options` 风格的配置。主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` props 设置（见 `CodeBlockTheme`）。
+可以在 `MarkdownRender` / `NodeRenderer` 顶层或直接挂载的 `CodeBlockNode` 上使用与 renderer 无关的 `codeBlockOptions`。六个框架 adapter 都导出相同的 `CodeBlockOptions` 公开类型。
+
+```vue
+<script setup lang="ts">
+import type { CodeBlockOptions } from 'markstream-vue'
+
+const codeBlockOptions: CodeBlockOptions = {
+  fontSize: 13,
+  overflow: 'wrap',
+  diffStyle: 'unified',
+  expandUnchanged: false,
+  enableLineSelection: true,
+}
+</script>
+
+<template>
+  <MarkdownRender
+    :content="content"
+    :code-block-options="codeBlockOptions"
+  />
+</template>
+```
+
+排版/布局字段（`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`）由 Markstream 协调，确保流式 fallback 与最终 surface 一致。受支持的 File/FileDiff 字段包括 `disableLineNumbers`、`overflow`、高亮限制、diff 布局/折叠、交互、selection callback、annotation、`onController` 与 `workerManager`。主题、语言/内容、流式状态、header、挂载、显示和释放仍由宿主管理，并具有更高优先级。
+
+主题使用已注册的 string 名称。直接 `CodeBlockNode.theme` 接收 string 或 `{ dark, light }`，`themes` 是要加载的 `[dark, light]` 对。旧 Monaco JSON theme object 没有直接改名：先调用 `stream-diffs/pierre` 的 `registerCustomTheme`，再传入注册名称。
 
 完整运行时行为、diff 交互与可选预热见 [/zh/guide/code-block-runtime](/zh/guide/code-block-runtime)。
 
@@ -82,6 +107,9 @@ const node = {
 </script>
 
 <template>
-  <CodeBlockNode :node="node" />
+  <CodeBlockNode
+    :node="node"
+    :code-block-options="{ overflow: 'wrap', disableLineNumbers: true }"
+  />
 </template>
 ```

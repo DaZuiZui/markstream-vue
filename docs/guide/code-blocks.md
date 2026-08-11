@@ -1,11 +1,11 @@
 ---
 title: Code Block Rendering
-description: How markstream-vue renders code blocks — enhanced diff surface, Shiki highlighting, or plain pre/code fallback depending on installed peers.
+description: How markstream-vue renders code blocks with the optional stream-diffs File/FileDiff surface or the plain pre/code fallback.
 keywords:
   - code block rendering
   - streaming code blocks
-  - shiki highlighting
-  - markdown code renderer
+  - stream-diffs
+  - code block options
 ---
 # Code Block Rendering
 
@@ -34,7 +34,32 @@ npm i stream-diffs
 
 ### Configuration
 
-The enhanced `stream-diffs` surface does not expose a per-block options prop. Code and diff options use the `stream-diffs` built-in defaults, so no `monaco-options`-style configuration is needed. Theming is handled through the `theme` / `darkTheme` / `lightTheme` / `themes` props (see `CodeBlockTheme`).
+Use the renderer-neutral `codeBlockOptions` prop on either `MarkdownRender` / `NodeRenderer` or a directly mounted `CodeBlockNode`. The same public `CodeBlockOptions` type is exported by all six framework adapters.
+
+```vue
+<script setup lang="ts">
+import type { CodeBlockOptions } from 'markstream-vue'
+
+const codeBlockOptions: CodeBlockOptions = {
+  fontSize: 13,
+  overflow: 'wrap',
+  diffStyle: 'unified',
+  expandUnchanged: false,
+  enableLineSelection: true,
+}
+</script>
+
+<template>
+  <MarkdownRender
+    :content="content"
+    :code-block-options="codeBlockOptions"
+  />
+</template>
+```
+
+Typography/layout fields (`fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, `tabSize`) are coordinated by Markstream so the streaming fallback and finalized surface match. Supported File/FileDiff fields include `disableLineNumbers`, `overflow`, highlighter limits, diff layout/folding, interactions, selection callbacks, annotations, `onController`, and `workerManager`. Theme, language/content, streaming state, header, mounting, reveal, and disposal stay host-owned and take precedence.
+
+Themes are registered string names. Direct `CodeBlockNode.theme` accepts a string or `{ dark, light }`, while `themes` is the `[dark, light]` pair to load. A former Monaco JSON theme object has no direct rename: use `registerCustomTheme` from `stream-diffs/pierre`, then pass its name.
 
 See [/guide/code-block-runtime](/guide/code-block-runtime) for the full runtime behavior, diff interactions, and optional preload.
 
@@ -82,6 +107,9 @@ const node = {
 </script>
 
 <template>
-  <CodeBlockNode :node="node" />
+  <CodeBlockNode
+    :node="node"
+    :code-block-options="{ overflow: 'wrap', disableLineNumbers: true }"
+  />
 </template>
 ```

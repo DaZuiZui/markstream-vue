@@ -18,6 +18,7 @@ markstream-vue2 provides the same powerful components as markstream-vue, but bui
 ```ts
 import type {
   CodeBlockNodeProps,
+  CodeBlockOptions,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
@@ -86,15 +87,16 @@ The primary component for rendering markdown content in Vue 2.
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `code-block-dark-theme` | `any` | Dark theme object forwarded to every `CodeBlockNode` |
-| `code-block-light-theme` | `any` | Light theme object forwarded to every `CodeBlockNode` |
+| `code-block-dark-theme` | `CodeBlockTheme` | Registered dark theme name forwarded to every `CodeBlockNode` |
+| `code-block-light-theme` | `CodeBlockTheme` | Registered light theme name forwarded to every `CodeBlockNode` |
 | `code-block-min-width` | `string \| number` | Min width forwarded to `CodeBlockNode` |
 | `code-block-max-width` | `string \| number` | Max width forwarded to `CodeBlockNode` |
+| `code-block-options` | `CodeBlockOptions` | Typography/layout and supported File/FileDiff options forwarded to every ordinary `CodeBlockNode` |
 | `code-block-props` | `Record<string, any>` | Extra props forwarded to every `CodeBlockNode` |
 | `mermaid-props` | `Partial<Omit<MermaidBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to Mermaid fences and custom `mermaid` renderers |
 | `d2-props` | `Partial<Omit<D2BlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to D2 fences and custom `d2` renderers |
 | `infographic-props` | `Partial<Omit<InfographicBlockNodeProps, 'node' \| 'loading' \| 'isDark'>>` | Extra props forwarded to infographic fences and custom `infographic` renderers |
-| `themes` | `string[]` | Theme list forwarded to `CodeBlockNode` |
+| `themes` | `readonly [string, string]` | Registered `[dark, light]` theme-name pair forwarded to `CodeBlockNode` |
 
 #### Heavy renderer prop forwarding
 
@@ -166,7 +168,7 @@ export default {
 
 ### CodeBlockNode
 
-Feature-rich code blocks enhanced by the optional `stream-diffs` runtime (falls back to a plain `<pre>` when the peer is not installed). Code and diff options use `stream-diffs` built-in defaults.
+Feature-rich code blocks enhanced by the optional `stream-diffs` runtime (falls back to a plain `<pre>` when the peer is not installed). Both direct `CodeBlockNode` and top-level `MarkdownRender` usage accept `codeBlockOptions`.
 
 ```vue
 <script>
@@ -181,6 +183,11 @@ export default {
         language: 'typescript',
         code: 'const greeting: string = "Hello"',
         raw: 'const greeting: string = "Hello"'
+      },
+      codeBlockOptions: {
+        overflow: 'wrap',
+        diffStyle: 'unified',
+        enableLineSelection: true
       }
     }
   },
@@ -199,6 +206,7 @@ export default {
   <div class="markstream-vue">
     <CodeBlockNode
       :node="codeNode"
+      :code-block-options="codeBlockOptions"
       :stream="true"
       @copy="handleCopy"
       @preview-code="handlePreviewCode"
@@ -206,6 +214,8 @@ export default {
   </div>
 </template>
 ```
+
+Markstream coordinates `fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, and `tabSize` across the fallback and finalized surface. It forwards the other supported File/FileDiff fields while retaining ownership of theme, content/language, streaming state, header, mounting, reveal, and disposal.
 
 ## Math Components
 

@@ -171,16 +171,19 @@ Use these as “answer skeletons”: quick steps + minimal repro questions + whe
 - Steps:
   - `CodeBlockNode` is the only code block renderer, enhanced via `stream-diffs` (diff tracking, code/render options)
   - For app-level preloading, call `preloadCodeBlockRuntime()` from `markstream-vue`
-  - Set `code-renderer` to `'pre'` (plain) or `'stream-diffs'` (enhanced); no extra peer is required
-- Ask: “Any console errors? Which `code-renderer` value are you using?”
+  - Install `stream-diffs` for the enhanced surface; without it the built-in renderer falls back to `<pre><code>`
+  - Pass supported options through top-level or direct `codeBlockOptions`; keep header/toolbar settings in `codeBlockProps`
+  - Use numeric CSS pixels for `maxHeight` and the single symmetric `padding` value
+  - Set `render-code-blocks-as-pre` to force the plain path, or replace `code_block` through scoped `setCustomComponents(...)`
+- Ask: “Any console errors? Is `stream-diffs` installed? Are you forcing the plain path or using a custom `code_block`?”
 - Docs: `docs/guide/code-block-runtime.md`, `docs/guide/components.md`
 
 ### Prefer lightweight code blocks (no diffs)
 
 - Signals: “SSR friendly”, “reduce bundle”
 - Steps:
-  - Use `code-renderer="pre"` for plain `<pre>` code blocks (no diff tracking)
-  - Use `code-renderer="stream-diffs"` on `CodeBlockNode` when you want diff tracking
+  - Use `render-code-blocks-as-pre` for plain `<pre>` code blocks (no diff tracking)
+  - Install `stream-diffs` when the built-in `CodeBlockNode` should provide diff tracking
 - Ask: “Need diff tracking or just plain code?”
 - Docs: `docs/guide/code-blocks.md`, `docs/guide/components.md`
 

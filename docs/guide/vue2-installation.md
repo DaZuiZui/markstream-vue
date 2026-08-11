@@ -189,7 +189,7 @@ markstream-vue2 supports various features through optional peer dependencies. In
 | D2 Diagrams | `@terrastruct/d2` | `pnpm add @terrastruct/d2` |
 | Math Rendering (KaTeX) | `katex` | `pnpm add katex` |
 
-Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Code and diff options use `stream-diffs` built-in defaults, and theming is controlled through `darkTheme` / `lightTheme` / `themes`.
+Enhanced code blocks use the optional `stream-diffs` peer. When it is not installed, a plain `<pre>` is rendered instead. Direct `CodeBlockNode` and top-level `MarkdownRender` both accept `code-block-options`; themes are registered names and `themes` is the `[dark, light]` pair.
 
 ## Vue 2.6.x Setup
 
@@ -290,9 +290,9 @@ if (mermaidWorker)
 
 If you want to keep using subpath imports like `markstream-vue2/index.css`, add `resolve.alias` mappings in `vue.config.js` (see `playground-vue2-cli/vue.config.js`).
 
-### Code blocks: prefer the `stream-diffs` override
+### Code blocks: install `stream-diffs` for the enhanced surface
 
-The enhanced code block runtime (`stream-diffs`) is the only code block renderer in markstream-vue2. It falls back to a plain `<pre>` when the optional peer is not installed. For Webpack 4, `stream-diffs` is the recommended (and only) code block runtime — there is no Monaco fallback.
+The enhanced code block runtime (`stream-diffs`) is the only code block renderer in markstream-vue2. It falls back to a plain `<pre>` when the optional peer is not installed. For Webpack 4, it remains the only enhanced runtime; there is no Monaco fallback.
 
 1) Install the optional peer:
 
@@ -381,7 +381,7 @@ Requires `stream-diffs`:
 pnpm add stream-diffs
 ```
 
-`stream-diffs` powers the enhanced `CodeBlockNode` runtime with built-in defaults for code and diff options. When it is not installed, code blocks fall back to a plain `<pre>`. You can override the `code_block` renderer via `setCustomComponents` for custom behavior:
+`stream-diffs` powers the enhanced `CodeBlockNode` runtime. Configure supported code/diff behavior through `code-block-options`. When it is not installed, code blocks fall back to a plain `<pre>`. You can override the `code_block` renderer via `setCustomComponents` for custom behavior:
 
 ```js
 import { setCustomComponents } from 'markstream-vue2'

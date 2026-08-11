@@ -26,7 +26,6 @@ keywords:
 | `html-policy` | `'safe' \| 'escape' \| 'trusted'` | `'safe'` | 控制 `html_block` / `html_inline` 渲染。`safe` 会阻断 active/embed/form 类标签，`escape` 按文本显示 HTML，`trusted` 保留旧的宽 HTML 行为但仍移除脚本和危险属性。 |
 | `mode` | `'docs' \| 'chat' \| 'minimal'` | `'docs'` | 按场景选择预设调优。AI/SSE 输出用 `chat`，富文档页面用 `docs`，非聊天的轻量场景用 `minimal`。 |
 | `dom-mode` | `'full' \| 'minimal'` | `'full'` | 尽力减少 DOM 结构。`minimal` 只会在不需要 per-node `.node-slot` / `.node-content` 包装时跳过它们；遇到 fade、批量渲染、视口延迟、虚拟化、宿主 virtual-scroll、typewriter 或自定义组件时会回退到 `full`。如需稳定 minimal 输出，请显式关闭这些能力。 |
-| `code-renderer` | `'pre' \| 'stream-diffs'` | 随 mode 变化 | 选择普通 fenced code block 的渲染器。`docs` 默认使用增强的 `stream-diffs` surface；`chat` 和 `minimal` 默认使用纯 `<pre><code>`。`render-code-blocks-as-pre=true` 优先级更高。 |
 | `custom-markdown-it` | `(md: MarkdownIt) => MarkdownIt` | – | 自定义内部 MarkdownIt 实例（加插件、改配置）。 |
 | `debug-performance` | `boolean` | `false` | 打印解析/渲染耗时、虚拟化统计，以及 `parse(stream)` 的 `streamMode` / `streamDelta` 等信息（仅 dev）。 |
 | `typewriter` | `boolean \| 'simple' \| 'precise'` | `false` | 流式内容增长时显示闪烁打字光标。`true` / `'precise'` 使用基于 Range 的精确定位；`'simple'` 使用轻量 CSS 光标。 |
@@ -158,7 +157,7 @@ flowchart TD
 
 | Flag | 默认值 | 功能 |
 | ---- | ------ | ---- |
-| `render-code-blocks-as-pre` | `false` | 将非 Mermaid/Infographic/D2 的 `code_block` 渲染为 `<pre><code>`（使用 `PreCodeNode`）。Mermaid/infographic/D2 仍会路由到各自组件，除非用 `setCustomComponents` 覆盖。 |
+| `render-code-blocks-as-pre` | `false` | 强制内置 fenced-code 路径使用 `<pre><code>`（`PreCodeNode`）。通过 `setCustomComponents` 注册的带作用域语言或 `code_block` 覆盖仍然优先。 |
 | `code-block-stream` | `true` | 启用流式代码块更新；关闭后会保持加载态直到完整文本就绪，避免中间态解析产生问题。 |
 | `viewport-priority` | `true` | 优先渲染视窗内的代码块/Mermaid/D2/KaTeX 等重节点，延迟离屏渲染以提升交互体验。 |
 | `defer-nodes-until-visible` | `true` | 启用后，重节点在接近视口前可先渲染为占位（仅在非虚拟化模式生效）。 |
@@ -185,15 +184,23 @@ flowchart TD
 
 - `code-block-dark-theme`, `code-block-light-theme`
 - `code-block-min-width`, `code-block-max-width`
+- `code-block-options`（`CodeBlockOptions`，从 renderer 顶层传给普通 `CodeBlockNode`；直接使用 `CodeBlockNode` 时也用同名 prop）
 - `code-block-props`（额外代码块 props，例如 `showHeader`、`showFontSizeButtons`、`showTooltips`、`htmlPreviewAllowScripts`、`htmlPreviewSandbox`，同时保留不是渲染器结构字段的自定义透传字段；`node`、`key`、`ref`、`ctx`、`renderNode`、`indexKey`、`__proto__`、`prototype`、`constructor` 不会透传）
-- `themes`（在安装 `stream-diffs` 时，会转发给其 adapter 的主题系统）
+- `themes`（已注册主题名称组成的 `[dark, light]` 对）
 
-2.0 不再支持按块配置 code/diff 选项，增强版 `CodeBlockNode` 使用 `stream-diffs` 内置默认值。`htmlPreviewAllowScripts` 和 `htmlPreviewSandbox` 只影响内置 `CodeBlockNode` 的 inline HTML iframe preview；它们不会影响 `previewCode` 事件处理器，也不会影响外部 artifact renderer。
+`code-block-options` 与 `code-block-props` 分属不同层。排版/布局（`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`）及受支持的 File/FileDiff runtime 字段使用 `code-block-options`；组件 shell 与 toolbar 使用 `code-block-props`。主题、code/language、流式状态、唯一 header、挂载/显示时机与释放由宿主管理，会覆盖冲突的 runtime 值。`htmlPreviewAllowScripts` 和 `htmlPreviewSandbox` 只影响内置 `CodeBlockNode` 的 inline HTML iframe preview；它们不会影响 `previewCode` 事件处理器，也不会影响外部 artifact renderer。
 
 `code-block-props` 也可以直接走渲染器公开类型，不需要再退回 `any`：
 
 ```ts twoslash
-import type { NodeRendererProps } from 'markstream-vue'
+import type { CodeBlockOptions, NodeRendererProps } from 'markstream-vue'
+
+const codeBlockOptions: CodeBlockOptions = {
+  fontSize: 13,
+  overflow: 'wrap',
+  diffStyle: 'unified',
+  enableLineSelection: true,
+}
 
 const codeBlockProps: NonNullable<NodeRendererProps['codeBlockProps']> = {
   showHeader: false,
@@ -202,6 +209,8 @@ const codeBlockProps: NonNullable<NodeRendererProps['codeBlockProps']> = {
   htmlPreviewAllowScripts: false,
 }
 ```
+
+两者都从 renderer 顶层传入：`:code-block-options="codeBlockOptions"` 与 `:code-block-props="codeBlockProps"`。直接挂载的 `CodeBlockNode` 接收相同的 `codeBlockOptions` object。直接 `CodeBlockNode.theme` 接收已注册的 string 名称或 `{ dark, light }`；旧 Monaco JSON theme object 需先调用 `stream-diffs/pierre` 的 `registerCustomTheme`，再通过注册名称引用。
 
 ## 图表节点全局下发参数
 
