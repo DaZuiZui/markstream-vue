@@ -5,7 +5,6 @@ import type { MarkstreamVirtualTimelineProps } from './composables/useMarkstream
 import type { CustomComponents as MarkstreamCustomComponents } from './types'
 import type {
   CodeBlockNodeProps,
-  CodeBlockOptions,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MathBlockNodeProps,

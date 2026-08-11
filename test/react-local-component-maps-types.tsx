@@ -66,7 +66,7 @@ const definedHtmlComponents = defineHtmlComponents({
 
 const codeBlockOptions = {
   onLineClick: (_event: { lineNumber: number }) => {},
-  onController: (controller: { dispose(): void }) => controller.dispose(),
+  onController: (controller: { dispose: () => void }) => controller.dispose(),
 } satisfies CodeBlockOptions
 
 defineStreamingComponents({

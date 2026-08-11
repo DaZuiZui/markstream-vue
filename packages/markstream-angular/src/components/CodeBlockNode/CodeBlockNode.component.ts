@@ -778,8 +778,19 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
   private buildRuntimeOptions() {
     const userOptions = { ...(this.resolvedCodeBlockOptions ?? {}) } as Record<string, any>
     for (const key of [
-      'maxHeight', 'padding', 'tabSize', 'theme', 'themes', 'themeType', 'language', 'languages',
-      'stream', 'disableFileHeader', 'onThemeChange', 'renderCustomHeader', 'renderHeaderMetadata',
+      'maxHeight',
+      'padding',
+      'tabSize',
+      'theme',
+      'themes',
+      'themeType',
+      'language',
+      'languages',
+      'stream',
+      'disableFileHeader',
+      'onThemeChange',
+      'renderCustomHeader',
+      'renderHeaderMetadata',
       'renderHeaderPrefix',
     ])
       delete userOptions[key]

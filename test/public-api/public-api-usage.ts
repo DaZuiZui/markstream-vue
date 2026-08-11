@@ -181,7 +181,7 @@ const brokenMermaidSvg: boolean = isBrokenMermaidSvg('<svg viewBox="0 0 0 10"><r
 const codeBlockProps: Partial<CodeBlockNodeProps> = {}
 const codeBlockOptions: CodeBlockOptions = {
   onLineClick: (event: { lineNumber: number }) => event.lineNumber,
-  onController: (controller: { dispose(): void }) => controller.dispose(),
+  onController: (controller: { dispose: () => void }) => controller.dispose(),
 }
 const nodeRendererCodeBlockOptions: NodeRendererProps = {
   content: '```ts\nconsole.log(1)\n```',

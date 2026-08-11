@@ -47,14 +47,14 @@ const props = withDefaults(
   },
 )
 
-const effectiveShowLineNumbers = computed(() => {
-  return props.showLineNumbers ?? (props.codeBlockOptions?.disableLineNumbers !== true)
-})
-
 const emits = defineEmits<{
   (e: 'previewCode', payload: CodeBlockPreviewPayload): void
   (e: 'copy', code: string): void
 }>()
+
+const effectiveShowLineNumbers = computed(() => {
+  return props.showLineNumbers ?? (props.codeBlockOptions?.disableLineNumbers !== true)
+})
 
 const attrs = useAttrs()
 const lifecycle = inject(MARKSTREAM_NODE_LIFECYCLE_KEY, null)

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { CodeBlockNode as ParsedCodeBlockNode } from 'stream-markdown-parser'
+import type { PropType } from 'vue-demi'
 import type { CodeBlockOptions, CodeBlockPreviewPayload, CodeBlockThemeProp, CodeBlockThemes } from '../../types/component-props'
 // Avoid static import of `stream-diffs` for types so the runtime bundle
 // doesn't get a reference. Define minimal local types we need here.
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onUnmounted, ref, watch } from 'vue-demi'
-import type { PropType } from 'vue-demi'
 import { useSafeI18n } from '../../composables/useSafeI18n'
 // Tooltip is provided as a singleton via composable to avoid many DOM nodes
 import { hideTooltip, showTooltipForAnchor } from '../../composables/useSingletonTooltip'
@@ -151,8 +151,19 @@ const effectiveShowLineNumbers = computed(() => {
 const resolvedRuntimeOptions = computed<Record<string, any>>(() => {
   const raw = { ...resolvedCodeBlockOptions.value } as Record<string, any>
   for (const key of [
-    'maxHeight', 'padding', 'tabSize', 'theme', 'themes', 'themeType', 'language', 'languages',
-    'stream', 'disableFileHeader', 'onThemeChange', 'renderCustomHeader', 'renderHeaderMetadata',
+    'maxHeight',
+    'padding',
+    'tabSize',
+    'theme',
+    'themes',
+    'themeType',
+    'language',
+    'languages',
+    'stream',
+    'disableFileHeader',
+    'onThemeChange',
+    'renderCustomHeader',
+    'renderHeaderMetadata',
     'renderHeaderPrefix',
   ])
     delete raw[key]
@@ -454,8 +465,9 @@ function syncEditorCssVars() {
   const tabSize = readPositiveNumber(codeOptions.tabSize) ?? 4
   targetEl.style.setProperty('--diffs-tab-size', String(tabSize))
   const configuredPadding = codeOptions.padding
-  if (typeof configuredPadding === 'number')
+  if (typeof configuredPadding === 'number') {
     targetEl.style.setProperty('--diffs-gap-block', `${configuredPadding}px`)
+  }
   else {
     targetEl.style.removeProperty('--diffs-gap-block')
   }
