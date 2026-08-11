@@ -104,6 +104,21 @@ describe('release dependency gates', () => {
     }
   })
 
+  it('runs pull request validation on the 2.0 integration branch', () => {
+    const workflows = [
+      ['.github/workflows/ci.yml', 2],
+      ['.github/workflows/docs-check.yml', 1],
+      ['.github/workflows/docs-parity.yml', 2],
+      ['.github/workflows/dts-typecheck.yml', 2],
+      ['.github/workflows/pkg-pr-new.yml', 1],
+    ] as const
+
+    for (const [path, expectedCount] of workflows) {
+      const workflow = readFileSync(resolve(process.cwd(), path), 'utf8')
+      expect(workflow.match(/branches: \[main, 2\.0\.0\]/g)).toHaveLength(expectedCount)
+    }
+  })
+
   it('fails closed when a release tag does not match its package manifest', () => {
     const workflow = readFileSync(resolve(process.cwd(), '.github/workflows/release-stable.yml'), 'utf8')
     const mappings = [
