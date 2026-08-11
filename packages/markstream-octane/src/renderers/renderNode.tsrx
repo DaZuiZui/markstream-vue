@@ -6,7 +6,7 @@ import { convertHtmlAttrsToProps, getHtmlTagFromContent, normalizeCustomHtmlTagN
 import { AdmonitionNode } from '../components/AdmonitionNode/AdmonitionNode.tsrx'
 import { BlockquoteNode } from '../components/BlockquoteNode/BlockquoteNode.tsrx'
 import { CheckboxNode } from '../components/CheckboxNode/CheckboxNode.tsrx'
-import { CodeBlockNode as MonacoCodeBlockNode } from '../components/CodeBlockNode/CodeBlockNode.tsrx'
+import { CodeBlockNode } from '../components/CodeBlockNode/CodeBlockNode.tsrx'
 import { PreCodeNode } from '../components/CodeBlockNode/PreCodeNode.tsrx'
 import { D2BlockNode } from '../components/D2BlockNode/D2BlockNode.tsrx'
 import { DefinitionListNode } from '../components/DefinitionListNode/DefinitionListNode.tsrx'
@@ -296,7 +296,7 @@ function renderCodeBlock(
     })
   }
 
-  return Octane.createElement(MonacoCodeBlockNode, {
+  return Octane.createElement(CodeBlockNode, {
     key,
     node,
     loading: Boolean(node.loading) || ctx.final === false,

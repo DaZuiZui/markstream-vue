@@ -1,7 +1,7 @@
 import type { SmoothMarkdownStreamOptions } from 'markstream-core'
 import type { BaseNode, HtmlPolicy, MarkdownIt, ParsedNode, ParseOptions } from 'stream-markdown-parser'
 import type { CustomComponentMap } from '../../customComponents'
-import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemeProp, CodeBlockThemes } from '../../types/monaco'
+import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemeProp, CodeBlockThemes } from '../../types/codeBlock'
 import {
   getHtmlTagFromContent,
   getMarkdown,

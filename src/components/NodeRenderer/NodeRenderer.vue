@@ -1654,6 +1654,7 @@ function estimateNodeHeight(node: ParsedNode, index: number, width: number) {
         rendererKind,
         showHeader: resolveCodeBlockShowHeader(),
         width,
+        diffStyle: rendererProps.codeBlockOptions?.diffStyle,
       })
     }
   }

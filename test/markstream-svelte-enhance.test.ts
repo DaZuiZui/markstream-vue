@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { enhanceRenderedHtml } from '../packages/markstream-svelte/src/enhanceRenderedHtml'
 
-const { cleanupEditor, createDiffEditor, createEditor, setTheme, useMonacoOptions } = vi.hoisted(() => ({
+const { cleanupEditor, createDiffEditor, createEditor, setTheme, codeBlockRuntimeOptions } = vi.hoisted(() => ({
   cleanupEditor: vi.fn(),
   createEditor: vi.fn(),
   setTheme: vi.fn(async () => {}),
-  useMonacoOptions: [] as Array<Record<string, any>>,
+  codeBlockRuntimeOptions: [] as Array<Record<string, any>>,
   createDiffEditor: vi.fn(async (container: HTMLElement, _original: string, modified: string) => {
     const surface = document.createElement('div')
     surface.className = 'stream-diffs-shell'
@@ -25,10 +25,10 @@ const { cleanupEditor, createDiffEditor, createEditor, setTheme, useMonacoOption
   }),
 }))
 
-vi.mock('../packages/markstream-svelte/src/optional/monaco', () => ({
+vi.mock('../packages/markstream-svelte/src/optional/streamDiffs', () => ({
   getStreamDiffsRuntime: vi.fn(async () => ({
-    useMonaco: vi.fn((options: Record<string, any>) => {
-      useMonacoOptions.push(options)
+    createCodeBlockRuntime: vi.fn((options: Record<string, any>) => {
+      codeBlockRuntimeOptions.push(options)
       return {
         cleanupEditor,
         createDiffEditor,
@@ -45,7 +45,7 @@ describe('markstream-svelte enhanceRenderedHtml', () => {
     createDiffEditor.mockClear()
     createEditor.mockClear()
     setTheme.mockClear()
-    useMonacoOptions.length = 0
+    codeBlockRuntimeOptions.length = 0
     const original = 'const value = 1'
     const updated = 'const value = 2'
     const root = document.createElement('div')
@@ -87,7 +87,7 @@ describe('markstream-svelte enhanceRenderedHtml', () => {
       container.replaceChildren(surface)
     })
     setTheme.mockClear()
-    useMonacoOptions.length = 0
+    codeBlockRuntimeOptions.length = 0
     const root = document.createElement('div')
     const source = Array.from({ length: 20 }, (_, index) => `const value${index} = ${index}`).join('\n')
     root.innerHTML = `<pre data-markstream-code-block="1" data-markstream-language="ts"><code>${source}</code></pre>`
@@ -105,7 +105,7 @@ describe('markstream-svelte enhanceRenderedHtml', () => {
       themes: ['top-tuple-dark', 'top-tuple-light'],
     })
 
-    expect(useMonacoOptions[0]).toMatchObject({
+    expect(codeBlockRuntimeOptions[0]).toMatchObject({
       theme: 'pair-dark',
       themes: ['tuple-dark', 'tuple-light'],
     })
@@ -122,7 +122,7 @@ describe('markstream-svelte enhanceRenderedHtml', () => {
     expect(fallback?.style.maxHeight).toBe('123px')
     expect(fallback?.style.overflow).toBe('auto')
 
-    useMonacoOptions.length = 0
+    codeBlockRuntimeOptions.length = 0
     setTheme.mockClear()
     const tupleRoot = document.createElement('div')
     tupleRoot.innerHTML = '<pre data-markstream-code-block="1" data-markstream-language="ts"><code>const tuple = true</code></pre>'
@@ -131,7 +131,7 @@ describe('markstream-svelte enhanceRenderedHtml', () => {
       isDark: false,
       themes: ['tuple-dark', 'tuple-light'],
     })
-    expect(useMonacoOptions[0]?.theme).toBe('tuple-light')
+    expect(codeBlockRuntimeOptions[0]?.theme).toBe('tuple-light')
     expect(setTheme).toHaveBeenCalledWith('tuple-light')
     tupleHandle.dispose()
   })

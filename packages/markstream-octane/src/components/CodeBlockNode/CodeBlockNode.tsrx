@@ -8,7 +8,7 @@ import { useSafeI18n } from '../../i18n/useSafeI18n'
 import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonTooltip'
 import { getLanguageIcon, isLikelyIncompleteLanguageIdentifier, languageMap, normalizeLanguageIdentifier, resolveLanguageId, subscribeLanguageIconsRevision } from '../../utils/languageIcon'
 import { HtmlPreviewFrame } from './HtmlPreviewFrame.tsrx'
-import { getStreamDiffsRuntime } from './monaco'
+import { getStreamDiffsRuntime } from './streamDiffs'
 import { PreCodeNode } from './PreCodeNode.tsrx'
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
@@ -408,11 +408,6 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
       return
 
     const maxHeight = getMaxHeightValue()
-    try {
-      view.updateOptions?.({ automaticLayout: nextExpanded })
-    }
-    catch {}
-
     const isDiffEditor = editorKindRef.current === 'diff'
     const heightPriority = isDiffEditor ? 'important' : ''
 
@@ -859,16 +854,16 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
           setUseFallback(true)
           return
         }
-        const useMonaco = (mod as any).useMonaco
+        const createRuntimeHelpers = (mod as any).createCodeBlockRuntime
         const detectLanguage = (mod as any).detectLanguage
         if (typeof detectLanguage === 'function')
           detectLanguageRef.current = detectLanguage
-        if (typeof useMonaco !== 'function') {
+        if (typeof createRuntimeHelpers !== 'function') {
           setUseFallback(true)
           return
         }
-        runtimeFactoryRef.current = useMonaco
-        installRuntimeHelpers(useMonaco)
+        runtimeFactoryRef.current = createRuntimeHelpers
+        installRuntimeHelpers(createRuntimeHelpers)
         setRuntimeReady(true)
       }
       catch {
@@ -976,7 +971,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
   const shouldDelayEditor = (stream === false && loading)
     || (stream !== false && loading && !hasStreamingCode)
 
-  // Vue parity: keep theme in sync without recreating Monaco.
+  // Vue parity: keep theme in sync without recreating the code-block surface.
   useEffect(() => {
     if (useFallback)
       return
@@ -1098,7 +1093,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
               ?? (initialFontSize === defaultPreFallbackFontSize
                 ? defaultPreFallbackLineHeight
                 : Math.max(12, Math.round(initialFontSize * 1.5)))
-            view?.updateOptions?.({ fontSize: initialFontSize, lineHeight: initialLineHeight, automaticLayout: false })
+            view?.updateOptions?.({ fontSize: initialFontSize, lineHeight: initialLineHeight })
           }
           catch {}
         }

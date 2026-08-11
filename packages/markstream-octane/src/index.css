@@ -1646,7 +1646,7 @@
 }
 
 /* Standalone Pre uses the renderer's semantic surface. The enhanced fallback
-   keeps its Monaco-theme override in .code-fallback-plain. */
+   keeps its runtime-theme override in .code-fallback-plain. */
 .markstream-octane pre[data-markstream-pre='1']:not(.code-fallback-plain):not(.markstream-pre--diff-preview) {
   box-sizing: border-box;
   width: 100%;

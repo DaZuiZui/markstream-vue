@@ -5,7 +5,7 @@ import CodeBlockNode from '../src/components/CodeBlockNode/CodeBlockNode.vue'
 import { resetCodeBlockRuntimeReadyForTest } from '../src/components/CodeBlockNode/runtime'
 
 function helpers() {
-  return (globalThis as any).__streamMonacoHelpers
+  return (globalThis as any).__streamDiffsHelpers
 }
 
 let reportedContentHeight = 0
@@ -70,7 +70,7 @@ function resetHelpers(contentHeight: number) {
     },
   }
 
-  runtime.useMonaco.mockReset().mockImplementation(() => runtime)
+  runtime.createCodeBlockRuntime.mockReset().mockImplementation(() => runtime)
   runtime.createEditor.mockReset().mockImplementation(async (container: HTMLElement) => {
     container.replaceChildren(document.createElement('diffs-container'))
   })

@@ -18,8 +18,28 @@ export interface StreamDiffsRuntimeHelpers {
 }
 
 export interface StreamDiffsRuntimeModule {
-  useMonaco: (options?: Record<string, unknown>) => StreamDiffsRuntimeHelpers
+  createCodeBlockRuntime: (options?: Record<string, unknown>) => StreamDiffsRuntimeHelpers
   preloadStreamDiffs?: () => Promise<unknown> | unknown
+}
+
+interface StreamDiffsUpstreamModule {
+  createCodeBlockRuntime?: StreamDiffsRuntimeModule['createCodeBlockRuntime']
+  useMonaco?: StreamDiffsRuntimeModule['createCodeBlockRuntime']
+  preloadStreamDiffs?: StreamDiffsRuntimeModule['preloadStreamDiffs']
+}
+
+function normalizeStreamDiffsModule(value: unknown): StreamDiffsRuntimeModule | null {
+  const moduleValue = value as StreamDiffsUpstreamModule | undefined
+  const source = typeof moduleValue?.createCodeBlockRuntime === 'function' || typeof moduleValue?.useMonaco === 'function'
+    ? moduleValue
+    : (value as { default?: unknown } | undefined)?.default as StreamDiffsUpstreamModule | undefined
+  const factory = source?.createCodeBlockRuntime ?? source?.useMonaco
+  if (typeof factory !== 'function')
+    return null
+  return {
+    createCodeBlockRuntime: options => factory.call(source, options),
+    preloadStreamDiffs: source?.preloadStreamDiffs?.bind(source),
+  }
 }
 
 export function isCodeBlockRuntimeReady() {
@@ -52,11 +72,10 @@ export async function getStreamDiffsRuntime(): Promise<StreamDiffsRuntimeModule 
     return null
 
   pendingImport = (async () => {
-    // `stream-diffs` is the only supported code-block runtime in 2.0. The
-    // heavy `stream-monaco` / `monaco-editor` fallback has been removed.
+    // `stream-diffs` is the only supported enhanced code-block runtime in 2.0.
     try {
-      const candidate = await import('stream-diffs/markstream')
-      if (typeof (candidate as any)?.useMonaco !== 'function')
+      const candidate = normalizeStreamDiffsModule(await import('stream-diffs/markstream'))
+      if (!candidate)
         return null
       streamDiffsModule = candidate
       await preloadRuntime(streamDiffsModule)

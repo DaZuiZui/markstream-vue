@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CodeBlockNode } from '../packages/markstream-react/src/components/CodeBlockNode/CodeBlockNode'
 
-interface StreamMonacoHelpers {
-  useMonaco: ReturnType<typeof vi.fn>
+interface StreamDiffsHelpers {
+  createCodeBlockRuntime: ReturnType<typeof vi.fn>
   createEditor: ReturnType<typeof vi.fn>
   createDiffEditor: ReturnType<typeof vi.fn>
   updateCode: ReturnType<typeof vi.fn>
@@ -19,12 +19,12 @@ interface StreamMonacoHelpers {
   whenVisualReady?: ReturnType<typeof vi.fn>
 }
 
-function getStreamMonacoHelpers(): StreamMonacoHelpers {
-  return (globalThis as any).__streamMonacoHelpers
+function getStreamDiffsHelpers(): StreamDiffsHelpers {
+  return (globalThis as any).__streamDiffsHelpers
 }
 
-function resetStreamMonacoHelpers() {
-  const helpers = getStreamMonacoHelpers()
+function resetStreamDiffsHelpers() {
+  const helpers = getStreamDiffsHelpers()
   const makeEditorView = () => ({
     getModel: () => ({ getLineCount: () => 1 }),
     getOption: () => 14,
@@ -32,7 +32,7 @@ function resetStreamMonacoHelpers() {
     layout: vi.fn(),
   })
 
-  helpers.useMonaco.mockReset().mockImplementation(() => helpers)
+  helpers.createCodeBlockRuntime.mockReset().mockImplementation(() => helpers)
   helpers.createEditor.mockReset().mockImplementation(async () => {})
   helpers.createDiffEditor.mockReset().mockImplementation(async () => {})
   helpers.updateCode.mockReset()
@@ -97,12 +97,12 @@ afterEach(() => {
 
 describe('markstream-react codeBlockNode theme updates', () => {
   beforeEach(() => {
-    resetStreamMonacoHelpers()
+    resetStreamDiffsHelpers()
     ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
   })
 
   it('updates single-editor themes without recreating the editor when isDark toggles', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -151,7 +151,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('updates diff themes without recreating the diff editor when isDark toggles', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -205,7 +205,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('applies the neutral stream-diffs defaults', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -228,9 +228,9 @@ describe('markstream-react codeBlockNode theme updates', () => {
         lightTheme: 'vitesse-light',
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 1)
+    await waitForCallCount(helpers.createCodeBlockRuntime, 1)
 
-    const options = helpers.useMonaco.mock.calls[0]?.[0] as Record<string, any> | undefined
+    const options = helpers.createCodeBlockRuntime.mock.calls[0]?.[0] as Record<string, any> | undefined
 
     expect(options?.diffStyle).toBe('split')
     expect(options?.expandUnchanged).toBe(false)
@@ -250,7 +250,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('merges codeBlockOptions before host-owned runtime fields', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -299,11 +299,11 @@ describe('markstream-react codeBlockNode theme updates', () => {
         },
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 1)
+    await waitForCallCount(helpers.createCodeBlockRuntime, 1)
     await waitForCallCount(helpers.createDiffEditor, 1)
     await flushReact()
 
-    const options = helpers.useMonaco.mock.calls[0]?.[0] as Record<string, any>
+    const options = helpers.createCodeBlockRuntime.mock.calls[0]?.[0] as Record<string, any>
     expect(options).toMatchObject({
       MAX_HEIGHT: 420,
       fontSize: 16,
@@ -349,7 +349,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('selects a tuple-only theme by host color mode', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -368,8 +368,8 @@ describe('markstream-react codeBlockNode theme updates', () => {
         themes: ['tuple-dark', 'tuple-light'],
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 1)
-    expect(helpers.useMonaco.mock.calls[0]?.[0]?.theme).toBe('tuple-light')
+    await waitForCallCount(helpers.createCodeBlockRuntime, 1)
+    expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.theme).toBe('tuple-light')
 
     await act(async () => {
       root.unmount()
@@ -377,7 +377,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('recreates the runtime when codeBlockOptions identity changes', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -401,7 +401,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
         },
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 1)
+    await waitForCallCount(helpers.createCodeBlockRuntime, 1)
     await waitForCallCount(helpers.createEditor, 1)
 
     await act(async () => {
@@ -415,9 +415,9 @@ describe('markstream-react codeBlockNode theme updates', () => {
         },
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 2)
+    await waitForCallCount(helpers.createCodeBlockRuntime, 2)
 
-    const options = helpers.useMonaco.mock.calls[1]?.[0] as Record<string, any>
+    const options = helpers.createCodeBlockRuntime.mock.calls[1]?.[0] as Record<string, any>
     expect(options.overflow).toBe('wrap')
     expect(options.onLineClick).toBe(secondOnLineClick)
     expect(helpers.safeClean).toHaveBeenCalled()
@@ -428,13 +428,13 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('restores the default font size when codeBlockOptions.fontSize is removed', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const createdTypography: Array<{ fontSize: number, lineHeight: number }> = []
     const createdFallbackTypography: Array<{ fontSize: string, lineHeight: string }> = []
     const host = document.createElement('div')
     document.body.appendChild(host)
     let activeOptions: Record<string, any> | undefined
-    helpers.useMonaco.mockImplementation((options: Record<string, any>) => {
+    helpers.createCodeBlockRuntime.mockImplementation((options: Record<string, any>) => {
       activeOptions = options
       return helpers
     })
@@ -466,7 +466,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
         codeBlockOptions: { fontSize: 16 },
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 1)
+    await waitForCallCount(helpers.createCodeBlockRuntime, 1)
     await waitForCallCount(helpers.createEditor, 1)
     expect(createdTypography[0]).toEqual({ fontSize: 16, lineHeight: 24 })
     expect(createdFallbackTypography[0]).toEqual({ fontSize: '16px', lineHeight: '24px' })
@@ -484,7 +484,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
         codeBlockOptions: {},
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 2)
+    await waitForCallCount(helpers.createCodeBlockRuntime, 2)
     await waitForCallCount(helpers.createEditor, 2)
 
     expect(createdTypography[1]).toEqual({ fontSize: 12, lineHeight: 18 })
@@ -520,7 +520,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('recreates the runtime when direct line-number precedence changes', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -541,8 +541,8 @@ describe('markstream-react codeBlockNode theme updates', () => {
         showLineNumbers: true,
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 1)
-    expect(helpers.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
+    await waitForCallCount(helpers.createCodeBlockRuntime, 1)
+    expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
 
     await act(async () => {
       root.render(React.createElement(CodeBlockNode as any, {
@@ -553,8 +553,8 @@ describe('markstream-react codeBlockNode theme updates', () => {
         showLineNumbers: false,
       }))
     })
-    await waitForCallCount(helpers.useMonaco, 2)
-    expect(helpers.useMonaco.mock.calls[1]?.[0]?.disableLineNumbers).toBe(true)
+    await waitForCallCount(helpers.createCodeBlockRuntime, 2)
+    expect(helpers.createCodeBlockRuntime.mock.calls[1]?.[0]?.disableLineNumbers).toBe(true)
 
     await act(async () => {
       root.unmount()
@@ -562,7 +562,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('resyncs diff height after a diff update settles', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -632,7 +632,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('renders a two-pane diff fallback with stream-diffs-aligned metrics before the diff editor is ready', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -687,7 +687,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
   })
 
   it('reveals a partial diff after a queued update produces a visible surface', async () => {
-    const helpers = getStreamMonacoHelpers()
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
@@ -747,24 +747,24 @@ describe('markstream-react codeBlockNode theme updates', () => {
 
 describe('markstream-react codeBlockNode plain text theme fallback', () => {
   beforeEach(() => {
-    resetStreamMonacoHelpers()
+    resetStreamDiffsHelpers()
     ;(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true
   })
 
-  it('keeps dark plain text blocks on the fallback dark surface when Monaco reports light colors', async () => {
-    const helpers = getStreamMonacoHelpers()
+  it('keeps dark plain text blocks on the fallback dark surface when the runtime reports light colors', async () => {
+    const helpers = getStreamDiffsHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = createRoot(host)
 
     helpers.createEditor.mockImplementation(async (el: HTMLElement) => {
       const editor = document.createElement('div')
-      editor.className = 'monaco-editor'
+      editor.className = 'stream-diffs-shell'
       editor.style.backgroundColor = 'rgb(255, 255, 255)'
       editor.style.color = 'rgb(17, 24, 39)'
 
       const background = document.createElement('div')
-      background.className = 'monaco-editor-background'
+      background.className = 'stream-diffs-surface'
       background.style.backgroundColor = 'rgb(255, 255, 255)'
 
       const lines = document.createElement('div')

@@ -157,7 +157,7 @@ export const CodeBlockNodeLoading = defineComponent({
       )
       const codeBlockOptions = props.codeBlockOptions ?? {}
       const diffInline = isDiff && (props.estimatedDiffInline
-        ?? resolveDiffInlineLayout(codeBlockOptions as unknown as Record<string, unknown>, typeof window === 'undefined' ? 0 : window.innerWidth))
+        ?? resolveDiffInlineLayout(codeBlockOptions as unknown as Record<string, unknown>))
       const isSurfaceDark = props.isDark === true
       const fontSize = typeof codeBlockOptions.fontSize === 'number' && Number.isFinite(codeBlockOptions.fontSize) && codeBlockOptions.fontSize > 0
         ? codeBlockOptions.fontSize

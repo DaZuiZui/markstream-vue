@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemeProp, CodeBlockThemes } from '../types/monaco'
+  import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemeProp, CodeBlockThemes } from '../types/codeBlock'
   import type { SvelteRenderableNode, SvelteRenderContext } from './shared/node-helpers'
   import { onDestroy, onMount, tick } from 'svelte'
   import { useSafeI18n } from '../i18n/useSafeI18n'
-  import { getStreamDiffsRuntime } from '../optional/monaco'
+  import { getStreamDiffsRuntime } from '../optional/streamDiffs'
   import { hideTooltip, showTooltipForAnchor } from '../tooltip/singletonTooltip'
   import { getLanguageIcon, isLikelyIncompleteLanguageIdentifier, languageMap, normalizeLanguageIdentifier, resolveLanguageId } from '../utils/languageIcon'
   import HtmlPreviewFrame from './HtmlPreviewFrame.svelte'
@@ -445,12 +445,12 @@ ${configuredUnsafeCSS}`.trim(),
       const mod = await getStreamDiffsRuntime()
       if (!mounted || lifecycleId !== runtimeId)
         return
-      if (!mod || typeof mod.useMonaco !== 'function') {
+      if (!mod || typeof mod.createCodeBlockRuntime !== 'function') {
         useFallback = true
         return
       }
 
-      helpers = mod.useMonaco(syncRuntimeOptions())
+      helpers = mod.createCodeBlockRuntime(syncRuntimeOptions())
       await Promise.resolve(helpers.setTheme?.(requestedTheme))
       if (!mounted || lifecycleId !== runtimeId)
         return
@@ -741,7 +741,7 @@ ${configuredUnsafeCSS}`.trim(),
 
   function applyEditorOptions() {
     const target = diff ? helpers?.getDiffEditorView?.() : helpers?.getEditorView?.()
-    target?.updateOptions?.({ fontSize: codeFontSize, automaticLayout: false })
+    target?.updateOptions?.({ fontSize: codeFontSize })
     syncEditorGeometryVars()
     scheduleEditorHeightSync()
   }

@@ -83,6 +83,7 @@ export interface CodeBlockEstimateOptions {
   rendererKind: CodeRendererKind
   showHeader?: boolean
   width?: number
+  diffStyle?: 'split' | 'unified'
 }
 
 const GLOBAL_STORE_KEY = '__MARKSTREAM_VUE_HEIGHT_ESTIMATION_EXPERIMENT__'
@@ -397,10 +398,10 @@ function getInlineDiffLineCount(node: ParsedNode) {
 
 function getCodeBlockVisibleLineCount(
   node: ParsedNode,
-  width = 0,
+  diffStyle?: 'split' | 'unified',
 ) {
   if ((node as any).diff) {
-    if (!resolveDiffInlineLayout({}, width))
+    if (!resolveDiffInlineLayout({ diffStyle }))
       return getSplitDiffLineCount(node)
     return getInlineDiffLineCount(node)
   }
@@ -429,7 +430,7 @@ export function estimateCodeBlockHeight(
   let cap = CODE_BLOCK_DEFAULT_CAP
 
   if (rendererKind === 'stream-diffs') {
-    const lineCount = getCodeBlockVisibleLineCount(node, options.width)
+    const lineCount = getCodeBlockVisibleLineCount(node, options.diffStyle)
     const lineHeight = resolveStreamDiffsLineHeight()
     const verticalPadding = resolveStreamDiffsVerticalPadding(isDiff)
     cap = CODE_BLOCK_DEFAULT_CAP
@@ -448,7 +449,7 @@ export function estimateCodeBlockHeight(
     contentHeight: visibleContentHeight,
     rendererKind,
     ...(isDiff && rendererKind === 'stream-diffs'
-      ? { diffInline: resolveDiffInlineLayout({}, options.width ?? 0) }
+      ? { diffInline: resolveDiffInlineLayout({ diffStyle: options.diffStyle }) }
       : {}),
   }
 }

@@ -1,11 +1,11 @@
 import type { NodeRendererCodeBlockProps, NodeRendererD2Props, NodeRendererInfographicProps, NodeRendererMermaidProps } from './components/shared/node-helpers'
-import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemes } from './types/monaco'
+import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemes } from './types/codeBlock'
 import { toSafeMermaidSvgMarkup } from 'stream-markdown-parser'
 import { getD2 } from './optional/d2'
 import { getInfographic } from './optional/infographic'
 import { getKatex } from './optional/katex'
 import { getMermaid } from './optional/mermaid'
-import { getStreamDiffsRuntime } from './optional/monaco'
+import { getStreamDiffsRuntime } from './optional/streamDiffs'
 import { extractRenderedSvg, toSafeSvgMarkup } from './sanitizeSvg'
 import { hideTooltip, showTooltipForAnchor } from './tooltip/singletonTooltip'
 import { normalizeKaTeXRenderInput } from './utils/normalizeKaTeXRenderInput'
@@ -643,7 +643,7 @@ async function renderCodeBlock(
   }
 
   const streamDiffsModule = await getStreamDiffsRuntime()
-  if (!streamDiffsModule || typeof streamDiffsModule.useMonaco !== 'function' || !isActive())
+  if (!streamDiffsModule || typeof streamDiffsModule.createCodeBlockRuntime !== 'function' || !isActive())
     return
 
   for (const pre of preNodes) {
@@ -681,7 +681,7 @@ async function renderCodeBlock(
       shell.body.style.overflow = 'auto'
     }
     const originalPre = pre.cloneNode(true) as HTMLElement
-    let helpers: ReturnType<typeof streamDiffsModule.useMonaco> | null = null
+    let helpers: ReturnType<typeof streamDiffsModule.createCodeBlockRuntime> | null = null
     let restored = false
     const restoreOriginalPre = () => {
       if (restored)
@@ -754,7 +754,7 @@ async function renderCodeBlock(
     }
     syncGeometry()
 
-    helpers = streamDiffsModule.useMonaco({
+    helpers = streamDiffsModule.createCodeBlockRuntime({
       overflow: 'wrap',
       ...nativeOptions,
       themes: runtimeThemes,
