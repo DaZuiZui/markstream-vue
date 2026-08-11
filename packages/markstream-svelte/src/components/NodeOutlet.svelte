@@ -74,9 +74,13 @@
   let preShowLineNumbers = $derived(
     typeof context?.codeBlockProps?.showLineNumbers === 'boolean'
       ? context.codeBlockProps.showLineNumbers
-      : context?.codeBlockOptions?.disableLineNumbers !== true,
+      : typeof context?.codeBlockOptions?.disableLineNumbers === 'boolean'
+        ? !context.codeBlockOptions.disableLineNumbers
+        : false,
   )
-  let preStyle = $derived(`white-space: ${context?.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'}`)
+  let preStyle = $derived(context?.codeBlockOptions?.overflow
+    ? `white-space: ${context.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap'}`
+    : undefined)
   let escapedTextNode = $derived({
     type: 'text',
     content: String((node as any)?.content ?? (node as any)?.raw ?? ''),

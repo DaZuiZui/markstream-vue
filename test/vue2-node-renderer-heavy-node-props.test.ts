@@ -341,6 +341,23 @@ describe('markstream-vue2 heavy-node prop forwarding', () => {
   })
 
   it('uses codeBlockOptions for fallback line numbers unless codeBlockProps overrides them', async () => {
+    const defaultWrapper = mount(NodeRenderer as any, {
+      props: {
+        renderCodeBlocksAsPre: true,
+        nodes: [{
+          type: 'code_block',
+          language: 'ts',
+          code: 'export const value = 1',
+          raw: '```ts\nexport const value = 1\n```',
+        }],
+      },
+    })
+    await flushAll()
+    const defaultPre = defaultWrapper.get('pre[data-language="ts"]')
+    expect(defaultPre.attributes('data-markstream-line-numbers')).toBeUndefined()
+    expect((defaultPre.element as HTMLElement).style.whiteSpace).toBe('')
+    defaultWrapper.unmount()
+
     const wrapper = mount(NodeRenderer as any, {
       props: {
         renderCodeBlocksAsPre: true,
@@ -359,6 +376,39 @@ describe('markstream-vue2 heavy-node prop forwarding', () => {
     expect((wrapper.get('pre[data-language="ts"]').element as HTMLElement).style.whiteSpace).toBe('pre')
     wrapper.unmount()
 
+    const enabled = mount(NodeRenderer as any, {
+      props: {
+        renderCodeBlocksAsPre: true,
+        codeBlockOptions: { disableLineNumbers: false },
+        codeBlockProps: { showLineNumbers: false },
+        nodes: [{
+          type: 'code_block',
+          language: 'ts',
+          code: 'export const value = 1',
+          raw: '```ts\nexport const value = 1\n```',
+        }],
+      },
+    })
+    await flushAll()
+    expect(enabled.get('pre[data-language="ts"]').attributes('data-markstream-line-numbers')).toBeUndefined()
+    enabled.unmount()
+
+    const optionEnabled = mount(NodeRenderer as any, {
+      props: {
+        renderCodeBlocksAsPre: true,
+        codeBlockOptions: { disableLineNumbers: false },
+        nodes: [{
+          type: 'code_block',
+          language: 'ts',
+          code: 'export const value = 1',
+          raw: '```ts\nexport const value = 1\n```',
+        }],
+      },
+    })
+    await flushAll()
+    expect(optionEnabled.get('pre[data-language="ts"]').attributes('data-markstream-line-numbers')).toBe('1')
+    optionEnabled.unmount()
+
     const overridden = mount(NodeRenderer as any, {
       props: {
         renderCodeBlocksAsPre: true,
@@ -376,6 +426,40 @@ describe('markstream-vue2 heavy-node prop forwarding', () => {
     expect(overridden.get('pre[data-language="ts"]').attributes('data-markstream-line-numbers')).toBe('1')
     expect((overridden.get('pre[data-language="ts"]').element as HTMLElement).style.whiteSpace).toBe('pre-wrap')
     overridden.unmount()
+  })
+
+  it('keeps legacy forced-pre defaults and explicit options aligned', async () => {
+    const nodes = [{
+      type: 'code_block',
+      language: 'ts',
+      code: 'export const value = 1',
+      raw: '```ts\nexport const value = 1\n```',
+    }]
+    const wrapper = mount(LegacyNodesRenderer as any, { props: { nodes } })
+    await flushAll()
+    const pre = () => wrapper.get('pre[data-language="ts"]')
+    expect(pre().attributes('data-markstream-line-numbers')).toBeUndefined()
+    expect((pre().element as HTMLElement).style.whiteSpace).toBe('')
+
+    wrapper.unmount()
+
+    const optionEnabled = mount(LegacyNodesRenderer as any, {
+      props: { codeBlockOptions: { disableLineNumbers: false }, nodes },
+    })
+    await flushAll()
+    expect(optionEnabled.get('pre[data-language="ts"]').attributes('data-markstream-line-numbers')).toBe('1')
+    optionEnabled.unmount()
+
+    const explicitDisabled = mount(LegacyNodesRenderer as any, {
+      props: {
+        codeBlockOptions: { disableLineNumbers: false },
+        codeBlockProps: { showLineNumbers: false },
+        nodes,
+      },
+    })
+    await flushAll()
+    expect(explicitDisabled.get('pre[data-language="ts"]').attributes('data-markstream-line-numbers')).toBeUndefined()
+    explicitDisabled.unmount()
   })
 
   it('uses unified diff options for the built-in fallback layout estimate', async () => {

@@ -362,14 +362,18 @@ function renderCodeBlock(
   if (ctx.renderCodeBlocksAsPre) {
     const extraProps = getCodeBlockExtraProps(ctx.codeBlockProps)
     const configuredShowLineNumbers = extraProps.showLineNumbers
+    const disableLineNumbers = ctx.codeBlockOptions?.disableLineNumbers
+    const overflow = ctx.codeBlockOptions?.overflow
     return (
       <PreCodeNode
         key={key}
         node={node}
-        style={{ whiteSpace: ctx.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap' }}
+        style={overflow ? { whiteSpace: overflow === 'scroll' ? 'pre' : 'pre-wrap' } : undefined}
         showLineNumbers={typeof configuredShowLineNumbers === 'boolean'
           ? configuredShowLineNumbers
-          : ctx.codeBlockOptions?.disableLineNumbers !== true}
+          : typeof disableLineNumbers === 'boolean'
+            ? !disableLineNumbers
+            : false}
       />
     )
   }

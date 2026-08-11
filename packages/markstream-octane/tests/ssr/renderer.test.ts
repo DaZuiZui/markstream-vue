@@ -1,5 +1,6 @@
 import type { ComponentBody } from 'octane'
 import type { NodeComponentProps } from '../../src/server'
+import type { RenderContext } from '../../src/types'
 import { createElement, renderToStaticMarkup, renderToString } from 'octane/server'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -7,6 +8,7 @@ import {
   MathBlockNode,
   MathInlineNode,
   NodeRenderer,
+  renderNode,
   setCustomComponents,
 } from '../../src/server'
 
@@ -142,5 +144,45 @@ describe('markstream-octane SSR renderer', () => {
 
     expect(scrolled.html).toContain('white-space:pre')
     expect(wrapped.html).toContain('white-space:pre-wrap')
+  })
+
+  it('keeps forced-pre line-number defaults aligned with explicit options', () => {
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'export const value = 1',
+      raw: '```ts\nexport const value = 1\n```',
+    } as const
+    const baseContext: RenderContext = {
+      customId: 'octane-ssr-pre-options',
+      isDark: false,
+      indexKey: 'octane-ssr-pre-options',
+      typewriter: false,
+      codeBlockProps: {},
+      mermaidProps: {},
+      d2Props: {},
+      infographicProps: {},
+      showTooltips: true,
+      codeBlockStream: true,
+      renderCodeBlocksAsPre: true,
+      customComponents: {},
+      customHtmlTags: [],
+      events: {},
+    }
+    const renderPre = (context: RenderContext) => renderNode(node as any, 'pre-options', context) as any
+
+    expect(renderPre(baseContext).props.showLineNumbers).toBe(false)
+    expect(renderPre(baseContext).props.style).toBeUndefined()
+    expect(renderPre({ ...baseContext, codeBlockOptions: { disableLineNumbers: false } }).props.showLineNumbers).toBe(true)
+    expect(renderPre({
+      ...baseContext,
+      codeBlockOptions: { disableLineNumbers: false },
+      codeBlockProps: { showLineNumbers: false },
+    }).props.showLineNumbers).toBe(false)
+    expect(renderPre({
+      ...baseContext,
+      codeBlockOptions: { disableLineNumbers: true },
+      codeBlockProps: { showLineNumbers: true },
+    }).props.showLineNumbers).toBe(true)
   })
 })

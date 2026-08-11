@@ -49,14 +49,18 @@ describe('markstream-svelte code block handoff geometry', () => {
   })
 
   it('keeps fallback line numbers aligned with neutral options and explicit props', () => {
-    expect(nodeOutletSource).toContain("typeof context?.codeBlockProps?.showLineNumbers === 'boolean'")
-    expect(nodeOutletSource).toContain('context?.codeBlockOptions?.disableLineNumbers !== true')
+    expect(nodeOutletSource).toContain('typeof context?.codeBlockProps?.showLineNumbers === \'boolean\'')
+    expect(nodeOutletSource).toContain('typeof context?.codeBlockOptions?.disableLineNumbers === \'boolean\'')
+    expect(nodeOutletSource).toContain('? !context.codeBlockOptions.disableLineNumbers')
+    expect(nodeOutletSource).toContain(': false,')
     expect(nodeOutletSource).toContain('<PreCodeNode {node} showLineNumbers={preShowLineNumbers} style={preStyle} />')
   })
 
   it('keeps direct pre overflow aligned with enhanced fallbacks', () => {
-    expect(codeBlockSource).toContain("resolvedCodeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'")
-    expect(nodeOutletSource).toContain("context?.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'")
+    expect(codeBlockSource).toContain('resolvedCodeBlockOptions?.overflow === \'scroll\' ? \'pre\' : \'pre-wrap\'')
+    expect(nodeOutletSource).toContain('let preStyle = $derived(context?.codeBlockOptions?.overflow')
+    expect(nodeOutletSource).toContain('context.codeBlockOptions.overflow === \'scroll\' ? \'pre\' : \'pre-wrap\'')
+    expect(nodeOutletSource).toContain(': undefined)')
   })
 
   it('reinstalls stream-diffs when neutral options or line-number precedence changes', () => {

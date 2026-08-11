@@ -302,7 +302,9 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
 
     await flushAll()
 
-    expect(wrapper.find('pre[data-markstream-pre="1"]').exists()).toBe(true)
+    const pre = wrapper.get('pre[data-markstream-pre="1"]')
+    expect(pre.attributes('data-markstream-line-numbers')).toBeUndefined()
+    expect((pre.element as HTMLElement).style.whiteSpace).toBe('')
     expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
   })
 
@@ -323,6 +325,15 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     await flushAll()
     expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBeUndefined()
 
+    await wrapper.setProps({ codeBlockOptions: { disableLineNumbers: false }, codeBlockProps: undefined })
+    await flushAll()
+    expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBe('1')
+
+    await wrapper.setProps({ codeBlockProps: { showLineNumbers: false } })
+    await flushAll()
+    expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBeUndefined()
+
+    await wrapper.setProps({ codeBlockOptions: { disableLineNumbers: true } })
     await wrapper.setProps({ codeBlockProps: { showLineNumbers: true } })
     await flushAll()
     expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBe('1')

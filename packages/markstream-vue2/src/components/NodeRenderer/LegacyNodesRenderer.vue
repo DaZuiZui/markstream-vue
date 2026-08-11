@@ -163,10 +163,12 @@ const codeBlockBindings = computed(() => ({
   ...builtinCodeBlockExtraProps.value,
   showLineNumbers: typeof builtinCodeBlockExtraProps.value.showLineNumbers === 'boolean'
     ? builtinCodeBlockExtraProps.value.showLineNumbers
-    : props.codeBlockOptions?.disableLineNumbers !== true,
-  style: {
-    whiteSpace: props.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap',
-  },
+    : typeof props.codeBlockOptions?.disableLineNumbers === 'boolean'
+      ? !props.codeBlockOptions.disableLineNumbers
+      : false,
+  ...(props.codeBlockOptions?.overflow
+    ? { style: { whiteSpace: props.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap' } }
+    : {}),
   codeBlockOptions: props.codeBlockOptions,
 }))
 const customCodeBlockBindings = computed(() => ({

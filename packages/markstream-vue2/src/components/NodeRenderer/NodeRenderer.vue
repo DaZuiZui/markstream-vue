@@ -1912,10 +1912,13 @@ const preCodeBlockBindings = computed(() => {
   const bindings: Record<string, unknown> = {}
 
   const showLineNumbers = pickBoolean(source.showLineNumbers)
+  const disableLineNumbers = props.codeBlockOptions?.disableLineNumbers
   bindings.showLineNumbers = showLineNumbers
-    ?? props.codeBlockOptions?.disableLineNumbers !== true
-  bindings.style = {
-    whiteSpace: props.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+    ?? (typeof disableLineNumbers === 'boolean' ? !disableLineNumbers : false)
+  if (props.codeBlockOptions?.overflow) {
+    bindings.style = {
+      whiteSpace: props.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+    }
   }
 
   const diffInline = pickBoolean(source.diffInline)

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hasCompleteHtmlTagContent } from '../packages/markstream-angular/src/components/shared/node-helpers'
@@ -10,27 +10,53 @@ import {
   resolveNodeOutletCustomInputs,
 } from '../packages/markstream-angular/src/components/shared/node-outlet-helpers'
 
+const require = createRequire(import.meta.url)
+const angularCompilerEntry = require.resolve('@angular/compiler', {
+  paths: [resolve(process.cwd(), 'node_modules/.pnpm/node_modules')],
+})
+await import(angularCompilerEntry)
+const { NodeOutletComponent } = await import('../packages/markstream-angular/src/components/NodeOutlet/NodeOutlet.component')
+
 class ExactLanguageComponent {}
 class GenericCodeBlockComponent {}
 class MermaidComponent {}
 class D2Component {}
 class D2LangComponent {}
 
-const nodeOutletSource = readFileSync(
-  resolve(process.cwd(), 'packages/markstream-angular/src/components/NodeOutlet/NodeOutlet.component.ts'),
-  'utf8',
-)
-
 describe('markstream-angular NodeOutlet', () => {
   it('lets explicit fallback line-number props override neutral options', () => {
-    expect(nodeOutletSource).toContain('[showLineNumbers]="resolvedPreShowLineNumbers"')
-    expect(nodeOutletSource).toContain("typeof explicit === 'boolean'")
-    expect(nodeOutletSource).toContain('this.context?.codeBlockOptions?.disableLineNumbers !== true')
+    const outlet = new NodeOutletComponent()
+    outlet.context = { events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreShowLineNumbers).toBe(false)
+
+    outlet.context = { codeBlockOptions: { disableLineNumbers: false }, events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreShowLineNumbers).toBe(true)
+
+    outlet.context = {
+      codeBlockOptions: { disableLineNumbers: false },
+      codeBlockProps: { showLineNumbers: false },
+      events: {},
+      renderCodeBlocksAsPre: true,
+    }
+    expect(outlet.resolvedPreShowLineNumbers).toBe(false)
+
+    outlet.context = {
+      codeBlockOptions: { disableLineNumbers: true },
+      codeBlockProps: { showLineNumbers: true },
+      events: {},
+      renderCodeBlocksAsPre: true,
+    }
+    expect(outlet.resolvedPreShowLineNumbers).toBe(true)
   })
 
   it('keeps direct pre overflow aligned with enhanced fallbacks', () => {
-    expect(nodeOutletSource).toContain('[whiteSpace]="resolvedPreWhiteSpace"')
-    expect(nodeOutletSource).toContain("this.context?.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'")
+    const outlet = new NodeOutletComponent()
+    outlet.context = { events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreWhiteSpace).toBeUndefined()
+    outlet.context = { codeBlockOptions: { overflow: 'scroll' }, events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreWhiteSpace).toBe('pre')
+    outlet.context = { codeBlockOptions: { overflow: 'wrap' }, events: {}, renderCodeBlocksAsPre: true }
+    expect(outlet.resolvedPreWhiteSpace).toBe('pre-wrap')
   })
 
   it('coerces custom html tags into tag-typed nodes for custom components', () => {

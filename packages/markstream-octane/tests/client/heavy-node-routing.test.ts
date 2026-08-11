@@ -109,31 +109,42 @@ describe('markstream-octane heavy-node routing', () => {
   })
 
   it('lets an explicit fallback showLineNumbers prop override codeBlockOptions', () => {
-    const result = descriptor({
+    const node = {
       type: 'code_block',
       language: 'ts',
       code: 'const value = 1',
       raw: '```ts\nconst value = 1\n```',
-    }, 'pre-options', {
+    } as ParsedNode
+    const renderPre = (ctx: Partial<RenderContext>, key: string) => descriptor(node, key, {
       ...baseCtx,
       renderCodeBlocksAsPre: true,
+      ...ctx,
+    })
+
+    const defaults = renderPre({}, 'pre-defaults')
+    expect(defaults.props.showLineNumbers).toBe(false)
+    expect(defaults.props.style).toBeUndefined()
+
+    expect(renderPre({
+      codeBlockOptions: { disableLineNumbers: false },
+    }, 'pre-enabled').props.showLineNumbers).toBe(true)
+
+    expect(renderPre({
+      codeBlockOptions: { disableLineNumbers: false },
+      codeBlockProps: { showLineNumbers: false },
+    }, 'pre-explicit-disabled').props.showLineNumbers).toBe(false)
+
+    const result = renderPre({
       codeBlockOptions: { disableLineNumbers: true, overflow: 'scroll' },
       codeBlockProps: { showLineNumbers: true },
-    })
+    }, 'pre-options')
 
     expect(result.props.showLineNumbers).toBe(true)
     expect(result.props.style).toEqual({ whiteSpace: 'pre' })
 
-    const wrapped = descriptor({
-      type: 'code_block',
-      language: 'ts',
-      code: 'const value = 1',
-      raw: '```ts\nconst value = 1\n```',
-    }, 'pre-wrap', {
-      ...baseCtx,
-      renderCodeBlocksAsPre: true,
+    const wrapped = renderPre({
       codeBlockOptions: { overflow: 'wrap' },
-    })
+    }, 'pre-wrap')
     expect(wrapped.props.style).toEqual({ whiteSpace: 'pre-wrap' })
   })
 

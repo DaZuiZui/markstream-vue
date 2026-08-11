@@ -5282,10 +5282,13 @@ const preCodeBlockBindings = computed(() => {
   const bindings: Record<string, unknown> = {}
 
   const showLineNumbers = pickBoolean(source.showLineNumbers)
+  const disableLineNumbers = rendererProps.codeBlockOptions?.disableLineNumbers
   bindings.showLineNumbers = showLineNumbers
-    ?? rendererProps.codeBlockOptions?.disableLineNumbers !== true
-  bindings.style = {
-    whiteSpace: rendererProps.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+    ?? (typeof disableLineNumbers === 'boolean' ? !disableLineNumbers : false)
+  if (rendererProps.codeBlockOptions?.overflow) {
+    bindings.style = {
+      whiteSpace: rendererProps.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+    }
   }
 
   const diffInline = pickBoolean(source.diffInline)

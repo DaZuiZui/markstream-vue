@@ -181,21 +181,44 @@ describe('markstream-react heavy-node prop forwarding', () => {
   })
 
   it('lets an explicit fallback showLineNumbers prop override codeBlockOptions', () => {
-    const ctx: RenderContext = {
-      ...baseCtx,
-      renderCodeBlocksAsPre: true,
-      codeBlockOptions: { disableLineNumbers: true },
-      codeBlockProps: { showLineNumbers: true },
-    }
     const node = {
       type: 'code_block',
       language: 'ts',
       code: 'const value = 1',
       raw: '```ts\nconst value = 1\n```',
     }
+    const renderBoth = (ctx: RenderContext) => [
+      clientRenderNode(node as any, 'client-pre-options', ctx) as any,
+      serverRenderNode(node as any, 'server-pre-options', ctx) as any,
+    ]
 
-    expect((clientRenderNode(node as any, 'client-pre-options', ctx) as any).props.showLineNumbers).toBe(true)
-    expect((serverRenderNode(node as any, 'server-pre-options', ctx) as any).props.showLineNumbers).toBe(true)
+    for (const result of renderBoth({ ...baseCtx, renderCodeBlocksAsPre: true })) {
+      expect(result.props.showLineNumbers).toBe(false)
+      expect(result.props.style).toBeUndefined()
+    }
+
+    for (const result of renderBoth({
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { disableLineNumbers: false },
+    }))
+      expect(result.props.showLineNumbers).toBe(true)
+
+    for (const result of renderBoth({
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { disableLineNumbers: false },
+      codeBlockProps: { showLineNumbers: false },
+    }))
+      expect(result.props.showLineNumbers).toBe(false)
+
+    for (const result of renderBoth({
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { disableLineNumbers: true },
+      codeBlockProps: { showLineNumbers: true },
+    }))
+      expect(result.props.showLineNumbers).toBe(true)
   })
 
   it('injects stable preview height estimates for client Mermaid and Infographic custom renderers', () => {

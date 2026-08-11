@@ -225,13 +225,17 @@ export class NodeOutletComponent {
 
   get resolvedPreShowLineNumbers() {
     const explicit = this.context?.codeBlockProps?.showLineNumbers
+    const disabled = this.context?.codeBlockOptions?.disableLineNumbers
     return typeof explicit === 'boolean'
       ? explicit
-      : this.context?.codeBlockOptions?.disableLineNumbers !== true
+      : typeof disabled === 'boolean'
+        ? !disabled
+        : false
   }
 
-  get resolvedPreWhiteSpace(): 'pre' | 'pre-wrap' {
-    return this.context?.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'
+  get resolvedPreWhiteSpace(): 'pre' | 'pre-wrap' | undefined {
+    const overflow = this.context?.codeBlockOptions?.overflow
+    return overflow ? (overflow === 'scroll' ? 'pre' : 'pre-wrap') : undefined
   }
 
   get htmlTag() {
