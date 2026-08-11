@@ -5,8 +5,10 @@ import type { CustomComponentMap, HtmlComponentDefinitions, HtmlComponentMap, St
 import type { SmoothMarkdownStreamOptions } from './hooks/useSmoothMarkdownStream'
 import type {
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockPreviewPayload,
   CodeBlockTheme,
+  CodeBlockThemes,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
@@ -14,12 +16,12 @@ import type {
 
 type NodeRendererCodeBlockThemes
   = CodeBlockNodeProps['themes']
-    | readonly string[]
 
 export type NodeRendererCodeBlockProps
-  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
+  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes' | 'codeBlockOptions'>>
     & {
       themes?: NodeRendererCodeBlockThemes
+      codeBlockOptions?: never
     }
     & Record<string, unknown>
 
@@ -53,13 +55,14 @@ export interface NodeRendererProps<
   renderCodeBlocksAsPre?: boolean
   codeBlockMinWidth?: string | number
   codeBlockMaxWidth?: string | number
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   mermaidProps?: Partial<Omit<MermaidBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   d2Props?: Partial<Omit<D2BlockNodeProps, 'node' | 'loading' | 'isDark'>>
   infographicProps?: Partial<Omit<InfographicBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   showTooltips?: boolean
-  /** Theme names or theme objects preloaded for diff-backed code blocks. */
-  themes?: CodeBlockTheme[]
+  /** Dark/light theme names used by stream-diffs backed code blocks. */
+  themes?: CodeBlockThemes
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -108,6 +111,7 @@ export interface RenderContext {
   htmlComponents?: HtmlComponentMap
   customHtmlTags?: readonly string[]
   htmlPolicy?: HtmlPolicy
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   mermaidProps?: Partial<Omit<MermaidBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   d2Props?: Partial<Omit<D2BlockNodeProps, 'node' | 'loading' | 'isDark'>>
@@ -116,7 +120,7 @@ export interface RenderContext {
   codeBlockStream?: boolean
   renderCodeBlocksAsPre?: boolean
   codeBlockThemes?: {
-    themes?: CodeBlockTheme[]
+    themes?: CodeBlockThemes
     darkTheme?: CodeBlockTheme
     lightTheme?: CodeBlockTheme
     minWidth?: string | number

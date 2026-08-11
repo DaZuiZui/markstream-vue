@@ -1,7 +1,7 @@
 let monacoModule: any = null
 let importAttempted = false
 let pendingImport: Promise<MonacoRuntimeModule | null> | null = null
-let workersPreloaded = false
+let runtimePreloaded = false
 
 export interface MonacoRuntimeHelpers {
   createEditor?: (container: HTMLElement, code: string, language: string) => Promise<unknown> | unknown
@@ -18,19 +18,15 @@ export interface MonacoRuntimeHelpers {
 
 export interface MonacoRuntimeModule {
   useMonaco: (options?: Record<string, unknown>) => MonacoRuntimeHelpers
-  preloadMonacoWorkers?: () => Promise<unknown> | unknown
-  getOrCreateHighlighter?: (...args: unknown[]) => Promise<unknown> | unknown
+  preloadStreamDiffs?: () => Promise<unknown> | unknown
 }
 
-async function preloadWorkers(mod: any) {
-  if (workersPreloaded)
+async function preloadRuntime(mod: any) {
+  if (runtimePreloaded)
     return
-  workersPreloaded = true
-  const existingEnv = (globalThis as any)?.MonacoEnvironment
-  if (existingEnv && (typeof existingEnv.getWorker === 'function' || typeof existingEnv.getWorkerUrl === 'function'))
-    return
-  if (typeof mod?.preloadMonacoWorkers === 'function')
-    await mod.preloadMonacoWorkers()
+  runtimePreloaded = true
+  if (typeof mod?.preloadStreamDiffs === 'function')
+    await mod.preloadStreamDiffs()
 }
 
 export async function getUseMonaco(): Promise<MonacoRuntimeModule | null> {
@@ -43,13 +39,13 @@ export async function getUseMonaco(): Promise<MonacoRuntimeModule | null> {
 
   pendingImport = (async () => {
     try {
-      const candidate = await import('stream-diffs')
+      const candidate = await import('stream-diffs/markstream')
       if (typeof (candidate as any)?.useMonaco !== 'function') {
         importAttempted = true
         return null
       }
       monacoModule = candidate
-      await preloadWorkers(monacoModule)
+      await preloadRuntime(monacoModule)
       return monacoModule
     }
     catch {

@@ -124,4 +124,23 @@ describe('markstream-octane SSR renderer', () => {
     expect(output.html).toContain('class="ssr-code-block-langs-probe"')
     expect(output.html).toContain('data-langs="null"')
   })
+
+  it('keeps direct pre overflow aligned with the enhanced fallback', () => {
+    const content = '```ts\nexport const value = 1\n```'
+    const scrolled = renderToStaticMarkup(NodeRenderer, {
+      codeBlockOptions: { overflow: 'scroll' },
+      content,
+      final: true,
+      renderCodeBlocksAsPre: true,
+    })
+    const wrapped = renderToStaticMarkup(NodeRenderer, {
+      codeBlockOptions: { overflow: 'wrap' },
+      content,
+      final: true,
+      renderCodeBlocksAsPre: true,
+    })
+
+    expect(scrolled.html).toContain('white-space:pre')
+    expect(wrapped.html).toContain('white-space:pre-wrap')
+  })
 })

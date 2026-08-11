@@ -113,7 +113,7 @@ setCustomComponents(FALLBACK_SCOPE, {
 enableKatex(() => katex)
 
 if (process.client) {
-  import('markstream-vue').then(({ getStreamDiffsRuntime }) => getStreamDiffsRuntime()).catch(() => {})
+  import('markstream-vue').then(({ preloadCodeBlockRuntime }) => preloadCodeBlockRuntime()).catch(() => {})
   setKaTeXWorker(new KatexWorker())
   setMermaidWorker(new MermaidWorker())
 }

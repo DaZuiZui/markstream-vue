@@ -6,6 +6,14 @@ const codeBlockSource = readFileSync(
   resolve(process.cwd(), 'packages/markstream-svelte/src/components/CodeBlockNode.svelte'),
   'utf8',
 )
+const nodeOutletSource = readFileSync(
+  resolve(process.cwd(), 'packages/markstream-svelte/src/components/NodeOutlet.svelte'),
+  'utf8',
+)
+const nodeRendererSource = readFileSync(
+  resolve(process.cwd(), 'packages/markstream-svelte/src/components/NodeRenderer.svelte'),
+  'utf8',
+)
 const playgroundSource = readFileSync(
   resolve(process.cwd(), 'playground-svelte/src/App.svelte'),
   'utf8',
@@ -38,6 +46,33 @@ describe('markstream-svelte code block handoff geometry', () => {
 
     expect(singleEditorHeightBranch).toContain('return Math.ceil(height)')
     expect(singleEditorHeightBranch).not.toContain('return Math.ceil(height + 1)')
+  })
+
+  it('keeps fallback line numbers aligned with neutral options and explicit props', () => {
+    expect(nodeOutletSource).toContain("typeof context?.codeBlockProps?.showLineNumbers === 'boolean'")
+    expect(nodeOutletSource).toContain('context?.codeBlockOptions?.disableLineNumbers !== true')
+    expect(nodeOutletSource).toContain('<PreCodeNode {node} showLineNumbers={preShowLineNumbers} style={preStyle} />')
+  })
+
+  it('keeps direct pre overflow aligned with enhanced fallbacks', () => {
+    expect(codeBlockSource).toContain("resolvedCodeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'")
+    expect(nodeOutletSource).toContain("context?.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'")
+  })
+
+  it('reinstalls stream-diffs when neutral options or line-number precedence changes', () => {
+    expect(codeBlockSource).toContain('let runtimeInstallationConfig = $derived.by(() => {')
+    expect(codeBlockSource).toContain('options: { ...(resolvedCodeBlockOptions ?? {}) }')
+    expect(codeBlockSource).toContain('showLineNumbers: effectiveShowLineNumbers')
+    expect(codeBlockSource).toContain('lastRuntimeInstallationConfig !== runtimeInstallationConfig')
+  })
+
+  it('does not retain a stale static-enhancement handle after a newer render pass', () => {
+    expect(nodeRendererSource).toContain('const handle = await enhanceRenderedHtml(rootEl, {')
+    expect(nodeRendererSource).toContain(`if (token !== enhancementToken) {
+      handle.dispose()
+      return
+    }
+    enhancementHandle = handle`)
   })
 
   it('disables node enter fades on both handoff comparison renderers', () => {

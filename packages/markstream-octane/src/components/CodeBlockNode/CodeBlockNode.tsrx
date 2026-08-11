@@ -62,12 +62,6 @@ const DEFAULTS: Required<Pick<
   showFontSizeButtons: true,
 }
 
-const defaultDiffHideUnchangedRegions = Object.freeze({
-  enabled: true,
-  contextLineCount: 2,
-  minimumLineCount: 4,
-  revealLineCount: 5,
-})
 const defaultPreFallbackFontSize = 12
 const defaultPreFallbackLineHeight = 18
 const defaultCodeBlockMaxHeight = 500
@@ -119,19 +113,10 @@ function readPositiveNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
-function readNonNegativeNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
-}
-
 function readEditorPadding(value: unknown, defaultPadding: number) {
-  if (!value || typeof value !== 'object')
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0)
     return { top: defaultPadding, bottom: defaultPadding }
-
-  const raw = value as Record<string, unknown>
-  return {
-    top: readNonNegativeNumber(raw.top) ?? defaultPadding,
-    bottom: readNonNegativeNumber(raw.bottom) ?? defaultPadding,
-  }
+  return { top: value, bottom: value }
 }
 
 function measureRenderedDiffHeight(container: HTMLElement): number | null {
@@ -172,41 +157,51 @@ function measureRenderedDiffHeight(container: HTMLElement): number | null {
   }
 }
 
-function resolveCodeBlockOptions(isDiff: boolean) {
-  if (!isDiff)
-    return {} as Record<string, any>
+function resolveCodeBlockOptions(
+  isDiff: boolean,
+  codeBlockOptions: CodeBlockNodeProps['codeBlockOptions'],
+): Record<string, any> {
+  const raw = { ...(codeBlockOptions || {}) } as Record<string, any>
+  for (const key of [
+    'theme',
+    'themes',
+    'themeType',
+    'language',
+    'languages',
+    'stream',
+    'disableFileHeader',
+    'onThemeChange',
+    'renderCustomHeader',
+    'renderHeaderMetadata',
+    'renderHeaderPrefix',
+  ])
+    delete raw[key]
 
-  const diffHideUnchangedRegions = { ...defaultDiffHideUnchangedRegions }
-  const diffDefaults = {
-    maxComputationTime: 0,
-    diffAlgorithm: 'legacy',
-    ignoreTrimWhitespace: false,
-    renderIndicators: true,
-    diffUpdateThrottleMs: 120,
-    renderLineHighlight: 'none',
-    renderLineHighlightOnlyWhenFocus: true,
-    selectionHighlight: false,
-    occurrencesHighlight: 'off',
-    matchBrackets: 'never',
-    lineDecorationsWidth: 4,
-    lineNumbersMinChars: 2,
-    glyphMargin: false,
-    minimap: { enabled: false },
-    renderOverviewRuler: false,
-    overviewRulerBorder: false,
-    hideCursorInOverviewRuler: true,
-    scrollBeyondLastLine: false,
-    diffHideUnchangedRegions,
-    useInlineViewWhenSpaceIsLimited: false,
-    diffLineStyle: 'background',
-    diffAppearance: 'auto',
-    diffUnchangedRegionStyle: 'line-info',
-    diffHunkActionsOnHover: false,
-    diffHunkHoverHideDelayMs: 160,
+  if (!isDiff) {
+    return {
+      overflow: 'wrap',
+      ...raw,
+    }
   }
 
+  const parseDiffOptions = raw.parseDiffOptions && typeof raw.parseDiffOptions === 'object'
+    ? raw.parseDiffOptions as Record<string, unknown>
+    : {}
+  const defaults = {
+    overflow: 'wrap',
+    diffStyle: 'split',
+    expandUnchanged: false,
+    collapsedContextThreshold: 5,
+    hunkSeparators: 'line-info',
+    parseDiffOptions: { context: 2 },
+  }
   return {
-    ...diffDefaults,
+    ...defaults,
+    ...raw,
+    parseDiffOptions: {
+      ...defaults.parseDiffOptions,
+      ...parseDiffOptions,
+    },
   }
 }
 
@@ -214,12 +209,8 @@ function getDisplayCode(code: unknown) {
   return String(code ?? '').replace(/\r\n$|\n$|\r$/, '')
 }
 
-function getThemeName(theme: any) {
-  if (typeof theme === 'string')
-    return theme
-  if (theme && typeof theme === 'object' && 'name' in theme)
-    return String((theme as any).name)
-  return null
+function getThemeName(theme: unknown): string | null {
+  return typeof theme === 'string' ? theme : null
 }
 
 function themeLooksDark(theme: any, fallback: boolean) {
@@ -309,6 +300,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     enableFontSizeControl,
     darkTheme,
     lightTheme,
+    codeBlockOptions,
     themes,
     minWidth,
     maxWidth,
@@ -334,6 +326,8 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
   const viewportHandleRef = useRef<VisibilityHandle | null>(null)
   const registerViewport = useViewportPriority()
   const runtimeOptionsRef = useRef<Record<string, any> | null>(null)
+  const runtimeFactoryRef = useRef<((options: Record<string, any>) => any) | null>(null)
+  const codeBlockOptionsIdentityRef = useRef(codeBlockOptions)
   const structuralSignatureRef = useRef<string | null>(null)
   const editorHeightSyncDisposablesRef = useRef<any[]>([])
   const diffDomHeightObserverRef = useRef<MutationObserver | null>(null)
@@ -361,24 +355,35 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
   }, [expanded])
 
   const resolvedOptions = useMemo(
-    () => resolveCodeBlockOptions(Boolean(node.diff)),
-    [node.diff],
+    () => resolveCodeBlockOptions(Boolean(node.diff), codeBlockOptions),
+    [codeBlockOptions, node.diff],
   )
 
   const [defaultFontSize, setDefaultFontSize] = useState<number>(() => {
-    const initial = Number((resolveCodeBlockOptions(Boolean(node.diff)) as any)?.fontSize)
+    const initial = Number((resolveCodeBlockOptions(Boolean(node.diff), codeBlockOptions) as any)?.fontSize)
     return Number.isFinite(initial) && initial > 0 ? initial : defaultPreFallbackFontSize
   })
   const [fontSize, setFontSize] = useState(defaultFontSize)
   const tooltipsEnabled = useMemo(() => showTooltips !== false, [showTooltips])
-  const resolvedShowLineNumbers = useMemo(
-    () => showLineNumbers !== false || Boolean(node.diff),
-    [node.diff, showLineNumbers],
-  )
+  const resolvedShowLineNumbers = typeof showLineNumbers === 'boolean'
+    ? showLineNumbers
+    : resolvedOptions.disableLineNumbers !== true
+  const showLineNumbersIdentityRef = useRef(resolvedShowLineNumbers)
 
   const getMaxHeightValue = useCallback((): number => {
+    const raw = resolvedOptions.maxHeight ?? defaultCodeBlockMaxHeight
+    if (typeof raw === 'number' && Number.isFinite(raw))
+      return raw
     return defaultCodeBlockMaxHeight
-  }, [])
+  }, [resolvedOptions.maxHeight])
+
+  useEffect(() => {
+    const configured = Number(resolvedOptions.fontSize)
+    if (!Number.isFinite(configured) || configured <= 0)
+      return
+    setDefaultFontSize(configured)
+    setFontSize(configured)
+  }, [resolvedOptions.fontSize])
 
   const applyEditorHeight = useCallback((nextExpanded: boolean) => {
     if (useFallback)
@@ -578,6 +583,13 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     rootEl.style.removeProperty('--vscode-editor-foreground')
     rootEl.style.removeProperty('--vscode-editor-background')
     rootEl.style.removeProperty('--vscode-editor-selectionBackground')
+    const configuredTabSize = readPositiveNumber(resolvedOptions.tabSize) ?? 4
+    const configuredPadding = readEditorPadding(resolvedOptions.padding, node.diff ? 0 : 8)
+    editorEl.style.setProperty('--diffs-tab-size', String(configuredTabSize))
+    if (typeof resolvedOptions.padding === 'number' && Number.isFinite(resolvedOptions.padding) && resolvedOptions.padding >= 0)
+      editorEl.style.setProperty('--diffs-gap-block', `${configuredPadding.top}px`)
+    else
+      editorEl.style.removeProperty('--diffs-gap-block')
     if (node.diff) {
       editorEl.style.removeProperty('--vscode-editor-foreground')
       editorEl.style.removeProperty('--vscode-editor-background')
@@ -618,30 +630,17 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
         editorEl.style.removeProperty('--vscode-editor-selectionBackground')
     }
     catch {}
-  }, [codeLanguage, detectedLanguage, node.diff, node.language])
+  }, [codeLanguage, detectedLanguage, node.diff, node.language, resolvedOptions])
 
-  const preferredTheme = useMemo(() => (isDark ? darkTheme : lightTheme), [darkTheme, isDark, lightTheme])
+  const preferredTheme = useMemo(() => {
+    if (isDark)
+      return darkTheme ?? themes?.[0] ?? 'vitesse-dark'
+    return lightTheme ?? themes?.[1] ?? 'vitesse-light'
+  }, [darkTheme, isDark, lightTheme, themes])
 
   const resolveRequestedTheme = useCallback(() => {
-    const explicit = (resolvedOptions as any)?.theme
-    const requested = preferredTheme ?? explicit
-    const availableThemes = Array.isArray(themes) ? themes : []
-    if (!availableThemes.length || requested == null)
-      return requested
-
-    const requestedName = getThemeName(requested)
-    const availableNames = availableThemes
-      .map(theme => getThemeName(theme))
-      .filter((name): name is string => !!name)
-    if (!requestedName || availableNames.includes(requestedName))
-      return requested
-
-    const explicitName = getThemeName(explicit)
-    if (explicit != null && explicitName && availableNames.includes(explicitName))
-      return explicit
-
-    return availableThemes[0]
-  }, [preferredTheme, resolvedOptions, themes])
+    return preferredTheme
+  }, [preferredTheme])
 
   const requestedTheme = useMemo(() => resolveRequestedTheme(), [resolveRequestedTheme])
 
@@ -653,13 +652,8 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
   const effectiveDiffAppearance = useMemo<'light' | 'dark'>(() => {
     if (!node.diff)
       return resolvedChromeIsDark ? 'dark' : 'light'
-
-    const explicit = (resolvedOptions as any)?.diffAppearance
-    if (explicit === 'light' || explicit === 'dark')
-      return explicit
-
     return isDark ? 'dark' : 'light'
-  }, [isDark, node.diff, resolvedChromeIsDark, resolvedOptions])
+  }, [isDark, node.diff, resolvedChromeIsDark])
 
   const resolvedSurfaceIsDark = useMemo(
     () => (node.diff ? effectiveDiffAppearance === 'dark' : resolvedChromeIsDark),
@@ -696,7 +690,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
   const preFallbackDiffInline = useMemo(() => {
     if (!node.diff)
       return false
-    return (resolvedOptions as any)?.renderSideBySide === false
+    return resolvedOptions.diffStyle === 'unified'
   }, [node.diff, resolvedOptions])
 
   const preFallbackStyle = useMemo(() => {
@@ -708,36 +702,51 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
       '--markstream-pre-line-number-gap': '0px',
       'fontSize': `${preFallbackMetrics.fontSize}px`,
       'lineHeight': `${preFallbackMetrics.lineHeight}px`,
+      'maxHeight': `${getMaxHeightValue()}px`,
+      'overflow': 'auto',
       'paddingBottom': `${preFallbackMetrics.paddingBottom}px`,
       'paddingTop': `${preFallbackMetrics.paddingTop}px`,
       'tabSize': preFallbackMetrics.tabSize,
+      'whiteSpace': resolvedOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
       '--markstream-code-font-family': preFallbackMetrics.fontFamily,
       'fontFamily': preFallbackMetrics.fontFamily,
     }
     return style
-  }, [preFallbackMetrics])
+  }, [getMaxHeightValue, preFallbackMetrics, resolvedOptions.overflow])
 
   const buildRuntimeOptions = useCallback(() => {
+    const configuredMaxHeight = resolvedOptions.maxHeight
     const nextOptions = {
-      wordWrap: 'on',
-      wrappingIndent: 'same',
-      themes,
       ...(resolvedOptions || {}),
+      ...(configuredMaxHeight == null ? {} : { MAX_HEIGHT: configuredMaxHeight }),
+      themes: themes ? [...themes] : undefined,
+      stream: false,
+      disableFileHeader: true,
       theme: requestedTheme,
-      lineNumbers: resolvedShowLineNumbers,
+      disableLineNumbers: !resolvedShowLineNumbers,
       fontSize: preFallbackMetrics.fontSize,
       lineHeight: preFallbackMetrics.lineHeight,
-      padding: { top: preFallbackMetrics.paddingTop, bottom: preFallbackMetrics.paddingBottom },
-      tabSize: preFallbackMetrics.tabSize,
       fontFamily: preFallbackMetrics.fontFamily,
-      ...(node.diff ? { diffAppearance: effectiveDiffAppearance } : {}),
       onThemeChange() {
         syncEditorCssVars()
       },
+      themeType: isDark ? 'dark' : 'light',
     } as Record<string, any>
 
+    delete nextOptions.maxHeight
+    delete nextOptions.padding
+    delete nextOptions.tabSize
+
+    const configuredUnsafeCSS = typeof nextOptions.unsafeCSS === 'string'
+      ? nextOptions.unsafeCSS
+      : ''
+    nextOptions.unsafeCSS = [
+      '[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }',
+      configuredUnsafeCSS,
+    ].filter(Boolean).join('\n')
+
     return nextOptions
-  }, [effectiveDiffAppearance, node.diff, preFallbackMetrics, requestedTheme, resolvedOptions, resolvedShowLineNumbers, syncEditorCssVars, themes])
+  }, [isDark, preFallbackMetrics, requestedTheme, resolvedOptions, resolvedShowLineNumbers, syncEditorCssVars, themes])
 
   const syncRuntimeOptions = useCallback(() => {
     const nextOptions = buildRuntimeOptions()
@@ -755,14 +764,24 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     return current
   }, [buildRuntimeOptions])
 
+  const installRuntimeHelpers = useCallback((factory: (options: Record<string, any>) => any) => {
+    const helpers = factory(syncRuntimeOptions())
+    helpersRef.current = helpers
+    cleanupRef.current = typeof helpers.safeClean === 'function'
+      ? () => helpers.safeClean()
+      : (typeof helpers.cleanupEditor === 'function' ? () => helpers.cleanupEditor() : null)
+    return helpers
+  }, [syncRuntimeOptions])
+
   const diffStructuralSignature = useMemo(() => JSON.stringify({
-    diffLineStyle: (resolvedOptions as any)?.diffLineStyle ?? 'background',
-    diffUnchangedRegionStyle: (resolvedOptions as any)?.diffUnchangedRegionStyle ?? 'line-info',
-    diffHideUnchangedRegions: (resolvedOptions as any)?.diffHideUnchangedRegions ?? true,
-    renderSideBySide: (resolvedOptions as any)?.renderSideBySide ?? true,
-    enableSplitViewResizing: (resolvedOptions as any)?.enableSplitViewResizing ?? true,
-    ignoreTrimWhitespace: (resolvedOptions as any)?.ignoreTrimWhitespace ?? true,
-    originalEditable: (resolvedOptions as any)?.originalEditable ?? false,
+    diffStyle: resolvedOptions.diffStyle,
+    expandUnchanged: resolvedOptions.expandUnchanged,
+    collapsedContextThreshold: resolvedOptions.collapsedContextThreshold,
+    hunkSeparators: resolvedOptions.hunkSeparators,
+    lineDiffType: resolvedOptions.lineDiffType,
+    maxLineDiffLength: resolvedOptions.maxLineDiffLength,
+    expansionLineCount: resolvedOptions.expansionLineCount,
+    context: (resolvedOptions.parseDiffOptions as Record<string, unknown> | undefined)?.context,
   }), [resolvedOptions])
 
   useEffect(() => {
@@ -778,6 +797,8 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
       createEditorPromiseRef.current = null
       editorKindRef.current = null
       editorMountElRef.current = null
+      helpersRef.current = null
+      runtimeFactoryRef.current = null
       detectLanguageRef.current = null
       viewportHandleRef.current?.destroy?.()
       viewportHandleRef.current = null
@@ -835,12 +856,8 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
           setUseFallback(true)
           return
         }
-        const runtimeOptions = syncRuntimeOptions()
-        const helpers = useMonaco(runtimeOptions)
-        helpersRef.current = helpers
-        cleanupRef.current = typeof helpers.safeClean === 'function'
-          ? () => helpers.safeClean()
-          : (typeof helpers.cleanupEditor === 'function' ? () => helpers.cleanupEditor() : null)
+        runtimeFactoryRef.current = useMonaco
+        installRuntimeHelpers(useMonaco)
         setRuntimeReady(true)
       }
       catch {
@@ -851,7 +868,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     return () => {
       mounted = false
     }
-  }, [syncRuntimeOptions])
+  }, [installRuntimeHelpers, syncRuntimeOptions])
 
   // Vue parity: if language is not provided, detect it from streaming code.
   useEffect(() => {
@@ -1047,7 +1064,10 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
         if (editorLifecycleIdRef.current !== creationId)
           return
 
-        const initialFontSize = defaultPreFallbackFontSize
+        const configuredFontSize = Number(resolvedOptions.fontSize)
+        const initialFontSize = Number.isFinite(configuredFontSize) && configuredFontSize > 0
+          ? configuredFontSize
+          : defaultPreFallbackFontSize
         if (Number.isFinite(initialFontSize) && initialFontSize > 0) {
           setDefaultFontSize(initialFontSize)
           setFontSize(initialFontSize)
@@ -1085,27 +1105,50 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     })
     createEditorPromiseRef.current = tracked
     return tracked
-  }, [applyEditorHeight, bindDiffEditorHeightSync, clearEditorHeightSyncBindings, collapsed, expanded, languageId, prepareEditorReveal, scheduleEditorHeightSync, shouldDelayEditor, syncEditorCssVars, syncRuntimeOptions, useFallback, viewportReady, waitForAnimationFrame])
+  }, [applyEditorHeight, bindDiffEditorHeightSync, clearEditorHeightSyncBindings, collapsed, expanded, languageId, prepareEditorReveal, resolvedOptions.fontSize, scheduleEditorHeightSync, shouldDelayEditor, syncEditorCssVars, syncRuntimeOptions, useFallback, viewportReady, waitForAnimationFrame])
 
   useEffect(() => {
     syncRuntimeOptions()
+    const optionsChanged = codeBlockOptionsIdentityRef.current !== codeBlockOptions
+    codeBlockOptionsIdentityRef.current = codeBlockOptions
+    const showLineNumbersChanged = showLineNumbersIdentityRef.current !== resolvedShowLineNumbers
+    showLineNumbersIdentityRef.current = resolvedShowLineNumbers
     const previousSignature = structuralSignatureRef.current
     structuralSignatureRef.current = diffStructuralSignature
 
-    if (!node.diff)
-      return
     if (useFallback)
       return
-    if (!runtimeReady || !viewportReady || !editorCreated)
+    if (!runtimeReady)
+      return
+    let runtimeRecreated = false
+    if (optionsChanged || showLineNumbersChanged) {
+      const factory = runtimeFactoryRef.current
+      if (factory) {
+        resetEditorInstance()
+        helpersRef.current = null
+        cleanupRef.current = null
+        try {
+          installRuntimeHelpers(factory)
+          runtimeRecreated = true
+        }
+        catch {
+          setUseFallback(true)
+          return
+        }
+      }
+    }
+    const structuralChanged = Boolean(node.diff && previousSignature !== diffStructuralSignature)
+    if (!runtimeRecreated && !structuralChanged)
+      return
+    if (!viewportReady || (!editorCreated && !runtimeRecreated))
       return
     if (collapsed || shouldDelayEditor)
-      return
-    if (previousSignature === diffStructuralSignature)
       return
 
     let cancelled = false
     void (async () => {
-      resetEditorInstance()
+      if (!runtimeRecreated)
+        resetEditorInstance()
       if (cancelled)
         return
       try {
@@ -1118,8 +1161,11 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
     }
   }, [
     collapsed,
+    codeBlockOptions,
     editorCreated,
+    resolvedShowLineNumbers,
     ensureEditorCreation,
+    installRuntimeHelpers,
     runtimeReady,
     diffStructuralSignature,
     node.diff,

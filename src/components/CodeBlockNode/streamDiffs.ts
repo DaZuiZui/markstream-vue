@@ -1,4 +1,4 @@
-import type { CodeBlockTheme } from '../../types/component-props'
+import type { CodeBlockThemeProp, CodeBlockThemes } from '../../types/component-props'
 import { preload } from '../NodeRenderer/preloadStreamDiffs'
 import { markCodeBlockRuntimeReady } from './runtime'
 
@@ -47,8 +47,8 @@ export interface StreamDiffsNamespaceLike {
 }
 
 export interface StreamDiffsRuntimeOptions extends Record<string, unknown> {
-  theme?: CodeBlockTheme
-  themes?: CodeBlockTheme[]
+  theme?: CodeBlockThemeProp
+  themes?: CodeBlockThemes
   onThemeChange?: () => void
 }
 
@@ -65,14 +65,14 @@ export interface StreamDiffsHelpers {
   cleanupEditor?: () => void
   safeClean?: () => void
   refreshDiffPresentation?: () => Promise<unknown> | unknown
-  setTheme?: (theme: CodeBlockTheme | undefined) => Promise<void> | void
+  setTheme?: (theme: CodeBlockThemeProp | undefined) => Promise<void> | void
   whenVisualReady?: () => Promise<boolean>
 }
 
 export interface StreamDiffsModule {
   useMonaco?: (options: StreamDiffsRuntimeOptions) => StreamDiffsHelpers | null | undefined
   detectLanguage?: (code: string) => string
-  preloadMonacoWorkers?: () => Promise<unknown> | unknown
+  preloadStreamDiffs?: () => Promise<unknown> | unknown
 }
 
 let mod: StreamDiffsModule | null = null
@@ -99,7 +99,7 @@ export async function getStreamDiffsRuntime(): Promise<StreamDiffsModule | null>
   loadingPromise = (async () => {
     if (!mod) {
       try {
-        mod = normalizeStreamDiffsModule(await import('stream-diffs'))
+        mod = normalizeStreamDiffsModule(await import('stream-diffs/markstream'))
         if (!mod)
           return null
       }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BaseNode, HtmlPolicy, ParsedNode } from 'stream-markdown-parser'
-import type { CodeBlockNodeProps, CodeBlockPreviewPayload, CodeBlockTheme } from '../../types/component-props'
+import type { CodeBlockNodeProps, CodeBlockOptions, CodeBlockPreviewPayload, CodeBlockTheme, CodeBlockThemes } from '../../types/component-props'
 import { normalizeShikiLanguage } from 'markstream-core'
 import { normalizeCustomHtmlTags } from 'stream-markdown-parser'
 import { computed, provide } from 'vue-demi'
@@ -42,14 +42,11 @@ import HtmlInlineNode from '../HtmlInlineNode/HtmlInlineNode.vue'
 import { MathBlockNodeAsync, MathInlineNodeAsync } from './asyncComponent'
 import FallbackComponent from './FallbackComponent.vue'
 
-type NodeRendererCodeBlockThemes
-  = CodeBlockNodeProps['themes']
-    | readonly string[]
-
 type NodeRendererCodeBlockProps
-  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
+  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes' | 'codeBlockOptions'>>
     & {
-      themes?: NodeRendererCodeBlockThemes
+      themes?: CodeBlockThemes
+      codeBlockOptions?: never
     }
     & Record<string, unknown>
 
@@ -65,10 +62,11 @@ const props = withDefaults(defineProps<{
   codeBlockLightTheme?: CodeBlockTheme
   codeBlockMinWidth?: string | number
   codeBlockMaxWidth?: string | number
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
   renderCodeBlocksAsPre?: boolean
   /** Theme names or theme objects preloaded for enhanced code blocks. */
-  themes?: CodeBlockTheme[]
+  themes?: CodeBlockThemes
   isDark?: boolean
   customHtmlTags?: readonly string[]
   htmlPolicy?: HtmlPolicy
@@ -163,10 +161,18 @@ const codeBlockBindings = computed(() => ({
   minWidth: props.codeBlockMinWidth,
   maxWidth: props.codeBlockMaxWidth,
   ...builtinCodeBlockExtraProps.value,
+  showLineNumbers: typeof builtinCodeBlockExtraProps.value.showLineNumbers === 'boolean'
+    ? builtinCodeBlockExtraProps.value.showLineNumbers
+    : props.codeBlockOptions?.disableLineNumbers !== true,
+  style: {
+    whiteSpace: props.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+  },
+  codeBlockOptions: props.codeBlockOptions,
 }))
 const customCodeBlockBindings = computed(() => ({
   ...codeBlockBindings.value,
   ...codeBlockExtraProps.value,
+  codeBlockOptions: props.codeBlockOptions,
 }))
 const nonCodeBindings = computed(() => ({ typewriter: props.typewriter, fade: props.fade, htmlPolicy: props.htmlPolicy ?? 'safe' }))
 const linkBindings = computed(() => ({

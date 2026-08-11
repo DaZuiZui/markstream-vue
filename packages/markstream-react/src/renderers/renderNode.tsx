@@ -120,6 +120,7 @@ function renderCustomCodeBlockComponent(
     onCopy: ctx.events.onCopy,
     onPreviewCode,
     ...extraProps,
+    codeBlockOptions: ctx.codeBlockOptions,
     ...specialProps,
     ctx,
     renderNode,
@@ -264,11 +265,15 @@ function renderCodeBlock(
     return renderCustomCodeBlockComponent(customCodeBlock, node, key, ctx)
 
   if (ctx.renderCodeBlocksAsPre || language === 'mermaid') {
+    const configuredShowLineNumbers = ctx.codeBlockProps?.showLineNumbers
     return (
       <PreCodeNode
         key={key}
         node={node}
-        showLineNumbers={ctx.codeBlockProps?.showLineNumbers === true}
+        style={{ whiteSpace: ctx.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap' }}
+        showLineNumbers={typeof configuredShowLineNumbers === 'boolean'
+          ? configuredShowLineNumbers
+          : ctx.codeBlockOptions?.disableLineNumbers !== true}
       />
     )
   }
@@ -280,11 +285,14 @@ function renderCodeBlock(
       loading={Boolean(node.loading)}
       stream={ctx.codeBlockStream}
       themes={ctx.codeBlockThemes?.themes}
+      darkTheme={ctx.codeBlockThemes?.darkTheme}
+      lightTheme={ctx.codeBlockThemes?.lightTheme}
       minWidth={ctx.codeBlockThemes?.minWidth}
       maxWidth={ctx.codeBlockThemes?.maxWidth}
       isDark={ctx.isDark}
       onCopy={ctx.events.onCopy}
       {...getCodeBlockExtraProps(ctx.codeBlockProps)}
+      codeBlockOptions={ctx.codeBlockOptions}
     />
   )
 }

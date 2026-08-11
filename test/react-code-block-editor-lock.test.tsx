@@ -204,7 +204,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
     })
   })
 
-  it('applies Vue-parity diff defaults', async () => {
+  it('applies the neutral stream-diffs defaults', async () => {
     const helpers = getStreamMonacoHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -232,18 +232,237 @@ describe('markstream-react codeBlockNode theme updates', () => {
 
     const options = helpers.useMonaco.mock.calls[0]?.[0] as Record<string, any> | undefined
 
-    expect(options?.diffLineStyle).toBe('background')
-    expect(options?.diffUnchangedRegionStyle).toBe('line-info')
-    expect(options?.diffAppearance).toBe('light')
-    expect(options?.diffHideUnchangedRegions).toEqual({
-      enabled: true,
-      contextLineCount: 2,
-      minimumLineCount: 4,
-      revealLineCount: 5,
-    })
+    expect(options?.diffStyle).toBe('split')
+    expect(options?.expandUnchanged).toBe(false)
+    expect(options?.collapsedContextThreshold).toBe(5)
+    expect(options?.hunkSeparators).toBe('line-info')
+    expect(options?.parseDiffOptions).toEqual({ context: 2 })
+    expect(options?.stream).toBe(false)
+    expect(options?.disableFileHeader).toBe(true)
+    expect(options?.disableLineNumbers).toBe(false)
     expect(options?.fontSize).toBe(12)
     expect(options?.lineHeight).toBe(18)
-    expect(options?.padding).toEqual({ top: 0, bottom: 0 })
+    expect(options?.padding).toBeUndefined()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('merges codeBlockOptions before host-owned runtime fields', async () => {
+    const helpers = getStreamMonacoHelpers()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const onLineClick = vi.fn()
+    const consumerThemeChange = vi.fn()
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        node: {
+          type: 'code_block',
+          language: 'diff',
+          code: '@@ -1 +1 @@',
+          diff: true,
+          originalCode: 'const a = 1\n',
+          updatedCode: 'const a = 2\n',
+          raw: '```diff\n-const a = 1\n+const a = 2\n```',
+        },
+        loading: false,
+        showHeader: false,
+        showLineNumbers: false,
+        isDark: true,
+        darkTheme: 'github-dark',
+        lightTheme: 'github-light',
+        themes: ['github-dark', 'github-light'],
+        codeBlockOptions: {
+          maxHeight: 420,
+          padding: 4,
+          tabSize: 8,
+          fontSize: 16,
+          lineHeight: 24,
+          fontFamily: 'Fira Code',
+          diffStyle: 'unified',
+          diffIndicators: 'bars',
+          parseDiffOptions: { context: 7, ignoreWhitespace: true },
+          enableLineSelection: true,
+          onLineClick,
+          unsafeCSS: '.consumer-rule { color: red; }',
+          theme: 'consumer-theme',
+          themeType: 'consumer',
+          themes: ['consumer-dark', 'consumer-light'],
+          language: 'consumer-language',
+          languages: ['consumer-language'],
+          stream: true,
+          disableFileHeader: false,
+          onThemeChange: consumerThemeChange,
+        },
+      }))
+    })
+    await waitForCallCount(helpers.useMonaco, 1)
+    await waitForCallCount(helpers.createDiffEditor, 1)
+    await flushReact()
+
+    const options = helpers.useMonaco.mock.calls[0]?.[0] as Record<string, any>
+    expect(options).toMatchObject({
+      MAX_HEIGHT: 420,
+      fontSize: 16,
+      lineHeight: 24,
+      fontFamily: 'Fira Code',
+      diffStyle: 'unified',
+      diffIndicators: 'bars',
+      enableLineSelection: true,
+      stream: false,
+      disableFileHeader: true,
+      disableLineNumbers: true,
+      theme: 'github-dark',
+      themeType: 'dark',
+      themes: ['github-dark', 'github-light'],
+    })
+    expect(options.parseDiffOptions).toEqual({ context: 7, ignoreWhitespace: true })
+    expect(options.onLineClick).toBe(onLineClick)
+    expect(options.onThemeChange).not.toBe(consumerThemeChange)
+    expect(options.language).toBeUndefined()
+    expect(options.languages).toBeUndefined()
+    expect(options.unsafeCSS).toContain('[data-file], [data-diff]')
+    expect(options.unsafeCSS).toContain('.consumer-rule { color: red; }')
+    expect(options.maxHeight).toBeUndefined()
+    expect(options.padding).toBeUndefined()
+    expect(options.tabSize).toBeUndefined()
+
+    const editorHost = host.querySelector('.code-editor-container') as HTMLElement | null
+    const fallback = host.querySelector('pre.code-fallback-plain') as HTMLElement | null
+    expect(editorHost?.style.maxHeight).toBe('420px')
+    expect(editorHost?.style.getPropertyValue('--diffs-tab-size')).toBe('8')
+    expect(editorHost?.style.getPropertyValue('--diffs-gap-block')).toBe('4px')
+    expect(fallback?.style.fontSize).toBe('16px')
+    expect(fallback?.style.lineHeight).toBe('24px')
+    expect(fallback?.style.paddingTop).toBe('4px')
+    expect(fallback?.style.paddingBottom).toBe('4px')
+    expect(fallback?.style.tabSize).toBe('8')
+    expect(fallback?.style.maxHeight).toBe('420px')
+    expect(fallback?.style.overflow).toBe('auto')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('selects a tuple-only theme by host color mode', async () => {
+    const helpers = getStreamMonacoHelpers()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        isDark: false,
+        loading: false,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'const value = 1',
+          raw: '```ts\nconst value = 1\n```',
+        },
+        showHeader: false,
+        themes: ['tuple-dark', 'tuple-light'],
+      }))
+    })
+    await waitForCallCount(helpers.useMonaco, 1)
+    expect(helpers.useMonaco.mock.calls[0]?.[0]?.theme).toBe('tuple-light')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('recreates the runtime when codeBlockOptions identity changes', async () => {
+    const helpers = getStreamMonacoHelpers()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'const value = 1',
+      raw: '```ts\nconst value = 1\n```',
+    }
+    const firstOnLineClick = vi.fn()
+    const secondOnLineClick = vi.fn()
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        node,
+        loading: false,
+        showHeader: false,
+        codeBlockOptions: {
+          overflow: 'scroll',
+          onLineClick: firstOnLineClick,
+        },
+      }))
+    })
+    await waitForCallCount(helpers.useMonaco, 1)
+    await waitForCallCount(helpers.createEditor, 1)
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        node,
+        loading: false,
+        showHeader: false,
+        codeBlockOptions: {
+          overflow: 'wrap',
+          onLineClick: secondOnLineClick,
+        },
+      }))
+    })
+    await waitForCallCount(helpers.useMonaco, 2)
+
+    const options = helpers.useMonaco.mock.calls[1]?.[0] as Record<string, any>
+    expect(options.overflow).toBe('wrap')
+    expect(options.onLineClick).toBe(secondOnLineClick)
+    expect(helpers.safeClean).toHaveBeenCalled()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('recreates the runtime when direct line-number precedence changes', async () => {
+    const helpers = getStreamMonacoHelpers()
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'const value = 1',
+      raw: '```ts\nconst value = 1\n```',
+    }
+    const codeBlockOptions = { disableLineNumbers: true }
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        codeBlockOptions,
+        loading: false,
+        node,
+        showHeader: false,
+        showLineNumbers: true,
+      }))
+    })
+    await waitForCallCount(helpers.useMonaco, 1)
+    expect(helpers.useMonaco.mock.calls[0]?.[0]?.disableLineNumbers).toBe(false)
+
+    await act(async () => {
+      root.render(React.createElement(CodeBlockNode as any, {
+        codeBlockOptions,
+        loading: false,
+        node,
+        showHeader: false,
+        showLineNumbers: false,
+      }))
+    })
+    await waitForCallCount(helpers.useMonaco, 2)
+    expect(helpers.useMonaco.mock.calls[1]?.[0]?.disableLineNumbers).toBe(true)
 
     await act(async () => {
       root.unmount()

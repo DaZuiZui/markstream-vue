@@ -1,19 +1,22 @@
 let isPreloaded = false
 let preloadPromise: Promise<void> | null = null
 
-export async function preload(m: { preloadMonacoWorkers?: () => Promise<unknown> | unknown }) {
+export async function preload(m: {
+  preloadStreamDiffs?: () => Promise<unknown> | unknown
+}) {
   if (isPreloaded)
     return
   if (preloadPromise)
     return preloadPromise
 
   const pending = (async () => {
-    if (typeof m?.preloadMonacoWorkers !== 'function') {
+    const preloadRuntime = m?.preloadStreamDiffs
+    if (typeof preloadRuntime !== 'function') {
       isPreloaded = true
       return
     }
 
-    await m.preloadMonacoWorkers()
+    await preloadRuntime()
     isPreloaded = true
   })()
 

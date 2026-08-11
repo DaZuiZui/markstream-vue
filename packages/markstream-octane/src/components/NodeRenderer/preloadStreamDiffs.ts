@@ -1,9 +1,9 @@
 let isPreloaded = false
 
-export async function preload(mod: any) {
+export async function preloadStreamDiffs(mod: any) {
   if (isPreloaded)
     return
   isPreloaded = true
-  if (mod?.preloadMonacoWorkers)
-    await mod.preloadMonacoWorkers()
+  if (mod?.preloadStreamDiffs)
+    await mod.preloadStreamDiffs()
 }

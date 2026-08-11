@@ -157,7 +157,7 @@ describe('diff CodeBlockNode fallback height stability', () => {
     const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
     expect(pre.style.paddingTop).toBe('0px')
     expect(pre.style.paddingBottom).toBe('0px')
-    expect(helpers.useMonaco.mock.calls[0]?.[0]?.padding).toEqual({ top: 0, bottom: 0 })
+    expect(helpers.useMonaco.mock.calls[0]?.[0]?.padding).toBeUndefined()
 
     wrapper.unmount()
   })

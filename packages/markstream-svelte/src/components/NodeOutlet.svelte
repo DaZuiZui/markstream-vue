@@ -71,6 +71,12 @@
   let shouldEscapeHtmlTag = $derived(resolveShouldEscapeHtmlTag())
   let htmlRenderNode = $derived(coerceBuiltinHtmlNode(node, resolvedType))
   let codeBlockInstanceKey = $derived(`${String(indexKey ?? 'code-block')}:${String((node as any)?.language ?? '')}:${(node as any)?.diff ? 'diff' : 'code'}`)
+  let preShowLineNumbers = $derived(
+    typeof context?.codeBlockProps?.showLineNumbers === 'boolean'
+      ? context.codeBlockProps.showLineNumbers
+      : context?.codeBlockOptions?.disableLineNumbers !== true,
+  )
+  let preStyle = $derived(`white-space: ${context?.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'}`)
   let escapedTextNode = $derived({
     type: 'text',
     content: String((node as any)?.content ?? (node as any)?.raw ?? ''),
@@ -105,6 +111,7 @@
     typewriter={context?.typewriter}
     fade={context?.fade}
     {...customInputs}
+    codeBlockOptions={context?.codeBlockOptions}
   />
 {:else if resolvedType === 'text' || resolvedType === 'text_special'}
   <TextNode {node} {context} {indexKey} typewriter={context?.typewriter} />
@@ -186,10 +193,10 @@
   {:else if codeMode === 'infographic'}
     <InfographicBlockNode {node} {context} {...customInputs} />
   {:else if codeMode === 'pre'}
-    <PreCodeNode {node} />
+    <PreCodeNode {node} showLineNumbers={preShowLineNumbers} style={preStyle} />
   {:else}
     {#key codeBlockInstanceKey}
-      <CodeBlockNode {node} {context} {...customInputs} />
+      <CodeBlockNode {node} {context} {...customInputs} codeBlockOptions={context?.codeBlockOptions} />
     {/key}
   {/if}
 {:else if resolvedType === 'label_open' || resolvedType === 'label_close'}

@@ -1,6 +1,6 @@
 import type { ComponentBody, ElementDescriptor } from 'octane'
 import type { ParsedNode } from 'stream-markdown-parser'
-import type { NodeComponentProps, RenderContext } from '../../src/index'
+import type { CodeBlockOptions, NodeComponentProps, RenderContext } from '../../src/index'
 import { isValidElement } from 'octane'
 import { describe, expect, it } from 'vitest'
 import { renderNode } from '../../src/index'
@@ -9,6 +9,10 @@ const ExactLanguageProbe: ComponentBody<NodeComponentProps> = () => null
 const GenericCodeBlockProbe: ComponentBody<NodeComponentProps> = () => null
 const MermaidProbe: ComponentBody<NodeComponentProps> = () => null
 const InfographicProbe: ComponentBody<NodeComponentProps> = () => null
+const callbackOptions = {
+  onLineClick: (_event: { lineNumber: number }) => {},
+} satisfies CodeBlockOptions
+void callbackOptions
 
 const baseCtx: RenderContext = {
   customId: 'octane-heavy-props-test',
@@ -81,6 +85,56 @@ describe('markstream-octane heavy-node routing', () => {
     expect(result.props.showHeader).toBe(false)
     expect(result.props.indexKey).toBeUndefined()
     expect(result.props.renderNode).toBeUndefined()
+  })
+
+  it('forwards top-level codeBlockOptions after the legacy codeBlockProps bag', () => {
+    const codeBlockOptions = {
+      diffStyle: 'unified' as const,
+      fontSize: 16,
+    }
+    const result = descriptor({
+      type: 'code_block',
+      language: 'ts',
+      code: 'export const value = 1',
+      raw: '```ts\nexport const value = 1\n```',
+    }, 'code-options', {
+      ...baseCtx,
+      codeBlockOptions,
+      codeBlockProps: {
+        codeBlockOptions: { fontSize: 99 },
+      } as any,
+    })
+
+    expect(result.props.codeBlockOptions).toBe(codeBlockOptions)
+  })
+
+  it('lets an explicit fallback showLineNumbers prop override codeBlockOptions', () => {
+    const result = descriptor({
+      type: 'code_block',
+      language: 'ts',
+      code: 'const value = 1',
+      raw: '```ts\nconst value = 1\n```',
+    }, 'pre-options', {
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { disableLineNumbers: true, overflow: 'scroll' },
+      codeBlockProps: { showLineNumbers: true },
+    })
+
+    expect(result.props.showLineNumbers).toBe(true)
+    expect(result.props.style).toEqual({ whiteSpace: 'pre' })
+
+    const wrapped = descriptor({
+      type: 'code_block',
+      language: 'ts',
+      code: 'const value = 1',
+      raw: '```ts\nconst value = 1\n```',
+    }, 'pre-wrap', {
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { overflow: 'wrap' },
+    })
+    expect(wrapped.props.style).toEqual({ whiteSpace: 'pre-wrap' })
   })
 
   it('prefers exact language bindings over the generic code block binding', () => {

@@ -5,6 +5,7 @@ import type { MarkstreamVirtualTimelineProps } from './composables/useMarkstream
 import type { CustomComponents as MarkstreamCustomComponents } from './types'
 import type {
   CodeBlockNodeProps,
+  CodeBlockOptions,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MathBlockNodeProps,
@@ -100,19 +101,15 @@ export type {
   SmoothMarkdownStreamOptions,
 } from './composables/useSmoothMarkdownStream'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockPreviewPayload,
   CodeBlockTheme,
-  CodeBlockThemeObject,
+  CodeBlockThemePair,
   CodeBlockThemeProp,
+  CodeBlockThemes,
   D2BlockNodeProps,
   ImageNodeProps,
   InfographicBlockNodeProps,

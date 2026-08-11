@@ -1,4 +1,5 @@
 import type { NodeRendererCodeBlockProps, NodeRendererD2Props, NodeRendererInfographicProps, NodeRendererMermaidProps } from './components/shared/node-helpers'
+import type { CodeBlockOptions, CodeBlockTheme, CodeBlockThemes } from './types/monaco'
 import { toSafeMermaidSvgMarkup } from 'stream-markdown-parser'
 import { getD2 } from './optional/d2'
 import { getInfographic } from './optional/infographic'
@@ -43,7 +44,11 @@ export interface EnhanceRenderedHtmlOptions {
   d2ThemeId?: number | null
   d2DarkThemeId?: number | null
   showTooltips?: boolean
+  codeBlockOptions?: CodeBlockOptions
   codeBlockProps?: NodeRendererCodeBlockProps
+  codeBlockDarkTheme?: CodeBlockTheme
+  codeBlockLightTheme?: CodeBlockTheme
+  themes?: CodeBlockThemes
   mermaidProps?: NodeRendererMermaidProps
   d2Props?: NodeRendererD2Props
   infographicProps?: NodeRendererInfographicProps
@@ -590,11 +595,27 @@ async function renderCodeBlocks(
   options: EnhanceRenderedHtmlOptions,
   isActive: () => boolean,
 ) {
+  const preNodes = Array.from(root.querySelectorAll<HTMLElement>('pre[data-markstream-code-block="1"]'))
+  const fallbackWhiteSpace = options.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'
+  const maxHeight = options.codeBlockOptions?.maxHeight
+  for (const pre of preNodes) {
+    const codeNode = pre.querySelector<HTMLElement>('code')
+    if (!codeNode)
+      continue
+    const normalizedLanguage = resolveCodeLanguage(pre, codeNode).trim().toLowerCase()
+    if (normalizedLanguage === 'mermaid' || normalizedLanguage === 'infographic' || normalizedLanguage === 'd2' || normalizedLanguage === 'd2lang')
+      continue
+    pre.style.whiteSpace = fallbackWhiteSpace
+    if (typeof maxHeight === 'number') {
+      pre.style.maxHeight = `${maxHeight}px`
+      pre.style.overflow = 'auto'
+    }
+  }
+
   const monacoModule = await getUseMonaco()
   if (!monacoModule || typeof monacoModule.useMonaco !== 'function' || !isActive())
     return
 
-  const preNodes = Array.from(root.querySelectorAll<HTMLElement>('pre[data-markstream-code-block="1"]'))
   for (const pre of preNodes) {
     if (!isActive())
       return
@@ -619,7 +640,6 @@ async function renderCodeBlocks(
     const fontSize = readCssPixels(codeStyle?.fontSize) ?? 13
     const lineHeight = readCssPixels(codeStyle?.lineHeight) ?? readCssPixels(preStyle?.lineHeight)
     const paddingTop = readCssPixels(preStyle?.paddingTop)
-    const paddingBottom = readCssPixels(preStyle?.paddingBottom)
     const fontFamily = codeStyle?.fontFamily || preStyle?.fontFamily || undefined
     const shell = createEnhancedBlockShell(
       'code',
@@ -632,7 +652,14 @@ async function renderCodeBlocks(
       },
     )
     shell.body.classList.add('markstream-angular-enhanced-block__body--code')
-    shell.body.style.minHeight = `${measuredPreHeight > 0 ? Math.ceil(measuredPreHeight) : estimateCodeBlockHeight(diff ? updatedCode || source : source, diff)}px`
+    const estimatedHeight = measuredPreHeight > 0
+      ? Math.ceil(measuredPreHeight)
+      : estimateCodeBlockHeight(diff ? updatedCode || source : source, diff)
+    shell.body.style.minHeight = `${typeof maxHeight === 'number' ? Math.min(estimatedHeight, maxHeight) : estimatedHeight}px`
+    if (typeof maxHeight === 'number') {
+      shell.body.style.maxHeight = `${maxHeight}px`
+      shell.body.style.overflow = 'auto'
+    }
     if (preStyle) {
       shell.wrapper.style.marginTop = preStyle.marginTop
       shell.wrapper.style.marginRight = preStyle.marginRight
@@ -642,26 +669,70 @@ async function renderCodeBlocks(
     const originalPre = pre.cloneNode(true) as HTMLElement
     pre.replaceWith(shell.wrapper)
 
-    const runtimeUnsafeCSS = `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }`
+    const userOptions = { ...(options.codeBlockOptions ?? {}) } as Record<string, any>
+    for (const key of [
+      'maxHeight', 'padding', 'tabSize', 'theme', 'themes', 'themeType', 'language', 'languages',
+      'stream', 'disableFileHeader', 'onThemeChange', 'renderCustomHeader', 'renderHeaderMetadata',
+      'renderHeaderPrefix',
+    ])
+      delete userOptions[key]
+    const parseDiffOptions = userOptions.parseDiffOptions && typeof userOptions.parseDiffOptions === 'object'
+      ? userOptions.parseDiffOptions as Record<string, unknown>
+      : {}
+    const nativeOptions = diff
+      ? {
+          diffStyle: 'split',
+          expandUnchanged: false,
+          collapsedContextThreshold: 5,
+          hunkSeparators: 'line-info',
+          ...userOptions,
+          parseDiffOptions: { context: 2, ...parseDiffOptions },
+        }
+      : userOptions
+    const configuredTheme = options.codeBlockProps?.theme
+    const configuredThemes = options.codeBlockProps?.themes ?? options.themes
+    const resolvedDarkTheme = typeof configuredTheme === 'string'
+      ? configuredTheme
+      : configuredTheme && typeof configuredTheme === 'object'
+        ? configuredTheme.dark
+        : options.codeBlockProps?.darkTheme ?? options.codeBlockDarkTheme ?? configuredThemes?.[0] ?? 'vitesse-dark'
+    const resolvedLightTheme = typeof configuredTheme === 'string'
+      ? configuredTheme
+      : configuredTheme && typeof configuredTheme === 'object'
+        ? configuredTheme.light
+        : options.codeBlockProps?.lightTheme ?? options.codeBlockLightTheme ?? configuredThemes?.[1] ?? 'vitesse-light'
+    const runtimeThemes = configuredThemes
+      ? [configuredThemes[0], configuredThemes[1]]
+      : [resolvedDarkTheme, resolvedLightTheme]
+    const configuredUnsafeCSS = typeof nativeOptions.unsafeCSS === 'string' ? nativeOptions.unsafeCSS : ''
+    const showLineNumbers = options.codeBlockProps?.showLineNumbers
+      ?? options.codeBlockOptions?.disableLineNumbers !== true
+    const syncGeometry = () => {
+      shell.body.style.setProperty('--diffs-tab-size', String(options.codeBlockOptions?.tabSize ?? 4))
+      const finalPaddingTop = options.codeBlockOptions?.padding ?? paddingTop
+      if (finalPaddingTop != null)
+        shell.body.style.setProperty('--diffs-gap-block', `${finalPaddingTop}px`)
+      else
+        shell.body.style.removeProperty('--diffs-gap-block')
+    }
+    syncGeometry()
+
     const helpers = monacoModule.useMonaco({
-      themes: ['vitesse-dark', 'vitesse-light'],
-      languages: Array.from(new Set([language, 'plaintext'])),
-      readOnly: true,
-      minimap: { enabled: false },
-      lineNumbers: 'on',
-      wordWrap: 'off',
-      revealDebounceMs: 75,
-      MAX_HEIGHT: 500,
-      fontSize,
-      ...(lineHeight ? { lineHeight } : {}),
-      ...(fontFamily ? { fontFamily } : {}),
-      ...(paddingTop != null || paddingBottom != null
-        ? { padding: { top: paddingTop ?? 0, bottom: paddingBottom ?? 0 } }
-        : {}),
-      // createEnhancedBlockShell already renders the code header. Prevent the
-      // enhanced runtime from adding a second `code.<language>` file header.
+      overflow: 'wrap',
+      ...nativeOptions,
+      themes: runtimeThemes,
+      theme: options.isDark ? resolvedDarkTheme : resolvedLightTheme,
+      themeType: options.isDark ? 'dark' : 'light',
+      disableLineNumbers: !showLineNumbers,
+      MAX_HEIGHT: options.codeBlockOptions?.maxHeight ?? 500,
+      fontSize: options.codeBlockOptions?.fontSize ?? fontSize,
+      ...(options.codeBlockOptions?.lineHeight ?? lineHeight ? { lineHeight: options.codeBlockOptions?.lineHeight ?? lineHeight } : {}),
+      ...(options.codeBlockOptions?.fontFamily ?? fontFamily ? { fontFamily: options.codeBlockOptions?.fontFamily ?? fontFamily } : {}),
+      stream: false,
       disableFileHeader: true,
-      unsafeCSS: runtimeUnsafeCSS,
+      onThemeChange: syncGeometry,
+      unsafeCSS: `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
+${configuredUnsafeCSS}`.trim(),
     })
 
     try {
@@ -680,10 +751,28 @@ async function renderCodeBlocks(
           language,
         )
       }
-      if (!isActive())
+      if (!isActive()) {
+        try {
+          helpers.cleanupEditor?.()
+        }
+        finally {
+          if (shell.wrapper.parentNode)
+            shell.wrapper.replaceWith(originalPre.cloneNode(true))
+        }
         return
+      }
 
-      await helpers.setTheme?.(options.isDark ? 'vitesse-dark' : 'vitesse-light')
+      await helpers.setTheme?.(options.isDark ? resolvedDarkTheme : resolvedLightTheme)
+      if (!isActive()) {
+        try {
+          helpers.cleanupEditor?.()
+        }
+        finally {
+          if (shell.wrapper.parentNode)
+            shell.wrapper.replaceWith(originalPre.cloneNode(true))
+        }
+        return
+      }
       shell.wrapper.dataset.markstreamMonaco = '1'
       if (diff)
         shell.wrapper.dataset.markstreamMonacoDiff = '1'
@@ -692,7 +781,7 @@ async function renderCodeBlocks(
           helpers.cleanupEditor?.()
         }
         finally {
-          if (shell.wrapper.isConnected)
+          if (shell.wrapper.parentNode)
             shell.wrapper.replaceWith(originalPre.cloneNode(true))
         }
       })

@@ -46,6 +46,7 @@ const GenericCodeBlockAttrsProbe = defineComponent({
     node: { type: Object, required: true },
     showHeader: Boolean,
     showLineNumbers: Boolean,
+    codeBlockOptions: Object,
   },
   setup(props, { attrs }) {
     return () => h('div', {
@@ -53,6 +54,7 @@ const GenericCodeBlockAttrsProbe = defineComponent({
       'data-language': String((props.node as any)?.language ?? ''),
       'data-show-header': String(props.showHeader),
       'data-show-line-numbers': String(props.showLineNumbers),
+      'data-code-padding': String((props.codeBlockOptions as any)?.padding ?? ''),
       'data-has-stream': String(Object.prototype.hasOwnProperty.call(attrs, 'stream')),
       'data-has-themes': String(Object.prototype.hasOwnProperty.call(attrs, 'themes')),
     })
@@ -304,6 +306,28 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
   })
 
+  it('uses codeBlockOptions for fallback line numbers unless codeBlockProps overrides them', async () => {
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        renderCodeBlocksAsPre: true,
+        codeBlockOptions: { disableLineNumbers: true },
+        nodes: [{
+          type: 'code_block',
+          language: 'ts',
+          code: 'const value = 1',
+          raw: '```ts\nconst value = 1\n```',
+        }],
+      },
+    })
+
+    await flushAll()
+    expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBeUndefined()
+
+    await wrapper.setProps({ codeBlockProps: { showLineNumbers: true } })
+    await flushAll()
+    expect(wrapper.get('pre[data-markstream-pre="1"]').attributes('data-markstream-line-numbers')).toBe('1')
+  })
+
   it('does not leak rich code block props onto the pre renderer', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
@@ -367,6 +391,38 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(probe.attributes('data-show-line-numbers')).toBe('true')
     expect(probe.attributes('data-has-stream')).toBe('true')
     expect(probe.attributes('data-has-themes')).toBe('true')
+  })
+
+  it('keeps top-level codeBlockOptions authoritative over a nested runtime collision', async () => {
+    setCustomComponents(customId, {
+      code_block: GenericCodeBlockAttrsProbe,
+    })
+
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        customId,
+        codeBlockOptions: { padding: 6 },
+        codeBlockProps: {
+          codeBlockOptions: { padding: 99 },
+        } as any,
+        nodes: [
+          {
+            type: 'code_block',
+            language: 'ts',
+            code: 'const value = 1',
+            raw: '```ts\nconst value = 1\n```',
+          },
+        ],
+        viewportPriority: false,
+        deferNodesUntilVisible: false,
+        batchRendering: false,
+        maxLiveNodes: 0,
+      },
+    })
+
+    await flushAll()
+
+    expect(wrapper.get('.generic-code-block-attrs-probe').attributes('data-code-padding')).toBe('6')
   })
 
   it('forwards code block options to code blocks nested inside list items', async () => {

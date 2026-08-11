@@ -145,6 +145,59 @@ describe('markstream-react heavy-node prop forwarding', () => {
     expect(Object.prototype.hasOwnProperty.call(serverElement?.props ?? {}, 'constructor')).toBe(false)
   })
 
+  it('forwards top-level codeBlockOptions after the legacy codeBlockProps bag', () => {
+    const codeBlockOptions = {
+      diffStyle: 'unified' as const,
+      fontSize: 16,
+    }
+    const ctx: RenderContext = {
+      ...baseCtx,
+      codeBlockOptions,
+      codeBlockThemes: {
+        darkTheme: 'github-dark',
+        lightTheme: 'github-light',
+        themes: ['github-dark', 'github-light'],
+      },
+      codeBlockProps: {
+        codeBlockOptions: { fontSize: 99 },
+      } as any,
+    }
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'export const value = 1',
+      raw: '```ts\nexport const value = 1\n```',
+    }
+
+    const clientElement = clientRenderNode(node as any, 'client-options', ctx) as any
+    const serverElement = serverRenderNode(node as any, 'server-options', ctx) as any
+
+    expect(clientElement.props.codeBlockOptions).toBe(codeBlockOptions)
+    expect(clientElement.props.darkTheme).toBe('github-dark')
+    expect(clientElement.props.lightTheme).toBe('github-light')
+    expect(serverElement.props.codeBlockOptions).toBe(codeBlockOptions)
+    expect(serverElement.props.darkTheme).toBe('github-dark')
+    expect(serverElement.props.lightTheme).toBe('github-light')
+  })
+
+  it('lets an explicit fallback showLineNumbers prop override codeBlockOptions', () => {
+    const ctx: RenderContext = {
+      ...baseCtx,
+      renderCodeBlocksAsPre: true,
+      codeBlockOptions: { disableLineNumbers: true },
+      codeBlockProps: { showLineNumbers: true },
+    }
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'const value = 1',
+      raw: '```ts\nconst value = 1\n```',
+    }
+
+    expect((clientRenderNode(node as any, 'client-pre-options', ctx) as any).props.showLineNumbers).toBe(true)
+    expect((serverRenderNode(node as any, 'server-pre-options', ctx) as any).props.showLineNumbers).toBe(true)
+  })
+
   it('injects stable preview height estimates for client Mermaid and Infographic custom renderers', () => {
     const longMermaidCode = 'flowchart TD\nA-->B\nB-->C\nC-->D\nD-->E\nE-->F\nF-->G\nG-->H\nH-->I\nI-->J\nJ-->K\nK-->L\n'
     const infographicCode = ['# Release progress', '- Plan: complete', '- Build: active', '- Verify: pending'].join('\n')
@@ -539,6 +592,7 @@ describe('markstream-react heavy-node prop forwarding', () => {
       ...baseCtx,
       renderCodeBlocksAsPre: true,
       codeBlockProps: { showLineNumbers: true },
+      codeBlockOptions: { overflow: 'scroll' },
     }
 
     const clientHtml = renderToStaticMarkup(clientRenderNode(node as any, 'client-pre-typography', ctx) as any)
@@ -552,7 +606,19 @@ describe('markstream-react heavy-node prop forwarding', () => {
       expect(html).toContain('padding-top:0px')
       expect(html).toContain('padding-bottom:0px')
       expect(html).toContain('tab-size:2')
+      expect(html).toContain('white-space:pre')
       expect(html).toContain('class="markstream-pre__line-numbers-text">1\n2</span>')
     }
+
+    const wrappedClientHtml = renderToStaticMarkup(clientRenderNode(node as any, 'client-pre-wrap', {
+      ...ctx,
+      codeBlockOptions: { overflow: 'wrap' },
+    }) as any)
+    const wrappedServerHtml = renderToStaticMarkup(serverRenderNode(node as any, 'server-pre-wrap', {
+      ...ctx,
+      codeBlockOptions: { overflow: 'wrap' },
+    }) as any)
+    expect(wrappedClientHtml).toContain('white-space:pre-wrap')
+    expect(wrappedServerHtml).toContain('white-space:pre-wrap')
   })
 })

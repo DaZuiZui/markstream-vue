@@ -141,6 +141,7 @@ function renderCustomCodeBlockComponent(
     onCopy: ctx.events.onCopy,
     onPreviewCode,
     ...extraProps,
+    codeBlockOptions: ctx.codeBlockOptions,
     ...specialProps,
     ctx,
     renderNode,
@@ -280,10 +281,14 @@ function renderCodeBlock(
 
   if (ctx.renderCodeBlocksAsPre || language === 'mermaid') {
     const extraProps = getCodeBlockExtraProps(ctx.codeBlockProps)
+    const configuredShowLineNumbers = extraProps.showLineNumbers
     return Octane.createElement(PreCodeNode, {
       key,
       node,
-      showLineNumbers: extraProps.showLineNumbers === true,
+      style: { whiteSpace: ctx.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap' },
+      showLineNumbers: typeof configuredShowLineNumbers === 'boolean'
+        ? configuredShowLineNumbers
+        : ctx.codeBlockOptions?.disableLineNumbers !== true,
     })
   }
 
@@ -300,6 +305,7 @@ function renderCodeBlock(
     isDark: ctx.isDark,
     onCopy: ctx.events.onCopy,
     ...getCodeBlockExtraProps(ctx.codeBlockProps),
+    codeBlockOptions: ctx.codeBlockOptions,
   })
 }
 

@@ -24,11 +24,9 @@ const vue2Source = readFileSync(
 )
 
 describe('code block handoff guards', () => {
-  it('passes showLineNumbers to stream-diffs as a boolean so false actually disables line numbers', () => {
-    // stream-diffs only disables the gutter when options.lineNumbers === false;
-    // 'off'/'on' strings are truthy and would always keep line numbers visible.
-    expect(svelteSource).toContain('lineNumbers: showLineNumbers !== false')
-    expect(svelteSource).not.toContain('lineNumbers: showLineNumbers === false ? \'off\' : \'on\'')
+  it('forwards the neutral disableLineNumbers option to every stream-diffs adapter', () => {
+    for (const source of [vue3Source, vue2Source, reactSource, svelteSource, angularSource])
+      expect(source).toContain('disableLineNumbers')
   })
 
   it('time-boxes the visual-readiness handoff so a hidden container never strands the block in fallback', () => {

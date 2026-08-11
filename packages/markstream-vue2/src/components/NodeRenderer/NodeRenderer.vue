@@ -2,7 +2,7 @@
 import type { BaseNode, HtmlPolicy, MarkdownIt, ParsedNode, ParseOptions } from 'stream-markdown-parser'
 import type { SmoothMarkdownStreamOptions } from '../../composables/useSmoothMarkdownStream'
 import type { VisibilityHandle } from '../../composables/viewportPriority'
-import type { CodeBlockNodeProps, CodeBlockPreviewPayload, CodeBlockTheme, D2BlockNodeProps, InfographicBlockNodeProps, MermaidBlockNodeProps } from '../../types/component-props'
+import type { CodeBlockNodeProps, CodeBlockOptions, CodeBlockPreviewPayload, CodeBlockTheme, CodeBlockThemes, D2BlockNodeProps, InfographicBlockNodeProps, MermaidBlockNodeProps } from '../../types/component-props'
 import { normalizeShikiLanguage } from 'markstream-core'
 import { getMarkdown, mergeCustomHtmlTags, parseMarkdownToStructure, resolveCustomHtmlTags } from 'stream-markdown-parser'
 import { h as createVNode } from 'vue'
@@ -57,14 +57,11 @@ interface IdleDeadlineLike {
   timeRemaining?: () => number
 }
 
-type NodeRendererCodeBlockThemes
-  = CodeBlockNodeProps['themes']
-    | readonly string[]
-
 type NodeRendererCodeBlockProps
-  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
+  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes' | 'codeBlockOptions'>>
     & {
-      themes?: NodeRendererCodeBlockThemes
+      themes?: CodeBlockThemes
+      codeBlockOptions?: never
     }
     & Record<string, unknown>
 
@@ -105,6 +102,8 @@ export interface NodeRendererProps {
   codeBlockMinWidth?: string | number
   /** Maximum width forwarded to CodeBlockNode (px or CSS unit) */
   codeBlockMaxWidth?: string | number
+  /** Options forwarded to the built-in stream-diffs CodeBlockNode. */
+  codeBlockOptions?: CodeBlockOptions
   /** Arbitrary props to forward to every CodeBlockNode */
   codeBlockProps?: NodeRendererCodeBlockProps
   /** Props forwarded to MermaidBlockNode for mermaid fences */
@@ -116,7 +115,7 @@ export interface NodeRendererProps {
   /** Global tooltip toggle for link/code-block renderers (default: true) */
   showTooltips?: boolean
   /** Theme names or theme objects preloaded for enhanced code blocks. */
-  themes?: CodeBlockTheme[]
+  themes?: CodeBlockThemes
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -1864,10 +1863,12 @@ const codeBlockBindings = computed(() => ({
   maxWidth: props.codeBlockMaxWidth,
   ...(typeof props.showTooltips === 'boolean' ? { showTooltips: props.showTooltips } : {}),
   ...builtinCodeBlockExtraProps.value,
+  codeBlockOptions: props.codeBlockOptions,
 }))
 const customCodeBlockBindings = computed(() => ({
   ...codeBlockBindings.value,
   ...codeBlockExtraProps.value,
+  codeBlockOptions: props.codeBlockOptions,
 }))
 
 function countCodeLines(value: unknown) {
@@ -1876,19 +1877,20 @@ function countCodeLines(value: unknown) {
 }
 
 function estimateBuiltinCodeBlockHeight(node: ParsedNode) {
-  // Fixed default metrics for the stream-diffs handoff.
-  const lineHeight = 18
+  const lineHeight = props.codeBlockOptions?.lineHeight ?? 18
   const isDiff = Boolean((node as any).diff)
-  const diffInline = false
+  const configuredDiffInline = pickBoolean((builtinCodeBlockExtraProps.value as Record<string, unknown>).diffInline)
+  const diffInline = isDiff && (configuredDiffInline ?? props.codeBlockOptions?.diffStyle === 'unified')
   const lineCount = isDiff
     ? (diffInline
         ? countCodeLines((node as any).originalCode) + countCodeLines((node as any).updatedCode)
         : Math.max(countCodeLines((node as any).originalCode), countCodeLines((node as any).updatedCode)))
     : countCodeLines((node as any).code)
   const defaultPadding = isDiff ? 0 : 8
-  const paddingTop = defaultPadding
-  const paddingBottom = defaultPadding
-  const maxHeight = 500
+  const padding = props.codeBlockOptions?.padding ?? defaultPadding
+  const paddingTop = padding
+  const paddingBottom = padding
+  const maxHeight = props.codeBlockOptions?.maxHeight ?? 500
   const contentHeight = Math.max(1, Math.min(
     maxHeight,
     Math.round(lineCount * lineHeight + paddingTop + paddingBottom),
@@ -1910,8 +1912,11 @@ const preCodeBlockBindings = computed(() => {
   const bindings: Record<string, unknown> = {}
 
   const showLineNumbers = pickBoolean(source.showLineNumbers)
-  if (showLineNumbers !== undefined)
-    bindings.showLineNumbers = showLineNumbers
+  bindings.showLineNumbers = showLineNumbers
+    ?? props.codeBlockOptions?.disableLineNumbers !== true
+  bindings.style = {
+    whiteSpace: props.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+  }
 
   const diffInline = pickBoolean(source.diffInline)
   if (diffInline !== undefined)
@@ -2539,6 +2544,7 @@ watch(
       :render-code-blocks-as-pre="props.renderCodeBlocksAsPre"
       :code-block-min-width="props.codeBlockMinWidth"
       :code-block-max-width="props.codeBlockMaxWidth"
+      :code-block-options="props.codeBlockOptions"
       :code-block-props="props.codeBlockProps"
       :themes="props.themes"
       :is-dark="props.isDark"

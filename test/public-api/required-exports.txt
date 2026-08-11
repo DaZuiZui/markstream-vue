@@ -95,18 +95,14 @@ safeCancelRaf
 
 # Key public types that appear in component props and function signatures
 CodeBlockNodeProps
+CodeBlockOptions
 CodeBlockPreviewPayload
 CodeBlockTheme
-CodeBlockThemeObject
+CodeBlockThemePair
 CodeBlockThemeProp
-CodeBlockDiffAppearance
+CodeBlockThemes
 CodeBlockDiffHideUnchangedRegions
 CodeBlockDiffHideUnchangedRegionsOptions
-CodeBlockDiffHunkActionContext
-CodeBlockDiffHunkActionKind
-CodeBlockDiffHunkSide
-CodeBlockDiffLineStyle
-CodeBlockDiffUnchangedRegionStyle
 CustomComponentAttrs
 CustomComponentNode
 CustomComponents

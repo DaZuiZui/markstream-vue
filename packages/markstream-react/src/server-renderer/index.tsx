@@ -147,6 +147,7 @@ function renderCustomCodeBlockComponent(
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     onCopy: ctx.events.onCopy,
     ...extraProps,
+    codeBlockOptions: ctx.codeBlockOptions,
     ...specialProps,
     ctx,
     renderNode,
@@ -223,6 +224,7 @@ function createRenderContext(
     htmlComponents,
     renderCodeBlocksAsPre: props.renderCodeBlocksAsPre,
     codeBlockStream: props.codeBlockStream,
+    codeBlockOptions: props.codeBlockOptions,
     codeBlockProps: {
       ...(typeof props.showTooltips === 'boolean' ? { showTooltips: props.showTooltips } : {}),
       ...(props.codeBlockProps || {}),
@@ -358,11 +360,15 @@ function renderCodeBlock(
     return renderCustomCodeBlockComponent(customCodeBlock, node, key, ctx)
 
   if (ctx.renderCodeBlocksAsPre) {
+    const configuredShowLineNumbers = ctx.codeBlockProps?.showLineNumbers
     return (
       <PreCodeNode
         key={key}
         node={node}
-        showLineNumbers={ctx.codeBlockProps?.showLineNumbers === true}
+        style={{ whiteSpace: ctx.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap' }}
+        showLineNumbers={typeof configuredShowLineNumbers === 'boolean'
+          ? configuredShowLineNumbers
+          : ctx.codeBlockOptions?.disableLineNumbers !== true}
       />
     )
   }
@@ -374,10 +380,13 @@ function renderCodeBlock(
       loading={Boolean(node.loading)}
       stream={ctx.codeBlockStream}
       themes={ctx.codeBlockThemes?.themes}
+      darkTheme={ctx.codeBlockThemes?.darkTheme}
+      lightTheme={ctx.codeBlockThemes?.lightTheme}
       minWidth={ctx.codeBlockThemes?.minWidth}
       maxWidth={ctx.codeBlockThemes?.maxWidth}
       isDark={ctx.isDark}
       {...getCodeBlockExtraProps(ctx.codeBlockProps)}
+      codeBlockOptions={ctx.codeBlockOptions}
     />
   )
 }

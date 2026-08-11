@@ -37,6 +37,7 @@
     renderCodeBlocksAsPre = false,
     codeBlockMinWidth = undefined,
     codeBlockMaxWidth = undefined,
+    codeBlockOptions = undefined,
     codeBlockProps = undefined,
     mermaidProps = undefined,
     d2Props = undefined,
@@ -169,6 +170,7 @@
     renderCodeBlocksAsPre,
     codeBlockMinWidth,
     codeBlockMaxWidth,
+    codeBlockOptions,
     codeBlockProps,
     mermaidProps,
     d2Props,
@@ -257,7 +259,11 @@
     void renderedNodes
     void isDark
     void renderCodeBlocksAsPre
+    void codeBlockOptions
     void codeBlockProps
+    void codeBlockDarkTheme
+    void codeBlockLightTheme
+    void themes
     void mermaidProps
     void d2Props
     void infographicProps
@@ -385,11 +391,15 @@
     if (token !== enhancementToken || !rootEl)
       return
     enhancementHandle?.dispose()
-    enhancementHandle = await enhanceRenderedHtml(rootEl, {
+    const handle = await enhanceRenderedHtml(rootEl, {
       final: enhancementFinal,
       isDark,
       renderCodeBlocksAsPre,
+      codeBlockOptions,
       codeBlockProps,
+      codeBlockDarkTheme,
+      codeBlockLightTheme,
+      themes,
       mermaidProps,
       d2Props,
       infographicProps,
@@ -397,6 +407,11 @@
       onCopy,
       isCancelled: () => token !== enhancementToken,
     })
+    if (token !== enhancementToken) {
+      handle.dispose()
+      return
+    }
+    enhancementHandle = handle
   }
 
   function hasLoadingNodes(nodes: SvelteRenderableNode[]): boolean {

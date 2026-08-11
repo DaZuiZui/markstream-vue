@@ -3,7 +3,9 @@ import type { Ref } from 'vue'
 import type { SmoothMarkdownStreamOptions } from '../composables/useSmoothMarkdownStream'
 import type {
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockTheme,
+  CodeBlockThemes,
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
@@ -13,9 +15,10 @@ type NodeRendererCodeBlockThemes
   = CodeBlockNodeProps['themes']
 
 export type NodeRendererCodeBlockProps
-  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
+  = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes' | 'codeBlockOptions'>>
     & {
       themes?: NodeRendererCodeBlockThemes
+      codeBlockOptions?: never
     }
     & Record<string, unknown>
 export type NodeRendererMode = 'docs' | 'chat' | 'minimal'
@@ -327,6 +330,8 @@ export interface NodeRendererProps {
   codeBlockMinWidth?: string | number
   /** Maximum width forwarded to CodeBlockNode (px or CSS unit) */
   codeBlockMaxWidth?: string | number
+  /** Runtime options forwarded to stream-diffs-backed CodeBlockNode instances. */
+  codeBlockOptions?: CodeBlockOptions
   /** Arbitrary props to forward to every CodeBlockNode */
   codeBlockProps?: NodeRendererCodeBlockProps
   /** Props forwarded to MermaidBlockNode for mermaid fences */
@@ -340,7 +345,7 @@ export interface NodeRendererProps {
   /**
    * Theme names or theme objects preloaded for stream-diffs-backed code blocks.
    */
-  themes?: CodeBlockTheme[]
+  themes?: CodeBlockThemes
   /** Forces dark mode for built-in renderers such as Mermaid, D2, KaTeX, and code blocks. */
   isDark?: boolean
   /** Scope key used by `setCustomComponents()` and `data-custom-id` style overrides. */

@@ -63,7 +63,7 @@ streamMonaco.useMonaco.mockImplementation(() => streamMonaco)
 
 vi.mock('stream-diffs', () => ({
   ...streamMonaco,
-  preloadMonacoWorkers: vi.fn(async () => {}),
+  preloadStreamDiffs: vi.fn(async () => {}),
   getOrCreateHighlighter: vi.fn(async () => ({
     codeToTokens: vi.fn(() => ({
       tokens: [],
@@ -74,6 +74,12 @@ vi.mock('stream-diffs', () => ({
       grammarState: null,
     })),
   })),
+  detectLanguage: () => 'plaintext',
+}))
+
+vi.mock('stream-diffs/markstream', () => ({
+  ...streamMonaco,
+  preloadStreamDiffs: vi.fn(async () => {}),
   detectLanguage: () => 'plaintext',
 }))
 

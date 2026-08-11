@@ -1,5 +1,6 @@
 import type {
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CustomComponents,
   D2BlockNodeProps,
   ImageNodeProps,
@@ -178,19 +179,14 @@ const safeMermaidSvgElement: SVGElement | null = toSafeSvgElement<SVGElement>('<
 const brokenMermaidSvg: boolean = isBrokenMermaidSvg('<svg viewBox="0 0 0 10"><rect width="10" height="10" /></svg>')
 
 const codeBlockProps: Partial<CodeBlockNodeProps> = {}
-const nodeRendererCodeBlockPropsWithThemeObject: NodeRendererProps = {
+const codeBlockOptions: CodeBlockOptions = {
+  onLineClick: (event: { lineNumber: number }) => event.lineNumber,
+  onController: (controller: { dispose(): void }) => controller.dispose(),
+}
+const nodeRendererCodeBlockOptions: NodeRendererProps = {
   content: '```ts\nconsole.log(1)\n```',
-  codeBlockProps: {
-    themes: [
-      {
-        name: 'public-api-custom-dark',
-        base: 'vs-dark',
-        inherit: true,
-        rules: [],
-        colors: {},
-      },
-    ],
-  },
+  codeBlockOptions,
+  themes: ['public-api-custom-dark', 'public-api-custom-light'],
 }
 const mermaidProps: Partial<MermaidBlockNodeProps> = {}
 const mathProps: Partial<MathBlockNodeProps> = {}
@@ -367,7 +363,8 @@ void safeMermaidSvgMarkup
 void safeMermaidSvgElement
 void brokenMermaidSvg
 void codeBlockProps
-void nodeRendererCodeBlockPropsWithThemeObject
+void codeBlockOptions
+void nodeRendererCodeBlockOptions
 void mermaidProps
 void mathProps
 void mathInlineProps

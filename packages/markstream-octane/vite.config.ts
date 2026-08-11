@@ -11,6 +11,7 @@ const external = [
   'katex/contrib/mhchem',
   'mermaid',
   'stream-diffs',
+  'stream-diffs/markstream',
   'stream-markdown-parser',
   'markstream-core',
   '@antv/infographic',

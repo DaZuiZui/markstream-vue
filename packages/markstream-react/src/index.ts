@@ -79,18 +79,13 @@ export * from './i18n/useSafeI18n'
 export * from './renderers/renderNode'
 export type { NodeRendererCodeBlockProps, NodeRendererProps } from './types'
 export type {
-  CodeBlockDiffAppearance,
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
-  CodeBlockDiffHunkActionContext,
-  CodeBlockDiffHunkActionKind,
-  CodeBlockDiffHunkSide,
-  CodeBlockDiffLineStyle,
-  CodeBlockDiffUnchangedRegionStyle,
   CodeBlockNodeProps,
+  CodeBlockOptions,
   CodeBlockPreviewPayload,
   CodeBlockTheme,
-  CodeBlockThemeObject,
+  CodeBlockThemes,
   D2BlockNodeProps,
   ImageNodeProps,
   InfographicBlockNodeProps,

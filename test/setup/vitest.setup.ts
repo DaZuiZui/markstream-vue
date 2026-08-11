@@ -85,6 +85,12 @@ vi.mock('stream-diffs', () => ({
   detectLanguage: () => 'plaintext',
 }))
 
+vi.mock('stream-diffs/markstream', () => ({
+  useMonaco: streamMonacoHelpers.useMonaco,
+  preloadStreamDiffs: vi.fn(async () => {}),
+  detectLanguage: () => 'plaintext',
+}))
+
 vi.mock('stream-monaco/legacy', () => {
   const mod = {
     useMonaco: streamMonacoHelpers.useMonaco,

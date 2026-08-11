@@ -147,6 +147,7 @@ function renderCustomCodeBlockComponent(
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     onCopy: ctx.events.onCopy,
     ...extraProps,
+    codeBlockOptions: ctx.codeBlockOptions,
     ...specialProps,
     ctx,
     renderNode,
@@ -223,6 +224,7 @@ function createRenderContext(
     htmlComponents,
     renderCodeBlocksAsPre: props.renderCodeBlocksAsPre,
     codeBlockStream: props.codeBlockStream,
+    codeBlockOptions: props.codeBlockOptions,
     codeBlockProps: {
       ...(typeof props.showTooltips === 'boolean' ? { showTooltips: props.showTooltips } : {}),
       ...(props.codeBlockProps || {}),
@@ -359,7 +361,17 @@ function renderCodeBlock(
 
   if (ctx.renderCodeBlocksAsPre) {
     const extraProps = getCodeBlockExtraProps(ctx.codeBlockProps)
-    return <PreCodeNode key={key} node={node} showLineNumbers={extraProps.showLineNumbers === true} />
+    const configuredShowLineNumbers = extraProps.showLineNumbers
+    return (
+      <PreCodeNode
+        key={key}
+        node={node}
+        style={{ whiteSpace: ctx.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap' }}
+        showLineNumbers={typeof configuredShowLineNumbers === 'boolean'
+          ? configuredShowLineNumbers
+          : ctx.codeBlockOptions?.disableLineNumbers !== true}
+      />
+    )
   }
 
   return (
@@ -375,6 +387,7 @@ function renderCodeBlock(
       maxWidth={ctx.codeBlockThemes?.maxWidth}
       isDark={ctx.isDark}
       {...getCodeBlockExtraProps(ctx.codeBlockProps)}
+      codeBlockOptions={ctx.codeBlockOptions}
     />
   )
 }
@@ -931,7 +944,7 @@ export function ImageNode(rawProps: ImageNodeProps) {
   )
 }
 
-export function PreCodeNode({ node }: PreCodeNodeProps) {
+export function PreCodeNode({ node, style }: PreCodeNodeProps) {
   const normalizedLanguage = normalizePreLanguage((node as any)?.language)
   const languageClass = `language-${normalizedLanguage}`
   const ariaLabel = normalizedLanguage ? `Code block: ${normalizedLanguage}` : 'Code block'
@@ -942,6 +955,7 @@ export function PreCodeNode({ node }: PreCodeNodeProps) {
       aria-busy={(node as any)?.loading === true}
       aria-label={ariaLabel}
       data-language={normalizedLanguage}
+      style={style}
       tabIndex={0}
     >
       <code translate="no">{String((node as any)?.code ?? '')}</code>

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { hasCompleteHtmlTagContent } from '../packages/markstream-angular/src/components/shared/node-helpers'
 import {
@@ -14,7 +16,23 @@ class MermaidComponent {}
 class D2Component {}
 class D2LangComponent {}
 
+const nodeOutletSource = readFileSync(
+  resolve(process.cwd(), 'packages/markstream-angular/src/components/NodeOutlet/NodeOutlet.component.ts'),
+  'utf8',
+)
+
 describe('markstream-angular NodeOutlet', () => {
+  it('lets explicit fallback line-number props override neutral options', () => {
+    expect(nodeOutletSource).toContain('[showLineNumbers]="resolvedPreShowLineNumbers"')
+    expect(nodeOutletSource).toContain("typeof explicit === 'boolean'")
+    expect(nodeOutletSource).toContain('this.context?.codeBlockOptions?.disableLineNumbers !== true')
+  })
+
+  it('keeps direct pre overflow aligned with enhanced fallbacks', () => {
+    expect(nodeOutletSource).toContain('[whiteSpace]="resolvedPreWhiteSpace"')
+    expect(nodeOutletSource).toContain("this.context?.codeBlockOptions?.overflow === 'scroll' ? 'pre' : 'pre-wrap'")
+  })
+
   it('coerces custom html tags into tag-typed nodes for custom components', () => {
     const node = {
       type: 'html_block',

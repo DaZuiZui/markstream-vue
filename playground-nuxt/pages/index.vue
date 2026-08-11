@@ -15,7 +15,7 @@ const streamChunkSize = useLocalStorage<number>('vmr-settings-stream-chunk-size'
 const normalizedChunkSize = computed(() => Math.max(1, Math.floor(streamChunkSize.value) || 1))
 
 if (process.client) {
-  import('markstream-vue').then(({ getStreamDiffsRuntime }) => getStreamDiffsRuntime()).catch(() => {})
+  import('markstream-vue').then(({ preloadCodeBlockRuntime }) => preloadCodeBlockRuntime()).catch(() => {})
   setKaTeXWorker(new KatexWorker())
   setMermaidWorker(new MermaidWorker())
 }
