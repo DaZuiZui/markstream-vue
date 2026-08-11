@@ -110,7 +110,7 @@ Common option migrations are not field-for-field renames:
 | `diffUnchangedRegionStyle` | `hunkSeparators` |
 | `diffHideUnchangedRegions` | There is no single replacement object. Map `false` / `{ enabled: false }` to `expandUnchanged: true`, and `true` / `{ enabled: true }` to `expandUnchanged: false`. Use `parseDiffOptions.context` for surrounding context, `collapsedContextThreshold` for when a region collapses, and `expansionLineCount` for reveal size. Tune the thresholds because the old and new algorithms are not identical. |
 
-Theme values are names, not Monaco theme JSON. Direct `CodeBlockNode.theme` accepts a fixed string or `{ dark, light }`; `themes` is the `[dark, light]` name pair used for loading. Convert an old Monaco theme to Shiki's theme format before registering it; in particular, Monaco `rules` are not Shiki token rules and must be translated to `tokenColors` or `settings`:
+Theme values are names, not Monaco theme JSON. In Vue 3, Svelte, Angular, and Vue 2, `CodeBlockNode.theme` accepts a fixed string or `{ dark, light }`. React and Octane use `darkTheme` / `lightTheme` for the active names. In every adapter, `themes` is the `[dark, light]` name pair used for loading. Convert an old Monaco theme to Shiki's theme format before registering it; in particular, Monaco `rules` are not Shiki token rules and must be translated to `tokenColors` or `settings`:
 
 ```ts
 import type { ThemeRegistration } from 'stream-diffs/pierre'
