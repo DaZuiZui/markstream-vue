@@ -3,7 +3,7 @@
   import type { SvelteRenderableNode, SvelteRenderContext } from './shared/node-helpers'
   import { onDestroy, onMount, tick } from 'svelte'
   import { useSafeI18n } from '../i18n/useSafeI18n'
-  import { getUseMonaco } from '../optional/monaco'
+  import { getStreamDiffsRuntime } from '../optional/monaco'
   import { hideTooltip, showTooltipForAnchor } from '../tooltip/singletonTooltip'
   import { getLanguageIcon, isLikelyIncompleteLanguageIdentifier, languageMap, normalizeLanguageIdentifier, resolveLanguageId } from '../utils/languageIcon'
   import HtmlPreviewFrame from './HtmlPreviewFrame.svelte'
@@ -74,7 +74,7 @@
   })
   const streamingLanguageTokens = ['javascript', 'plaintext', 'shellscript', 'typescript']
   const defaultPreFallbackFontFamily = '"SF Mono", Monaco, Consolas, "Ubuntu Mono", "Liberation Mono", "Courier New", monospace'
-  // 2.0: `stream-monaco` is removed and there is no `monacoOptions` prop
+  // 2.0 keeps stream-diffs adapter options internal.
   // anymore. stream-diffs is configured entirely by the component-level
   // defaults below, so all option reads fall back to these reasonable values.
   const defaultEditorOptions = Object.freeze({}) as Record<string, unknown>
@@ -129,8 +129,8 @@
 
   let editorHost: HTMLDivElement | null = $state(null)
   let helpers: any = $state(null)
-  let runtimeMonacoOptions: Record<string, any> | null = $state(null)
-  let ensureMonacoPromise: Promise<void> | null = $state(null)
+  let runtimeOptions: Record<string, any> | null = $state(null)
+  let ensureRuntimePromise: Promise<void> | null = $state(null)
   let editorReady = $state(false)
   let useFallback = $state(false)
   let fallbackLanguage = $state('')
@@ -162,7 +162,7 @@
 
   let rawLanguage = $derived(getString((node as any)?.language).trim())
   let canonicalLanguage = $derived(normalizeLanguageIdentifier(rawLanguage))
-  let monacoLanguage = $derived(resolveLanguageId(canonicalLanguage || rawLanguage || 'plaintext'))
+  let runtimeLanguage = $derived(resolveLanguageId(canonicalLanguage || rawLanguage || 'plaintext'))
   let code = $derived(getResolvedCode(node))
   let diff = $derived(Boolean((node as any)?.diff))
   let originalCode = $derived(getString((node as any)?.originalCode))
@@ -172,7 +172,7 @@
   let resolvedStream = $derived(stream ?? context?.codeBlockStream ?? true)
   let resolvedIsDark = $derived(isDark ?? context?.isDark ?? false)
   let resolvedThemes = $derived(context?.codeBlockThemes)
-  let resolvedMonacoOptions = $derived(buildResolvedMonacoOptions())
+  let resolvedRuntimeOptions = $derived(buildResolvedRuntimeOptions())
   let requestedTheme = $derived(getThemeName(
     resolvedIsDark
       ? darkTheme ?? resolvedThemes?.darkTheme
@@ -201,8 +201,8 @@
   } as SvelteRenderableNode)
   let preFallbackStyle = $derived(buildPreFallbackStyle())
   let settledRefreshSignature = $derived(diff
-    ? `${monacoLanguage}\0${originalCode}\0${updatedCode || code}`
-    : `${monacoLanguage}\0${code}`)
+    ? `${runtimeLanguage}\0${originalCode}\0${updatedCode || code}`
+    : `${runtimeLanguage}\0${code}`)
 
   $effect(() => {
     if (useFallback && fallbackLanguage && rawLanguage !== fallbackLanguage && isLikelyIncompleteLanguageIdentifier(fallbackLanguage)) {
@@ -236,9 +236,9 @@
     void code
     void originalCode
     void updatedCode
-    void monacoLanguage
+    void runtimeLanguage
     void requestedTheme
-    void resolvedMonacoOptions
+    void resolvedRuntimeOptions
     void codeFontSize
     void expanded
     if (mounted)
@@ -358,7 +358,7 @@
     return { ...defaultDiffHideUnchangedRegions }
   }
 
-  function buildResolvedMonacoOptions() {
+  function buildResolvedRuntimeOptions() {
     const raw = { ...defaultEditorOptions } as Record<string, any>
     const maxHeight = expanded ? 900 : (raw.MAX_HEIGHT ?? 500)
     const baseOptions = {
@@ -454,31 +454,31 @@ ${configuredUnsafeCSS}`.trim()
     }
   }
 
-  function syncRuntimeMonacoOptions() {
+  function syncRuntimeOptions() {
     const nextOptions = {
-      ...resolvedMonacoOptions,
+      ...resolvedRuntimeOptions,
       theme: requestedTheme,
     }
-    if (!runtimeMonacoOptions) {
-      runtimeMonacoOptions = nextOptions
-      return runtimeMonacoOptions
+    if (!runtimeOptions) {
+      runtimeOptions = nextOptions
+      return runtimeOptions
     }
-    for (const key of Object.keys(runtimeMonacoOptions)) {
+    for (const key of Object.keys(runtimeOptions)) {
       if (!(key in nextOptions))
-        delete runtimeMonacoOptions[key]
+        delete runtimeOptions[key]
     }
-    Object.assign(runtimeMonacoOptions, nextOptions)
-    return runtimeMonacoOptions
+    Object.assign(runtimeOptions, nextOptions)
+    return runtimeOptions
   }
 
-  async function ensureMonaco() {
+  async function ensureRuntime() {
     if (helpers || useFallback || typeof window === 'undefined')
       return
-    if (ensureMonacoPromise)
-      return ensureMonacoPromise
+    if (ensureRuntimePromise)
+      return ensureRuntimePromise
 
-    ensureMonacoPromise = (async () => {
-      const mod = await getUseMonaco()
+    ensureRuntimePromise = (async () => {
+      const mod = await getStreamDiffsRuntime()
       if (!mounted)
         return
       if (!mod || typeof mod.useMonaco !== 'function') {
@@ -486,13 +486,13 @@ ${configuredUnsafeCSS}`.trim()
         return
       }
 
-      helpers = mod.useMonaco(syncRuntimeMonacoOptions())
+      helpers = mod.useMonaco(syncRuntimeOptions())
       await Promise.resolve(helpers.setTheme?.(requestedTheme))
       lastThemeRequest = requestedTheme
     })().finally(() => {
-      ensureMonacoPromise = null
+      ensureRuntimePromise = null
     })
-    return ensureMonacoPromise
+    return ensureRuntimePromise
   }
 
   function queueThemeSync() {
@@ -509,10 +509,10 @@ ${configuredUnsafeCSS}`.trim()
     if (!mounted || !shouldRender || !editorHost || collapsed || shouldDelayEditor || shouldDeferStreamingLanguage)
       return
 
-    await ensureMonaco()
+    await ensureRuntime()
     if (!mounted || useFallback || !helpers)
       return
-    syncRuntimeMonacoOptions()
+    syncRuntimeOptions()
 
     const desiredKind: 'single' | 'diff' = diff ? 'diff' : 'single'
     const hasEditorView = desiredKind === 'diff'
@@ -531,9 +531,9 @@ ${configuredUnsafeCSS}`.trim()
 
     try {
       if (diff && typeof helpers.updateDiff === 'function')
-        await Promise.resolve(helpers.updateDiff(originalCode, updatedCode || code, monacoLanguage))
+        await Promise.resolve(helpers.updateDiff(originalCode, updatedCode || code, runtimeLanguage))
       else if (typeof helpers.updateCode === 'function') {
-        await Promise.resolve(helpers.updateCode(code, monacoLanguage))
+        await Promise.resolve(helpers.updateCode(code, runtimeLanguage))
         scheduleEditorTokenization()
       }
       if (!editorReady && await prepareEditorHandoff(desiredKind, lifecycleId)) {
@@ -628,13 +628,13 @@ ${configuredUnsafeCSS}`.trim()
 
         editorStreamMode = false
         if (kind === 'diff' && typeof helpers.createDiffEditor === 'function') {
-          await helpers.createDiffEditor(editorHost, originalCode, updatedCode || code, monacoLanguage)
-          await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, monacoLanguage))
+          await helpers.createDiffEditor(editorHost, originalCode, updatedCode || code, runtimeLanguage)
+          await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, runtimeLanguage))
           editorKind = 'diff'
         }
         else {
-          await helpers.createEditor(editorHost, code, monacoLanguage)
-          await Promise.resolve(helpers.updateCode?.(code, monacoLanguage))
+          await helpers.createEditor(editorHost, code, runtimeLanguage)
+          await Promise.resolve(helpers.updateCode?.(code, runtimeLanguage))
           editorKind = 'single'
         }
         applyEditorOptions()
@@ -677,23 +677,23 @@ ${configuredUnsafeCSS}`.trim()
       }
       if (!mounted || !shouldRender || !editorHost || collapsed || shouldDelayEditor || shouldDeferStreamingLanguage)
         return
-      await ensureMonaco()
+      await ensureRuntime()
       if (!mounted || useFallback || !helpers)
         return
-      syncRuntimeMonacoOptions()
+      syncRuntimeOptions()
       const desiredKind: 'single' | 'diff' = diff ? 'diff' : 'single'
       if (!hasRenderedEditorDom(desiredKind) || editorKind !== desiredKind)
         await recreateEditor(desiredKind)
       if (!mounted || useFallback || !helpers || !hasRenderedEditorDom(desiredKind) || editorKind !== desiredKind)
         return
       if (diff) {
-        await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, monacoLanguage))
+        await Promise.resolve(helpers.updateDiff?.(originalCode, updatedCode || code, runtimeLanguage))
         helpers.refreshDiffPresentation?.()
         applyEditorOptions()
         scheduleEditorHeightSync()
         return
       }
-      await Promise.resolve(helpers.updateCode?.(code, monacoLanguage))
+      await Promise.resolve(helpers.updateCode?.(code, runtimeLanguage))
       scheduleEditorTokenization(140, true)
       applyEditorOptions()
       scheduleEditorHeightSync()
@@ -738,8 +738,8 @@ ${configuredUnsafeCSS}`.trim()
     lastLayoutHeight = null
     if (disposeHelpers) {
       helpers = null
-      runtimeMonacoOptions = null
-      ensureMonacoPromise = null
+      runtimeOptions = null
+      ensureRuntimePromise = null
       lastThemeRequest = ''
     }
   }
@@ -767,7 +767,7 @@ ${configuredUnsafeCSS}`.trim()
   }
 
   function getMaxHeightValue() {
-    const raw = resolvedMonacoOptions.MAX_HEIGHT
+    const raw = resolvedRuntimeOptions.MAX_HEIGHT
     if (raw === 'none' || raw == null)
       return Number.POSITIVE_INFINITY
     const value = typeof raw === 'number' ? raw : Number.parseFloat(String(raw))
@@ -1051,7 +1051,7 @@ ${configuredUnsafeCSS}`.trim()
 {#if shouldRender}
   <div
     class:is-dark={resolvedIsDark}
-    class:is-plain-text={monacoLanguage === 'plaintext'}
+    class:is-plain-text={runtimeLanguage === 'plaintext'}
     class:is-rendering={resolvedLoading}
     class:is-diff={diff}
     class="code-block-container"

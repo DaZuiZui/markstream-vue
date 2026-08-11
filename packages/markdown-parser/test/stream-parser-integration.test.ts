@@ -962,6 +962,39 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     expect(full[0]?.rows?.[0]?.cells?.[0]?.children?.[0]?.content).toBe('张三')
   })
 
+  it('does not duplicate the prefix when a loading table separator completes through tail reparse', () => {
+    const md = getMarkdown('stream-table-loading-tail-reparse')
+    ;(md as any).options.streamOptimizationMinSize = 1
+    const prefix = '| P | Q |\n| - | - |\n| x | y |\n\n### Next\n\n'
+    const first = `${prefix}| A | B |\n| ---`
+    const second = `${first} | --- |\n| 1 | 2 |\n`
+
+    expect(first).toHaveLength(56)
+    expect(second).toHaveLength(75)
+
+    const partial = parseMarkdownToStructure(first, md, {
+      final: false,
+      streamParse: true,
+      reuseStableTopLevelNodes: true,
+    }) as any[]
+    expect(partial.at(-1)?.type).toBe('table')
+    expect(partial.at(-1)?.loading).toBe(true)
+
+    const actual = parseMarkdownToStructure(second, md, {
+      final: false,
+      streamParse: true,
+      reuseStableTopLevelNodes: true,
+    }) as any[]
+    const cold = parseMarkdownToStructure(second, getMarkdown('stream-table-loading-tail-reparse-cold'), {
+      final: false,
+      streamParse: false,
+    }) as any[]
+
+    expect(getStreamStats(md).tailHits).toBeGreaterThan(0)
+    expect(actual.map(node => node.type)).toEqual(['table', 'heading', 'table'])
+    expect(actual).toEqual(cold)
+  })
+
   it('clears table loading on final parse', () => {
     const md = getMarkdown('stream-table-final-loading-clear')
     const markdown = '| 姓名 | 年龄 | 职业 |\n| --- | --- | --- |\n'

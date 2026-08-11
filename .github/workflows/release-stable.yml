@@ -59,6 +59,46 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      - name: Resolve and validate package manifest
+        id: package
+        env:
+          PACKAGE_NAME: ${{ steps.meta.outputs.pkg }}
+          PACKAGE_VERSION: ${{ steps.meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${PACKAGE_NAME}" in
+            markstream-vue) PACKAGE_DIR="."; PACKAGE_JSON="package.json" ;;
+            stream-markdown-parser) PACKAGE_DIR="packages/markdown-parser"; PACKAGE_JSON="packages/markdown-parser/package.json" ;;
+            markstream-core) PACKAGE_DIR="packages/markstream-core"; PACKAGE_JSON="packages/markstream-core/package.json" ;;
+            markstream-angular) PACKAGE_DIR="packages/markstream-angular"; PACKAGE_JSON="packages/markstream-angular/package.json" ;;
+            markstream-octane) PACKAGE_DIR="packages/markstream-octane"; PACKAGE_JSON="packages/markstream-octane/package.json" ;;
+            markstream-react) PACKAGE_DIR="packages/markstream-react"; PACKAGE_JSON="packages/markstream-react/package.json" ;;
+            markstream-svelte) PACKAGE_DIR="packages/markstream-svelte"; PACKAGE_JSON="packages/markstream-svelte/package.json" ;;
+            markstream-vue2) PACKAGE_DIR="packages/markstream-vue2"; PACKAGE_JSON="packages/markstream-vue2/package.json" ;;
+            *) echo "Unknown package: ${PACKAGE_NAME}" >&2; exit 1 ;;
+          esac
+
+          MANIFEST_NAME="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const manifest = JSON.parse(readFileSync(process.argv[1], "utf8")); process.stdout.write(String(manifest.name ?? ""))' "${PACKAGE_JSON}")"
+          MANIFEST_VERSION="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const manifest = JSON.parse(readFileSync(process.argv[1], "utf8")); process.stdout.write(String(manifest.version ?? ""))' "${PACKAGE_JSON}")"
+
+          if [[ "${MANIFEST_NAME}" != "${PACKAGE_NAME}" ]]; then
+            echo "Tag package ${PACKAGE_NAME} maps to ${PACKAGE_JSON}, but the manifest name is ${MANIFEST_NAME}." >&2
+            exit 1
+          fi
+          if [[ "${MANIFEST_VERSION}" != "${PACKAGE_VERSION}" ]]; then
+            echo "Tag version ${PACKAGE_VERSION} does not match ${PACKAGE_JSON} version ${MANIFEST_VERSION}." >&2
+            exit 1
+          fi
+          if [[ "${GITHUB_REF_NAME}" != "${MANIFEST_NAME}@${MANIFEST_VERSION}" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} is not the canonical manifest tag ${MANIFEST_NAME}@${MANIFEST_VERSION}." >&2
+            exit 1
+          fi
+
+          echo "package_dir=${PACKAGE_DIR}" >> "${GITHUB_OUTPUT}"
+          echo "package_json=${PACKAGE_JSON}" >> "${GITHUB_OUTPUT}"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -73,43 +113,25 @@ jobs:
       - name: Build package for npm
         if: ${{ steps.meta.outputs.pkg != 'markstream-vue' }}
         env:
-          PACKAGE_NAME: ${{ steps.meta.outputs.pkg }}
-        shell: bash
+          PACKAGE_DIR: ${{ steps.package.outputs.package_dir }}
+        run: pnpm --dir "${PACKAGE_DIR}" run build
+
+      - name: Check renderer workspace dependencies
+        if: ${{ steps.meta.outputs.pkg != 'stream-markdown-parser' && steps.meta.outputs.pkg != 'markstream-core' }}
+        env:
+          PACKAGE_JSON: ${{ steps.package.outputs.package_json }}
         run: |
-          set -euo pipefail
-
-          case "${PACKAGE_NAME}" in
-            stream-markdown-parser) PACKAGE_DIR="packages/markdown-parser" ;;
-            markstream-core) PACKAGE_DIR="packages/markstream-core" ;;
-            markstream-angular) PACKAGE_DIR="packages/markstream-angular" ;;
-            markstream-octane) PACKAGE_DIR="packages/markstream-octane" ;;
-            markstream-react) PACKAGE_DIR="packages/markstream-react" ;;
-            markstream-svelte) PACKAGE_DIR="packages/markstream-svelte" ;;
-            markstream-vue2) PACKAGE_DIR="packages/markstream-vue2" ;;
-            *) echo "Unknown package: ${PACKAGE_NAME}" >&2; exit 1 ;;
-          esac
-
-          pnpm --dir "${PACKAGE_DIR}" run build
+          node scripts/check-workspace-deps-published.mjs --package-json "${PACKAGE_JSON}"
+          node scripts/check-packed-workspace-deps.mjs --package-json "${PACKAGE_JSON}"
 
       - name: Publish package to npm
         env:
           PACKAGE_NAME: ${{ steps.meta.outputs.pkg }}
           PACKAGE_VERSION: ${{ steps.meta.outputs.version }}
+          PACKAGE_DIR: ${{ steps.package.outputs.package_dir }}
         shell: bash
         run: |
           set -euo pipefail
-
-          case "${PACKAGE_NAME}" in
-            markstream-vue) PACKAGE_DIR="." ;;
-            stream-markdown-parser) PACKAGE_DIR="packages/markdown-parser" ;;
-            markstream-core) PACKAGE_DIR="packages/markstream-core" ;;
-            markstream-angular) PACKAGE_DIR="packages/markstream-angular" ;;
-            markstream-octane) PACKAGE_DIR="packages/markstream-octane" ;;
-            markstream-react) PACKAGE_DIR="packages/markstream-react" ;;
-            markstream-svelte) PACKAGE_DIR="packages/markstream-svelte" ;;
-            markstream-vue2) PACKAGE_DIR="packages/markstream-vue2" ;;
-            *) echo "Unknown package: ${PACKAGE_NAME}" >&2; exit 1 ;;
-          esac
 
           if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version >/dev/null 2>&1; then
             echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is already published; skipping."

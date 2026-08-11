@@ -18,15 +18,6 @@ export interface CommonCodeBlockProps {
   showExpandButton?: boolean
 }
 
-export interface ShikiCodeBlockProps extends CommonCodeBlockProps {
-  themes?: readonly string[]
-  /**
-   * Shiki language preload request forwarded to stream-markdown's registerHighlight().
-   * This is not a rendering allow-list; already available Shiki languages may still highlight.
-   */
-  langs?: readonly string[]
-}
-
 export interface CodeBlockDiffHideUnchangedRegionsOptions {
   enabled?: boolean
   contextLineCount?: number

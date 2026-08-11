@@ -20,18 +20,22 @@ export function applyFixTableTokens(md: MarkdownIt) {
   })
 }
 
-function createStart() {
+function createStart(sourceMap: MarkdownToken['map']) {
+  const tableMap = Array.isArray(sourceMap) ? [...sourceMap] : null
+  const headerMap = tableMap ? [tableMap[0], tableMap[0] + 1] : null
   return [
     {
       type: 'table_open',
       tag: 'table',
       attrs: null,
-      map: null,
+      map: tableMap,
       children: null,
       content: '',
       markup: '',
       info: '',
       level: 0,
+      nesting: 1,
+      block: true,
       loading: true,
       meta: null,
     },
@@ -41,6 +45,8 @@ function createStart() {
       attrs: null,
       block: true,
       level: 1,
+      map: headerMap,
+      nesting: 1,
       children: null,
     },
     {
@@ -49,6 +55,8 @@ function createStart() {
       attrs: null,
       block: true,
       level: 2,
+      map: headerMap,
+      nesting: 1,
       children: null,
     },
 
@@ -62,6 +70,8 @@ function createEnd() {
       attrs: null,
       block: true,
       level: 2,
+      map: null,
+      nesting: -1,
       children: null,
     },
     {
@@ -70,6 +80,8 @@ function createEnd() {
       attrs: null,
       block: true,
       level: 1,
+      map: null,
+      nesting: -1,
       children: null,
     },
     {
@@ -82,6 +94,8 @@ function createEnd() {
       markup: '',
       info: '',
       level: 0,
+      nesting: -1,
+      block: true,
       meta: null,
     },
   ]
@@ -93,6 +107,8 @@ function createTh(text: string) {
     attrs: null,
     block: true,
     level: 3,
+    map: null,
+    nesting: 1,
     children: null,
   }, {
     type: 'inline',
@@ -101,6 +117,8 @@ function createTh(text: string) {
     content: text,
     level: 4,
     attrs: null,
+    map: null,
+    nesting: 0,
     block: true,
   }, {
     type: 'th_close',
@@ -108,6 +126,8 @@ function createTh(text: string) {
     attrs: null,
     block: true,
     level: 3,
+    map: null,
+    nesting: -1,
     children: null,
   }]
 }
@@ -178,6 +198,7 @@ export function fixTableTokens(tokens: MarkdownToken[], final = false, source = 
   const i = tokens.length - 2
   const token = tokens[i]
   if (token.type === 'inline') {
+    const sourceMap = tokens[i - 1]?.map
     const tcontent = String(token.content ?? '')
     const headerContent = tcontent.split('\n')[0] ?? ''
     const [headerLine = '', separatorLine = '', ...rest] = tcontent.split('\n')
@@ -200,7 +221,7 @@ export function fixTableTokens(tokens: MarkdownToken[], final = false, source = 
     ) {
       const body = headerContent.slice(1, -1).split('|').map(i => i.trim()).flatMap(i => createTh(i))
       const insert = ([
-        ...createStart(),
+        ...createStart(sourceMap),
         ...body,
         ...createEnd(),
       ] as unknown) as MarkdownToken[]
@@ -215,7 +236,7 @@ export function fixTableTokens(tokens: MarkdownToken[], final = false, source = 
       // 解析 table
       const body = headerContent.slice(1, -1).split('|').map(i => i.trim()).flatMap(i => createTh(i))
       const insert = ([
-        ...createStart(),
+        ...createStart(sourceMap),
         ...body,
         ...createEnd(),
       ] as unknown) as MarkdownToken[]

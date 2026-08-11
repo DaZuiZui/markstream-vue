@@ -339,7 +339,7 @@ describe('markstream-vue2 heavy-node prop forwarding', () => {
     expect(pre.attributes('showheader')).toBeUndefined()
   })
 
-  it('forwards top-level langs to custom code block renderers', async () => {
+  it('does not forward removed top-level langs to custom code block renderers', async () => {
     setCustomComponents(customId, {
       code_block: GenericCodeBlockAttrsProbe as any,
     })
@@ -363,7 +363,7 @@ describe('markstream-vue2 heavy-node prop forwarding', () => {
 
     const probe = wrapper.get('.generic-code-block-attrs-probe')
     expect(probe.attributes('data-language')).toBe('ts')
-    expect(probe.attributes('data-langs')).toBe('["typescript"]')
+    expect(probe.attributes('data-langs')).toBe('null')
   })
 
   it('does not let codeBlockProps override reserved code block props', async () => {

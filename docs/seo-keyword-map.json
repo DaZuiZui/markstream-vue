@@ -180,6 +180,14 @@
     "primaryTitle": "Migrate from react-markdown"
   },
   {
+    "query": "markstream 2.0 migration",
+    "queryZh": "markstream 2.0 迁移",
+    "intent": "migration",
+    "target": "/guide/migration-2-0",
+    "targetZh": "/zh/guide/migration-2-0",
+    "primaryTitle": "Migrate markstream-vue from 1.x to 2.0"
+  },
+  {
     "query": "streaming mermaid markdown",
     "queryZh": "流式 mermaid markdown",
     "intent": "use-case",

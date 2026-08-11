@@ -4,7 +4,7 @@ import { getD2 } from './optional/d2'
 import { getInfographic } from './optional/infographic'
 import { getKatex } from './optional/katex'
 import { getMermaid } from './optional/mermaid'
-import { getUseMonaco } from './optional/monaco'
+import { getStreamDiffsRuntime } from './optional/monaco'
 import { extractRenderedSvg, toSafeSvgMarkup } from './sanitizeSvg'
 import { hideTooltip, showTooltipForAnchor } from './tooltip/singletonTooltip'
 import { normalizeKaTeXRenderInput } from './utils/normalizeKaTeXRenderInput'
@@ -614,7 +614,7 @@ async function renderCodeBlock(
   options: EnhanceRenderedHtmlOptions,
   isActive: () => boolean,
 ) {
-  const streamDiffsModule = await getUseMonaco()
+  const streamDiffsModule = await getStreamDiffsRuntime()
   if (!streamDiffsModule || typeof streamDiffsModule.useMonaco !== 'function' || !isActive())
     return
 
@@ -634,11 +634,11 @@ async function renderCodeBlock(
     const source = codeNode.textContent || ''
     const diff = pre.dataset.markstreamDiff === '1'
     const updatedCode = decodeDataPayload(pre.dataset.markstreamUpdated)
-    const monacoLanguage = resolveLanguage(rawLanguage)
-    const renderLanguage = diff ? 'plaintext' : monacoLanguage
+    const runtimeLanguage = resolveLanguage(rawLanguage)
+    const renderLanguage = diff ? 'plaintext' : runtimeLanguage
     const shell = createEnhancedBlockShell(
       'code',
-      diff ? `Diff / ${monacoLanguage}` : `Code / ${monacoLanguage}`,
+      diff ? `Diff / ${runtimeLanguage}` : `Code / ${runtimeLanguage}`,
       source,
       false,
       options,
@@ -668,7 +668,7 @@ async function renderCodeBlock(
 
     helpers = streamDiffsModule.useMonaco({
       themes: ['vitesse-dark', 'vitesse-light'],
-      languages: Array.from(new Set([monacoLanguage, 'plaintext'])),
+      languages: Array.from(new Set([runtimeLanguage, 'plaintext'])),
       readOnly: true,
       minimap: { enabled: false },
       lineNumbers: 'on',
@@ -680,8 +680,8 @@ async function renderCodeBlock(
     cleanupFns.push(restoreOriginalPre)
 
     try {
-      // Vue/React wire Monaco diff editors through dedicated components.
-      // Svelte enhances static HTML after the fact, so a single-editor
+      // Vue and React wire diff surfaces through dedicated components.
+      // Svelte enhances static HTML after the fact, so a single-surface
       // surface is used here that still preserves the diff source text.
       await helpers.createEditor(
         shell.body,

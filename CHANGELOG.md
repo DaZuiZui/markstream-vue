@@ -1,3 +1,31 @@
+## [2.0.0-beta.1](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@1.1.2-beta.3...markstream-vue@2.0.0-beta.1) (2026-08-11)
+
+### ⚠ Breaking changes
+
+- Remove the Monaco and `stream-markdown` code-block runtimes, their peers, `MarkdownCodeBlockNode`, and the `CodeBlockMonaco*` public types and props.
+- Use `stream-diffs` as the only enhanced code-block surface; without the optional peer, code fences fall back to plain `<pre><code>` rendering.
+- Remove `codeRenderer` values `monaco`, `shiki`, and `markdown`. `monacoOptions` and `codeBlockMonacoOptions` have no replacement.
+- Replace `CodeBlockMonacoTheme` with `CodeBlockTheme`, `resolveMonacoLanguageId` with `resolveLanguageId`, and `getUseMonaco` with `getStreamDiffsRuntime`.
+- Replace the parser-only `InternalParseOptions` type with the public `ParseOptions` contract.
+
+### Features and reliability
+
+- Complete the parser ownership, leaf-module, reuse, lifecycle, API-snapshot, differential, and performance-gate work tracked by the 2.0 parser epic.
+- Align Vue 3, React, Octane, Svelte, Angular, and Vue 2 code-block rendering on the same `stream-diffs` handoff and plain fallback behavior.
+- Keep 1.x releases isolated on `legacy` / `legacy-next` while 2.x uses `latest` / `next`.
+
+### Coordinated beta versions
+
+- `stream-markdown-parser@1.2.5-beta.1`
+- `markstream-core@1.1.0-beta.1`
+- `markstream-react@0.1.0-beta.1`
+- `markstream-octane@0.1.0-beta.1`
+- `markstream-svelte@0.1.0-beta.1`
+- `markstream-angular@0.1.0-beta.1`
+- `markstream-vue2@0.1.0-beta.1`
+
+See [Migrating to 2.0](https://markstream.simonhe.me/guide/migration-2-0) for replacements, dependency changes, and the 1.x maintenance policy.
+
 ## [1.0.4-beta.0](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@1.0.3...markstream-vue@1.0.4-beta.0) (2026-06-22)
 
 

@@ -4017,6 +4017,14 @@ function shouldRenderNode(index: number) {
     return true
   if (index < resolvedInitialBatch.value)
     return true
+  if (
+    contentStreamingTailActive.value
+    && effectiveFinal.value !== true
+    && !props.nodes?.length
+    && index >= parsedNodes.value.length - liveNodeBufferResolved.value
+  ) {
+    return true
+  }
   return visibleNodeIndices.value.has(index)
 }
 

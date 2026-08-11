@@ -204,7 +204,7 @@ describe('markstream-react codeBlockNode theme updates', () => {
     })
   })
 
-  it('applies Vue-parity diff defaults when monacoOptions are omitted', async () => {
+  it('applies Vue-parity diff defaults', async () => {
     const helpers = getStreamMonacoHelpers()
     const host = document.createElement('div')
     document.body.appendChild(host)

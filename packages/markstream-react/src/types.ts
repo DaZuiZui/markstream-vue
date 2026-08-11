@@ -10,16 +10,14 @@ import type {
   D2BlockNodeProps,
   InfographicBlockNodeProps,
   MermaidBlockNodeProps,
-  ShikiCodeBlockProps,
 } from './types/component-props'
 
 type NodeRendererCodeBlockThemes
   = CodeBlockNodeProps['themes']
-    | ShikiCodeBlockProps['themes']
+    | readonly string[]
 
 export type NodeRendererCodeBlockProps
   = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
-    & Partial<Omit<ShikiCodeBlockProps, 'themes'>>
     & {
       themes?: NodeRendererCodeBlockThemes
     }
@@ -60,19 +58,8 @@ export interface NodeRendererProps<
   d2Props?: Partial<Omit<D2BlockNodeProps, 'node' | 'loading' | 'isDark'>>
   infographicProps?: Partial<Omit<InfographicBlockNodeProps, 'node' | 'loading' | 'isDark'>>
   showTooltips?: boolean
-  /**
-   * Theme names or theme objects preloaded for diff-backed code blocks.
-   * When Shiki code blocks are used, only string theme names are forwarded;
-   * theme objects are ignored.
-   */
+  /** Theme names or theme objects preloaded for diff-backed code blocks. */
   themes?: CodeBlockTheme[]
-  /**
-   * Shiki language preload list forwarded to stream-markdown.
-   *
-   * The default React code block renderer is diff-backed. This prop is used
-   * when a custom `code_block` or language renderer requests Shiki languages.
-   */
-  langs?: readonly string[]
   isDark?: boolean
   customId?: string
   indexKey?: number | string
@@ -134,7 +121,6 @@ export interface RenderContext {
     lightTheme?: CodeBlockTheme
     minWidth?: string | number
     maxWidth?: string | number
-    langs?: readonly string[]
   }
   events: {
     onCopy?: (code: string) => void

@@ -1,11 +1,14 @@
 import { spawn } from 'node:child_process'
 import net from 'node:net'
+import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
 const host = '127.0.0.1'
 const port = 4230
-const playground = '/Users/Simon/Github/markstream-vue/playground'
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const playground = path.join(repoRoot, 'playground')
 
 function isOpen(portNumber) {
   return new Promise((resolve) => {

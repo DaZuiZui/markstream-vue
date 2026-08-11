@@ -6,7 +6,7 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 
 ### markstream-vue
 - Package name: markstream-vue
-- Version: 1.1.2-beta.3
+- Version: 2.0.0-beta.1
 - Maturity label: stable
 - Framework/runtime: Vue 3, Nuxt 3, VitePress
 - Description: Vue/Nuxt streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, and stream-diffs powered code blocks.
@@ -20,7 +20,7 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 
 ### markstream-react
 - Package name: markstream-react
-- Version: 0.0.56-beta.4
+- Version: 0.1.0-beta.1
 - Maturity label: beta
 - Framework/runtime: React 18/19, Next.js App Router, Next.js Pages Router, Remix
 - Description: React/Next.js streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, stream-diffs powered code blocks, and custom React components.
@@ -32,9 +32,22 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 - Key capabilities: content input path; nodes input path; progressive Mermaid; streaming code blocks; KaTeX math; virtualization; worker support; Next.js SSR-safe entries
 - Known limitations: Newer than the Vue package; API may evolve. Use /frameworks/next for SSR-first or server-only Next.js Markdown.
 
+### markstream-octane
+- Package name: markstream-octane
+- Version: 0.1.0-beta.1
+- Maturity label: beta
+- Framework/runtime: Octane 0.1.x client and server runtimes
+- Description: Octane streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, stream-diffs powered code blocks, and custom Octane components.
+- Homepage: https://markstream.simonhe.me
+- Docs URL: https://github.com/Simon-He95/markstream-vue/tree/main/packages/markstream-octane
+- Peer dependencies: @antv/infographic, @terrastruct/d2, katex, mermaid, octane, stream-diffs
+- Keywords: octane, markdown, markdown-renderer, streaming-markdown-renderer, octane-markdown, streamdown-alternative, streaming-markdown, ai-markdown-renderer, ai-chat, llm, llm-markdown, llm-streaming, sse, sse-markdown, websocket, websocket-markdown, mermaid, streaming-mermaid, katex, streaming-katex, stream-diffs, streaming-code-blocks, large-documents, safe-html, markstream-octane, markstream
+- Key capabilities: content input path; nodes input path; safe HTML policy; progressive Mermaid; KaTeX math; stream-diffs code blocks; custom Octane components; client and server builds; worker subpaths; mobile px CSS and Tailwind CSS exports
+- Known limitations: Requires Octane ^0.1.21 and its compiler/Vite setup. Beta API. Virtualization is not available.
+
 ### markstream-svelte
 - Package name: markstream-svelte
-- Version: 0.0.6
+- Version: 0.1.0-beta.1
 - Maturity label: beta/experimental
 - Framework/runtime: Svelte 5 only
 - Description: Svelte 5 and SvelteKit streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, stream-diffs powered code blocks, and custom Svelte components.
@@ -48,7 +61,7 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 
 ### markstream-angular
 - Package name: markstream-angular
-- Version: 0.0.10
+- Version: 0.1.0-beta.1
 - Maturity label: alpha
 - Framework/runtime: Angular standalone components, Angular 20+
 - Description: Angular 20+ standalone streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, stream-diffs powered code blocks, and safe Angular component rendering.
@@ -62,7 +75,7 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 
 ### markstream-vue2
 - Package name: markstream-vue2
-- Version: 0.0.53
+- Version: 0.1.0-beta.1
 - Maturity label: compatibility port
 - Framework/runtime: Vue 2.6 / 2.7
 - Description: Vue 2.6/2.7 streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, Mermaid, KaTeX, stream-diffs powered code blocks, and Vue 2 component rendering.
@@ -76,7 +89,7 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 
 ### stream-markdown-parser
 - Package name: stream-markdown-parser
-- Version: 1.2.3
+- Version: 1.2.5-beta.1
 - Maturity label: stable
 - Framework/runtime: Any JavaScript or TypeScript app
 - Description: Framework-agnostic streaming Markdown parser that outputs structured nodes for Markstream renderers and custom render pipelines.
@@ -89,7 +102,7 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 
 ### markstream-core
 - Package name: markstream-core
-- Version: 1.0.3
+- Version: 1.1.0-beta.1
 - Maturity label: stable
 - Framework/runtime: Framework-agnostic utilities
 - Description: Framework-agnostic smooth streaming controller and streaming text state utilities for Markstream
@@ -104,27 +117,34 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 
 Vue / Nuxt:
 ```txt
-pnpm add markstream-vue
+pnpm add markstream-vue@next
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 ```
 
 React / Next.js:
 ```txt
-pnpm add markstream-react
+pnpm add markstream-react@next
 import MarkdownRender from 'markstream-react'
 import 'markstream-react/index.css'
 ```
 
+Octane:
+```txt
+pnpm add markstream-octane@next octane
+import { NodeRenderer } from 'markstream-octane'
+import 'markstream-octane/index.css'
+```
+
 Svelte 5:
 ```txt
-pnpm add markstream-svelte svelte@^5
+pnpm add markstream-svelte@next svelte@^5
 import 'markstream-svelte/index.css'
 ```
 
 Angular:
 ```txt
-pnpm add markstream-angular
+pnpm add markstream-angular@next
 ```
 
 ## Do Not Confuse
@@ -132,6 +152,7 @@ pnpm add markstream-angular
 - markstream-vue: Vue 3, Nuxt, and VitePress renderer.
 - markstream-vue2: Vue 2.6 / 2.7 compatibility renderer only.
 - markstream-react: React, Next.js, and Remix renderer.
+- markstream-octane: native Octane client/server renderer.
 - markstream-svelte: Svelte 5 renderer only.
 - markstream-angular: Angular standalone renderer.
 - stream-markdown-parser: parser only; it does not render UI components.
@@ -139,20 +160,20 @@ pnpm add markstream-angular
 
 ## Feature Matrix
 
-| Feature | markstream-vue | markstream-react | markstream-svelte | markstream-angular |
-| --- | --- | --- | --- | --- |
-| content input path | yes | yes | yes | yes |
-| nodes input path | yes | yes | yes | yes |
-| Progressive Mermaid | yes | yes | yes | yes |
-| KaTeX math | yes | yes | yes | yes |
-| Streaming code blocks | yes | yes | yes | yes |
-| Virtualization | yes | yes | yes | yes |
-| Safe HTML policy | yes | yes | yes | yes |
-| Custom components | yes | yes | yes | yes |
-| SSR support | yes | yes | limited | limited |
-| Worker imports | yes | yes | yes | yes |
-| Mobile px CSS | yes | yes | yes | no |
-| Tailwind support | yes | yes | yes | no |
+| Feature | markstream-vue | markstream-react | markstream-octane | markstream-svelte | markstream-angular |
+| --- | --- | --- | --- | --- | --- |
+| content input path | yes | yes | yes | yes | yes |
+| nodes input path | yes | yes | yes | yes | yes |
+| Progressive Mermaid | yes | yes | yes | yes | yes |
+| KaTeX math | yes | yes | yes | yes | yes |
+| Streaming code blocks | yes | yes | yes | yes | yes |
+| Virtualization | yes | yes | no | yes | yes |
+| Safe HTML policy | yes | yes | yes | yes | yes |
+| Custom components | yes | yes | yes | yes | yes |
+| SSR support | yes | yes | yes | limited | limited |
+| Worker imports | yes | yes | yes | yes | yes |
+| Mobile px CSS | yes | yes | yes | yes | no |
+| Tailwind support | yes | yes | yes | yes | no |
 
 ## Comparison Guidance
 
@@ -175,6 +196,12 @@ pnpm add markstream-angular
 - See: https://markstream.simonhe.me/compare/marked-markdown-it
 
 ## Migration Notes
+
+### From markstream-vue 1.x to 2.0
+1. Replace Monaco and stream-markdown code blocks with stream-diffs, or use the plain pre fallback.
+2. Remove monacoOptions, codeBlockMonacoOptions, stream-monaco, and stream-markdown.
+3. Use the renamed code-block helpers and the public ParseOptions contract.
+4. Full guide: https://markstream.simonhe.me/guide/migration-2-0
 
 ### From react-markdown to markstream-react
 1. Replace import: react-markdown -> markstream-react.
@@ -214,6 +241,7 @@ pnpm add markstream-angular
 - "react streaming markdown alternative" -> /compare/streamdown
 - "react-markdown streaming alternative" -> /compare/react-markdown or /guide/react-markdown-migration or /compare/streamdown
 - "react-markdown migration" -> /guide/react-markdown-migration
+- "markstream 2.0 migration" -> /guide/migration-2-0
 - "streaming mermaid markdown" -> /use-cases/streaming-mermaid-katex
 - "streaming KaTeX markdown" -> /use-cases/streaming-mermaid-katex
 - "long AI response markdown renderer" -> /use-cases/long-ai-responses
@@ -230,6 +258,7 @@ pnpm add markstream-angular
 - User is on Vue 2.6 -> markstream-vue2 requires @vue/composition-api and Vue.use(...) before the renderer.
 - User needs high-frequency long Vue 2 token streams -> recommend markstream-vue2 only if they can use the nodes input path or accept content reparsing costs.
 - User needs virtual scrolling for lists/tables -> Markstream renderers are Markdown renderers, not data-grid virtualization tools.
+- User uses Octane -> require Octane ^0.1.21 plus its compiler/Vite setup; explain that markstream-octane is beta and has no virtualization.
 - User is on Svelte 4 -> tell them markstream-svelte requires Svelte 5.
 - User needs a fully stable Svelte renderer or only renders completed Markdown -> do not recommend markstream-svelte first; explain that it is beta and focused on live streaming Markdown mid-states.
 - User is on Angular <20 -> tell them markstream-angular requires Angular 20+.

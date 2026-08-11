@@ -237,6 +237,44 @@ describe('markstream-octane renderer regressions', () => {
     expect(originalElement?.getAttribute('data-code')).toContain('second = 2')
   })
 
+  it('ignores removed top-level langs while preserving custom code-block props', () => {
+    type CodeBlockProbeProps = NodeComponentProps<ParsedNode> & {
+      langs?: readonly string[]
+    }
+    const CodeBlockProbe: ComponentBody<CodeBlockProbeProps> = props =>
+      createElement('div', {
+        'className': 'code-block-langs-probe',
+        'data-langs': JSON.stringify(props.langs ?? null),
+      })
+    const node: ParsedNode = {
+      type: 'code_block',
+      language: 'ts',
+      code: 'export const value = 1',
+      raw: '```ts\nexport const value = 1\n```',
+    }
+    setCustomComponents({ code_block: CodeBlockProbe })
+
+    const view = render(NodeRenderer, {
+      props: {
+        ...stableRendererProps,
+        nodes: [node],
+        langs: ['typescript'],
+      } as NodeRendererProps & { langs: readonly string[] },
+    })
+
+    expect(view.container.querySelector('.code-block-langs-probe')?.getAttribute('data-langs')).toBe('null')
+
+    view.rerender({
+      props: {
+        ...stableRendererProps,
+        nodes: [node],
+        codeBlockProps: { langs: ['python'] },
+      },
+    })
+
+    expect(view.container.querySelector('.code-block-langs-probe')?.getAttribute('data-langs')).toBe('["python"]')
+  })
+
   it('forwards custom code previews through the renderer artifact event', () => {
     type PreviewProbeProps = NodeComponentProps<ParsedNode> & {
       onPreviewCode?: (payload: {

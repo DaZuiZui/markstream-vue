@@ -115,7 +115,6 @@ function renderCustomCodeBlockComponent(
     darkTheme: ctx.codeBlockThemes?.darkTheme,
     lightTheme: ctx.codeBlockThemes?.lightTheme,
     themes: ctx.codeBlockThemes?.themes,
-    langs: ctx.codeBlockThemes?.langs,
     minWidth: ctx.codeBlockThemes?.minWidth,
     maxWidth: ctx.codeBlockThemes?.maxWidth,
     onCopy: ctx.events.onCopy,
@@ -285,7 +284,7 @@ function renderCodeBlock(
       maxWidth={ctx.codeBlockThemes?.maxWidth}
       isDark={ctx.isDark}
       onCopy={ctx.events.onCopy}
-      {...getCodeBlockExtraProps(ctx.codeBlockProps, { omit: ['langs'] })}
+      {...getCodeBlockExtraProps(ctx.codeBlockProps)}
     />
   )
 }

@@ -681,6 +681,36 @@ async function main() {
         && hostRect.height < 700
         && Math.abs(hostRect.height - surfaceRect.height) <= 2
     }, testRendererSelector, { timeout: 15000 })
+    const diffColorMapping = await page.evaluate((selector) => {
+      const body = document.querySelector(`${selector} .code-block-container.is-diff .code-block-body`)
+      if (!(body instanceof HTMLElement))
+        return { ok: false, reason: 'diff code-block body is missing' }
+
+      const style = getComputedStyle(body)
+      const properties = [
+        ['--vscode-editor-background', '--markstream-diff-editor-bg'],
+        ['--vscode-editor-foreground', '--markstream-diff-editor-fg'],
+        ['--vscode-diffEditor-unchangedRegionForeground', '--markstream-diff-unchanged-fg'],
+        ['--vscode-diffEditor-unchangedRegionBackground', '--markstream-diff-unchanged-bg'],
+        ['--vscode-diffEditor-insertedTextBackground', '--markstream-diff-added-inline'],
+        ['--vscode-diffEditor-removedTextBackground', '--markstream-diff-removed-inline'],
+        ['--vscode-diffEditor-insertedLineBackground', '--markstream-diff-added-line'],
+        ['--vscode-diffEditor-removedLineBackground', '--markstream-diff-removed-line'],
+      ]
+      const values = properties.map(([target, source]) => ({
+        target,
+        source,
+        targetValue: style.getPropertyValue(target).trim(),
+        sourceValue: style.getPropertyValue(source).trim(),
+      }))
+      return {
+        ok: values.every(value => value.sourceValue && value.targetValue === value.sourceValue),
+        backgroundColor: style.backgroundColor,
+        values,
+      }
+    }, testRendererSelector)
+    if (!diffColorMapping.ok)
+      throw new Error(`Svelte diff color mapping mismatch: ${JSON.stringify(diffColorMapping)}`)
 
     if (errors.length) {
       throw new Error(`Browser errors:\\n${errors.join('\\n')}`)

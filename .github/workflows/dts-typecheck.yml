@@ -2,9 +2,9 @@ name: Types & Public API Check
 
 on:
   push:
-    branches: [main]
+    branches: [main, 2.0.0]
   pull_request:
-    branches: [main]
+    branches: [main, 2.0.0]
 
 jobs:
   dts-and-typecheck:

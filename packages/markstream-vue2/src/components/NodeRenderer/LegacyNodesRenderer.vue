@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BaseNode, HtmlPolicy, ParsedNode } from 'stream-markdown-parser'
-import type { CodeBlockNodeProps, CodeBlockPreviewPayload, CodeBlockTheme, ShikiCodeBlockProps } from '../../types/component-props'
+import type { CodeBlockNodeProps, CodeBlockPreviewPayload, CodeBlockTheme } from '../../types/component-props'
 import { normalizeShikiLanguage } from 'markstream-core'
 import { normalizeCustomHtmlTags } from 'stream-markdown-parser'
 import { computed, provide } from 'vue-demi'
@@ -44,11 +44,10 @@ import FallbackComponent from './FallbackComponent.vue'
 
 type NodeRendererCodeBlockThemes
   = CodeBlockNodeProps['themes']
-    | ShikiCodeBlockProps['themes']
+    | readonly string[]
 
 type NodeRendererCodeBlockProps
   = Partial<Omit<CodeBlockNodeProps, 'node' | 'themes'>>
-    & Partial<Omit<ShikiCodeBlockProps, 'themes'>>
     & {
       themes?: NodeRendererCodeBlockThemes
     }
@@ -68,18 +67,8 @@ const props = withDefaults(defineProps<{
   codeBlockMaxWidth?: string | number
   codeBlockProps?: NodeRendererCodeBlockProps
   renderCodeBlocksAsPre?: boolean
-  /**
-   * Theme names or theme objects preloaded for enhanced (stream-diffs) code
-   * blocks. When Shiki code blocks are used, only string theme names are
-   * forwarded to stream-markdown; theme objects are ignored.
-   */
+  /** Theme names or theme objects preloaded for enhanced code blocks. */
   themes?: CodeBlockTheme[]
-  /**
-   * Shiki language preload list forwarded to stream-markdown.
-   *
-   * Used when a custom `code_block` or language renderer uses stream-markdown.
-   */
-  langs?: readonly string[]
   isDark?: boolean
   customHtmlTags?: readonly string[]
   htmlPolicy?: HtmlPolicy
@@ -165,9 +154,7 @@ const customComponentsMap = computed(() => {
 })
 const indexPrefix = computed(() => (props.indexKey != null ? String(props.indexKey) : 'legacy-renderer'))
 const codeBlockExtraProps = computed(() => getCodeBlockExtraProps(props.codeBlockProps))
-const builtinCodeBlockExtraProps = computed(() =>
-  getCodeBlockExtraProps(props.codeBlockProps, { omit: ['langs'] }),
-)
+const builtinCodeBlockExtraProps = computed(() => getCodeBlockExtraProps(props.codeBlockProps))
 const codeBlockBindings = computed(() => ({
   stream: props.codeBlockStream,
   darkTheme: props.codeBlockDarkTheme,
@@ -179,7 +166,6 @@ const codeBlockBindings = computed(() => ({
 }))
 const customCodeBlockBindings = computed(() => ({
   ...codeBlockBindings.value,
-  langs: props.langs,
   ...codeBlockExtraProps.value,
 }))
 const nonCodeBindings = computed(() => ({ typewriter: props.typewriter, fade: props.fade, htmlPolicy: props.htmlPolicy ?? 'safe' }))
