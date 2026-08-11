@@ -444,7 +444,6 @@ async function run() {
       localStorage.setItem('vmr-settings-stream-chunk-size-max', '16')
       localStorage.setItem('vmr-settings-stream-burstiness', '0')
       localStorage.setItem('vmr-settings-smooth-streaming', 'false')
-      localStorage.setItem('vmr-test-render-mode', 'stream-diffs')
       localStorage.setItem('vmr-test-code-stream', 'false')
       localStorage.setItem('vmr-test-viewport-priority', 'false')
       localStorage.setItem('vmr-test-batch-rendering', 'false')

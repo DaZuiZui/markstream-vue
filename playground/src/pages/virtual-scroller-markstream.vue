@@ -7,7 +7,7 @@ import type {
 } from '../../../src/exports'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
-import MarkdownRender, { useMarkstreamVirtualAdapter } from '../../../src/exports'
+import MarkdownRender, { preloadCodeBlockRuntime, useMarkstreamVirtualAdapter } from '../../../src/exports'
 import KatexWorker from '../../../src/workers/katexRenderer.worker?worker&inline'
 import { setKaTeXWorker } from '../../../src/workers/katexWorkerClient'
 import MermaidWorker from '../../../src/workers/mermaidParser.worker?worker&inline'
@@ -21,7 +21,7 @@ type RestoreAnchor = NonNullable<MarkstreamThreadVirtualState['outerAnchor']>
 
 setKaTeXWorker(new KatexWorker())
 setMermaidWorker(new MermaidWorker())
-import('../../../src/components/CodeBlockNode/streamDiffs').then(({ getStreamDiffsRuntime }) => getStreamDiffsRuntime()).catch(() => {})
+void preloadCodeBlockRuntime()
 
 interface BaseTimelineItem {
   threadId: ThreadId
@@ -151,7 +151,7 @@ function makeCodeMarkdown(label: string, step: number) {
   return [
     `# ${label}: code-heavy response ${step}`,
     '',
-    'The row below mixes Monaco-backed code blocks, lightweight pre blocks, JSON, shell, and diff content. This is the path that usually exposes row-height drift if the outer virtualizer only trusts the mounted DOM.',
+    'The row below mixes enhanced code blocks, lightweight pre blocks, JSON, shell, and diff content. This is the path that usually exposes row-height drift if the outer virtualizer only trusts the mounted DOM.',
     '',
     '```ts title="useStableTimeline.ts"',
     'import { computed, nextTick, reactive, ref } from "vue"',

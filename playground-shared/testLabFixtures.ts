@@ -202,7 +202,7 @@ export function ensureParity(name: string) {
     "docs-site",
     "mermaid",
     "katex",
-    "monaco-editor"
+    "stream-diffs"
   ],
   "sideEffects": [
     "**/*.css"
@@ -219,7 +219,7 @@ export function ensureParity(name: string) {
 }
 \`\`\`
 
-再加一段普通代码，方便对比 Monaco / MarkdownCodeBlock / PreCodeNode：
+再加一段普通代码，方便对比增强代码块与普通代码块：
 
 \`\`\`tsx
 export function TestHarness() {

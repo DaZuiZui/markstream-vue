@@ -4,8 +4,8 @@ import type { StreamPresetId } from '../composables/streamPresets'
 import type { StreamTransportMode } from '../composables/useStreamSimulator'
 import { Icon } from '@iconify/vue'
 import { useRouter } from 'vue-router'
-import CodeBlockNode from '../../../src/components/CodeBlockNode'
 import MarkdownRender from '../../../src/components/NodeRenderer'
+import { preloadCodeBlockRuntime } from '../../../src/exports'
 import { setCustomComponents } from '../../../src/utils/nodeComponents'
 import KatexWorker from '../../../src/workers/katexRenderer.worker?worker&inline'
 import { setKaTeXWorker } from '../../../src/workers/katexWorkerClient'
@@ -87,7 +87,7 @@ const {
 })
 
 // 预加载 stream-diffs 运行时
-import('../../../src/components/CodeBlockNode/streamDiffs').then(({ getStreamDiffsRuntime }) => getStreamDiffsRuntime()).catch(() => {})
+void preloadCodeBlockRuntime()
 setKaTeXWorker(new KatexWorker())
 setMermaidWorker(new MermaidWorker())
 const router = useRouter()
@@ -128,7 +128,7 @@ watchEffect(() => {
     streamBurstiness.value = boundedBurstiness
 })
 
-setCustomComponents('playground-demo', { thinking: ThinkingNode, code_block: CodeBlockNode })
+setCustomComponents('playground-demo', { thinking: ThinkingNode })
 const parseOptions = {
   preTransformTokens: (tokens: any[]) => {
     // Example: Log tokens during parsing

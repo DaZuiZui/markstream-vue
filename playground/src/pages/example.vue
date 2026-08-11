@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import CodeBlockNode from '../../../src/components/CodeBlockNode'
 import MarkdownRender from '../../../src/components/NodeRenderer'
+import { preloadCodeBlockRuntime } from '../../../src/exports'
 import KatexWorker from '../../../src/workers/katexRenderer.worker?worker&inline'
 import { setKaTeXWorker } from '../../../src/workers/katexWorkerClient'
 import MermaidWorker from '../../../src/workers/mermaidParser.worker?worker&inline'
@@ -11,7 +12,7 @@ import 'katex/dist/katex.min.css'
 // Workers
 setKaTeXWorker(new KatexWorker())
 setMermaidWorker(new MermaidWorker())
-import('../../../src/components/CodeBlockNode/streamDiffs').then(({ getStreamDiffsRuntime }) => getStreamDiffsRuntime()).catch(() => {})
+void preloadCodeBlockRuntime()
 
 const isDark = ref(
   typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches,
@@ -118,7 +119,7 @@ const palette = [
 ]
 
 // stream-diffs code block node
-const shikiNode = {
+const codeBlockNode = {
   type: 'code_block' as const,
   language: 'typescript',
   code: `import { createApp } from 'vue'
@@ -478,11 +479,11 @@ Term 2
         Code Block
       </h2>
       <CodeBlockNode
-        :node="shikiNode"
+        :node="codeBlockNode"
         :is-dark="isDark"
         :loading="false"
         :stream="false"
-        index-key="shiki-demo"
+        index-key="code-block-demo"
         :show-header="true"
         :show-copy-button="true"
         :show-collapse-button="true"

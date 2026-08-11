@@ -29,7 +29,7 @@ const routeSeoMap: Record<string, RouteSeoConfig> = {
   },
   '/test': {
     title: 'Markdown Preview & Test Lab | markstream-vue Playground',
-    description: 'Paste markdown for live preview, then compare framework and version behavior with streaming, Monaco, Mermaid, and KaTeX in one place.',
+    description: 'Paste markdown for live preview, then compare framework and version behavior with streaming, stream-diffs, Mermaid, and KaTeX in one place.',
     robots: 'noindex,nofollow',
     canonicalUrl: `${DOCS_SITE_URL}/guide/playground`,
   },

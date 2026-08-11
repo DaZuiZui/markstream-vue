@@ -15,8 +15,7 @@ import 'katex/dist/katex.min.css'
 
 Vue.config.productionTip = false
 
-// In Vue CLI (Webpack 4), the heavy Monaco/Shiki renderers are not bundled in
-// markstream-vue2 2.0. Use the CodeBlockNode component instead.
+// In Vue CLI (Webpack 4), register the enhanced CodeBlockNode explicitly.
 setCustomComponents({ code_block: CodeBlockNode })
 
 Vue.use(VueRendererMarkdown)

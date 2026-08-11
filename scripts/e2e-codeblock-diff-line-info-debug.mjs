@@ -152,7 +152,6 @@ async function main() {
     const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } })
 
     await page.addInitScript(() => {
-      localStorage.setItem('vmr-test-render-mode', 'stream-diffs')
       localStorage.setItem('vmr-test-code-stream', 'true')
       localStorage.setItem('vmr-test-viewport-priority', 'false')
       localStorage.setItem('vmr-test-batch-rendering', 'false')

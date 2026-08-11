@@ -94,16 +94,8 @@ vi.mock('../src/components/NodeRenderer', () => ({
   },
 }))
 
-vi.mock('../src/components/CodeBlockNode', () => ({
-  default: { name: 'CodeBlockNodeStub', template: '<div />' },
-}))
-
-vi.mock('../src/components/PreCodeNode', () => ({
-  default: { name: 'PreCodeNodeStub', template: '<div />' },
-}))
-
-vi.mock('../src/components/CodeBlockNode/streamDiffs', () => ({
-  getStreamDiffsRuntime: vi.fn(),
+vi.mock('../src/exports', () => ({
+  preloadCodeBlockRuntime: vi.fn(async () => true),
 }))
 
 vi.mock('../src/utils/nodeComponents', () => ({
@@ -273,7 +265,7 @@ describe('playground /test smoke', () => {
     expect(wrapper.text()).toContain('Cross-framework Rendering Studio')
     expect(wrapper.text()).toContain('版本沙箱')
     expect(wrapper.text()).toContain('Angular')
-    expect(wrapper.text()).toContain('stream-diffs')
+    expect(wrapper.text()).not.toContain('代码块模式')
     expect(wrapper.get('iframe').attributes('src')).toContain('/test-sandbox?framework=vue3')
     expect(wrapper.get('.preview-surface').attributes('tabindex')).toBeUndefined()
 

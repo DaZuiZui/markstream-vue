@@ -4,7 +4,7 @@ import { collectWebVitalsInteractionWarnings } from '../scripts/web-vitals-budge
 describe('web vitals budget checks', () => {
   it('passes interaction timing budgets when a scripted interaction stays below the Event Timing threshold', () => {
     const warnings = collectWebVitalsInteractionWarnings(
-      'codeblockMonaco',
+      'codeblockStreamDiffs',
       {
         label: 'codeblock-copy',
         eventObserverSupported: true,
@@ -29,7 +29,7 @@ describe('web vitals budget checks', () => {
 
   it('fails interaction timing budgets when no interaction happened and no interaction groups are captured', () => {
     const warnings = collectWebVitalsInteractionWarnings(
-      'codeblockMonaco',
+      'codeblockStreamDiffs',
       {
         label: 'codeblock-copy',
         eventObserverSupported: true,
@@ -47,12 +47,12 @@ describe('web vitals budget checks', () => {
       },
     )
 
-    expect(warnings).toContain('[codeblockMonaco:codeblock-copy] Event Timing measurement unavailable: no interaction groups captured.')
+    expect(warnings).toContain('[codeblockStreamDiffs:codeblock-copy] Event Timing measurement unavailable: no interaction groups captured.')
   })
 
   it('fails interaction timing budgets when the event observer is unavailable', () => {
     const warnings = collectWebVitalsInteractionWarnings(
-      'codeblockMonaco',
+      'codeblockStreamDiffs',
       {
         label: 'codeblock-copy',
         eventObserverSupported: false,
@@ -66,12 +66,12 @@ describe('web vitals budget checks', () => {
       },
     )
 
-    expect(warnings).toContain('[codeblockMonaco:codeblock-copy] Event Timing measurement unavailable: observer unsupported.')
+    expect(warnings).toContain('[codeblockStreamDiffs:codeblock-copy] Event Timing measurement unavailable: observer unsupported.')
   })
 
   it('passes interaction timing budgets when a real interaction group is captured under budget', () => {
     const warnings = collectWebVitalsInteractionWarnings(
-      'codeblockMonaco',
+      'codeblockStreamDiffs',
       {
         label: 'codeblock-copy',
         eventObserverSupported: true,
