@@ -67,6 +67,12 @@ const DEFAULTS: Required<Pick<
 const defaultPreFallbackFontSize = 12
 const defaultPreFallbackLineHeight = 18
 const defaultCodeBlockMaxHeight = 500
+const streamingLanguagePrefixCandidates = Object.keys(languageMap)
+const exactStreamingLanguageTokens = new Set([
+  ...streamingLanguagePrefixCandidates,
+  'c',
+  'java',
+])
 
 type EditorLayerProps = {
   editorHostRef: OctaneRefObject<HTMLDivElement | null>
@@ -902,12 +908,14 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
   }, [codeLanguage, detectedLanguage, node.language])
   const canonicalLanguage = useMemo(() => normalizeLanguageIdentifier(rawLanguage), [rawLanguage])
   const shouldUseStreamingPlaintext = useMemo(() => {
+    if (!loading)
+      return false
     const token = rawLanguage.trim().split(/\s+/)[0]?.split(':')[0]?.toLowerCase() || ''
     const normalized = normalizeLanguageIdentifier(token)
-    if (!token || Object.prototype.hasOwnProperty.call(languageMap, normalized))
+    if (!token || exactStreamingLanguageTokens.has(normalized))
       return false
-    return Object.keys(languageMap).some(candidate => candidate.startsWith(token))
-  }, [rawLanguage])
+    return streamingLanguagePrefixCandidates.some(candidate => candidate.startsWith(token))
+  }, [loading, rawLanguage])
   const languageId = useMemo(
     () => shouldUseStreamingPlaintext ? 'plaintext' : resolveLanguageId(canonicalLanguage),
     [canonicalLanguage, shouldUseStreamingPlaintext],

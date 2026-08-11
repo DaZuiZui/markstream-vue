@@ -192,6 +192,37 @@ describe('markstream-octane client renderer', () => {
     expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === 'javasc')).toBe(false)
   })
 
+  it.each(['java', 'c'])('preserves the complete %s language while streaming and final', async (language) => {
+    const mockedUseMonaco = vi.mocked(useMonaco)
+    const helpers = mockedUseMonaco.getMockImplementation()?.({}) as any
+    mockedUseMonaco.mockClear()
+    helpers.createEditor.mockClear()
+    helpers.updateCode.mockClear()
+    const content = `\`\`\`${language}\nconst value = 1\n\`\`\``
+    const view = render(NodeRenderer, {
+      props: {
+        ...stableRendererProps,
+        content,
+        final: false,
+        codeBlockProps: { showHeader: false },
+      },
+    })
+
+    await waitFor(() => expect(helpers.createEditor).toHaveBeenCalled())
+    expect(helpers.createEditor.mock.calls[0]?.[2]).toBe(language)
+
+    view.rerender({
+      props: {
+        ...stableRendererProps,
+        content,
+        final: true,
+        codeBlockProps: { showHeader: false },
+      },
+    })
+    await waitFor(() => expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === language)).toBe(true))
+    expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === 'plaintext')).toBe(false)
+  })
+
   it('recreates the runtime when codeBlockOptions identity changes', async () => {
     const mockedUseMonaco = vi.mocked(useMonaco)
     mockedUseMonaco.mockClear()
