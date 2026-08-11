@@ -162,7 +162,10 @@ describe('markstream-octane client renderer', () => {
     expect(fallback?.style.overflow).toBe('auto')
   })
 
-  it('uses plaintext while a streaming fence language is incomplete', async () => {
+  it.each([
+    ['javasc', 'javascript'],
+    ['rus', 'rust'],
+  ])('uses plaintext while the streaming %s fence language is incomplete, then resolves %s', async (partialLanguage, completeLanguage) => {
     const mockedUseMonaco = vi.mocked(useMonaco)
     const helpers = mockedUseMonaco.getMockImplementation()?.({}) as any
     mockedUseMonaco.mockClear()
@@ -171,7 +174,7 @@ describe('markstream-octane client renderer', () => {
     const view = render(NodeRenderer, {
       props: {
         ...stableRendererProps,
-        content: '```javasc\nconst value = 1',
+        content: `\`\`\`${partialLanguage}\nconst value = 1`,
         final: false,
         codeBlockProps: { showHeader: false },
       },
@@ -183,13 +186,13 @@ describe('markstream-octane client renderer', () => {
     view.rerender({
       props: {
         ...stableRendererProps,
-        content: '```javascript\nconst value = 1\n```',
+        content: `\`\`\`${completeLanguage}\nconst value = 1\n\`\`\``,
         final: true,
         codeBlockProps: { showHeader: false },
       },
     })
-    await waitFor(() => expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === 'javascript')).toBe(true))
-    expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === 'javasc')).toBe(false)
+    await waitFor(() => expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === completeLanguage)).toBe(true))
+    expect(helpers.updateCode.mock.calls.some((call: any[]) => call[1] === partialLanguage)).toBe(false)
   })
 
   it.each(['java', 'c'])('preserves the complete %s language while streaming and final', async (language) => {

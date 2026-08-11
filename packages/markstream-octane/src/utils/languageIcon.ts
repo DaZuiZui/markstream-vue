@@ -190,3 +190,28 @@ export const languageMap: Record<string, string> = {
   mermaid: 'Mermaid',
   d2: 'D2',
 }
+
+const LANGUAGE_PREFIX_CANDIDATES = Array.from(new Set([
+  ...Object.keys(LANGUAGE_ALIAS_MAP),
+  ...Object.values(LANGUAGE_ALIAS_MAP),
+  ...Object.keys(CORE_LANGUAGE_ICON_MAP),
+  ...Object.keys(languageMap),
+  'c',
+  'diff',
+  'go',
+  'java',
+  'php',
+  'ruby',
+  'rust',
+  'sql',
+  'yaml',
+]))
+
+export function isLikelyIncompleteLanguageIdentifier(lang?: string | null): boolean {
+  const token = extractLanguageToken(lang)
+  if (!token)
+    return false
+  if (LANGUAGE_PREFIX_CANDIDATES.includes(token))
+    return false
+  return LANGUAGE_PREFIX_CANDIDATES.some(candidate => candidate.startsWith(token))
+}

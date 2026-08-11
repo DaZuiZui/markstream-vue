@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useViewportPriority } from '../../context/viewportPriority.tsrx'
 import { useSafeI18n } from '../../i18n/useSafeI18n'
 import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonTooltip'
-import { getLanguageIcon, languageMap, normalizeLanguageIdentifier, resolveLanguageId, subscribeLanguageIconsRevision } from '../../utils/languageIcon'
+import { getLanguageIcon, isLikelyIncompleteLanguageIdentifier, languageMap, normalizeLanguageIdentifier, resolveLanguageId, subscribeLanguageIconsRevision } from '../../utils/languageIcon'
 import { HtmlPreviewFrame } from './HtmlPreviewFrame.tsrx'
 import { getStreamDiffsRuntime } from './monaco'
 import { PreCodeNode } from './PreCodeNode.tsrx'
@@ -67,12 +67,6 @@ const DEFAULTS: Required<Pick<
 const defaultPreFallbackFontSize = 12
 const defaultPreFallbackLineHeight = 18
 const defaultCodeBlockMaxHeight = 500
-const streamingLanguagePrefixCandidates = Object.keys(languageMap)
-const exactStreamingLanguageTokens = new Set([
-  ...streamingLanguagePrefixCandidates,
-  'c',
-  'java',
-])
 
 type EditorLayerProps = {
   editorHostRef: OctaneRefObject<HTMLDivElement | null>
@@ -910,11 +904,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeOctane
   const shouldUseStreamingPlaintext = useMemo(() => {
     if (!loading)
       return false
-    const token = rawLanguage.trim().split(/\s+/)[0]?.split(':')[0]?.toLowerCase() || ''
-    const normalized = normalizeLanguageIdentifier(token)
-    if (!token || exactStreamingLanguageTokens.has(normalized))
-      return false
-    return streamingLanguagePrefixCandidates.some(candidate => candidate.startsWith(token))
+    return isLikelyIncompleteLanguageIdentifier(rawLanguage)
   }, [loading, rawLanguage])
   const languageId = useMemo(
     () => shouldUseStreamingPlaintext ? 'plaintext' : resolveLanguageId(canonicalLanguage),
