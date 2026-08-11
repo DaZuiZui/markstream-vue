@@ -512,7 +512,7 @@ describe('final restore heavy-node deferral', () => {
           content: createMixedHistoryContent(),
           final: true,
           mode: 'chat',
-          codeRenderer: 'stream-diffs',
+          renderCodeBlocksAsPre: false,
           smoothStreaming: false,
           batchRendering: false,
           fade: false,

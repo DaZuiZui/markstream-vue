@@ -3,7 +3,6 @@ import type {
   MarkstreamVirtualMetrics,
   MarkstreamVirtualScrollOptions,
   MarkstreamVirtualState,
-  NodeRendererCodeRenderer,
   NodeRendererMode,
   NodeRendererProps,
 } from '../types/node-renderer-props'
@@ -95,7 +94,7 @@ export interface MarkstreamVirtualTimelineProps<T = MarkstreamTimelineItem> {
   measurementKey?: string | number
 
   markdownMode?: NodeRendererMode
-  markdownCodeRenderer?: NodeRendererCodeRenderer
+  renderCodeBlocksAsPre?: boolean
 
   /**
    * Initial state for the active thread.
@@ -184,7 +183,7 @@ export interface MarkstreamVirtualMarkdownProps extends Pick<
   | 'virtualScroll'
   | 'fade'
   | 'mode'
-  | 'codeRenderer'
+  | 'renderCodeBlocksAsPre'
 > {
   onHeightChange: (metrics: MarkstreamVirtualMetrics) => void
   onVirtualStateChange: (state: MarkstreamVirtualState) => void
@@ -205,7 +204,7 @@ export interface UseMarkstreamVirtualAdapterOptions<T = MarkstreamTimelineItem> 
   measurementKey?: MaybeRefOrGetter<string | number | undefined>
 
   markdownMode?: MaybeRefOrGetter<NodeRendererMode | undefined>
-  markdownCodeRenderer?: MaybeRefOrGetter<NodeRendererCodeRenderer | undefined>
+  renderCodeBlocksAsPre?: MaybeRefOrGetter<boolean | undefined>
 
   /**
    * Default: false.
@@ -461,16 +460,13 @@ export function useMarkstreamVirtualAdapter<T = MarkstreamTimelineItem>(
       : 'docs'
   }
 
-  function normalizeMarkdownCodeRenderer(): NodeRendererCodeRenderer {
-    const renderer = toValue(options.markdownCodeRenderer)
-    if (renderer === 'pre' || renderer === 'stream-diffs')
-      return renderer
-
-    return normalizeMarkdownMode() === 'docs' ? 'stream-diffs' : 'pre'
+  function normalizeRenderCodeBlocksAsPre() {
+    return toValue(options.renderCodeBlocksAsPre) === true
   }
 
   function normalizeMarkdownMeasurementKey() {
-    return `${normalizeBaseMeasurementKey() ?? ''}\u0001${normalizeMarkdownMode()}\u0001${normalizeMarkdownCodeRenderer()}`
+    const codeLayout = normalizeRenderCodeBlocksAsPre() ? 'pre' : 'rich'
+    return `${normalizeBaseMeasurementKey() ?? ''}\u0001${normalizeMarkdownMode()}\u0001${codeLayout}`
   }
 
   function getItemSizeSourceKey(item: T, index: number) {
@@ -929,14 +925,14 @@ export function useMarkstreamVirtualAdapter<T = MarkstreamTimelineItem>(
     const sessionKey = getSessionKey(item, index)
     const measurementKey = normalizeMarkdownMeasurementKey()
     const markdownMode = normalizeMarkdownMode()
-    const markdownCodeRenderer = normalizeMarkdownCodeRenderer()
+    const renderCodeBlocksAsPre = normalizeRenderCodeBlocksAsPre()
     const cacheKey = [
       itemKey,
       sessionKey,
       final ? 'final' : 'live',
       measurementKey,
       markdownMode,
-      markdownCodeRenderer,
+      renderCodeBlocksAsPre,
       options.markdownFade === true ? 'fade' : 'no-fade',
     ].join(':')
     const restoreState = toRaw(markdownStates).get(itemKey)
@@ -967,7 +963,7 @@ export function useMarkstreamVirtualAdapter<T = MarkstreamTimelineItem>(
       content,
       final,
       mode: markdownMode,
-      codeRenderer: markdownCodeRenderer,
+      renderCodeBlocksAsPre,
       nodeVirtual: final ? 'auto' : false,
       maxLiveNodes: final ? TIMELINE_MARKDOWN_MAX_LIVE_NODES : undefined,
       liveNodeBuffer: final ? TIMELINE_MARKDOWN_LIVE_NODE_BUFFER : undefined,

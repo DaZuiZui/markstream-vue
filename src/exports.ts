@@ -144,7 +144,6 @@ export type {
   MarkstreamVirtualScrollOptions,
   MarkstreamVirtualScrollSharedOptions,
   MarkstreamVirtualState,
-  NodeRendererCodeRenderer,
   NodeRendererDomMode,
   NodeRendererMode,
   NodeRendererProps,

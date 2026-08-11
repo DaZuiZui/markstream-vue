@@ -193,7 +193,7 @@ afterEach(() => {
 })
 
 describe('nodeRenderer heavy-node prop forwarding', () => {
-  it('uses lightweight chat mode defaults for code blocks and tooltips', async () => {
+  it('uses the enhanced code block renderer with chat mode defaults', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         mode: 'chat',
@@ -210,8 +210,7 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
 
     await flushAll()
 
-    expect(wrapper.find('pre[data-markstream-pre="1"]').exists()).toBe(true)
-    expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(true)
     expect(wrapper.get('a[href="https://vuejs.org"]').attributes('title')).toBe('https://vuejs.org')
   })
 
@@ -284,10 +283,10 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(wrapper.emitted('copy')).toBeUndefined()
   })
 
-  it('honors explicit pre code renderer in the default mode', async () => {
+  it('honors the explicit plain pre fallback in the default mode', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         nodes: [
           {
             type: 'code_block',
@@ -308,7 +307,7 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
   it('does not leak rich code block props onto the pre renderer', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         themes: ['vitesse-dark'],
         codeBlockProps: {
           showLineNumbers: true,
@@ -343,7 +342,7 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         customId,
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         themes: ['vitesse-dark'],
         codeBlockProps: {
           showLineNumbers: true,
@@ -370,7 +369,7 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(probe.attributes('data-has-themes')).toBe('true')
   })
 
-  it('forwards Monaco diff options to code blocks nested inside list items', async () => {
+  it('forwards code block options to code blocks nested inside list items', async () => {
     setCustomComponents(customId, {
       code_block: GenericCodeBlockAttrsProbe as any,
     })
@@ -378,7 +377,7 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         customId,
-        codeRenderer: 'stream-diffs',
+        renderCodeBlocksAsPre: false,
         codeBlockProps: {
           showHeader: false,
         },
@@ -410,7 +409,7 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     const wrapper = mount(NodeRenderer, {
       props: {
         customId,
-        codeRenderer: 'stream-diffs',
+        renderCodeBlocksAsPre: false,
         codeBlockProps: {
           showHeader: false,
         },
@@ -519,32 +518,10 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(probe.attributes('data-show-header')).toBe('false')
   })
 
-  it('ignores invalid runtime codeRenderer values', async () => {
+  it('uses codeBlockProps for Mermaid fences in the plain pre fallback', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
-        mode: 'chat',
-        codeRenderer: 'invalid' as any,
-        nodes: [
-          {
-            type: 'code_block',
-            language: 'ts',
-            code: 'const value = 1',
-            raw: '```ts\nconst value = 1\n```',
-          },
-        ],
-      },
-    })
-
-    await flushAll()
-
-    expect(wrapper.find('pre[data-markstream-pre="1"]').exists()).toBe(true)
-    expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
-  })
-
-  it('uses codeBlockProps for Mermaid fences when codeRenderer is pre', async () => {
-    const wrapper = mount(NodeRenderer, {
-      props: {
-        codeRenderer: 'pre',
+        renderCodeBlocksAsPre: true,
         codeBlockProps: {
           showLineNumbers: true,
         },

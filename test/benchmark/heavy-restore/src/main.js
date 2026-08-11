@@ -514,7 +514,7 @@ const App = defineComponent({
             mode: 'chat',
             smoothStreaming: false,
             ...(disableAutoVirtual ? { maxLiveNodes: 0 } : {}),
-            codeRenderer: 'stream-diffs',
+            renderCodeBlocksAsPre: false,
             viewportPriorityOptions: {
               rootMargin: '0px',
               heavyBlockMargin: '0px',

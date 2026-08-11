@@ -9,7 +9,6 @@ import type {
   MarkstreamVirtualMetrics,
   MarkstreamVirtualScrollOptions,
   MarkstreamVirtualState,
-  NodeRendererCodeRenderer,
   NodeRendererMode,
 } from '../../types/node-renderer-props'
 import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, provide, reactive, ref, shallowRef, watch } from 'vue'
@@ -263,25 +262,12 @@ function normalizeTimelineMarkdownMode(value: unknown): NodeRendererMode {
     : 'docs'
 }
 
-function normalizeTimelineMarkdownCodeRenderer(
-  value: unknown,
-  mode = normalizeTimelineMarkdownMode(props.markdownMode),
-): NodeRendererCodeRenderer {
-  if (value === 'pre' || value === 'stream-diffs')
-    return value
-
-  return mode === 'docs' ? 'stream-diffs' : 'pre'
-}
-
 const normalizedTimelineMarkdownMode = computed(() => {
   return normalizeTimelineMarkdownMode(props.markdownMode)
 })
 
-const normalizedTimelineMarkdownCodeRenderer = computed(() => {
-  return normalizeTimelineMarkdownCodeRenderer(
-    props.markdownCodeRenderer,
-    normalizedTimelineMarkdownMode.value,
-  )
+const normalizedRenderCodeBlocksAsPre = computed(() => {
+  return props.renderCodeBlocksAsPre === true
 })
 
 const timelineBaseMeasurementKey = computed(() => {
@@ -292,7 +278,8 @@ const timelineBaseMeasurementKey = computed(() => {
 })
 
 const timelineMarkdownMeasurementKey = computed(() => {
-  return `${timelineBaseMeasurementKey.value}\u0001${normalizedTimelineMarkdownMode.value}\u0001${normalizedTimelineMarkdownCodeRenderer.value}`
+  const codeLayout = normalizedRenderCodeBlocksAsPre.value ? 'pre' : 'rich'
+  return `${timelineBaseMeasurementKey.value}\u0001${normalizedTimelineMarkdownMode.value}\u0001${codeLayout}`
 })
 
 class TimelineFenwickTree {
@@ -1522,7 +1509,6 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
   const final = getMarkstreamTimelineItemFinal(item, record.index, props)
   const restoreState = markdownStates.get(record.key)
   const markdownMode = normalizedTimelineMarkdownMode.value
-  const markdownCodeRenderer = normalizedTimelineMarkdownCodeRenderer.value
   const virtualScroll: MarkstreamVirtualScrollOptions = {
     enabled: true,
     sessionKey: getSessionKey(record),
@@ -1541,7 +1527,7 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
     content: getMarkstreamTimelineItemContent(item, record.index, props),
     final,
     mode: markdownMode,
-    codeRenderer: markdownCodeRenderer,
+    renderCodeBlocksAsPre: normalizedRenderCodeBlocksAsPre.value,
     ...(final
       ? {
           nodeVirtual: 'auto' as const,

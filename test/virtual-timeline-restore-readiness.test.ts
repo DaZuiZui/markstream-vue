@@ -72,8 +72,8 @@ function timelineItemSource(threadKey: string, itemKey: string, revision?: strin
   }
 }
 
-function timelineMarkdownMeasurementKey(widthBucket = 800, mode = 'docs', codeRenderer = 'stream-diffs') {
-  return [`:${widthBucket}`, mode, codeRenderer].join('\u0001')
+function timelineMarkdownMeasurementKey(widthBucket = 800, mode = 'docs', codeLayout = 'rich') {
+  return [`:${widthBucket}`, mode, codeLayout].join('\u0001')
 }
 
 function timelineMarkdownItemSource(threadKey: string, itemKey: string, revision?: string | number, widthBucket = 800) {

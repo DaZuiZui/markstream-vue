@@ -21,7 +21,7 @@ describe('virtual layout key helpers', () => {
 
   it('combines host and renderer layout keys without dropping empty host keys', () => {
     const layoutKey = buildVirtualRendererLayoutKey({
-      renderer: 'stream-diffs',
+      renderCodeBlocksAsPre: false,
       isDark: false,
       codeBlockStream: true,
     })
@@ -33,7 +33,7 @@ describe('virtual layout key helpers', () => {
 
   it('tracks renderer mode, theme, stream, and code block sizing dimensions', () => {
     const base = buildVirtualRendererLayoutKey({
-      renderer: 'stream-diffs',
+      renderCodeBlocksAsPre: false,
       isDark: false,
       codeBlockStream: true,
       codeBlockMinWidth: 320,
@@ -47,7 +47,7 @@ describe('virtual layout key helpers', () => {
     expect(base).toContain('100%')
 
     expect(buildVirtualRendererLayoutKey({
-      renderer: 'pre',
+      renderCodeBlocksAsPre: true,
       isDark: false,
       codeBlockStream: true,
       codeBlockMinWidth: 320,
@@ -55,7 +55,7 @@ describe('virtual layout key helpers', () => {
     })).not.toBe(base)
 
     expect(buildVirtualRendererLayoutKey({
-      renderer: 'stream-diffs',
+      renderCodeBlocksAsPre: false,
       isDark: true,
       codeBlockStream: true,
       codeBlockMinWidth: 320,
@@ -63,7 +63,7 @@ describe('virtual layout key helpers', () => {
     })).not.toBe(base)
 
     expect(buildVirtualRendererLayoutKey({
-      renderer: 'stream-diffs',
+      renderCodeBlocksAsPre: false,
       isDark: false,
       codeBlockStream: false,
       codeBlockMinWidth: 320,
@@ -73,7 +73,7 @@ describe('virtual layout key helpers', () => {
 
   it('preserves the exact stream-diffs layout key token sequence', () => {
     const key = buildVirtualRendererLayoutKey({
-      renderer: 'stream-diffs',
+      renderCodeBlocksAsPre: false,
       isDark: true,
       codeBlockStream: false,
       codeBlockMinWidth: 320,
@@ -105,7 +105,7 @@ describe('virtual layout key helpers', () => {
 
   it('tracks code block chrome options that can affect layout', () => {
     const base = buildVirtualRendererLayoutKey({
-      renderer: 'stream-diffs',
+      renderCodeBlocksAsPre: false,
       codeBlockProps: {
         showHeader: true,
         showCopyButton: true,
@@ -113,7 +113,7 @@ describe('virtual layout key helpers', () => {
     })
 
     expect(buildVirtualRendererLayoutKey({
-      renderer: 'stream-diffs',
+      renderCodeBlocksAsPre: false,
       codeBlockProps: {
         showHeader: false,
         showCopyButton: true,
@@ -121,7 +121,7 @@ describe('virtual layout key helpers', () => {
     })).not.toBe(base)
 
     expect(buildVirtualRendererLayoutKey({
-      renderer: 'stream-diffs',
+      renderCodeBlocksAsPre: false,
       codeBlockProps: {
         showHeader: true,
         showCopyButton: false,

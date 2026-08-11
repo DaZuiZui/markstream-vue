@@ -1,5 +1,4 @@
 import type {
-  NodeRendererCodeRenderer,
   NodeRendererMode,
   NodeRendererProps,
 } from '../../types/node-renderer-props'
@@ -69,21 +68,4 @@ export function normalizeRendererMode(value: unknown): NodeRendererMode {
   return value === 'chat' || value === 'minimal' || value === 'docs'
     ? value
     : 'docs'
-}
-
-export function resolveNodeRendererCodeRenderer(options: {
-  mode: NodeRendererMode
-  codeRenderer: NodeRendererProps['codeRenderer']
-  renderCodeBlocksAsPre: NodeRendererProps['renderCodeBlocksAsPre']
-}): NodeRendererCodeRenderer {
-  if (options.renderCodeBlocksAsPre === true)
-    return 'pre'
-
-  if (options.codeRenderer === 'pre' || options.codeRenderer === 'stream-diffs')
-    return options.codeRenderer
-
-  if (options.renderCodeBlocksAsPre === false)
-    return 'stream-diffs'
-
-  return options.mode === 'docs' ? 'stream-diffs' : 'pre'
 }
