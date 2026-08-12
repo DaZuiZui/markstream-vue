@@ -1065,7 +1065,7 @@ function cancelFitRetry() {
   }
 }
 
-function applyInitialFit(maxAttempts = 3) {
+function applyInitialFit(maxAttempts = 8) {
   if (userHasAdjustedTransform.value)
     return
   if (isCollapsed.value || showSource.value)
@@ -1101,6 +1101,15 @@ function applyInitialFit(maxAttempts = 3) {
   }
   // 仅做缩小适配（min 0.5 与 zoomOut 下限一致），并按比例居中
   const scale = Math.max(0.5, Math.min(1, areaW / naturalW, areaH / naturalH))
+  if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+    console.warn('[markstream-vue] mermaid initial-fit applied', {
+      areaW: Math.round(areaW),
+      areaH: Math.round(areaH),
+      naturalW: Math.round(naturalW),
+      naturalH: Math.round(naturalH),
+      scale: Math.round(scale * 100) / 100,
+    })
+  }
   zoom.value = scale
   translateX.value = (areaW - naturalW * scale) / 2
   translateY.value = (areaH - naturalH * scale) / 2
@@ -2244,7 +2253,10 @@ watch(
             const newWidth = entries[0].contentRect.width
             updateContainerHeight(newWidth)
           })
-          // 容器尺寸变化后重新适配默认视角
+        }
+        // 容器尺寸变化（宽度或高度，如 maxHeight 截断、模式切换过渡结束）后
+        // 重新适配默认视角；仍处于流式期间时跳过，等 loading=false 的最终提交兜底
+        if (props.loading === false) {
           safeRaf(() => applyInitialFit())
         }
       })
