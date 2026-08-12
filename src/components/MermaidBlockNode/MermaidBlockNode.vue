@@ -10,7 +10,7 @@ import { clampMermaidPreviewHeight, estimateMermaidPreviewHeight, getMermaidDiag
 import { resolveLifecycleIndexKey } from '../../utils/lifecycleIndexKey'
 import { escapeSequenceTextSemicolons } from '../../utils/mermaidSequenceSemicolons'
 import { MARKSTREAM_NODE_LIFECYCLE_KEY } from '../../utils/nodeLifecycle'
-import { safeRaf } from '../../utils/safeRaf'
+import { safeCancelRaf, safeRaf } from '../../utils/safeRaf'
 import { canParseOffthread as canParseOffthreadClient, findPrefixOffthread as findPrefixOffthreadClient } from '../../workers/mermaidWorkerClient'
 
 import { getMermaid } from './mermaid'
@@ -465,6 +465,9 @@ const savedTransformState = ref({
   translateY: 0,
   containerHeight: containerHeight.value,
 })
+// Whether the user has manually adjusted the transform (zoom buttons, drag,
+// wheel). Once set, auto "fit to view" stops overriding the user's view.
+const userHasAdjustedTransform = ref(false)
 const wheelListeners = computed(() => (props.enableWheelZoom ? { wheel: handleWheel } : {}))
 
 // Timeouts (ms) - configurable via props and reactive
@@ -864,7 +867,9 @@ async function canParseOffthread(
         || errorCode === 'WORKER_INIT_ERROR'
         || errorCode === 'MERMAID_DISABLED'
         || errorCode === 'WORKER_REPLACED'
-    if (!isTransient || error?.fallbackToRenderer)
+    // 若 worker 侧解析超时（worker 可能卡死），回退到主线程解析；
+    // 主线程解析自身有超时上限（parse timeout），不会无限阻塞。
+    if (!isTransient || error?.fallbackToRenderer || errorCode === 'WORKER_TIMEOUT')
       return await canParseOnMain(code, theme, opts)
     throw error
   }
@@ -1045,6 +1050,69 @@ const transformStyle = computed(() => ({
   transform: `translate(${translateX.value}px, ${translateY.value}px) scale(${zoom.value})`,
 }))
 
+/**
+ * 将内容适配到预览区域内：当图表自然尺寸超出容器（例如超过 maxHeight 截断）
+ * 时，自动缩小并居中，保证默认视角不被裁切；用户手动缩放/拖拽后不再干预。
+ * 内容本身放得下时保持 100% 缩放与默认定位。
+ * 若此时 SVG 尚未完成布局（测量为 0），会在后续帧重试几次。
+ */
+let fitRetryRafId: number | null = null
+
+function cancelFitRetry() {
+  if (fitRetryRafId != null) {
+    safeCancelRaf(fitRetryRafId)
+    fitRetryRafId = null
+  }
+}
+
+function applyInitialFit(maxAttempts = 3) {
+  if (userHasAdjustedTransform.value)
+    return
+  if (isCollapsed.value || showSource.value)
+    return
+  const area = mermaidContainer.value
+  const svg = mermaidContent.value?.querySelector('svg')
+  if (!area || !svg)
+    return
+  const areaW = area.clientWidth
+  const areaH = area.clientHeight
+  if (!areaW || !areaH)
+    return
+  const svgRect = svg.getBoundingClientRect()
+  if (!svgRect.width || !svgRect.height) {
+    // SVG 尚未完成布局，稍后重试（最多 maxAttempts 次）
+    if (maxAttempts > 1) {
+      cancelFitRetry()
+      fitRetryRafId = safeRaf(() => {
+        fitRetryRafId = null
+        applyInitialFit(maxAttempts - 1)
+      })
+    }
+    return
+  }
+  // 还原为未缩放的自然尺寸
+  const naturalW = svgRect.width / Math.max(0.01, zoom.value)
+  const naturalH = svgRect.height / Math.max(0.01, zoom.value)
+  if (naturalW <= areaW && naturalH <= areaH) {
+    zoom.value = 1
+    translateX.value = 0
+    translateY.value = 0
+    return
+  }
+  // 仅做缩小适配（min 0.5 与 zoomOut 下限一致），并按比例居中
+  const scale = Math.max(0.5, Math.min(1, areaW / naturalW, areaH / naturalH))
+  zoom.value = scale
+  translateX.value = (areaW - naturalW * scale) / 2
+  translateY.value = (areaH - naturalH * scale) / 2
+  // 同步保存状态，确保 source/preview 切换、主题切换后仍恢复 fit 后的视角
+  savedTransformState.value = {
+    zoom: zoom.value,
+    translateX: translateX.value,
+    translateY: translateY.value,
+    containerHeight: containerHeight.value,
+  }
+}
+
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && isModalOpen.value) {
     closeModal()
@@ -1184,25 +1252,33 @@ watch(
 
 // Zoom controls
 function zoomIn() {
+  userHasAdjustedTransform.value = true
   if (zoom.value < 3) {
     zoom.value += 0.1
   }
 }
 
 function zoomOut() {
+  userHasAdjustedTransform.value = true
   if (zoom.value > 0.5) {
     zoom.value -= 0.1
   }
 }
 
 function resetZoom() {
-  zoom.value = 1
-  translateX.value = 0
-  translateY.value = 0
+  // Reset goes back to the default "fit to view" state instead of a hard 100%,
+  // so content that overflows the max-height container is never left clipped.
+  if (userHasAdjustedTransform.value) {
+    userHasAdjustedTransform.value = false
+    applyInitialFit()
+    return
+  }
+  applyInitialFit()
 }
 
 // Drag functionality
 function startDrag(e: MouseEvent | TouchEvent) {
+  userHasAdjustedTransform.value = true
   isDragging.value = true
   if (e instanceof MouseEvent) {
     dragStart.value = {
@@ -1250,6 +1326,7 @@ function handleWheel(event: WheelEvent) {
     event.preventDefault()
     if (!mermaidContainer.value)
       return
+    userHasAdjustedTransform.value = true
 
     const rect = mermaidContainer.value.getBoundingClientRect()
     const mouseX = event.clientX - rect.left
@@ -1530,9 +1607,12 @@ async function initMermaid(request = createMermaidRenderRequest()) {
       const bindFunctions = res?.bindFunctions ?? null
       lastMermaidBindFunctions = bindFunctions
       bindMermaidInteractions(rendered.bindTarget)
+      // Re-measure the container height on every successful commit (keeps the
+      // preview sized to the *latest* diagram after streaming updates; the
+      // streaming freeze is respected inside updateContainerHeight).
+      safeRaf(() => updateContainerHeight())
       // Successful full render clears Partial preview state
       if (!hasRenderedOnce.value && !isThemeRendering.value) {
-        safeRaf(() => updateContainerHeight())
         hasRenderedOnce.value = true
         savedTransformState.value = {
           zoom: zoom.value,
@@ -1541,6 +1621,12 @@ async function initMermaid(request = createMermaidRenderRequest()) {
           containerHeight: containerHeight.value,
         }
       }
+      // Default view: auto-fit the final diagram so oversized content is never
+      // clipped by the max-height container (unless the user adjusted the view).
+      // `request.final` 在请求创建时计算；若提交时流式已经结束（loading 已置
+      // false），即使请求本身不是 final 也应当适配。
+      if (request.final || props.loading === false)
+        safeRaf(() => applyInitialFit())
       svgCache.value[request.theme] = { svg: rendered.svg, bindFunctions }
       if (isThemeRendering.value)
         isThemeRendering.value = false
@@ -2079,6 +2165,10 @@ watch(
           }
         }
         updateContainerHeight(undefined, { force: true })
+        // 流式结束的兜底：内容可能已变化，重新适配默认视角（fit）
+        safeRaf(() => applyInitialFit())
+        // 流式结束的兜底：内容可能发生了变化，重新适配默认视角（fit）
+        safeRaf(() => applyInitialFit())
         // 渲染已完成，清理后台任务
         cleanupAfterLoadingSettled()
         return
@@ -2154,6 +2244,8 @@ watch(
             const newWidth = entries[0].contentRect.width
             updateContainerHeight(newWidth)
           })
+          // 容器尺寸变化后重新适配默认视角
+          safeRaf(() => applyInitialFit())
         }
       })
       resizeObserver.observe(newEl)
@@ -2213,6 +2305,7 @@ watch(
   () => {
     nextTick(() => {
       updateContainerHeight()
+      applyInitialFit()
     })
   },
 )
