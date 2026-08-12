@@ -1056,7 +1056,9 @@ const transformStyle = computed(() => ({
  * 内容能放下时保持不变；适配后的视角同步进 savedTransformState，
  * 保证 source/preview 切换、主题切换后恢复的仍是 fit 后的视角。
  */
-function applyFitToArea(area: HTMLElement, svg: SVGSVGElement) {
+function applyFitToArea(area: HTMLElement | undefined, svg?: SVGSVGElement | null) {
+    if (!area || !svg)
+    return
   const areaW = area.clientWidth
   const areaH = area.clientHeight
   const svgRect = svg.getBoundingClientRect()
@@ -1109,7 +1111,7 @@ function applyFitToArea(area: HTMLElement, svg: SVGSVGElement) {
  * - resetZoom 语义 = 回到这个 fit 默认视角（不再回到被裁切视角）。
  */
 async function fitWhenSettled(maxAttempts = 12) {
-  if (userHasAdjustedTransform.value)
+    if (unmounted || userHasAdjustedTransform.value)
     return
   await nextTick()
   let previous = ''
@@ -1117,10 +1119,12 @@ async function fitWhenSettled(maxAttempts = 12) {
     await new Promise<void>(resolve => safeRaf(() => resolve()))
     const area = mermaidContainer.value
     const svg = mermaidContent.value?.querySelector('svg')
-    if (!area || isCollapsed.value || showSource.value)
+        if (!area || isCollapsed.value || showSource.value || !svg)
       return
     const areaH = area.clientHeight
     const svgRect = svg.getBoundingClientRect()
+    if (!svgRect.width || !svgRect.height || !areaH)
+      return
     const sample
       = `${area.clientWidth}|${areaH}|${svgRect.width}|${svgRect.height}|${zoom.value}`
     if (attempt > 0 && sample === previous)
