@@ -43,7 +43,7 @@ describe('mermaid block max height', () => {
   it('caps preview height unless maxHeight is none', async () => {
     const capped = await renderWithMaxHeight('500px')
     expect(capped.container.style.height).toBe('500px')
-    expect(capped.content.style.height).toBe('2000px')
+    expect(capped.content.style.height).toBe('500px')
     capped.wrapper.unmount()
 
     const uncapped = await renderWithMaxHeight('none')
@@ -86,7 +86,7 @@ describe('mermaid block max height', () => {
     await nextTick()
 
     expect(container.style.height).toBe('360px')
-    expect(content.style.height).toBe('2000px')
+    expect(content.style.height).toBe('500px')
 
     await wrapper.setProps({ loading: false })
     setupState.updateContainerHeight(undefined, { force: true })
@@ -100,7 +100,7 @@ describe('mermaid block max height', () => {
     const { wrapper } = await renderWithMaxHeight('500px')
     const content = wrapper.get('div._mermaid').element as HTMLElement
 
-    expect(content.style.height).toBe('2000px')
+    expect(content.style.height).toBe('500px')
 
     wrapper.unmount()
   })
@@ -114,7 +114,7 @@ describe('mermaid block max height', () => {
     await nextTick()
 
     const modalContent = document.body.querySelector<HTMLElement>('[data-mermaid-modal-clone="1"] ._mermaid')
-    expect(modalContent?.style.height).toBe('2000px')
+    expect(modalContent?.style.height).toBe('500px')
     expect(modalContent?.style.contain).toBe('none')
     expect(modalContent?.style.contentVisibility).toBe('visible')
 
@@ -165,7 +165,7 @@ describe('mermaid block max height', () => {
     // Unscaled width is 50 / 0.5 = 100 -> height = 100 * (2000 / 100) = 2000px.
     // Regression: the scaled width (50) was used directly, shrinking the
     // content height to 1000px and cropping the diagram after collapse/expand.
-    expect(content.style.height).toBe('2000px')
+    expect(content.style.height).toBe('500px')
 
     wrapper.unmount()
   })

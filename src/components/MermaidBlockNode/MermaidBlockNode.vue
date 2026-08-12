@@ -1186,13 +1186,13 @@ watch(
 
 // Zoom controls
 function zoomIn() {
-    if (zoom.value < 3) {
+  if (zoom.value < 3) {
     zoom.value += 0.1
   }
 }
 
 function zoomOut() {
-    if (zoom.value > 0.5) {
+  if (zoom.value > 0.5) {
     zoom.value -= 0.1
   }
 }
@@ -1205,7 +1205,7 @@ function resetZoom() {
 
 // Drag functionality
 function startDrag(e: MouseEvent | TouchEvent) {
-    isDragging.value = true
+  isDragging.value = true
   if (e instanceof MouseEvent) {
     dragStart.value = {
       x: e.clientX - translateX.value,
@@ -1252,7 +1252,7 @@ function handleWheel(event: WheelEvent) {
     event.preventDefault()
     if (!mermaidContainer.value)
       return
-    
+
     const rect = mermaidContainer.value.getBoundingClientRect()
     const mouseX = event.clientX - rect.left
     const mouseY = event.clientY - rect.top
@@ -2566,6 +2566,9 @@ const computedButtonStyle = 'mermaid-action-btn p-[var(--ms-action-btn-padding)]
   display: block;
   width: 100%;
   height: 100%;
+}
+.fullscreen ._mermaid svg {
+  max-height: none;
 }
 </style>
 
