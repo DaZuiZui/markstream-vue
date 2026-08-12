@@ -12,7 +12,14 @@ import { resolveLifecycleIndexKey } from '../../utils/lifecycleIndexKey'
 import { MARKSTREAM_NODE_LIFECYCLE_KEY } from '../../utils/nodeLifecycle'
 import { resolveLanguageIcon } from '../../utils/resolveLanguageIcon'
 import { safeCancelRaf, safeRaf } from '../../utils/safeRaf'
-import PreCodeNode from '../PreCodeNode'
+import PreCodeBlock from '../PreCodeNode/PreCodeBlock.vue'
+import {
+  DEFAULT_PRE_CODE_FONT_SIZE,
+  DEFAULT_PRE_CODE_LINE_HEIGHT,
+  resolvePreCodeThemeName,
+  resolvePreCodeThemePalette,
+  resolvePreCodeVisualOptions,
+} from '../PreCodeNode/preCodeVisual'
 import { isDiffCodeBlock, resolveCodeBlockHeader } from './codeBlockHeader'
 import CodeBlockShell from './CodeBlockShell.vue'
 import HtmlPreviewFrame from './HtmlPreviewFrame.vue'
@@ -369,6 +376,13 @@ const effectiveDiffAppearance = computed<'light' | 'dark'>(() => {
 const resolvedSurfaceIsDark = computed(() =>
   isDiff.value ? effectiveDiffAppearance.value === 'dark' : editorSurfaceIsDark.value,
 )
+const preFallbackThemePalette = computed(() => resolvePreCodeThemePalette({
+  darkTheme: props.darkTheme,
+  isDark: props.isDark,
+  lightTheme: props.lightTheme,
+  theme: props.theme,
+  themes: props.themes,
+}))
 
 // In streaming scenarios, the opening fence info string can arrive in chunks
 // (e.g. "```d" then "iff json:..."), which means a block may flip between
@@ -388,9 +402,6 @@ let staleContentRetryFailureKey: string | null = null
 let editorCreationFailureRetryInProgress = false
 let editorCreationFailureKeyRetriedKey: string | null = null
 let diffEditorCreatedWhileStreaming = false
-const preFallbackWrap = computed(() => {
-  return props.codeBlockOptions?.overflow !== 'scroll'
-})
 const preFallbackDiffInline = computed(() => {
   if (!isDiff.value)
     return false
@@ -548,8 +559,8 @@ async function ensureCodeBlockRuntime() {
 const codeFontMin = 10
 const codeFontMax = 36
 const codeFontStep = 1
-const defaultPreFallbackFontSize = 12
-const defaultPreFallbackLineHeight = 18
+const defaultPreFallbackFontSize = DEFAULT_PRE_CODE_FONT_SIZE
+const defaultPreFallbackLineHeight = DEFAULT_PRE_CODE_LINE_HEIGHT
 const defaultCodeFontSize = ref<number>(
   typeof props.codeBlockOptions?.fontSize === 'number' ? props.codeBlockOptions.fontSize : Number.NaN,
 )
@@ -564,9 +575,6 @@ const fontBaselineReady = computed(() => {
   return typeof a === 'number' && Number.isFinite(a) && a > 0 && typeof b === 'number' && Number.isFinite(b) && b > 0
 })
 const preFallbackFontSize = computed(() => {
-  const measured = measuredEditorFontSize.value
-  if (typeof measured === 'number' && Number.isFinite(measured) && measured > 0)
-    return measured
   const fromOptions = props.codeBlockOptions?.fontSize
   if (typeof fromOptions === 'number' && Number.isFinite(fromOptions) && fromOptions > 0)
     return fromOptions
@@ -576,9 +584,6 @@ const preFallbackFontSize = computed(() => {
   return defaultPreFallbackFontSize
 })
 const preFallbackLineHeight = computed(() => {
-  const measured = measuredEditorLineHeight.value
-  if (typeof measured === 'number' && Number.isFinite(measured) && measured > 0)
-    return measured
   const fromOptions = props.codeBlockOptions?.lineHeight
   if (typeof fromOptions === 'number' && Number.isFinite(fromOptions) && fromOptions > 0)
     return fromOptions
@@ -601,6 +606,18 @@ const preFallbackVerticalPadding = computed(() => {
     ? padding
     : defaultPadding
   return { top: value, bottom: value }
+})
+const preFallbackVisualOptions = computed(() => {
+  const base = resolvePreCodeVisualOptions(props.codeBlockOptions, isDiff.value)
+  return {
+    ...base,
+    fontSize: preFallbackFontSize.value,
+    lineHeight: preFallbackEffectiveLineHeight.value,
+    maxHeight: getMaxHeightValue(),
+    padding: preFallbackVerticalPadding.value.top,
+    paddingBottom: preFallbackVerticalPadding.value.bottom,
+    tabSize: preFallbackTabSize.value,
+  }
 })
 // Keep computed height tight to content. Extra padding caused visible bottom gap.
 const CONTENT_PADDING = 0
@@ -628,6 +645,12 @@ function shouldUseStreamingLocalPreFallbackHeight() {
   return !isDiff.value && props.stream !== false && props.loading !== false
 }
 
+const streamingLocalPreFallbackHeightActive = ref(shouldUseStreamingLocalPreFallbackHeight())
+function shouldIgnoreEstimatedPlainHeight() {
+  return shouldUseStreamingLocalPreFallbackHeight()
+    || streamingLocalPreFallbackHeightActive.value
+}
+
 const preFallbackLocalMinHeight = computed(() => {
   const countLines = (source: unknown) => {
     const value = String(source ?? '')
@@ -641,7 +664,7 @@ const preFallbackLocalMinHeight = computed(() => {
 
   if (
     estimatedVisibleContentHeight.value != null
-    && !shouldUseStreamingLocalPreFallbackHeight()
+    && !shouldIgnoreEstimatedPlainHeight()
   ) {
     return null
   }
@@ -658,7 +681,7 @@ const preFallbackReservedContentHeight = computed(() => {
     return null
 
   const estimated = estimatedVisibleContentHeight.value
-  if (estimated != null && !shouldUseStreamingLocalPreFallbackHeight())
+  if (estimated != null && !shouldIgnoreEstimatedPlainHeight())
     return capEditorContentHeight(estimated)
 
   const local = preFallbackLocalMinHeight.value
@@ -722,19 +745,10 @@ function getDiffVisualVars(isDark: boolean) {
 }
 
 const preFallbackStyle = computed(() => {
-  const fontFamily = props.codeBlockOptions?.fontFamily
   const cappedEstimatedContentHeight = capEditorContentHeight(estimatedVisibleContentHeight.value)
   const cappedLocalMinHeight = capEditorContentHeight(preFallbackLocalMinHeight.value)
-  const useStreamingLocalHeight = shouldUseStreamingLocalPreFallbackHeight()
+  const useStreamingLocalHeight = shouldIgnoreEstimatedPlainHeight()
   const style = {
-    fontSize: `${preFallbackFontSize.value}px`,
-    lineHeight: `${preFallbackEffectiveLineHeight.value}px`,
-    tabSize: preFallbackTabSize.value,
-    boxSizing: 'border-box',
-    maxHeight: `${getMaxHeightValue()}px`,
-    overflow: 'auto',
-    paddingTop: `${preFallbackVerticalPadding.value.top}px`,
-    paddingBottom: `${preFallbackVerticalPadding.value.bottom}px`,
     ...(!isDiff.value && cappedEstimatedContentHeight != null && !useStreamingLocalHeight
       ? {
           height: `${cappedEstimatedContentHeight}px`,
@@ -745,11 +759,13 @@ const preFallbackStyle = computed(() => {
               minHeight: `${cappedLocalMinHeight}px`,
             }
           : {}),
-    ...(typeof fontFamily === 'string' && fontFamily.trim()
-      ? { fontFamily: fontFamily.trim() }
-      : {}),
   } as Record<string, string | number>
 
+  style['--markstream-code-fallback-bg'] = preFallbackThemePalette.value.background
+  style['--markstream-code-fallback-fg'] = preFallbackThemePalette.value.foreground
+  style['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
+  style['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
+  style['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
   style['--markstream-pre-line-number-top'] = `${preFallbackVerticalPadding.value.top}px`
   style['--markstream-pre-line-number-left'] = '0px'
   style['--markstream-pre-line-number-padding-left'] = '2ch'
@@ -804,6 +820,11 @@ const codeEditorContainerStyle = computed(() => {
 
 function armEstimatedEditorHeightFloor() {
   plainEditorContentMeasured.value = false
+  if (shouldIgnoreEstimatedPlainHeight()) {
+    pendingEstimatedEditorHeightFloor.value = null
+    return
+  }
+
   const estimate = preFallbackReservedContentHeight.value
   pendingEstimatedEditorHeightFloor.value = !editorMounted.value && estimate != null
     ? estimate
@@ -813,6 +834,20 @@ function armEstimatedEditorHeightFloor() {
 function clearEstimatedEditorHeightFloor() {
   pendingEstimatedEditorHeightFloor.value = null
 }
+
+watch(
+  () => [props.stream, props.loading, props.node.loading, isDiff.value] as const,
+  () => {
+    if (shouldUseStreamingLocalPreFallbackHeight()) {
+      streamingLocalPreFallbackHeightActive.value = true
+      clearEstimatedEditorHeightFloor()
+    }
+    else if (isDiff.value || props.stream === false) {
+      streamingLocalPreFallbackHeightActive.value = false
+    }
+  },
+  { immediate: true },
+)
 
 function syncDiffScrollFromFallback() {
   const fallback = container.value?.querySelector('pre.code-pre-fallback') as HTMLElement | null
@@ -1440,6 +1475,11 @@ function syncEditorCssVars() {
   // - `--diffs-gap-block`: only set when the consumer explicitly configures
   //   padding — the default 8px gap already matches the fallback.
   targetEl.style.setProperty('--diffs-tab-size', String(preFallbackTabSize.value))
+  // stream-diffs reserves a transparent 6px horizontal scrollbar track by
+  // default and subtracts it from computed bottom padding. The shared pre
+  // surface already owns that space in its padding, so keep the runtime's
+  // computed four-edge padding identical and preserve the same total height.
+  targetEl.style.setProperty('--diffs-scrollbar-gutter-override', '0px')
   const configuredPadding = props.codeBlockOptions?.padding
   if (typeof configuredPadding === 'number')
     targetEl.style.setProperty('--diffs-gap-block', `${preFallbackVerticalPadding.value.top}px`)
@@ -2570,8 +2610,14 @@ const containerStyle = computed(() => {
       s.minHeight = `${reserved}px`
   }
   if (!isDiff.value) {
-    s.color = 'var(--markstream-code-fallback-fg, var(--code-fg))'
-    s.backgroundColor = 'var(--markstream-code-fallback-bg, var(--code-bg))'
+    s['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
+    s['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
+    s['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
+    s['--markstream-pre-resolved-theme-bg'] = preFallbackThemePalette.value.background
+    s['--markstream-pre-resolved-theme-fg'] = preFallbackThemePalette.value.foreground
+    s['--markstream-pre-resolved-theme-line-number'] = preFallbackThemePalette.value.lineNumber
+    s.color = 'var(--markstream-code-fallback-fg, var(--markstream-code-theme-fg, var(--markstream-pre-resolved-theme-fg)))'
+    s.backgroundColor = 'var(--markstream-code-fallback-bg, var(--markstream-code-theme-bg, var(--markstream-pre-resolved-theme-bg)))'
     s.borderColor = 'var(--markstream-code-border-color, var(--code-border))'
   }
   return s
@@ -3024,21 +3070,13 @@ function isPairedTheme(t: unknown): t is { light: CodeBlockTheme, dark: CodeBloc
 }
 
 function getPreferredColorScheme(): CodeBlockTheme | undefined {
-  // Unified theme prop takes precedence
-  if (props.theme !== undefined) {
-    const t = props.theme
-    if (isPairedTheme(t))
-      return props.isDark ? t.dark : t.light
-    // Fixed theme — always this theme regardless of isDark
-    return t as CodeBlockTheme
-  }
-  const explicitTheme = props.isDark ? props.darkTheme : props.lightTheme
-  if (explicitTheme)
-    return explicitTheme
-  const configuredThemes = props.themes
-  if (configuredThemes)
-    return props.isDark ? configuredThemes[0] : configuredThemes[1]
-  return props.isDark ? 'vitesse-dark' : 'vitesse-light'
+  return resolvePreCodeThemeName({
+    darkTheme: props.darkTheme,
+    isDark: props.isDark,
+    lightTheme: props.lightTheme,
+    theme: props.theme,
+    themes: props.themes,
+  })
 }
 
 function getThemeName(theme: CodeBlockTheme | null | undefined) {
@@ -3603,16 +3641,22 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <PreCodeNode
+  <PreCodeBlock
     v-if="usePreCodeRender"
-    class="code-pre-fallback"
-    :class="{ 'is-wrap': preFallbackWrap }"
     :style="preFallbackStyle"
     :node="preCodeNode"
     :loading="props.loading"
     :show-line-numbers="effectiveShowLineNumbers"
     :diff-inline="preFallbackDiffInline"
     :diff-hide-unchanged-regions="preFallbackDiffHideUnchangedRegions"
+    :code-block-options="props.codeBlockOptions"
+    :resolved-visual-options="preFallbackVisualOptions"
+    :is-dark="props.isDark"
+    :theme="props.theme"
+    :dark-theme="props.darkTheme"
+    :light-theme="props.lightTheme"
+    :themes="props.themes"
+    :show-toolbar="false"
   />
   <div
     v-else
@@ -3692,15 +3736,22 @@ onUnmounted(() => {
           :data-markstream-host-hidden="hideCodeEditorContainer ? 'true' : undefined"
           :style="codeEditorContainerStyle"
         />
-        <PreCodeNode
+        <PreCodeBlock
           v-if="renderPreFallback"
-          class="code-pre-fallback"
-          :class="{ 'is-wrap': preFallbackWrap }"
           :style="preFallbackStyle"
           :node="preCodeNode"
+          :loading="props.loading"
           :show-line-numbers="effectiveShowLineNumbers"
           :diff-inline="preFallbackDiffInline"
           :diff-hide-unchanged-regions="preFallbackDiffHideUnchangedRegions"
+          :code-block-options="props.codeBlockOptions"
+          :resolved-visual-options="preFallbackVisualOptions"
+          :is-dark="props.isDark"
+          :theme="props.theme"
+          :dark-theme="props.darkTheme"
+          :light-theme="props.lightTheme"
+          :themes="props.themes"
+          :show-toolbar="false"
         />
       </div>
       <HtmlPreviewFrame
@@ -3727,8 +3778,8 @@ onUnmounted(() => {
 
 <style scoped>
 .code-block-container {
-  --markstream-code-fallback-bg: var(--code-bg);
-  --markstream-code-fallback-fg: var(--code-fg);
+  --markstream-code-fallback-bg: var(--markstream-code-theme-bg, var(--markstream-pre-resolved-theme-bg));
+  --markstream-code-fallback-fg: var(--markstream-code-theme-fg, var(--markstream-pre-resolved-theme-fg));
   --markstream-code-border-color: var(--code-border);
   --vscode-editor-selectionBackground: var(--markstream-code-fallback-selection-bg);
   --markstream-code-fallback-selection-bg: var(--code-selection-bg);
@@ -3783,8 +3834,8 @@ onUnmounted(() => {
 }
 
 .code-block-container.is-dark {
-  --markstream-code-fallback-bg: var(--code-bg);
-  --markstream-code-fallback-fg: var(--code-fg);
+  --markstream-code-fallback-bg: var(--markstream-code-theme-bg, var(--markstream-pre-resolved-theme-bg));
+  --markstream-code-fallback-fg: var(--markstream-code-theme-fg, var(--markstream-pre-resolved-theme-fg));
   --markstream-code-border-color: var(--code-border);
   --markstream-code-fallback-selection-bg: var(--code-selection-bg);
   --markstream-diff-frame-border: var(--code-border);
@@ -3869,13 +3920,11 @@ onUnmounted(() => {
   grid-area: 1 / 1;
   z-index: 1;
 }
-/* No :deep() here (or for the pre.code-pre-fallback rules below): the
-   fallback <pre> is PreCodeNode's root element, and a child component's root
-   carries this SFC's scope id, so a plain scoped selector matches it both as
-   a descendant (inside .code-editor-layer) and as this component's own root
-   (the standalone fallback). :deep() would emit an ancestor selector that
-   cannot match the standalone-root case. */
-.code-editor-layer > pre.code-pre-fallback {
+/* PreCodeBlock has a toolbar-capable fragment root, so Vue cannot forward this
+   component's scope attribute to its nested <pre>. Cross that component
+   boundary explicitly; otherwise the ready runtime host and fallback occupy
+   separate implicit grid rows for one frame and their heights stack. */
+.code-editor-layer > :deep(pre.code-pre-fallback) {
   grid-area: 1 / 1;
   position: relative;
   z-index: 2;
@@ -3939,47 +3988,6 @@ onUnmounted(() => {
   overflow: hidden;
   visibility: hidden;
   pointer-events: none;
-}
-
-pre.code-pre-fallback {
-  margin: 0;
-  box-sizing: border-box;
-  width: 100%;
-  padding: var(--markstream-code-padding-y, 8px) var(--markstream-code-padding-x, 12px);
-  padding-left: var(--markstream-code-padding-left, 52px);
-  background: var(--markstream-code-fallback-bg, var(--code-bg, #fff));
-  color: var(--markstream-code-fallback-fg, var(--code-fg));
-  backface-visibility: visible;
-  transform: none;
-  -webkit-font-smoothing: auto;
-  /* Match stream-diffs defaults to avoid a jarring swap while it loads */
-  font-size: var(--vscode-editor-font-size, 12px);
-  line-height: var(--vscode-editor-line-height, 18px);
-  font-weight: 400;
-  font-family: var(
-    --markstream-code-font-family,
-    Menlo,
-    Monaco,
-    Courier New,
-    monospace
-  );
-}
-
-pre.code-pre-fallback :deep(code) {
-  font-size: inherit;
-  font-weight: inherit;
-  line-height: inherit;
-  font-family: inherit;
-}
-
-pre.code-pre-fallback.is-wrap {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-pre.code-pre-fallback.markstream-pre--diff-preview {
-  padding-left: 0;
-  padding-right: 0;
 }
 
 .code-block-container.is-diff :deep(pre.code-pre-fallback.markstream-pre--diff-preview) {

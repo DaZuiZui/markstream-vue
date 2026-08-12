@@ -39,9 +39,9 @@ The `stream-diffs` root entry is framework-agnostic. It does not import Vue or o
 
 `CodeBlockNode` uses one stable visual path:
 
-1. While code is streaming, Vue renders `PreCodeNode`.
+1. While code is streaming, Vue renders the shared `PreCodeBlock`; `renderCodeBlocksAsPre` uses the same component and resolved visual defaults.
 2. After the block is complete and visible, the component dynamically imports the `stream-diffs` root runtime and mounts one File or FileDiff surface into its existing container.
-3. The component applies the active theme to that surface and removes the temporary `<pre>` only when the surface is ready.
+3. The component applies the active theme to that surface and removes the temporary `<pre>` only when the surface is ready. Before reveal, both surfaces already share font metrics, padding, gutter geometry, overflow, and theme background; a streaming plain block never inherits a stale restored-height floor.
 4. On component unmount, the Vue adapter disposes the controller.
 
 Completion, visibility, and unmount are `CodeBlockNode` concerns. They are not `stream-diffs` lifecycle hooks.

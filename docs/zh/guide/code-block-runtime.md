@@ -39,9 +39,9 @@ CodeBlockNode                          controller + DOM surface
 
 `CodeBlockNode` 只有一条稳定的视觉路径：
 
-1. code 正在流式输出时，Vue 渲染 `PreCodeNode`。
+1. code 正在流式输出时，Vue 渲染共享 `PreCodeBlock`；`renderCodeBlocksAsPre` 直接使用同一个组件和同一套视觉默认参数。
 2. code 结束且进入可视区域后，组件动态加载 `stream-diffs` 根 runtime，并在既有容器中挂载一个 File 或 FileDiff surface。
-3. 组件把当前 theme 应用到 surface；surface ready 后才移除临时 `<pre>`。
+3. 组件把当前 theme 应用到 surface；surface ready 后才移除临时 `<pre>`。显示前，两层已共享字体指标、padding、gutter 几何、overflow 与主题背景；流式普通代码块不得继承旧的恢复高度 floor。
 4. 组件卸载时，由 Vue 适配层 dispose controller。
 
 结束态、可见性与卸载都是 `CodeBlockNode` 的职责，并不是 `stream-diffs` 的生命周期 hook。

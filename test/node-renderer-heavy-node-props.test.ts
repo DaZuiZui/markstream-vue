@@ -303,8 +303,11 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     await flushAll()
 
     const pre = wrapper.get('pre[data-markstream-pre="1"]')
-    expect(pre.attributes('data-markstream-line-numbers')).toBeUndefined()
-    expect((pre.element as HTMLElement).style.whiteSpace).toBe('')
+    expect(pre.attributes('data-markstream-line-numbers')).toBe('1')
+    expect((pre.element as HTMLElement).style.whiteSpace).toBe('pre-wrap')
+    expect(pre.attributes('data-markstream-code-theme')).toBe('vitesse-light')
+    expect((pre.element as HTMLElement).style.fontSize).toBe('12px')
+    expect((pre.element as HTMLElement).style.lineHeight).toBe('18px')
     expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
   })
 

@@ -41,6 +41,7 @@ import ListItemNode from '../../components/ListItemNode'
 import ListNode from '../../components/ListNode'
 import ParagraphNode from '../../components/ParagraphNode'
 import PreCodeNode from '../../components/PreCodeNode'
+import PreCodeBlock from '../../components/PreCodeNode/PreCodeBlock.vue'
 import ReferenceNode from '../../components/ReferenceNode'
 import StrikethroughNode from '../../components/StrikethroughNode'
 import StrongNode from '../../components/StrongNode'
@@ -1606,7 +1607,7 @@ function setupExperimentResizeObserver() {
 
 const codeBlockComponent = computed(() => {
   if (resolvedRenderCodeBlocksAsPre.value)
-    return PreCodeNode
+    return PreCodeBlock
   return CodeBlockNodeAsync
 })
 
@@ -1614,7 +1615,7 @@ function resolveCodeBlockRendererKind(node: ParsedNode) {
   if (node.type !== 'code_block')
     return null
   const component = getNodeComponent(node, getCodeBlockLanguage(node))
-  if (component === PreCodeNode)
+  if (component === PreCodeBlock)
     return 'pre'
   if (component === codeBlockComponent.value || component === CodeBlockNodeAsync)
     return 'stream-diffs'
@@ -1624,6 +1625,11 @@ function resolveCodeBlockRendererKind(node: ParsedNode) {
 function resolveCodeBlockShowHeader() {
   const showHeader = rendererProps.codeBlockProps?.showHeader
   return showHeader !== false
+}
+
+function resolvePreCodeCopyToolbar() {
+  const props = rendererProps.codeBlockProps
+  return props?.showHeader !== false && props?.showCopyButton !== false
 }
 
 function isParagraphTextEstimateAffectedByCustomComponent(node: ParsedNode) {
@@ -1652,7 +1658,9 @@ function estimateNodeHeight(node: ParsedNode, index: number, width: number) {
     if (rendererKind === 'stream-diffs' || rendererKind === 'pre') {
       return estimateCodeBlockHeight(node, {
         rendererKind,
+        codeBlockOptions: rendererProps.codeBlockOptions,
         showHeader: resolveCodeBlockShowHeader(),
+        showPreCopyToolbar: resolvePreCodeCopyToolbar(),
         width,
         diffStyle: rendererProps.codeBlockOptions?.diffStyle,
       })
@@ -5283,18 +5291,28 @@ const preCodeBlockBindings = computed(() => {
   const bindings: Record<string, unknown> = {}
 
   const showLineNumbers = pickBoolean(source.showLineNumbers)
-  const disableLineNumbers = rendererProps.codeBlockOptions?.disableLineNumbers
   bindings.showLineNumbers = showLineNumbers
-    ?? (typeof disableLineNumbers === 'boolean' ? !disableLineNumbers : false)
-  if (rendererProps.codeBlockOptions?.overflow) {
-    bindings.style = {
-      whiteSpace: rendererProps.codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
-    }
-  }
+    ?? (rendererProps.codeBlockOptions?.disableLineNumbers !== true)
+
+  bindings.showHeader = pickBoolean(source.showHeader) ?? true
+  bindings.showCopyButton = pickBoolean(source.showCopyButton) ?? true
+  const showTooltips = pickBoolean(source.showTooltips) ?? resolvedShowTooltips.value
+  if (typeof showTooltips === 'boolean')
+    bindings.showTooltips = showTooltips
+
+  bindings.codeBlockOptions = rendererProps.codeBlockOptions
+  bindings.isDark = rendererProps.isDark
+  bindings.darkTheme = source.darkTheme ?? rendererProps.codeBlockDarkTheme
+  bindings.lightTheme = source.lightTheme ?? rendererProps.codeBlockLightTheme
+  bindings.theme = source.theme
+  bindings.themes = source.themes ?? rendererProps.themes
 
   const diffInline = pickBoolean(source.diffInline)
   if (diffInline !== undefined)
     bindings.diffInline = diffInline
+
+  if (source.diffHideUnchangedRegions !== undefined)
+    bindings.diffHideUnchangedRegions = source.diffHideUnchangedRegions
 
   const reservedHeightPx = pickPositiveNumber(source.reservedHeightPx)
   if (reservedHeightPx !== undefined)
@@ -5428,7 +5446,7 @@ const renderedItems = computed(() => {
 
     const usesPreCodeBindings = node.type === 'code_block'
       && resolvedRenderCodeBlocksAsPre.value
-      && component === PreCodeNode
+      && component === PreCodeBlock
       && !getCustomCodeLanguageComponent(customComponentsMap.value, language)
     let bindings = { ...getBindingsFor(node, language, component) } as Record<string, unknown>
     const estimatedHeight = heightEstimationActive.value ? estimatedNodeHeights.value[item.index] : null
@@ -5571,7 +5589,7 @@ function getNodeComponent(node: ParsedNode, language?: string) {
 
     if (resolvedRenderCodeBlocksAsPre.value) {
       const customCodeBlock = customComponents.code_block
-      return customCodeBlock || PreCodeNode
+      return customCodeBlock || PreCodeBlock
     }
 
     // Keep Mermaid blocks routed to MermaidBlockNode unless a specific
@@ -5622,7 +5640,7 @@ function getBindingsFor(node: ParsedNode, language?: string, component?: unknown
       component
       && resolvedRenderCodeBlocksAsPre.value
       && !customLanguageComponent
-      && component === PreCodeNode
+      && component === PreCodeBlock
     ) {
       return preCodeBlockBindings.value
     }

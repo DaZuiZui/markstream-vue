@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { CodeBlockDiffHideUnchangedRegionsOptions, PreCodeNodeProps } from '../../types/component-props'
 
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, normalizeClass, normalizeStyle, onBeforeUnmount, ref, useAttrs, watch } from 'vue'
 
 const props = defineProps<PreCodeNodeProps>()
+const attrs = useAttrs()
 
 function getDisplayCode(code: unknown, loading?: boolean) {
   const value = String(code ?? '')
@@ -55,6 +56,40 @@ const codeLineCount = computed(() => countCodeLines(displayCode.value))
 const codeLines = computed(() => {
   return displayCode.value.split(/\r\n|\n|\r/)
 })
+const logicalCodeLines = computed(() => {
+  const code = displayCode.value
+  const lines: string[] = []
+  const lineBreak = /\r\n|\n|\r/g
+  let start = 0
+  let match = lineBreak.exec(code)
+
+  while (match) {
+    lines.push(code.slice(start, lineBreak.lastIndex))
+    start = lineBreak.lastIndex
+    match = lineBreak.exec(code)
+  }
+
+  lines.push(code.slice(start))
+  return lines
+})
+
+function isWrappingWhiteSpace(value: unknown) {
+  return value === 'pre-wrap' || value === 'break-spaces'
+}
+
+function wrapsPlainCodeLines() {
+  if (props.showLineNumbers !== true || props.node?.diff === true)
+    return false
+
+  if (normalizeClass(attrs.class).split(/\s+/).includes('is-wrap'))
+    return true
+
+  const style = normalizeStyle(attrs.style)
+  if (typeof style === 'string')
+    return /(?:^|;)\s*white-space\s*:\s*(?:pre-wrap|break-spaces)(?:\s*!important)?\s*(?:;|$)/i.test(style)
+
+  return isWrappingWhiteSpace(style?.whiteSpace ?? style?.['white-space'])
+}
 
 let lineNumbersTextCount = 0
 let lineNumbersTextCache = ''
@@ -857,7 +892,7 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
     :data-markstream-line-numbers="props.showLineNumbers ? '1' : undefined"
     data-markstream-pre="1"
     tabindex="0"
-  ><code v-if="isDiffPreview" translate="no" class="markstream-pre__diff-code"><span v-for="pane in diffPreviewPanes" :key="pane.key" class="markstream-pre__diff-pane" :class="pane.className"><span class="markstream-pre__diff-pane-content"><span v-for="(line, index) in pane.lines" :key="line.key" class="markstream-pre__diff-line" :class="[`markstream-pre__diff-line--${line.kind}`, { 'markstream-pre__diff-line--empty': line.empty }]" :style="getDiffLineStyle(index, pane.key as 'original' | 'modified')"><span class="markstream-pre__diff-rail" aria-hidden="true" /><span class="markstream-pre__diff-number" aria-hidden="true">{{ line.number }}</span><span class="markstream-pre__diff-content"><span class="markstream-pre__diff-content-inner">{{ line.code }}</span></span></span></span></span></code><template v-else><span v-if="props.showLineNumbers" class="markstream-pre__line-numbers" aria-hidden="true"><span class="markstream-pre__line-numbers-text" v-text="lineNumbersText" /></span><code translate="no" class="markstream-pre__code" v-text="displayCode" /></template></pre>
+  ><code v-if="isDiffPreview" translate="no" class="markstream-pre__diff-code"><span v-for="pane in diffPreviewPanes" :key="pane.key" class="markstream-pre__diff-pane" :class="pane.className"><span class="markstream-pre__diff-pane-content"><span v-for="(line, index) in pane.lines" :key="line.key" class="markstream-pre__diff-line" :class="[`markstream-pre__diff-line--${line.kind}`, { 'markstream-pre__diff-line--empty': line.empty }]" :style="getDiffLineStyle(index, pane.key as 'original' | 'modified')"><span class="markstream-pre__diff-rail" aria-hidden="true" /><span class="markstream-pre__diff-number" aria-hidden="true">{{ line.number }}</span><span class="markstream-pre__diff-content"><span class="markstream-pre__diff-content-inner">{{ line.code }}</span></span></span></span></span></code><template v-else><code v-if="wrapsPlainCodeLines()" translate="no" class="markstream-pre__code markstream-pre__code--wrapped"><span v-for="(line, index) in logicalCodeLines" :key="index" class="markstream-pre__logical-line" :data-line-number="index + 1" v-text="line" /></code><template v-else><span v-if="props.showLineNumbers" class="markstream-pre__line-numbers" aria-hidden="true"><span class="markstream-pre__line-numbers-text" v-text="lineNumbersText" /></span><code translate="no" class="markstream-pre__code" v-text="displayCode" /></template></template></pre>
 </template>
 
 <style>
@@ -867,7 +902,7 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
   /* Ensure code layout is stable */
   white-space: pre;
   overflow: auto;
-  tab-size: 2;
+  tab-size: var(--markstream-code-tab-size, 4);
   font-variant-ligatures: none;
   /* Isolate painting/layout to this block to avoid ancestor reflow jank */
   contain: content;
@@ -882,8 +917,8 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
 }
 
 .markstream-vue pre[data-markstream-pre='1']:not(.markstream-pre--diff-preview) {
-  background: var(--code-bg);
-  color: var(--code-fg);
+  background: var(--markstream-code-fallback-bg, var(--markstream-code-theme-bg, var(--code-bg)));
+  color: var(--markstream-code-fallback-fg, var(--markstream-code-theme-fg, var(--code-fg)));
 }
 
 .markstream-vue pre.markstream-pre--line-numbers {
@@ -901,20 +936,14 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
   box-sizing: border-box;
   width: 100%;
   margin: 0;
-  padding: var(--markstream-code-padding-y, 8px) var(--markstream-code-padding-x, 12px);
+  padding: var(--markstream-code-padding-y, 8px) var(--markstream-code-padding-x, 1ch);
   padding-left: var(--markstream-code-padding-left);
   overflow: auto;
   border: 0;
   border-radius: 0;
-  background: var(--code-bg);
-  color: var(--code-fg);
-  font-family: var(
-    --markstream-code-font-family,
-    Menlo,
-    Monaco,
-    Courier New,
-    monospace
-  );
+  background: var(--markstream-code-fallback-bg, var(--markstream-code-theme-bg, var(--code-bg)));
+  color: var(--markstream-code-fallback-fg, var(--markstream-code-theme-fg, var(--code-fg)));
+  font-family: var(--markstream-code-font-family, \"SF Mono\", Monaco, Consolas, \"Ubuntu Mono\", \"Liberation Mono\", \"Courier New\", monospace);
   font-size: var(--vscode-editor-font-size, 12px);
   line-height: var(--vscode-editor-line-height, 18px);
 }
@@ -945,6 +974,33 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
   min-width: 100%;
   padding-left: var(--markstream-code-padding-left, 52px);
   padding-right: var(--markstream-code-padding-x, 12px);
+}
+
+.markstream-vue pre.markstream-pre--line-numbers > .markstream-pre__code--wrapped {
+  white-space: pre-wrap;
+}
+
+.markstream-vue pre.markstream-pre--line-numbers > .markstream-pre__code--wrapped > .markstream-pre__logical-line {
+  position: relative;
+  display: block;
+  min-height: 1lh;
+}
+
+.markstream-vue pre.markstream-pre--line-numbers > .markstream-pre__code--wrapped > .markstream-pre__logical-line::before {
+  position: absolute;
+  left: calc(-1 * var(--markstream-code-padding-left, 52px));
+  box-sizing: content-box;
+  width: var(--markstream-pre-line-number-width, 2ch);
+  padding-left: var(--markstream-pre-line-number-padding-left, 2ch);
+  color: var(--code-line-number);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: inherit;
+  text-align: right;
+  white-space: pre;
+  content: attr(data-line-number);
+  pointer-events: none;
+  user-select: none;
 }
 
 .markstream-vue pre.markstream-pre--line-numbers > .markstream-pre__line-numbers > .markstream-pre__line-number {

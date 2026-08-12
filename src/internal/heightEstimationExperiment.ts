@@ -1,8 +1,10 @@
 import type { PreparedText } from '@chenglou/pretext'
 import type { ParsedNode } from 'stream-markdown-parser'
+import type { CodeBlockOptions } from '../types/component-props'
 import { layout, prepare } from '@chenglou/pretext'
 import { shallowRef } from 'vue'
 import { resolveDiffInlineLayout } from '../components/CodeBlockNode/codeBlockHeader'
+import { resolvePreCodeVisualOptions } from '../components/PreCodeNode/preCodeVisual'
 
 type WhiteSpaceMode = 'normal' | 'pre-wrap'
 type EstimateKind = 'simple-text' | 'code-block'
@@ -81,7 +83,9 @@ export interface EstimatedNodeHeight {
 
 export interface CodeBlockEstimateOptions {
   rendererKind: CodeRendererKind
+  codeBlockOptions?: CodeBlockOptions
   showHeader?: boolean
+  showPreCopyToolbar?: boolean
   width?: number
   diffStyle?: 'split' | 'unified'
 }
@@ -90,8 +94,8 @@ const GLOBAL_STORE_KEY = '__MARKSTREAM_VUE_HEIGHT_ESTIMATION_EXPERIMENT__'
 const PREPARED_CACHE_LIMIT = 240
 const BLOCK_ESTIMATE_CACHE_LIMIT = 4000
 const CODE_BLOCK_HEADER_HEIGHT = 40
+const PRE_CODE_TOOLBAR_HEIGHT = 37
 const CODE_BLOCK_DEFAULT_CAP = 500
-const PRE_CODE_LINE_HEIGHT = 28
 const DIFF_METADATA_PREFIXES = ['diff ', 'index ', '--- ', '+++ ', '@@ ']
 
 interface PreparedCacheEntry {
@@ -425,6 +429,8 @@ export function estimateCodeBlockHeight(
 
   const rendererKind = options.rendererKind
   const showHeader = rendererKind !== 'pre' && options.showHeader !== false
+  const showPreCopyToolbar = rendererKind === 'pre'
+    && options.showPreCopyToolbar === true
   const isDiff = Boolean((node as any).diff)
   let contentHeight = 0
   let cap = CODE_BLOCK_DEFAULT_CAP
@@ -438,14 +444,19 @@ export function estimateCodeBlockHeight(
   }
   else {
     const lineCount = getCodeBlockVisibleLineCount(node)
-    contentHeight = Math.round(lineCount * PRE_CODE_LINE_HEIGHT)
-    cap = Number.POSITIVE_INFINITY
+    const visual = resolvePreCodeVisualOptions(options.codeBlockOptions, isDiff)
+    contentHeight = Math.round(lineCount * visual.lineHeight + visual.padding + visual.paddingBottom)
+    cap = visual.maxHeight
   }
 
   const visibleContentHeight = Math.max(1, Math.min(contentHeight, cap))
   return {
     kind: 'code-block',
-    height: Math.round(visibleContentHeight + (showHeader ? CODE_BLOCK_HEADER_HEIGHT : 0)),
+    height: Math.round(visibleContentHeight + (
+      rendererKind === 'pre'
+        ? (showPreCopyToolbar ? PRE_CODE_TOOLBAR_HEIGHT : 0)
+        : (showHeader ? CODE_BLOCK_HEADER_HEIGHT : 0)
+    )),
     contentHeight: visibleContentHeight,
     rendererKind,
     ...(isDiff && rendererKind === 'stream-diffs'

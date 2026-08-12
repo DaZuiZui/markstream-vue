@@ -93,6 +93,79 @@ describe('diff CodeBlockNode fallback height stability', () => {
     wrapper.unmount()
   })
 
+  it('ignores a restored height estimate while a plain block is streaming', async () => {
+    const wrapper = mount(CodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'const first = true\nconst second = false',
+          raw: '```ts\nconst first = true\nconst second = false',
+          loading: true,
+        },
+        estimatedContentHeightPx: 1000,
+        estimatedHeightPx: 1042,
+        loading: true,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await flushPendingMicrotasks()
+
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    const host = wrapper.get('.code-editor-container').element as HTMLElement
+    const block = wrapper.get('[data-markstream-code-block="1"]').element as HTMLElement
+    expect(pre.style.minHeight).toBe('37px')
+    expect(host.style.minHeight).toBe('37px')
+    expect(block.style.minHeight).toBe('79px')
+    expect(pre.style.minHeight).not.toBe('500px')
+    expect(host.style.minHeight).not.toBe('500px')
+    expect(block.style.minHeight).not.toBe('1042px')
+
+    wrapper.unmount()
+  })
+
+  it('clears an armed restored height floor when a plain block starts streaming again', async () => {
+    const helpers = getStreamDiffsHelpers()
+    helpers.createEditor.mockImplementation(() => new Promise<void>(() => {}))
+    const settledNode = {
+      type: 'code_block' as const,
+      language: 'ts',
+      code: 'const first = true\nconst second = false',
+      raw: '```ts\nconst first = true\nconst second = false\n```',
+      loading: false,
+    }
+    const wrapper = mount(CodeBlockNode, {
+      props: {
+        node: settledNode,
+        estimatedContentHeightPx: 1000,
+        estimatedHeightPx: 1042,
+        loading: false,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await vi.waitFor(() => expect(helpers.createEditor).toHaveBeenCalledTimes(1))
+    const host = wrapper.get('.code-editor-container').element as HTMLElement
+    expect(host.style.minHeight).toBe('500px')
+
+    await wrapper.setProps({
+      node: { ...settledNode, loading: true },
+      loading: true,
+    })
+    await flushPendingMicrotasks()
+
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    const block = wrapper.get('[data-markstream-code-block="1"]').element as HTMLElement
+    expect(pre.style.minHeight).toBe('37px')
+    expect(host.style.minHeight).toBe('37px')
+    expect(block.style.minHeight).toBe('79px')
+
+    wrapper.unmount()
+  })
+
   it('keeps diff fallback height owned by its rendered rows when an estimate is set', async () => {
     const helpers = getStreamDiffsHelpers()
     // Hold createDiffEditor so the enhanced surface is never ready during this test.

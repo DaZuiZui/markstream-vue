@@ -85,8 +85,8 @@ describe('height estimation experiment internals', () => {
     )
 
     expect(estimated?.rendererKind).toBe('pre')
-    expect(estimated?.contentHeight).toBe(84)
-    expect(estimated?.height).toBe(84)
+    expect(estimated?.contentHeight).toBe(70)
+    expect(estimated?.height).toBe(70)
   })
 
   it('does not count a terminal newline as an extra ordinary code line', () => {

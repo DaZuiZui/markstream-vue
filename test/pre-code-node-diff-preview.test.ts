@@ -14,8 +14,8 @@ describe('pre code node diff preview', () => {
     const end = source.indexOf('}', start)
     const rule = source.slice(start, end)
 
-    expect(rule).toContain('background: var(--code-bg)')
-    expect(rule).toContain('color: var(--code-fg)')
+    expect(rule).toContain('background: var(--markstream-code-fallback-bg, var(--markstream-code-theme-bg, var(--code-bg)))')
+    expect(rule).toContain('color: var(--markstream-code-fallback-fg, var(--markstream-code-theme-fg, var(--code-fg)))')
     expect(rule).toContain('border: 0')
     expect(rule).toContain('border-radius: 0')
     expect(rule).toContain('font-family: var(')
@@ -64,6 +64,110 @@ describe('pre code node diff preview', () => {
     expect(wrapper.findAll('.markstream-pre__line-number')).toHaveLength(0)
     expect(wrapper.get('.markstream-pre__line-numbers-text').element.textContent).toBe('1\n2')
     expect(wrapper.get('.markstream-pre__code').element.textContent).toBe('const a = 1\n')
+
+    wrapper.unmount()
+  })
+
+  it('keeps wrapped visual rows under their logical source line number', () => {
+    const code = 'const message = "one logical source line that can wrap"\n\nreturn message\n'
+    const wrapper = mount(PreCodeNode, {
+      attrs: {
+        style: { whiteSpace: 'pre-wrap' },
+      },
+      props: {
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code,
+          raw: `\`\`\`ts\n${code}\`\`\``,
+        },
+      },
+    })
+
+    const logicalLines = wrapper.findAll('.markstream-pre__logical-line')
+    expect(wrapper.find('.markstream-pre__line-numbers-text').exists()).toBe(false)
+    expect(logicalLines.map(line => line.attributes('data-line-number'))).toEqual(['1', '2', '3'])
+    expect(logicalLines.map(line => line.element.textContent)).toEqual([
+      'const message = "one logical source line that can wrap"\n',
+      '\n',
+      'return message',
+    ])
+    expect(wrapper.get('.markstream-pre__code--wrapped').element.textContent).toBe(
+      'const message = "one logical source line that can wrap"\n\nreturn message',
+    )
+
+    wrapper.unmount()
+  })
+
+  it('preserves CRLF and CR as logical source-line delimiters while wrapping', () => {
+    const code = 'first\r\nsecond\rthird\nfourth\r\n'
+    const wrapper = mount(PreCodeNode, {
+      attrs: {
+        class: 'is-wrap',
+      },
+      props: {
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'txt',
+          code,
+          raw: code,
+        },
+      },
+    })
+
+    const logicalLines = wrapper.findAll('.markstream-pre__logical-line')
+    expect(logicalLines.map(line => line.attributes('data-line-number'))).toEqual(['1', '2', '3', '4'])
+    expect(logicalLines.map(line => line.element.textContent)).toEqual([
+      'first\r\n',
+      'second\r',
+      'third\n',
+      'fourth',
+    ])
+    expect(wrapper.get('.markstream-pre__code--wrapped').element.textContent).toBe(
+      'first\r\nsecond\rthird\nfourth',
+    )
+
+    wrapper.unmount()
+  })
+
+  it('keeps wrapped logical lines stable when a streamed CR becomes CRLF', async () => {
+    const wrapper = mount(PreCodeNode, {
+      attrs: {
+        class: 'is-wrap',
+      },
+      props: {
+        loading: true,
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'txt',
+          code: 'first\r',
+          raw: 'first\r',
+          loading: true,
+        },
+      },
+    })
+
+    expect(wrapper.findAll('.markstream-pre__logical-line').map(line => line.element.textContent)).toEqual([
+      'first\r',
+      '',
+    ])
+
+    await wrapper.setProps({
+      node: {
+        type: 'code_block',
+        language: 'txt',
+        code: 'first\r\nsecond',
+        raw: 'first\r\nsecond',
+        loading: true,
+      },
+    })
+
+    const logicalLines = wrapper.findAll('.markstream-pre__logical-line')
+    expect(logicalLines.map(line => line.attributes('data-line-number'))).toEqual(['1', '2'])
+    expect(logicalLines.map(line => line.element.textContent)).toEqual(['first\r\n', 'second'])
 
     wrapper.unmount()
   })
