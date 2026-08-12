@@ -1051,52 +1051,31 @@ const transformStyle = computed(() => ({
 }))
 
 /**
- * 将内容适配到预览区域内：当图表自然尺寸超出容器（例如超过 maxHeight 截断）
- * 时，自动缩小并居中，保证默认视角不被裁切；用户手动缩放/拖拽后不再干预。
- * 内容本身放得下时保持 100% 缩放与默认定位。
- * 若此时 SVG 尚未完成布局（测量为 0），会在后续帧重试几次。
+ * 把「适配 + 居中」应用到给定 SVG 与容器。
+ * 以未缩放的自然尺寸为基准，仅做缩小适配（min 0.5，与 zoomOut 下限一致），
+ * 内容能放下时保持不变；适配后的视角同步进 savedTransformState，
+ * 保证 source/preview 切换、主题切换后恢复的仍是 fit 后的视角。
  */
-let fitRetryRafId: number | null = null
-
-function cancelFitRetry() {
-  if (fitRetryRafId != null) {
-    safeCancelRaf(fitRetryRafId)
-    fitRetryRafId = null
-  }
-}
-
-function applyInitialFit(maxAttempts = 8) {
-  if (userHasAdjustedTransform.value)
-    return
-  if (isCollapsed.value || showSource.value)
-    return
-  const area = mermaidContainer.value
-  const svg = mermaidContent.value?.querySelector('svg')
-  if (!area || !svg)
-    return
+function applyFitToArea(area: HTMLElement, svg: SVGSVGElement) {
   const areaW = area.clientWidth
   const areaH = area.clientHeight
-  if (!areaW || !areaH)
-    return
   const svgRect = svg.getBoundingClientRect()
-  if (!svgRect.width || !svgRect.height) {
-    // SVG 尚未完成布局，稍后重试（最多 maxAttempts 次）
-    if (maxAttempts > 1) {
-      cancelFitRetry()
-      fitRetryRafId = safeRaf(() => {
-        fitRetryRafId = null
-        applyInitialFit(maxAttempts - 1)
-      })
-    }
+  if (!areaW || !areaH || !svgRect.width || !svgRect.height)
     return
-  }
   // 还原为未缩放的自然尺寸
   const naturalW = svgRect.width / Math.max(0.01, zoom.value)
   const naturalH = svgRect.height / Math.max(0.01, zoom.value)
   if (naturalW <= areaW && naturalH <= areaH) {
+    // 内容放得下：保持 100% 与默认定位（_mermaid 的 flex 已负责居中）
     zoom.value = 1
     translateX.value = 0
     translateY.value = 0
+    savedTransformState.value = {
+      zoom: 1,
+      translateX: 0,
+      translateY: 0,
+      containerHeight: containerHeight.value,
+    }
     return
   }
   // 仅做缩小适配（min 0.5 与 zoomOut 下限一致），并按比例居中
@@ -1113,13 +1092,47 @@ function applyInitialFit(maxAttempts = 8) {
   zoom.value = scale
   translateX.value = (areaW - naturalW * scale) / 2
   translateY.value = (areaH - naturalH * scale) / 2
-  // 同步保存状态，确保 source/preview 切换、主题切换后仍恢复 fit 后的视角
+  // 同步保存状态，确保 source/preview 切换、主题切换后恢复的仍是 fit 后的视角
   savedTransformState.value = {
     zoom: zoom.value,
     translateX: translateX.value,
     translateY: translateY.value,
     containerHeight: containerHeight.value,
   }
+}
+
+/**
+ * 等「最终态」稳定后，fit + 居中一次：
+ * - 对 SVG/容器尺寸逐帧采样，连续两帧一致（或到达尝试上限）才应用 fit，
+ *   兜住 mode 切换高度动画、content-visibility 延迟布局等竞态；
+ * - 用户手动缩放/拖拽过后不再干预；
+ * - resetZoom 语义 = 回到这个 fit 默认视角（不再回到被裁切视角）。
+ */
+async function fitWhenSettled(maxAttempts = 12) {
+  if (userHasAdjustedTransform.value)
+    return
+  await nextTick()
+  let previous = ''
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise<void>(resolve => safeRaf(() => resolve()))
+    const area = mermaidContainer.value
+    const svg = mermaidContent.value?.querySelector('svg')
+    if (!area || isCollapsed.value || showSource.value)
+      return
+    const areaH = area.clientHeight
+    const svgRect = svg.getBoundingClientRect()
+    const sample
+      = `${area.clientWidth}|${areaH}|${svgRect.width}|${svgRect.height}|${zoom.value}`
+    if (attempt > 0 && sample === previous)
+      break
+    previous = sample
+    if (svgRect.width && svgRect.height && areaH)
+      applyFitToArea(area, svg)
+  }
+  const area = mermaidContainer.value
+  const svg = mermaidContent.value?.querySelector('svg')
+  if (area && svg)
+    applyFitToArea(area, svg)
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -1279,10 +1292,10 @@ function resetZoom() {
   // so content that overflows the max-height container is never left clipped.
   if (userHasAdjustedTransform.value) {
     userHasAdjustedTransform.value = false
-    applyInitialFit()
+    void fitWhenSettled()
     return
   }
-  applyInitialFit()
+  void fitWhenSettled()
 }
 
 // Drag functionality
@@ -1635,7 +1648,7 @@ async function initMermaid(request = createMermaidRenderRequest()) {
       // `request.final` 在请求创建时计算；若提交时流式已经结束（loading 已置
       // false），即使请求本身不是 final 也应当适配。
       if (request.final || props.loading === false)
-        safeRaf(() => applyInitialFit())
+        void fitWhenSettled()
       svgCache.value[request.theme] = { svg: rendered.svg, bindFunctions }
       if (isThemeRendering.value)
         isThemeRendering.value = false
@@ -2175,9 +2188,9 @@ watch(
         }
         updateContainerHeight(undefined, { force: true })
         // 流式结束的兜底：内容可能已变化，重新适配默认视角（fit）
-        safeRaf(() => applyInitialFit())
+        void fitWhenSettled()
         // 流式结束的兜底：内容可能发生了变化，重新适配默认视角（fit）
-        safeRaf(() => applyInitialFit())
+        void fitWhenSettled()
         // 渲染已完成，清理后台任务
         cleanupAfterLoadingSettled()
         return
@@ -2257,7 +2270,7 @@ watch(
         // 容器尺寸变化（宽度或高度，如 maxHeight 截断、模式切换过渡结束）后
         // 重新适配默认视角；仍处于流式期间时跳过，等 loading=false 的最终提交兜底
         if (props.loading === false) {
-          safeRaf(() => applyInitialFit())
+          void fitWhenSettled()
         }
       })
       resizeObserver.observe(newEl)
@@ -2317,7 +2330,7 @@ watch(
   () => {
     nextTick(() => {
       updateContainerHeight()
-      applyInitialFit()
+      void fitWhenSettled()
     })
   },
 )

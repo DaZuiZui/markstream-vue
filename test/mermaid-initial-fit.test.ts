@@ -53,22 +53,28 @@ async function mountStub({
   return { wrapper, ss }
 }
 
-describe('mermaid initial fit', () => {
+/** Wait for the settle loop + microtasks to finish. */
+async function flushFit() {
+  await new Promise(resolve => setTimeout(resolve, 100))
+  await nextTick()
+}
+
+describe('mermaid initial fit (fitWhenSettled)', () => {
   it('zooms out and centers when content overflows the preview area', async () => {
     const { wrapper, ss } = await mountStub({ naturalW: 1000, naturalH: 2000 })
-    ss.applyInitialFit()
-    await nextTick()
+    await ss.fitWhenSettled()
+    await flushFit()
 
     expect(ss.zoom).toBe(0.5)
-    expect(ss.translateX).toBeCloseTo(250, 6) // (1000 - 1000*0.5)/2
-    expect(ss.translateY).toBeCloseTo(-250, 6) // (500 - 2000*0.5)/2
+    expect(ss.translateX).toBe(250) // (1000 - 1000*0.5)/2
+    expect(ss.translateY).toBe(-250) // (500 - 2000*0.5)/2
     wrapper.unmount()
   })
 
   it('keeps identity transform when content fits', async () => {
     const { wrapper, ss } = await mountStub({ naturalW: 400, naturalH: 200 })
-    ss.applyInitialFit()
-    await nextTick()
+    await ss.fitWhenSettled()
+    await flushFit()
 
     expect(ss.zoom).toBe(1)
     expect(ss.translateX).toBe(0)
@@ -81,8 +87,8 @@ describe('mermaid initial fit', () => {
     ss.userHasAdjustedTransform = true
     ss.translateX = 12
     ss.translateY = 34
-    ss.applyInitialFit()
-    await nextTick()
+    await ss.fitWhenSettled()
+    await flushFit()
 
     expect(ss.zoom).toBe(0.8)
     expect(ss.translateX).toBe(12)
@@ -94,7 +100,7 @@ describe('mermaid initial fit', () => {
     const { wrapper, ss } = await mountStub({ naturalW: 1000, naturalH: 2000, zoom: 1.4 })
     ss.userHasAdjustedTransform = true
     ss.resetZoom()
-    await nextTick()
+    await flushFit()
 
     expect(ss.zoom).toBe(0.5)
     expect(ss.translateX).toBeCloseTo(250, 6)
