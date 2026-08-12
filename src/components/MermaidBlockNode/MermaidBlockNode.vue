@@ -10,7 +10,7 @@ import { clampMermaidPreviewHeight, estimateMermaidPreviewHeight, getMermaidDiag
 import { resolveLifecycleIndexKey } from '../../utils/lifecycleIndexKey'
 import { escapeSequenceTextSemicolons } from '../../utils/mermaidSequenceSemicolons'
 import { MARKSTREAM_NODE_LIFECYCLE_KEY } from '../../utils/nodeLifecycle'
-import { safeCancelRaf, safeRaf } from '../../utils/safeRaf'
+import { safeRaf } from '../../utils/safeRaf'
 import { canParseOffthread as canParseOffthreadClient, findPrefixOffthread as findPrefixOffthreadClient } from '../../workers/mermaidWorkerClient'
 
 import { getMermaid } from './mermaid'
@@ -1057,7 +1057,7 @@ const transformStyle = computed(() => ({
  * 保证 source/preview 切换、主题切换后恢复的仍是 fit 后的视角。
  */
 function applyFitToArea(area: HTMLElement | undefined, svg?: SVGSVGElement | null) {
-    if (!area || !svg)
+  if (!area || !svg)
     return
   const areaW = area.clientWidth
   const areaH = area.clientHeight
@@ -1111,7 +1111,7 @@ function applyFitToArea(area: HTMLElement | undefined, svg?: SVGSVGElement | nul
  * - resetZoom 语义 = 回到这个 fit 默认视角（不再回到被裁切视角）。
  */
 async function fitWhenSettled(maxAttempts = 12) {
-    if (unmounted || userHasAdjustedTransform.value)
+  if (unmounted || userHasAdjustedTransform.value)
     return
   await nextTick()
   let previous = ''
@@ -1119,7 +1119,7 @@ async function fitWhenSettled(maxAttempts = 12) {
     await new Promise<void>(resolve => safeRaf(() => resolve()))
     const area = mermaidContainer.value
     const svg = mermaidContent.value?.querySelector('svg')
-        if (!area || isCollapsed.value || showSource.value || !svg)
+    if (!area || isCollapsed.value || showSource.value || !svg)
       return
     const areaH = area.clientHeight
     const svgRect = svg.getBoundingClientRect()

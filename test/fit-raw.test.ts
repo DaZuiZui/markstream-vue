@@ -39,12 +39,14 @@ async function mountForFit(zoom = 1): Promise<{
   ss.zoom = zoom
   await nextTick()
   const content = ss.mermaidContent as HTMLElement | undefined
-  if (!content) throw new Error('mermaidContent ref null')
+  if (!content)
+    throw new Error('mermaidContent ref null')
 
   content.innerHTML = '<svg viewBox="0 0 100 200"></svg>'
   const svg = content.querySelector('svg')!
   const area = ss.mermaidContainer as HTMLElement | undefined
-  if (!area) throw new Error('mermaidContainer null')
+  if (!area)
+    throw new Error('mermaidContainer null')
 
   Object.defineProperty(area, 'clientWidth', { configurable: true, value: 1000 })
   Object.defineProperty(area, 'clientHeight', { configurable: true, value: 500 })
@@ -90,6 +92,4 @@ describe('applyFitToArea raw', () => {
     expect(api.translateY).toBe(0)
     wrapper.unmount()
   })
-
-
 })
