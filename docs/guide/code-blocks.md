@@ -98,7 +98,9 @@ Fallback line numbers count logical source lines delimited by `\n`, `\r\n`, or `
 
 Automatic wrapping never creates an additional source line number or diff row. The default is `overflow: 'wrap'`, and the same value is applied to the fallback and enhanced code surface. With `overflow: 'scroll'`, both surfaces keep non-wrapping content and horizontal scrolling.
 
-For unified and split diffs, the fallback and finalized surface use the same unchanged-region threshold. `No newline at end of file` is shown only for a source that actually lacks a final LF, uses a neutral metadata foreground/background, and occupies the same visible height in both surfaces. When diff rows wrap, the added/removed content background, gutter marker, and line-number background fill the complete logical row; changing between wrap and scroll discards the previous measured row height immediately.
+For unified and split diffs, the fallback and finalized surface use the same unchanged-region threshold. `No newline at end of file` is shown only for a source that actually lacks a final LF, uses a neutral metadata foreground/background, and occupies the same visible height in both surfaces. Added and removed line backgrounds have the same effective composited color in both surfaces; the fallback must not paint the same translucent fill in overlapping layers. When diff rows wrap, the added/removed content background, gutter marker, and line-number background fill the complete logical row; changing between wrap and scroll discards the previous measured row height immediately.
+
+`maxHeight` is also a shared visibility boundary. Content that fits below it remains fully visible in both surfaces. Content that exceeds it remains reachable through the same internal scrolling behavior; the finalized diff host must not clip rows with `overflow: hidden` while the outer shell keeps a larger blank height.
 
 ## Links & further reading
 

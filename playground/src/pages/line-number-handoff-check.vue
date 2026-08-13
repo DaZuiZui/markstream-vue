@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import type { CodeBlockOptions } from '../../../src/types/component-props'
+import { ref } from 'vue'
 import MarkdownRender from '../../../src/components/NodeRenderer'
 
 const isDark = ref(typeof window !== 'undefined'

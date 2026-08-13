@@ -27,6 +27,9 @@ function syncOverflowQuery(value: OverflowMode) {
 const isDark = ref(typeof window !== 'undefined'
   && new URLSearchParams(window.location.search).get('theme') === 'dark')
 const overflow = ref<OverflowMode>(resolveInitialOverflow())
+const maxHeight = typeof window !== 'undefined'
+  ? Number.parseFloat(new URLSearchParams(window.location.search).get('maxHeight') || '') || undefined
+  : undefined
 
 const ordinaryMarkdown = [
   '```ts src/handoff.ts',
@@ -111,19 +114,30 @@ const scenarios = computed<HandoffScenario[]>(() => [
     id: 'ordinary',
     title: 'Ordinary code',
     markdown: ordinaryMarkdown,
-    options: { overflow: overflow.value } satisfies CodeBlockOptions,
+    options: {
+      overflow: overflow.value,
+      ...(maxHeight != null ? { maxHeight } : {}),
+    } satisfies CodeBlockOptions,
   },
   {
     id: 'unified',
     title: 'Unified diff (one column)',
     nodes: [diffNode],
-    options: { diffStyle: 'unified', overflow: overflow.value } satisfies CodeBlockOptions,
+    options: {
+      diffStyle: 'unified',
+      overflow: overflow.value,
+      ...(maxHeight != null ? { maxHeight } : {}),
+    } satisfies CodeBlockOptions,
   },
   {
     id: 'split',
     title: 'Split diff (two columns)',
     nodes: [diffNode],
-    options: { diffStyle: 'split', overflow: overflow.value } satisfies CodeBlockOptions,
+    options: {
+      diffStyle: 'split',
+      overflow: overflow.value,
+      ...(maxHeight != null ? { maxHeight } : {}),
+    } satisfies CodeBlockOptions,
   },
 ])
 

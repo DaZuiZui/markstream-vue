@@ -83,4 +83,4 @@ void preloadCodeBlockRuntime()
 
 diff block 使用相同的适配边界。未提供对应 `codeBlockOptions` 时，增强 diff surface 使用 `stream-diffs` 默认值；可通过 `diffStyle`、`expandUnchanged`、`collapsedContextThreshold`、`hunkSeparators`、`lineDiffType` 与 `parseDiffOptions` 配置布局和折叠。
 
-fallback 与最终 surface 使用相同的 `collapsedContextThreshold` 判断：只有未变化区域的隐藏行数大于阈值时才折叠。unified 与 split diff fallback 都根据每个源文本真实的末尾换行状态生成 `No newline at end of file`，使用与最终 surface 一致的中性 metadata 前景色与背景色，并保持相同可见高度。换行模式下，新增/删除内容背景、gutter 标记与行号背景覆盖测量后的完整逻辑行高度；在换行与滚动模式之间切换时，会在下一次布局绘制前清除旧的同步行高。
+fallback 与最终 surface 使用相同的 `collapsedContextThreshold` 判断：只有未变化区域的隐藏行数大于阈值时才折叠。unified 与 split diff fallback 都根据每个源文本真实的末尾换行状态生成 `No newline at end of file`，使用与最终 surface 一致的中性 metadata 前景色与背景色，并保持相同可见高度。新增/删除行 fill 在每个视觉区域只合成一次，使最终颜色与 enhanced surface 一致。换行模式下，内容背景、gutter 标记与行号背景覆盖测量后的完整逻辑行高度；在换行与滚动模式之间切换时，会在下一次布局绘制前清除旧的同步行高。最终 host 必须完整保留 `maxHeight` 以下的所有行，并在超过限制时使用可滚动 overflow；不得把超出的 diff 行隐藏在更大的 shell 内。

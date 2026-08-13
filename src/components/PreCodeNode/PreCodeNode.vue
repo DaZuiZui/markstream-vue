@@ -1381,12 +1381,12 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
 }
 
 .markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--added > .markstream-pre__diff-number {
-  background: var(--markstream-diff-added-line-fill, transparent);
+  background: var(--markstream-diff-added-number-fill, var(--markstream-diff-added-line-fill, transparent));
   color: var(--markstream-diff-added-fg, var(--code-line-number));
 }
 
 .markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--removed > .markstream-pre__diff-number {
-  background: var(--markstream-diff-removed-line-fill, transparent);
+  background: var(--markstream-diff-removed-number-fill, var(--markstream-diff-removed-line-fill, transparent));
   color: var(--markstream-diff-removed-fg, var(--code-line-number));
 }
 
@@ -1498,28 +1498,10 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
 }
 
 .markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--added::before {
-  background:
-    linear-gradient(
-      var(--markstream-diff-added-line-fill, transparent),
-      var(--markstream-diff-added-line-fill, transparent)
-    ),
-    var(--markstream-diff-added-line-fill, transparent);
-}
-
-.markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--removed::before {
-  background:
-    linear-gradient(
-      var(--markstream-diff-removed-line-fill, transparent),
-      var(--markstream-diff-removed-line-fill, transparent)
-    ),
-    var(--markstream-diff-removed-line-fill, transparent);
-}
-
-.markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--added::after {
   background: var(--markstream-diff-added-line-fill, transparent);
 }
 
-.markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--removed::after {
+.markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--removed::before {
   background: var(--markstream-diff-removed-line-fill, transparent);
 }
 

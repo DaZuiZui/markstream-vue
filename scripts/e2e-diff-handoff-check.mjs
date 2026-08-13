@@ -191,9 +191,12 @@ async function installFrameCapture(page) {
       const fillHeight = Number.parseFloat(getComputedStyle(row, '::before').height || '0')
       const railHeight = row.querySelector('.markstream-pre__diff-rail')?.getBoundingClientRect().height ?? 0
       const numberHeight = row.querySelector('.markstream-pre__diff-number')?.getBoundingClientRect().height ?? 0
+      const number = row.querySelector('.markstream-pre__diff-number')
       return {
+        contentBackground: getComputedStyle(row, '::before').backgroundColor,
         fillHeight: round(fillHeight),
         lineHeight: round(lineHeight),
+        numberBackground: number instanceof HTMLElement ? getComputedStyle(number).backgroundColor : null,
         numberHeight: round(numberHeight),
         railHeight: round(railHeight),
         rowHeight: round(rowHeight),
@@ -224,6 +227,19 @@ async function installFrameCapture(page) {
       const headerStyle = header instanceof HTMLElement ? getComputedStyle(header) : null
       const runtimeSurface = runtimeReady
         ? diffs.shadowRoot?.querySelector('[data-diff], [data-file]')
+        : null
+      const runtimeFill = runtimeReady
+        ? Object.fromEntries([
+            ['removed', 'deletion'],
+            ['added', 'addition'],
+          ].map(([kind, runtimeKind]) => {
+            const content = diffs.shadowRoot?.querySelector(`[data-line][data-line-type="change-${runtimeKind}"]`)
+            const number = diffs.shadowRoot?.querySelector(`[data-column-number][data-line-type="change-${runtimeKind}"]`)
+            return [kind, {
+              contentBackground: content instanceof HTMLElement ? getComputedStyle(content).backgroundColor : null,
+              numberBackground: number instanceof HTMLElement ? getComputedStyle(number).backgroundColor : null,
+            }]
+          }))
         : null
       const scrollbarLayoutHeight = pre instanceof HTMLElement && preStyle
         ? round(pre.offsetHeight - pre.clientHeight
@@ -258,6 +274,7 @@ async function installFrameCapture(page) {
             }
           : null,
         runtimeReady,
+        runtimeFill,
         runtimeBackground: runtimeSurface instanceof HTMLElement
           ? getComputedStyle(runtimeSurface).backgroundColor
           : null,
@@ -340,6 +357,15 @@ function surfaceHasHeaderPalette(surface, reference) {
     && surface?.headerToken === reference?.headerToken
 }
 
+function diffFillMatchesRuntime(surface, runtime, scenario) {
+  if (scenario === 'ordinary')
+    return true
+  return ['removed', 'added'].every(kind => (
+    surface?.preWrapFill?.[kind]?.contentBackground === runtime?.runtimeFill?.[kind]?.contentBackground
+    && surface?.preWrapFill?.[kind]?.numberBackground === runtime?.runtimeFill?.[kind]?.numberBackground
+  ))
+}
+
 async function runCase(browser, port, overflow, theme) {
   const context = await browser.newContext({ viewport: { width: 1800, height: 2200 } })
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: `http://${host}:${port}` })
@@ -402,6 +428,8 @@ async function runCase(browser, port, overflow, theme) {
       const metadataVisible = metadataFramesMatch
       const wrapFillComplete = preFrames.every(frame => changedRowsHaveModeHeight(frame, scenario, overflow))
         && permanentPreFrames.every(frame => changedRowsHaveModeHeight(frame, scenario, overflow))
+      const fillPaletteMatches = preFrames.every(frame => diffFillMatchesRuntime(frame, final, scenario))
+        && permanentPreFrames.every(frame => diffFillMatchesRuntime(frame, final, scenario))
       const backgroundFramesMatch = samples.every(frame => surfaceHasPalette(frame, expectedBackground))
         && permanentPreFrames.every(frame => surfaceHasPalette(frame, expectedBackground))
       const headerFramesMatch = samples.every(frame => surfaceHasHeaderPalette(frame, headerReference))
@@ -425,6 +453,7 @@ async function runCase(browser, port, overflow, theme) {
         && metadataFramesMatch
         && metadataVisible
         && wrapFillComplete
+        && fillPaletteMatches
         && backgroundFramesMatch
         && headerFramesMatch
         && heightDelta != null
@@ -447,6 +476,7 @@ async function runCase(browser, port, overflow, theme) {
         metadataFramesMatch,
         metadataVisible,
         wrapFillComplete,
+        fillPaletteMatches,
         backgroundFramesMatch,
         headerFramesMatch,
         headerBackground: headerReference?.headerBackground ?? null,
@@ -457,6 +487,7 @@ async function runCase(browser, port, overflow, theme) {
         runtimeMetadataStyles: final?.runtimeMetadataStyles ?? null,
         preWrapFill: lastPre?.preWrapFill ?? null,
         permanentPreWrapFill: permanentPre?.preWrapFill ?? null,
+        runtimeFill: final?.runtimeFill ?? null,
         visibleRowsPerPane: lastPre?.preRows?.map(rows => rows.length) ?? null,
         lastPreHeight: lastPre?.height ?? null,
         finalHeight: final?.height ?? null,
@@ -536,6 +567,8 @@ async function runCase(browser, port, overflow, theme) {
             && sameValue(frame.runtimeMetadataStyles, final?.runtimeMetadataStyles))
         const rowsMatch = initialPre.every(frame => sameValue(frame.preRows, final?.runtimeRows))
           && permanentPreFrames.every(frame => sameValue(frame.preRows, final?.runtimeRows))
+        const fillPaletteMatches = initialPre.every(frame => diffFillMatchesRuntime(frame, final, scenario))
+          && permanentPreFrames.every(frame => diffFillMatchesRuntime(frame, final, scenario))
         const backgroundFramesMatch = enhanced.every(frame => surfaceHasPalette(frame, expectedBackground))
           && permanentPreFrames.every(frame => surfaceHasPalette(frame, expectedBackground))
         const headerFramesMatch = enhanced.every(frame => surfaceHasHeaderPalette(frame, headerReference))
@@ -548,6 +581,7 @@ async function runCase(browser, port, overflow, theme) {
             && permanentPreHeightsValid
             && metadataFramesMatch
             && rowsMatch
+            && fillPaletteMatches
             && backgroundFramesMatch
             && headerFramesMatch
             && initialShellHeightsValid
@@ -560,6 +594,7 @@ async function runCase(browser, port, overflow, theme) {
           permanentPreHeightsValid,
           metadataFramesMatch,
           rowsMatch,
+          fillPaletteMatches,
           backgroundFramesMatch,
           headerFramesMatch,
           initialShellHeightsValid,
@@ -601,6 +636,100 @@ async function runCase(browser, port, overflow, theme) {
   }
 }
 
+async function runOverflowContractCase(browser, port, theme, maxHeight, expectScrollable) {
+  const page = await browser.newPage({ viewport: { width: 1800, height: 2200 } })
+  try {
+    await page.goto(`http://${host}:${port}/diff-handoff-check?theme=${theme}&codeOverflow=wrap&maxHeight=${maxHeight}`, { waitUntil: 'load' })
+    await page.waitForFunction(scenarioIds => scenarioIds.every(scenario => (
+      document.querySelector(`[data-handoff-case="${scenario}-enhanced"] diffs-container`)
+        ?.shadowRoot
+        ?.querySelector('[data-line]')
+        && !document.querySelector(`[data-handoff-case="${scenario}-enhanced"] pre.code-pre-fallback`)
+    )), ['unified', 'split'])
+
+    const results = await page.evaluate(({ maxHeight, expectScrollable }) => {
+      const round = value => Math.round(value * 100) / 100
+      return ['unified', 'split'].map((scenario) => {
+        const enhancedBlock = document.querySelector(`[data-handoff-case="${scenario}-enhanced"] .code-block-container`)
+        const host = enhancedBlock.querySelector('.code-editor-container')
+        const content = enhancedBlock.querySelector('.code-block-shell-content')
+        const layer = enhancedBlock.querySelector('.code-editor-layer')
+        const diffs = host.querySelector('diffs-container')
+        const pre = document.querySelector(`[data-handoff-case="${scenario}-pre"] pre.code-pre-fallback`)
+        const runtimeRows = Array.from(diffs.shadowRoot?.querySelectorAll('[data-line], [data-no-newline]') ?? [])
+        const preRows = Array.from(pre.querySelectorAll('.markstream-pre__diff-line'))
+        const hostStyle = getComputedStyle(host)
+        const preStyle = getComputedStyle(pre)
+
+        host.scrollTop = host.scrollHeight
+        pre.scrollTop = pre.scrollHeight
+        const lastRuntimeRow = runtimeRows.at(-1)
+        const lastPreRow = preRows.at(-1)
+        const hostRect = host.getBoundingClientRect()
+        const preRect = pre.getBoundingClientRect()
+        const runtimeReachable = lastRuntimeRow instanceof HTMLElement
+          && lastRuntimeRow.getBoundingClientRect().bottom <= hostRect.bottom + 2
+          && lastRuntimeRow.getBoundingClientRect().bottom >= hostRect.top
+        const preReachable = lastPreRow instanceof HTMLElement
+          && lastPreRow.getBoundingClientRect().bottom <= preRect.bottom + 2
+          && lastPreRow.getBoundingClientRect().bottom >= preRect.top
+        const enhancedScrollable = host.scrollHeight > host.clientHeight + 1
+          && host.scrollTop > 0
+          && hostStyle.overflow === 'auto'
+        const preScrollable = pre.scrollHeight > pre.clientHeight + 1
+          && pre.scrollTop > 0
+          && ['auto', 'scroll'].includes(preStyle.overflowY)
+        const enhancedFits = host.scrollHeight <= host.clientHeight + 1
+          && host.clientHeight < maxHeight
+          && hostStyle.overflow === 'hidden'
+        const preFits = pre.scrollHeight <= pre.clientHeight + 1
+          && pre.clientHeight < maxHeight
+        const shellMatchesHost = Math.abs(content.getBoundingClientRect().height - hostRect.height) <= 1
+          && Math.abs(layer.getBoundingClientRect().height - hostRect.height) <= 1
+
+        return {
+          ok: runtimeRows.length > 0
+            && preRows.length > 0
+            && shellMatchesHost
+            && (expectScrollable
+              ? enhancedScrollable && preScrollable && runtimeReachable && preReachable
+              : enhancedFits && preFits),
+          scenario,
+          enhanced: {
+            clientHeight: host.clientHeight,
+            scrollHeight: host.scrollHeight,
+            overflow: hostStyle.overflow,
+            scrollTop: host.scrollTop,
+          },
+          pre: {
+            clientHeight: pre.clientHeight,
+            scrollHeight: pre.scrollHeight,
+            overflowY: preStyle.overflowY,
+            scrollTop: pre.scrollTop,
+          },
+          innerRuntimeHeight: round(diffs.getBoundingClientRect().height),
+          shellContentHeight: round(content.getBoundingClientRect().height),
+          editorLayerHeight: round(layer.getBoundingClientRect().height),
+          runtimeReachable,
+          preReachable,
+          shellMatchesHost,
+        }
+      })
+    }, { maxHeight, expectScrollable })
+
+    return {
+      ok: results.every(result => result.ok),
+      theme,
+      maxHeight,
+      expectScrollable,
+      results,
+    }
+  }
+  finally {
+    await page.close()
+  }
+}
+
 async function main() {
   const port = await findFreePort()
   const server = startDevServer(port)
@@ -617,6 +746,12 @@ async function main() {
       }
       for (const theme of classicScrollbarMode ? ['dark'] : ['dark', 'light'])
         results.push(await runCase(browser, port, classicScrollbarMode ? 'scroll' : 'wrap', theme))
+      if (!classicScrollbarMode) {
+        for (const theme of ['dark', 'light']) {
+          results.push(await runOverflowContractCase(browser, port, theme, 500, false))
+          results.push(await runOverflowContractCase(browser, port, theme, 120, true))
+        }
+      }
     }
     finally {
       await browser.close()

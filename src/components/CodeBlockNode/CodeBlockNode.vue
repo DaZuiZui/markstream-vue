@@ -719,8 +719,18 @@ const reservedEditorContentHeight = computed(() => {
 function getDiffVisualVars(isDark: boolean) {
   const addedFg = isDark ? 'hsl(152 42% 60%)' : 'var(--diff-added-fg)'
   const removedFg = isDark ? 'hsl(0 58% 58%)' : 'var(--diff-removed-fg)'
-  const addedLine = isDark ? 'hsl(152 42% 60% / 0.18)' : 'var(--diff-added-bg)'
-  const removedLine = isDark ? 'hsl(0 58% 58% / 0.18)' : 'var(--diff-removed-bg)'
+  const addedLine = isDark
+    ? 'color-mix(in lab, #121212 80%, #4d9375)'
+    : 'color-mix(in lab, #ffffff 88%, #1e754f)'
+  const addedNumber = isDark
+    ? 'color-mix(in lab, #121212 85%, #4d9375)'
+    : 'color-mix(in lab, #ffffff 91%, #1e754f)'
+  const removedLine = isDark
+    ? 'color-mix(in lab, #121212 80%, #cb7676)'
+    : 'color-mix(in lab, #ffffff 88%, #ab5959)'
+  const removedNumber = isDark
+    ? 'color-mix(in lab, #121212 85%, #cb7676)'
+    : 'color-mix(in lab, #ffffff 91%, #ab5959)'
   const addedInline = isDark ? 'hsl(152 42% 60% / 0.28)' : 'var(--diff-added-inline-bg)'
   const removedInline = isDark ? 'hsl(0 58% 58% / 0.28)' : 'var(--diff-removed-inline-bg)'
   const addedGutter = `linear-gradient(90deg, ${addedFg} 0 4px, transparent 4px 100%)`
@@ -733,7 +743,9 @@ function getDiffVisualVars(isDark: boolean) {
     '--markstream-diff-added-line': addedLine,
     '--markstream-diff-removed-line': removedLine,
     '--markstream-diff-added-line-fill': addedLine,
+    '--markstream-diff-added-number-fill': addedNumber,
     '--markstream-diff-removed-line-fill': removedLine,
+    '--markstream-diff-removed-number-fill': removedNumber,
     '--markstream-diff-added-gutter': addedGutter,
     '--markstream-diff-removed-gutter': removedGutter,
     '--markstream-diff-added-inline': addedInline,
@@ -1047,12 +1059,14 @@ function syncDiffRevealHostHeight() {
     // separator DOM that is not represented by the fallback's source rows.
     const renderedHeight = measureRenderedDiffHeight(editorHost)
     if (renderedHeight != null && renderedHeight > 0) {
-      const height = Math.ceil(renderedHeight)
+      const contentHeight = Math.ceil(renderedHeight)
+      const maxHeight = Math.ceil(getMaxHeightValue())
+      const height = Math.min(contentHeight, maxHeight)
       const value = `${height}px`
       editorHost.style.height = value
       editorHost.style.minHeight = '0px'
-      editorHost.style.maxHeight = `${Math.ceil(getMaxHeightValue())}px`
-      editorHost.style.overflow = 'hidden'
+      editorHost.style.maxHeight = `${maxHeight}px`
+      editorHost.style.overflow = contentHeight > maxHeight + PIXEL_EPSILON ? 'auto' : 'hidden'
 
       if (showPreWhileRuntimeLoads.value) {
         diffFallbackHandoffHeight.value = height
@@ -1574,10 +1588,12 @@ function syncEditorHostToFallbackHeight() {
 
   const fallbackHeight = Math.ceil(fallback.getBoundingClientRect().height)
   const renderedDiffHeight = isDiff.value ? measureRenderedDiffHeight(editorHost) : null
-  const height = Math.max(
+  const contentHeight = Math.max(
     fallbackHeight,
     renderedDiffHeight != null && renderedDiffHeight > 0 ? Math.ceil(renderedDiffHeight) : 0,
   )
+  const maxHeight = Math.ceil(getMaxHeightValue())
+  const height = Math.min(contentHeight, maxHeight)
   if (!Number.isFinite(height) || height <= 0)
     return null
 
@@ -1586,8 +1602,8 @@ function syncEditorHostToFallbackHeight() {
 
   editorHost.style.height = `${height}px`
   editorHost.style.minHeight = `${height}px`
-  editorHost.style.maxHeight = `${Math.ceil(getMaxHeightValue())}px`
-  editorHost.style.overflow = 'hidden'
+  editorHost.style.maxHeight = `${maxHeight}px`
+  editorHost.style.overflow = contentHeight > maxHeight + PIXEL_EPSILON ? 'auto' : 'hidden'
   return height
 }
 
@@ -1994,14 +2010,10 @@ function applyCollapsedContainerHeight(
 
   container.style.height = `${nextHeight}px`
   container.style.maxHeight = `${Math.ceil(maxHeight)}px`
-  if (isDiff.value) {
-    container.style.overflow = 'hidden'
-  }
-  else {
-    const shouldScroll = options.preserveScrollableOverflow === true
-      || contentHeight > maxHeight + PIXEL_EPSILON
-    container.style.overflow = shouldScroll ? 'auto' : 'hidden'
-  }
+  const shouldScroll = options.preserveScrollableOverflow === true
+    || resolvedContentHeight > maxHeight + PIXEL_EPSILON
+    || hasScrollableOverflow(container, nextHeight)
+  container.style.overflow = shouldScroll ? 'auto' : 'hidden'
 
   return nextHeight
 }
@@ -2014,11 +2026,8 @@ function hasScrollableOverflow(container: HTMLElement, visibleHeight = 0) {
 }
 
 function shouldRestoreScrollableOverflow(container: HTMLElement) {
-  return !isDiff.value
-    && (
-      wasScrollableBeforeCollapse
-      || hasScrollableOverflow(container, heightBeforeCollapse.value ?? 0)
-    )
+  return wasScrollableBeforeCollapse
+    || hasScrollableOverflow(container, heightBeforeCollapse.value ?? 0)
 }
 
 function bindEditorHeightSync() {
@@ -2726,7 +2735,11 @@ const containerStyle = computed(() => {
   s['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
   s['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
   s['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
+  s['--markstream-diff-added-line-fill'] = preFallbackThemePalette.value.diffAddedLine
+  s['--markstream-diff-added-number-fill'] = preFallbackThemePalette.value.diffAddedNumber
   s['--markstream-diff-editor-bg'] = preFallbackThemePalette.value.background
+  s['--markstream-diff-removed-line-fill'] = preFallbackThemePalette.value.diffRemovedLine
+  s['--markstream-diff-removed-number-fill'] = preFallbackThemePalette.value.diffRemovedNumber
   s['--markstream-diff-shell-bg'] = preFallbackThemePalette.value.background
   s['--markstream-pre-resolved-theme-bg'] = preFallbackThemePalette.value.background
   s['--markstream-pre-resolved-theme-fg'] = preFallbackThemePalette.value.foreground
@@ -2799,7 +2812,7 @@ function toggleExpand() {
   }
   else {
     stopExpandAutoResize()
-    container.style.overflow = isDiff.value ? 'hidden' : 'auto'
+    container.style.overflow = 'auto'
     syncEditorHostHeight(true)
   }
 }
@@ -2810,12 +2823,9 @@ function toggleHeaderCollapse() {
     wasScrollableBeforeCollapse = false
     if (codeEditor.value) {
       const rectH = Math.ceil((codeEditor.value.getBoundingClientRect?.().height) || 0)
-      wasScrollableBeforeCollapse = !isDiff.value
-        && (
-          hasScrollableOverflow(codeEditor.value, rectH)
-          || codeEditor.value.style.overflow === 'auto'
-          || codeEditor.value.style.overflowY === 'auto'
-        )
+      wasScrollableBeforeCollapse = hasScrollableOverflow(codeEditor.value, rectH)
+        || codeEditor.value.style.overflow === 'auto'
+        || codeEditor.value.style.overflowY === 'auto'
       if (rectH > 0)
         heightBeforeCollapse.value = rectH
     }
@@ -4184,14 +4194,12 @@ onUnmounted(() => {
   padding-bottom: var(--markstream-pre-diff-pane-bottom-padding, 0px);
 }
 
-.code-block-container.is-diff :deep(pre.code-pre-fallback.markstream-pre--diff-preview .markstream-pre__diff-line--added::after),
 .code-block-container.is-diff :deep(pre.code-pre-fallback.markstream-pre--diff-preview .markstream-pre__diff-line--added > .markstream-pre__diff-number) {
-  background: var(--markstream-diff-added-line-fill, transparent) !important;
+  background: var(--markstream-diff-added-number-fill, var(--markstream-diff-added-line-fill, transparent)) !important;
 }
 
-.code-block-container.is-diff :deep(pre.code-pre-fallback.markstream-pre--diff-preview .markstream-pre__diff-line--removed::after),
 .code-block-container.is-diff :deep(pre.code-pre-fallback.markstream-pre--diff-preview .markstream-pre__diff-line--removed > .markstream-pre__diff-number) {
-  background: var(--markstream-diff-removed-line-fill, transparent) !important;
+  background: var(--markstream-diff-removed-number-fill, var(--markstream-diff-removed-line-fill, transparent)) !important;
 }
 
 .code-block-container.is-diff :deep(pre.code-pre-fallback.markstream-pre--diff-preview .markstream-pre__diff-line--added > .markstream-pre__diff-rail) {

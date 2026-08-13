@@ -89,7 +89,9 @@ if (typeof window !== 'undefined')
 
 fallback 行号按 `\n`、`\r\n` 或 `\r` 分隔的逻辑源码行计算。`overflow: 'wrap'` 下，超长逻辑行可以占据多个可视行，但只保留一个行号；自动换行不会创建额外的源码行号或 diff 行。内置 diff header 的 `- / +` 统计也只描述实际变更的逻辑源码行。
 
-unified 与 split diff 的 fallback 和最终 surface 使用相同的未变化区域折叠阈值。只有源文本确实缺少末尾 LF 时才显示 `No newline at end of file`；该行使用中性的 metadata 前景色与背景色，并在两个 surface 中占用相同可见高度。diff 行换行时，新增/删除内容背景、gutter 标记与行号背景会覆盖完整逻辑行；在换行和滚动模式之间切换会立即丢弃之前测量的行高。
+unified 与 split diff 的 fallback 和最终 surface 使用相同的未变化区域折叠阈值。只有源文本确实缺少末尾 LF 时才显示 `No newline at end of file`；该行使用中性的 metadata 前景色与背景色，并在两个 surface 中占用相同可见高度。新增/删除行背景在两个 surface 中具有相同的最终合成颜色；fallback 不得在重叠图层中重复绘制同一个半透明 fill。diff 行换行时，新增/删除内容背景、gutter 标记与行号背景会覆盖完整逻辑行；在换行和滚动模式之间切换会立即丢弃之前测量的行高。
+
+`maxHeight` 同样是共享的可见性边界。低于限制的内容在两个 surface 中都必须完整显示；超过限制的内容必须通过相同的内部滚动行为保持可访问，最终 diff host 不得使用 `overflow: hidden` 裁掉行内容并在外层 shell 留下空白。
 
 ```text
 1 │ const short = true

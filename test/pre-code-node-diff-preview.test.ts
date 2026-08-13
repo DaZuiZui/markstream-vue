@@ -772,7 +772,7 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
-  it('allows empty added and removed rows to receive diff fill styles', () => {
+  it('paints one added or removed fill layer in each visual region', () => {
     const source = readFileSync(
       'src/components/PreCodeNode/PreCodeNode.vue',
       'utf8',
@@ -781,16 +781,16 @@ describe('pre code node diff preview', () => {
     expect(source).toContain('.markstream-pre__diff-line--added::before')
     expect(source).toContain('.markstream-pre__diff-line--removed::before')
     expect(source).toContain('.markstream-pre__diff-line::after')
-    expect(source).toContain('.markstream-pre__diff-line--added::after')
-    expect(source).toContain('.markstream-pre__diff-line--removed::after')
+    expect(source).not.toContain('.markstream-pre__diff-line--added::after')
+    expect(source).not.toContain('.markstream-pre__diff-line--removed::after')
     expect(source).toContain('.markstream-pre__diff-line--added > .markstream-pre__diff-rail')
     expect(source).toContain('.markstream-pre__diff-line--removed > .markstream-pre__diff-rail')
     expect(source).toContain('.markstream-pre__diff-line--added > .markstream-pre__diff-number')
     expect(source).toContain('.markstream-pre__diff-line--removed > .markstream-pre__diff-number')
     expect(source).toContain('background: var(--markstream-diff-added-line-fill, transparent);')
     expect(source).toContain('background: var(--markstream-diff-removed-line-fill, transparent);')
-    expect(source).toContain('linear-gradient(\n      var(--markstream-diff-added-line-fill')
-    expect(source).toContain('linear-gradient(\n      var(--markstream-diff-removed-line-fill')
+    expect(source).not.toContain('linear-gradient(\n      var(--markstream-diff-added-line-fill')
+    expect(source).not.toContain('linear-gradient(\n      var(--markstream-diff-removed-line-fill')
     expect(source).toContain('--markstream-pre-diff-line-number-bg: var(')
     expect(source).toContain('background: var(--markstream-pre-diff-line-number-bg);')
     expect(source).toContain('border-right: var(--markstream-pre-diff-line-number-separator-width, 2px) solid var(--code-bg);')

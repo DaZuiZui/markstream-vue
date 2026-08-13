@@ -48,9 +48,22 @@ function helpers() {
   return (globalThis as any).__streamDiffsHelpers
 }
 
-function installFinalDiffsDom(container: HTMLElement) {
+function installFinalDiffsDom(container: HTMLElement, height?: number) {
   const surface = document.createElement('diffs-container')
   surface.textContent = 'final diffs surface'
+  if (height != null) {
+    surface.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: height,
+      width: 800,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect
+  }
   container.replaceChildren(surface)
 }
 
@@ -786,6 +799,69 @@ describe('codeBlockNode final Diffs gate', () => {
       expect(wrapper.find('pre.code-pre-fallback').exists()).toBe(false)
       expect(wrapper.get('[data-markstream-code-block="1"]').attributes('data-markstream-code-block-state')).toBe('settled')
     })
+    wrapper.unmount()
+  })
+
+  it.each([
+    { diffStyle: 'unified' as const, contentHeight: 120, expectedHeight: 120, expectedOverflow: 'hidden' },
+    { diffStyle: 'unified' as const, contentHeight: 720, expectedHeight: 240, expectedOverflow: 'auto' },
+    { diffStyle: 'split' as const, contentHeight: 120, expectedHeight: 120, expectedOverflow: 'hidden' },
+    { diffStyle: 'split' as const, contentHeight: 720, expectedHeight: 240, expectedOverflow: 'auto' },
+  ])('keeps a finalized $diffStyle diff with height $contentHeight visible or scrollable', async ({
+    diffStyle,
+    contentHeight,
+    expectedHeight,
+    expectedOverflow,
+  }) => {
+    const runtime = helpers()
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+      if (!this.matches('pre.code-pre-fallback'))
+        return originalGetBoundingClientRect.call(this)
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 800,
+        bottom: expectedHeight,
+        width: 800,
+        height: expectedHeight,
+        toJSON: () => ({}),
+      } as DOMRect
+    })
+    runtime.createDiffEditor.mockImplementation(async (container: HTMLElement) => {
+      installFinalDiffsDom(container, contentHeight)
+    })
+    runtime.whenVisualReady = vi.fn(() => Promise.resolve(true))
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'typescript',
+          code: '',
+          raw: '```diff\n-const before = 1\n+const after = 2\n```',
+          diff: true,
+          originalCode: 'const before = 1',
+          updatedCode: 'const after = 2',
+          loading: false,
+        },
+        codeBlockOptions: { diffStyle, maxHeight: 240 },
+        loading: false,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(wrapper.find('pre.code-pre-fallback').exists()).toBe(false))
+
+    const host = wrapper.get('.code-editor-container').element as HTMLElement
+    expect(host.style.height).toBe(`${expectedHeight}px`)
+    expect(host.style.maxHeight).toBe('240px')
+    expect(host.style.overflow).toBe(expectedOverflow)
+
     wrapper.unmount()
   })
 

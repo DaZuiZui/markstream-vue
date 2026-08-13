@@ -17,6 +17,10 @@ interface PreCodeThemeInput {
 }
 
 interface PreCodeThemePalette {
+  diffAddedLine: string
+  diffAddedNumber: string
+  diffRemovedLine: string
+  diffRemovedNumber: string
   background: string
   foreground: string
   lineNumber: string
@@ -84,12 +88,20 @@ export function resolvePreCodeThemePalette(input: PreCodeThemeInput): PreCodeThe
     ? {
         name,
         background: '#121212',
+        diffAddedLine: 'color-mix(in lab, #121212 80%, #4d9375)',
+        diffAddedNumber: 'color-mix(in lab, #121212 85%, #4d9375)',
+        diffRemovedLine: 'color-mix(in lab, #121212 80%, #cb7676)',
+        diffRemovedNumber: 'color-mix(in lab, #121212 85%, #cb7676)',
         foreground: '#dbd7caee',
         lineNumber: '#dedcd550',
       }
     : {
         name,
         background: '#ffffff',
+        diffAddedLine: 'color-mix(in lab, #ffffff 88%, #1e754f)',
+        diffAddedNumber: 'color-mix(in lab, #ffffff 91%, #1e754f)',
+        diffRemovedLine: 'color-mix(in lab, #ffffff 88%, #ab5959)',
+        diffRemovedNumber: 'color-mix(in lab, #ffffff 91%, #ab5959)',
         foreground: '#393a34',
         lineNumber: '#393a3450',
       }
