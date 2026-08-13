@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CodeBlockDiffHideUnchangedRegionsOptions, PreCodeNodeProps } from '../../types/component-props'
+import type { DiffLineMetric } from './preCodeDiffMetrics'
 
 import { computed, normalizeClass, normalizeStyle, onBeforeUnmount, ref, useAttrs, watch } from 'vue'
 
@@ -58,31 +59,15 @@ const codeLines = computed(() => {
 })
 const logicalCodeLines = computed(() => {
   const code = displayCode.value
-  const lines: string[] = []
-  const lineBreak = /\r\n|\n|\r/g
-  let start = 0
-  let match = lineBreak.exec(code)
-
-  while (match) {
-    lines.push(code.slice(start, lineBreak.lastIndex))
-    start = lineBreak.lastIndex
-    match = lineBreak.exec(code)
-  }
-
-  lines.push(code.slice(start))
+  const lines = code.split(/(?<=\n)|(?<=\r)(?!\n)/)
+  if (/(?:\r\n|\n|\r)$/.test(code))
+    lines.push('')
   return lines
 })
 
-function isWrappingWhiteSpace(value: unknown) {
-  return value === 'pre-wrap' || value === 'break-spaces'
-}
-
 const isDiffPreview = computed(() => props.showLineNumbers === true && props.node?.diff === true)
 
-function wrapsPlainCodeLines() {
-  if (props.showLineNumbers !== true || props.node?.diff === true)
-    return false
-
+const wrapsCodeLines = computed(() => {
   if (normalizeClass(attrs.class).split(/\s+/).includes('is-wrap'))
     return true
 
@@ -90,21 +75,15 @@ function wrapsPlainCodeLines() {
   if (typeof style === 'string')
     return /(?:^|;)\s*white-space\s*:\s*(?:pre-wrap|break-spaces)(?:\s*!important)?\s*(?:;|$)/i.test(style)
 
-  return isWrappingWhiteSpace(style?.whiteSpace ?? style?.['white-space'])
+  return ['pre-wrap', 'break-spaces'].includes(String(style?.whiteSpace ?? style?.['white-space']))
+})
+
+function wrapsPlainCodeLines() {
+  return props.showLineNumbers === true && props.node?.diff !== true && wrapsCodeLines.value
 }
 
 const wrapsDiffPreviewLines = computed(() => {
-  if (!isDiffPreview.value)
-    return false
-
-  if (normalizeClass(attrs.class).split(/\s+/).includes('is-wrap'))
-    return true
-
-  const style = normalizeStyle(attrs.style)
-  if (typeof style === 'string')
-    return /(?:^|;)\s*white-space\s*:\s*(?:pre-wrap|break-spaces)(?:\s*!important)?\s*(?:;|$)/i.test(style)
-
-  return isWrappingWhiteSpace(style?.whiteSpace ?? style?.['white-space'])
+  return isDiffPreview.value && wrapsCodeLines.value
 })
 
 let lineNumbersTextCount = 0
@@ -831,100 +810,11 @@ const ariaLabel = computed(() => {
 
 const preRef = ref<HTMLPreElement | null>(null)
 
-interface DiffLineMetric {
-  rowHeight: number
-  originalHeight: number
-  modifiedHeight: number
-}
-
 const diffLineMetrics = ref<DiffLineMetric[]>([])
 let diffLineMetricsRaf: number | null = null
+let diffMetricsModule: Promise<typeof import('./preCodeDiffMetrics')> | null = null
 let disposed = false
 let diffResizeObserver: ResizeObserver | null = null
-
-function readPx(value: string | null | undefined) {
-  const parsed = Number.parseFloat(String(value ?? ''))
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-}
-
-function readBaseDiffLineHeight(root: HTMLElement) {
-  const style = window.getComputedStyle(root)
-  const fromVar = readPx(style.getPropertyValue('--markstream-pre-diff-line-height'))
-  if (fromVar > 0)
-    return fromVar
-
-  const fromLineHeight = readPx(style.lineHeight)
-  return fromLineHeight > 0 ? fromLineHeight : 18
-}
-
-function readNaturalDiffLineHeight(line: HTMLElement | null, baseLineHeight: number) {
-  if (!line)
-    return baseLineHeight
-
-  if (line.classList.contains('markstream-pre__diff-line--collapsed'))
-    return 32
-
-  const content = line.querySelector('.markstream-pre__diff-content') as HTMLElement | null
-  const contentRect = content?.getBoundingClientRect()
-  const contentHeight = contentRect?.height ?? 0
-
-  return Math.max(baseLineHeight, Math.ceil(contentHeight))
-}
-
-function areDiffMetricsEqual(a: DiffLineMetric[], b: DiffLineMetric[]) {
-  if (a.length !== b.length)
-    return false
-
-  return a.every((item, index) => {
-    const other = b[index]
-    return other
-      && Math.abs(item.rowHeight - other.rowHeight) <= 0.5
-      && Math.abs(item.originalHeight - other.originalHeight) <= 0.5
-      && Math.abs(item.modifiedHeight - other.modifiedHeight) <= 0.5
-  })
-}
-
-function syncDiffLineMetrics() {
-  diffLineMetricsRaf = null
-
-  const root = preRef.value
-  if (
-    !root
-    || !isDiffPreview.value
-    || isInlineDiffPreview.value
-    || !wrapsDiffPreviewLines.value
-  ) {
-    if (diffLineMetrics.value.length)
-      diffLineMetrics.value = []
-    return
-  }
-
-  const baseLineHeight = readBaseDiffLineHeight(root)
-
-  const originalSelector = isInlineDiffPreview.value
-    ? '.markstream-pre__diff-pane--inline .markstream-pre__diff-line'
-    : '.markstream-pre__diff-pane--original .markstream-pre__diff-line'
-  const originalLines = Array.from(root.querySelectorAll<HTMLElement>(originalSelector))
-  const modifiedLines = Array.from(
-    root.querySelectorAll<HTMLElement>('.markstream-pre__diff-pane--modified .markstream-pre__diff-line'),
-  )
-
-  const count = Math.max(originalLines.length, modifiedLines.length)
-  const next: DiffLineMetric[] = []
-
-  for (let i = 0; i < count; i++) {
-    const originalHeight = readNaturalDiffLineHeight(originalLines[i] ?? null, baseLineHeight)
-    const modifiedHeight = isInlineDiffPreview.value
-      ? originalHeight
-      : readNaturalDiffLineHeight(modifiedLines[i] ?? null, baseLineHeight)
-    const rowHeight = Math.max(baseLineHeight, originalHeight, modifiedHeight)
-
-    next.push({ rowHeight, originalHeight, modifiedHeight })
-  }
-
-  if (!areDiffMetricsEqual(diffLineMetrics.value, next))
-    diffLineMetrics.value = next
-}
 
 function scheduleDiffLineMetricsSync() {
   if (
@@ -940,11 +830,17 @@ function scheduleDiffLineMetricsSync() {
   if (diffLineMetricsRaf != null)
     return
 
+  diffMetricsModule ??= import('./preCodeDiffMetrics')
   diffLineMetricsRaf = window.requestAnimationFrame(() => {
-    diffLineMetricsRaf = null
-    if (disposed)
-      return
-    syncDiffLineMetrics()
+    void diffMetricsModule!.then(({ measurePreCodeDiffLines }) => {
+      const root = preRef.value
+      if (!disposed && root) {
+        const next = measurePreCodeDiffLines(root, diffLineMetrics.value)
+        if (next !== diffLineMetrics.value)
+          diffLineMetrics.value = next
+      }
+      diffLineMetricsRaf = null
+    })
   })
 }
 

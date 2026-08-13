@@ -13,7 +13,8 @@ import { MARKSTREAM_NODE_LIFECYCLE_KEY } from '../../utils/nodeLifecycle'
 import { resolveLanguageIcon } from '../../utils/resolveLanguageIcon'
 import { safeCancelRaf, safeRaf } from '../../utils/safeRaf'
 import PreCodeBlock from '../PreCodeNode/PreCodeBlock.vue'
-import { preCodeThemeLooksDark, resolvePreCodeThemeName, resolvePreCodeThemePalette } from '../PreCodeNode/preCodeTheme'
+import { resolvePreCodeThemePalette } from '../PreCodeNode/preCodeTheme'
+import { preCodeThemeLooksDark, resolvePreCodeThemeName } from '../PreCodeNode/preCodeThemeName'
 import {
   DEFAULT_PRE_CODE_FONT_SIZE,
   DEFAULT_PRE_CODE_LINE_HEIGHT,

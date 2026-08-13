@@ -1079,6 +1079,7 @@ describe('pre code node diff preview', () => {
     })
 
     await nextTick()
+    await vi.dynamicImportSettled()
     const pre = wrapper.get('pre')
     expect(pre.classes()).toContain('is-wrap')
     expect(observe).toHaveBeenCalledWith(pre.element)
@@ -1166,6 +1167,7 @@ describe('pre code node diff preview', () => {
     const wrapper = mount(Host)
 
     await nextTick()
+    await vi.dynamicImportSettled()
     await new Promise(resolve => requestAnimationFrame(resolve))
     await nextTick()
     expect(wrapper.findAll('.markstream-pre__diff-line').some(row => row.attributes('style')?.includes('--markstream-pre-diff-synced-row-height'))).toBe(true)

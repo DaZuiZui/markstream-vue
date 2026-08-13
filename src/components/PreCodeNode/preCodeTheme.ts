@@ -1,12 +1,5 @@
-import type { CodeBlockTheme, CodeBlockThemeProp } from '../../types/component-props'
-
-interface PreCodeThemeInput {
-  isDark?: boolean
-  theme?: CodeBlockThemeProp
-  darkTheme?: CodeBlockTheme
-  lightTheme?: CodeBlockTheme
-  themes?: readonly CodeBlockTheme[]
-}
+import type { PreCodeThemeInput } from './preCodeThemeName'
+import { preCodeThemeLooksDark, resolvePreCodeThemeName } from './preCodeThemeName'
 
 interface PreCodeThemePalette {
   builtin: boolean
@@ -19,61 +12,6 @@ interface PreCodeThemePalette {
   foreground: string
   lineNumber: string
   name: string
-}
-
-function isThemePair(theme: CodeBlockThemeProp | undefined): theme is { dark: string, light: string } {
-  return !!theme && typeof theme === 'object' && 'dark' in theme && 'light' in theme
-}
-
-export function resolvePreCodeThemeName(input: PreCodeThemeInput): string {
-  if (input.theme !== undefined)
-    return isThemePair(input.theme) ? (input.isDark ? input.theme.dark : input.theme.light) : input.theme
-
-  const explicitTheme = input.isDark ? input.darkTheme : input.lightTheme
-  if (explicitTheme)
-    return explicitTheme
-
-  const configuredTheme = input.isDark ? input.themes?.[0] : input.themes?.[1]
-  if (configuredTheme)
-    return configuredTheme
-
-  return input.isDark ? 'vitesse-dark' : 'vitesse-light'
-}
-
-export function preCodeThemeLooksDark(themeName: string, isDark = false) {
-  const normalized = themeName.toLowerCase()
-  if (!normalized)
-    return isDark
-  const darkTokens = [
-    'dark',
-    'night',
-    'moon',
-    'black',
-    'dracula',
-    'mocha',
-    'frappe',
-    'macchiato',
-    'palenight',
-    'ocean',
-    'poimandres',
-    'monokai',
-    'laserwave',
-    'tokyo',
-    'slack-dark',
-    'rose-pine',
-    'github-dark',
-    'material-theme',
-    'one-dark',
-    'catppuccin-mocha',
-    'catppuccin-frappe',
-    'catppuccin-macchiato',
-  ]
-  const lightTokens = ['light', 'latte', 'dawn', 'lotus']
-  if (lightTokens.some(token => normalized.includes(token)))
-    return false
-  if (darkTokens.some(token => normalized.includes(token)))
-    return true
-  return isDark
 }
 
 export function resolvePreCodeThemePalette(input: PreCodeThemeInput): PreCodeThemePalette {

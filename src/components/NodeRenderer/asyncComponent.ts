@@ -6,8 +6,11 @@ import type {
 } from '../../types/component-props'
 import { defineAsyncComponent, defineComponent, getCurrentInstance, h, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useOffscreenHeavyNodeDeferral, useViewportPriority, useViewportPriorityOptions } from '../../composables/viewportPriority'
+import { isDiffCodeBlock } from '../CodeBlockNode/codeBlockHeader'
 import { getKatex } from '../MathInlineNode/katex'
 import PreCodeNode from '../PreCodeNode'
+import { preCodeThemeLooksDark, resolvePreCodeThemeName } from '../PreCodeNode/preCodeThemeName'
+import { resolvePreCodeVisualOptions } from '../PreCodeNode/preCodeVisual'
 import TextNode from '../TextNode'
 
 interface ProcessLike {
@@ -105,37 +108,102 @@ const CodeBlockNodeLoadingShell = defineComponent({
     'node',
     'isDark',
     'loading',
+    'stream',
+    'codeBlockOptions',
+    'showLineNumbers',
+    'theme',
+    'darkTheme',
+    'lightTheme',
+    'isShowPreview',
+    'enableFontSizeControl',
+    'minWidth',
+    'maxWidth',
+    'themes',
     'showHeader',
+    'showCopyButton',
+    'showExpandButton',
+    'showPreviewButton',
+    'showCollapseButton',
+    'showFontSizeButtons',
+    'showTooltips',
+    'htmlPreviewAllowScripts',
+    'htmlPreviewSandbox',
+    'customId',
+    'indexKey',
+    'estimatedHeightPx',
     'estimatedContentHeightPx',
+    'estimatedDiffInline',
+    'diffInline',
+    'diffHideUnchangedRegions',
+    'reservedHeightPx',
   ],
+  emits: ['click', 'mouseover', 'mouseout', 'copy', 'previewCode', 'handleArtifactClick'],
   setup(rawProps, { attrs }) {
-    const props = rawProps as CodeBlockFallbackProps & { estimatedContentHeightPx?: number }
+    const props = rawProps as CodeBlockFallbackProps & {
+      estimatedContentHeightPx?: number
+      estimatedDiffInline?: boolean
+    }
     return () => {
-      const contentHeight = typeof props.estimatedContentHeightPx === 'number'
-        ? `${Math.ceil(props.estimatedContentHeightPx)}px`
+      const options = props.codeBlockOptions ?? {}
+      const visual = resolvePreCodeVisualOptions(options)
+      const themeName = resolvePreCodeThemeName(props)
+      const dark = preCodeThemeLooksDark(themeName, props.isDark === true)
+      const builtin = themeName === 'vitesse-dark' || themeName === 'vitesse-light'
+      const palette = dark
+        ? ['#121212', '#dbd7caee', '#dedcd550']
+        : ['#ffffff', '#393a34', '#393a3450']
+      if (!builtin) {
+        palette[0] = `var(--markstream-code-theme-bg, ${palette[0]})`
+        palette[1] = `var(--markstream-code-theme-fg, ${palette[1]})`
+        palette[2] = `var(--markstream-code-theme-line-number, ${palette[2]})`
+      }
+      const isDiff = isDiffCodeBlock(props.node)
+      const diffInline = isDiff && Boolean(props.diffInline ?? props.estimatedDiffInline ?? options.diffStyle === 'unified')
+      const showLineNumbers = props.showLineNumbers ?? options.disableLineNumbers !== true
+      const reservedHeight = Number(props.estimatedContentHeightPx ?? props.reservedHeightPx)
+      const estimated = Number.isFinite(reservedHeight) && reservedHeight > 0
+        ? Math.min(visual.maxHeight, Math.ceil(reservedHeight))
         : undefined
+      const safeAttrs = Object.fromEntries(Object.entries(attrs).filter(([key]) => key === 'class' || key === 'style' || /^(?:data|aria)-/.test(key)))
       return h('div', {
-        ...attrs,
-        'class': ['code-block-container', 'rounded-lg', 'border', {
-          'dark': props.isDark === true,
-          'is-rendering': props.loading !== false,
-        }, attrs.class],
-        'style': attrs.style,
+        ...safeAttrs,
+        'class': ['code-block-container', {
+          'is-dark': dark,
+        }, safeAttrs.class],
+        'style': [{
+          '--code-bg': palette[0],
+          '--code-fg': palette[1],
+          '--code-line-number': palette[2],
+        }, safeAttrs.style],
         'data-markstream-code-block': '1',
         'data-markstream-enhanced': 'false',
         'data-markstream-code-block-state': props.loading ? 'streaming' : 'settled',
-        'data-markstream-code-loading': '1',
       }, [
         props.showHeader === false
           ? null
           : h('div', {
-              class: 'code-block-header flex justify-between items-center border-b px-[var(--ms-inset-panel-x)] py-[var(--ms-inset-panel-y)] border-[var(--code-border)] bg-[var(--code-header-bg)] text-[var(--code-fg)]',
+              class: 'code-block-header',
+              style: { minHeight: '37px' },
             }),
-        h('pre', {
-          'class': 'code-pre-fallback',
-          'style': contentHeight ? { maxHeight: contentHeight, overflow: 'auto' } : undefined,
+        h(PreCodeNode, {
+          'node': props.node,
+          'loading': props.loading,
+          'showLineNumbers': showLineNumbers,
+          'diffInline': diffInline,
+          'reservedHeightPx': estimated,
+          'class': ['code-pre-fallback', {
+            'is-wrap': visual.overflow === 'wrap',
+          }],
+          'style': {
+            '--markstream-code-padding-x': `${visual.padding}px`,
+            '--markstream-code-padding-y': `${visual.padding}px`,
+            '--markstream-code-tab-size': visual.tabSize,
+            '--markstream-pre-diff-line-height': `${visual.lineHeight}px`,
+            'font': `${visual.fontSize}px/${visual.lineHeight}px ${visual.fontFamily}`,
+            'maxHeight': `${estimated ?? visual.maxHeight}px`,
+          },
           'data-markstream-code-loading': '1',
-        }, String(props.node?.code ?? '')),
+        }),
       ])
     }
   },
@@ -144,6 +212,7 @@ const CodeBlockNodeLoadingShell = defineComponent({
 export const CodeBlockNodeLoading: Component = defineAsyncComponent({
   loader: () => import('./CodeBlockNodeLoading'),
   loadingComponent: CodeBlockNodeLoadingShell,
+  errorComponent: CodeBlockNodeLoadingShell,
   delay: 0,
   suspensible: true,
 })

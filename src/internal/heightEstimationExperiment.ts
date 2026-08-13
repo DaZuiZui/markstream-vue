@@ -414,22 +414,16 @@ function getCodeBlockVisibleLineCount(
 
 function getCodeColumns(line: string, tabSize: number) {
   let columns = 0
-  for (const character of line) {
-    if (character === '\t') {
-      columns += tabSize - (columns % tabSize)
-      continue
-    }
-    columns += /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE10-\uFE19\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/u.test(character) ? 2 : 1
-  }
+  for (const character of line)
+    columns += character === '\t' ? tabSize - (columns % tabSize) : character >= '\u1100' ? 2 : 1
   return columns
 }
 
-function getWrappedLineRows(line: string, availableWidth: number, characterWidth: number, tabSize: number) {
-  const columnsPerRow = Math.max(1, Math.floor(availableWidth / characterWidth))
+function getWrappedLineRows(line: string, columnsPerRow: number, tabSize: number) {
   return Math.max(1, Math.ceil(getCodeColumns(line, tabSize) / columnsPerRow))
 }
 
-function getPreCodeContentWidth(
+function getPreCodeColumnsPerRow(
   width: number,
   characterWidth: number,
   lineCount: number,
@@ -437,17 +431,15 @@ function getPreCodeContentWidth(
   options: CodeBlockEstimateOptions,
   splitPane: boolean,
 ) {
-  const paneWidth = splitPane ? width / 2 : width
+  const paneWidth = width / (splitPane ? 2 : 1)
   const horizontalPadding = options.codeBlockOptions?.padding == null
     ? characterWidth
     : visual.padding
   const showLineNumbers = options.showLineNumbers
     ?? (options.codeBlockOptions?.disableLineNumbers !== true)
   const lineNumberWidth = Math.max(2, String(Math.max(1, lineCount)).length) * characterWidth
-  const gutterWidth = showLineNumbers
-    ? (3 * characterWidth + lineNumberWidth + 2 + horizontalPadding)
-    : horizontalPadding
-  return Math.max(characterWidth, paneWidth - gutterWidth - horizontalPadding)
+  const gutterWidth = showLineNumbers ? 3 * characterWidth + lineNumberWidth + 2 : 0
+  return Math.max(1, Math.floor((paneWidth - gutterWidth - 2 * horizontalPadding) / characterWidth))
 }
 
 function getPreCodeVisualRowCount(
@@ -472,8 +464,8 @@ function getPreCodeVisualRowCount(
         ].filter(Boolean).join('\n'))
       : getDisplayCode((node as any).code, (node as any).loading === true)
     const lines = source.split(/\r\n|\n|\r/)
-    const contentWidth = getPreCodeContentWidth(width, characterWidth, lines.length, visual, options, false)
-    return lines.reduce((rows, line) => rows + getWrappedLineRows(line, contentWidth, characterWidth, visual.tabSize), 0)
+    const columns = getPreCodeColumnsPerRow(width, characterWidth, lines.length, visual, options, false)
+    return lines.reduce((rows, line) => rows + getWrappedLineRows(line, columns, visual.tabSize), 0)
   }
 
   const original = getDisplayCode((node as any).originalCode).split(/\r\n|\n|\r/)
@@ -482,12 +474,12 @@ function getPreCodeVisualRowCount(
     return logicalLineCount
 
   const lineCount = Math.max(original.length, updated.length)
-  const contentWidth = getPreCodeContentWidth(width, characterWidth, lineCount, visual, options, true)
+  const columns = getPreCodeColumnsPerRow(width, characterWidth, lineCount, visual, options, true)
   let rows = 0
   for (let index = 0; index < lineCount; index++) {
     rows += Math.max(
-      getWrappedLineRows(original[index] ?? '', contentWidth, characterWidth, visual.tabSize),
-      getWrappedLineRows(updated[index] ?? '', contentWidth, characterWidth, visual.tabSize),
+      getWrappedLineRows(original[index] ?? '', columns, visual.tabSize),
+      getWrappedLineRows(updated[index] ?? '', columns, visual.tabSize),
     )
   }
   return rows

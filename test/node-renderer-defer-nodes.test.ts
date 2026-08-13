@@ -544,10 +544,11 @@ describe('markdownRender deferNodesUntilVisible', () => {
     }
   })
 
-  it('uses the heavy-block preload margin for MarkdownRender code blocks', async () => {
+  it('keeps the shared pre contract while MarkdownRender code blocks are offscreen', async () => {
     const OriginalIO = globalThis.IntersectionObserver
     const benchmarkWindow = window as any
     vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver as any)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
     benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__ = true
 
     let wrapper: ReturnType<typeof mount> | null = null
@@ -569,6 +570,24 @@ describe('markdownRender deferNodesUntilVisible', () => {
             rootMargin: '111px',
             heavyBlockMargin: '222px',
           },
+          codeBlockOptions: {
+            disableLineNumbers: true,
+            fontFamily: 'Fira Code',
+            fontSize: 20,
+            lineHeight: 30,
+            maxHeight: 180,
+            overflow: 'scroll',
+            padding: 12,
+            tabSize: 8,
+          },
+          codeBlockProps: {
+            estimatedContentHeightPx: 54,
+            theme: 'dracula',
+          },
+          virtualScroll: {
+            enabled: true,
+            sessionKey: 'offscreen-code-shell',
+          },
         },
       })
 
@@ -579,11 +598,67 @@ describe('markdownRender deferNodesUntilVisible', () => {
       const codeBlockObserver = FakeIntersectionObserver.instances.find(instance => instance.elements.has(codeBlock.element))
       expect(codeBlockObserver).toBeTruthy()
       expect(codeBlockObserver?.options.rootMargin).toBe('222px')
+      expect(codeBlock.classes()).toContain('is-dark')
+      expect(codeBlock.attributes('codeblockoptions')).toBeUndefined()
+      expect(codeBlock.attributes('showlinenumbers')).toBeUndefined()
+      expect(codeBlock.attributes('index-key')).toBeUndefined()
+      expect(codeBlock.attributes('estimatedcontentheightpx')).toBeUndefined()
+
+      const pre = codeBlock.get('pre.code-pre-fallback')
+      expect(codeBlock.element.style.getPropertyValue('--code-bg')).toBe('var(--markstream-code-theme-bg, #121212)')
+      expect(codeBlock.element.style.getPropertyValue('--code-fg')).toBe('var(--markstream-code-theme-fg, #dbd7caee)')
+      expect(pre.attributes('data-markstream-line-numbers')).toBeUndefined()
+      expect((pre.element as HTMLElement).style.fontFamily).toBe('Fira Code')
+      expect((pre.element as HTMLElement).style.fontSize).toBe('20px')
+      expect((pre.element as HTMLElement).style.lineHeight).toBe('30px')
+      expect((pre.element as HTMLElement).style.getPropertyValue('--markstream-code-tab-size')).toBe('8')
+      expect((pre.element as HTMLElement).style.getPropertyValue('--markstream-code-padding-y')).toBe('12px')
+      expect(pre.classes()).not.toContain('is-wrap')
+      expect((pre.element as HTMLElement).style.maxHeight).toBe('54px')
+      expect((pre.element as HTMLElement).style.height).toBe('54px')
+      expect((pre.element as HTMLElement).style.minHeight).toBe('54px')
+
+      expect(codeBlock.element.outerHTML).not.toContain('codeblockoptions=')
+      expect(codeBlock.element.outerHTML).not.toContain('showlinenumbers=')
     }
     finally {
       wrapper?.unmount()
       delete benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__
       vi.stubGlobal('IntersectionObserver', OriginalIO as any)
+    }
+  })
+
+  it('keeps default diff and line-number geometry while the async code block is offscreen', async () => {
+    const benchmarkWindow = window as any
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver as any)
+    benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__ = true
+
+    let wrapper: ReturnType<typeof mount> | null = null
+    try {
+      const { default: MarkdownRender } = await import('../src/components/NodeRenderer')
+      wrapper = mount(MarkdownRender, {
+        props: {
+          content: '```diff\n-old\n+new\n```',
+          batchRendering: false,
+          deferNodesUntilVisible: false,
+          final: true,
+          viewportPriority: true,
+        },
+      })
+
+      for (let attempt = 0; attempt < 10 && !wrapper.find('[data-markstream-code-block="1"]').exists(); attempt++)
+        await flushAll()
+
+      const codeBlock = wrapper.get('[data-markstream-code-block="1"]')
+      const pre = codeBlock.get('pre.code-pre-fallback')
+      expect(pre.attributes('data-markstream-line-numbers')).toBe('1')
+      expect(pre.classes()).toContain('markstream-pre--diff-preview')
+      expect(pre.classes()).not.toContain('markstream-pre--diff-inline')
+      expect(pre.findAll('.markstream-pre__diff-pane')).toHaveLength(2)
+    }
+    finally {
+      wrapper?.unmount()
+      delete benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__
     }
   })
 
