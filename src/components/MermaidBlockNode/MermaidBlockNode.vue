@@ -864,7 +864,9 @@ async function canParseOffthread(
         || errorCode === 'WORKER_INIT_ERROR'
         || errorCode === 'MERMAID_DISABLED'
         || errorCode === 'WORKER_REPLACED'
-    if (!isTransient || error?.fallbackToRenderer)
+    // 若 worker 侧解析超时（worker 可能卡死），回退到主线程解析；
+    // 主线程解析自身有超时上限（parse timeout），不会无限阻塞。
+    if (!isTransient || error?.fallbackToRenderer || errorCode === 'WORKER_TIMEOUT')
       return await canParseOnMain(code, theme, opts)
     throw error
   }
@@ -1032,9 +1034,9 @@ function updateContainerHeight(newContainerWidth?: number, options?: { force?: b
     const newHeight = effectiveWidth * aspectRatio
     const resolvedHeight = maxHeight == null ? newHeight : Math.min(newHeight, maxHeight)
     const previewHeight = Math.max(resolvedHeight, resolveEstimatedPreviewHeight())
-    contentHeight.value = `${Math.max(newHeight, previewHeight)}px`
     if (!freezePreviewHeight && !hasExternalPreviewHeightEstimate())
       containerHeight.value = `${previewHeight}px`
+    contentHeight.value = containerHeight.value
   }
 }
 
@@ -1530,9 +1532,12 @@ async function initMermaid(request = createMermaidRenderRequest()) {
       const bindFunctions = res?.bindFunctions ?? null
       lastMermaidBindFunctions = bindFunctions
       bindMermaidInteractions(rendered.bindTarget)
+      // Re-measure the container height on every successful commit (keeps the
+      // preview sized to the *latest* diagram after streaming updates; the
+      // streaming freeze is respected inside updateContainerHeight).
+      safeRaf(() => updateContainerHeight())
       // Successful full render clears Partial preview state
       if (!hasRenderedOnce.value && !isThemeRendering.value) {
-        safeRaf(() => updateContainerHeight())
         hasRenderedOnce.value = true
         savedTransformState.value = {
           zoom: zoom.value,
@@ -2155,6 +2160,8 @@ watch(
             updateContainerHeight(newWidth)
           })
         }
+        // 容器尺寸变化（宽度或高度，如 maxHeight 截断、模式切换过渡结束）后
+        // 重新适配默认视角；仍处于流式期间时跳过，等 loading=false 的最终提交兜底
       })
       resizeObserver.observe(newEl)
     }
@@ -2673,7 +2680,12 @@ const computedButtonStyle = 'mermaid-action-btn p-[var(--ms-action-btn-padding)]
 ._mermaid :deep(svg) {
   width: 100%;
   height: auto;
+  max-height: 100%;
   display: block;
+}
+
+.fullscreen ._mermaid :deep(svg) {
+  max-height: none;
 }
 
 .fullscreen {
