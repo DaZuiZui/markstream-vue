@@ -13,6 +13,7 @@ function humanizeKey(key: string) {
 
 const defaultMap: Record<string, string> = {
   'common.copy': 'Copy',
+  'common.selectCopy': '全选（复制）',
   'common.copied': 'Copied',
   'common.decrease': 'Decrease',
   'common.reset': 'Reset',

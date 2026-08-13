@@ -320,7 +320,9 @@ describe('node renderer domMode', () => {
       const placeholder = wrapper.get('.node-slot[data-node-index="1"] .node-placeholder')
       const height = Number.parseFloat((placeholder.element as HTMLElement).style.height)
 
-      expect(height).toBeGreaterThan(270)
+      // render-code-blocks-as-pre uses the shared 12px/18px PreCodeBlock metrics:
+      // 10 rows (180px) + 16px vertical padding + 37px copy toolbar.
+      expect(height).toBe(233)
     }
     finally {
       wrapper?.unmount()

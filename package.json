@@ -147,6 +147,8 @@
     "test:e2e:svelte-playground": "node scripts/e2e-svelte-playground.mjs",
     "test:e2e:diff-theme-switch": "node scripts/e2e-diff-theme-switch.mjs",
     "test:e2e:diff-streaming-stability": "node scripts/e2e-diff-streaming-stability.mjs",
+    "test:e2e:diff-handoff-check": "node scripts/e2e-diff-handoff-check.mjs",
+    "test:e2e:diff-handoff-check:classic": "node scripts/e2e-diff-handoff-check.mjs --classic-scrollbar",
     "test:e2e:nuxt-ssr": "node scripts/e2e-nuxt-ssr.mjs",
     "test:e2e:katex-unicode-unit": "node scripts/e2e-katex-unicode-unit-regression.mjs",
     "lint": "eslint . --cache",

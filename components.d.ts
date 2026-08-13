@@ -44,6 +44,7 @@ declare module 'vue' {
     NodeChildRenderer: typeof import('./src/components/NodeChildRenderer/NodeChildRenderer.vue')['default']
     NodeRenderer: typeof import('./src/components/NodeRenderer/NodeRenderer.vue')['default']
     ParagraphNode: typeof import('./src/components/ParagraphNode/ParagraphNode.vue')['default']
+    PreCodeBlock: typeof import('./src/components/PreCodeNode/PreCodeBlock.vue')['default']
     PreCodeNode: typeof import('./src/components/PreCodeNode/PreCodeNode.vue')['default']
     ReferenceNode: typeof import('./src/components/ReferenceNode/ReferenceNode.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

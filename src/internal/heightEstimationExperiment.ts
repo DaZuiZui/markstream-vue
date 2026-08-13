@@ -1,8 +1,10 @@
 import type { PreparedText } from '@chenglou/pretext'
 import type { ParsedNode } from 'stream-markdown-parser'
+import type { CodeBlockOptions } from '../types/component-props'
 import { layout, prepare } from '@chenglou/pretext'
 import { shallowRef } from 'vue'
 import { resolveDiffInlineLayout } from '../components/CodeBlockNode/codeBlockHeader'
+import { resolvePreCodeVisualOptions } from '../components/PreCodeNode/preCodeVisual'
 
 type WhiteSpaceMode = 'normal' | 'pre-wrap'
 type EstimateKind = 'simple-text' | 'code-block'
@@ -81,7 +83,9 @@ export interface EstimatedNodeHeight {
 
 export interface CodeBlockEstimateOptions {
   rendererKind: CodeRendererKind
+  codeBlockOptions?: CodeBlockOptions
   showHeader?: boolean
+  showLineNumbers?: boolean
   width?: number
   diffStyle?: 'split' | 'unified'
 }
@@ -90,8 +94,8 @@ const GLOBAL_STORE_KEY = '__MARKSTREAM_VUE_HEIGHT_ESTIMATION_EXPERIMENT__'
 const PREPARED_CACHE_LIMIT = 240
 const BLOCK_ESTIMATE_CACHE_LIMIT = 4000
 const CODE_BLOCK_HEADER_HEIGHT = 40
+const PRE_CODE_TOOLBAR_HEIGHT = 37
 const CODE_BLOCK_DEFAULT_CAP = 500
-const PRE_CODE_LINE_HEIGHT = 28
 const DIFF_METADATA_PREFIXES = ['diff ', 'index ', '--- ', '+++ ', '@@ ']
 
 interface PreparedCacheEntry {
@@ -344,7 +348,7 @@ export function estimateSimpleTextBlockHeight(
 function countCodeLines(source: string) {
   if (!source)
     return 1
-  const lines = String(source).split(/\r?\n/)
+  const lines = String(source).split(/\r\n|\n|\r/)
   return Math.max(1, lines.length)
 }
 
@@ -408,6 +412,79 @@ function getCodeBlockVisibleLineCount(
   return countCodeLines(getDisplayCode((node as any).code, (node as any).loading === true))
 }
 
+function getCodeColumns(line: string, tabSize: number) {
+  let columns = 0
+  for (const character of line)
+    columns += character === '\t' ? tabSize - (columns % tabSize) : character >= '\u1100' ? 2 : 1
+  return columns
+}
+
+function getWrappedLineRows(line: string, columnsPerRow: number, tabSize: number) {
+  return Math.max(1, Math.ceil(getCodeColumns(line, tabSize) / columnsPerRow))
+}
+
+function getPreCodeColumnsPerRow(
+  width: number,
+  characterWidth: number,
+  lineCount: number,
+  visual: ReturnType<typeof resolvePreCodeVisualOptions>,
+  options: CodeBlockEstimateOptions,
+  splitPane: boolean,
+) {
+  const paneWidth = width / (splitPane ? 2 : 1)
+  const horizontalPadding = options.codeBlockOptions?.padding == null
+    ? characterWidth
+    : visual.padding
+  const showLineNumbers = options.showLineNumbers
+    ?? (options.codeBlockOptions?.disableLineNumbers !== true)
+  const lineNumberWidth = Math.max(2, String(Math.max(1, lineCount)).length) * characterWidth
+  const gutterWidth = showLineNumbers ? 3 * characterWidth + lineNumberWidth + 2 : 0
+  return Math.max(1, Math.floor((paneWidth - gutterWidth - 2 * horizontalPadding) / characterWidth))
+}
+
+function getPreCodeVisualRowCount(
+  node: ParsedNode,
+  options: CodeBlockEstimateOptions,
+  visual: ReturnType<typeof resolvePreCodeVisualOptions>,
+) {
+  const logicalLineCount = getCodeBlockVisibleLineCount(node, options.diffStyle)
+  const width = Number(options.width)
+  if (visual.overflow !== 'wrap' || !Number.isFinite(width) || width <= 0)
+    return logicalLineCount
+
+  const characterWidth = Math.max(1, visual.fontSize * 0.6)
+  const isDiff = Boolean((node as any).diff)
+  const diffInline = isDiff && resolveDiffInlineLayout({ diffStyle: options.diffStyle })
+
+  if (!isDiff || diffInline) {
+    const source = isDiff
+      ? (getDisplayCode((node as any).raw) || [
+          getDisplayCode((node as any).originalCode),
+          getDisplayCode((node as any).updatedCode),
+        ].filter(Boolean).join('\n'))
+      : getDisplayCode((node as any).code, (node as any).loading === true)
+    const lines = source.split(/\r\n|\n|\r/)
+    const columns = getPreCodeColumnsPerRow(width, characterWidth, lines.length, visual, options, false)
+    return lines.reduce((rows, line) => rows + getWrappedLineRows(line, columns, visual.tabSize), 0)
+  }
+
+  const original = getDisplayCode((node as any).originalCode).split(/\r\n|\n|\r/)
+  const updated = getDisplayCode((node as any).updatedCode).split(/\r\n|\n|\r/)
+  if ((node as any).originalCode == null && (node as any).updatedCode == null)
+    return logicalLineCount
+
+  const lineCount = Math.max(original.length, updated.length)
+  const columns = getPreCodeColumnsPerRow(width, characterWidth, lineCount, visual, options, true)
+  let rows = 0
+  for (let index = 0; index < lineCount; index++) {
+    rows += Math.max(
+      getWrappedLineRows(original[index] ?? '', columns, visual.tabSize),
+      getWrappedLineRows(updated[index] ?? '', columns, visual.tabSize),
+    )
+  }
+  return rows
+}
+
 function resolveStreamDiffsLineHeight() {
   return 18
 }
@@ -425,6 +502,7 @@ export function estimateCodeBlockHeight(
 
   const rendererKind = options.rendererKind
   const showHeader = rendererKind !== 'pre' && options.showHeader !== false
+  const showPreToolbar = rendererKind === 'pre' && options.showHeader !== false
   const isDiff = Boolean((node as any).diff)
   let contentHeight = 0
   let cap = CODE_BLOCK_DEFAULT_CAP
@@ -437,15 +515,20 @@ export function estimateCodeBlockHeight(
     contentHeight = Math.round(lineCount * lineHeight + verticalPadding)
   }
   else {
-    const lineCount = getCodeBlockVisibleLineCount(node)
-    contentHeight = Math.round(lineCount * PRE_CODE_LINE_HEIGHT)
-    cap = Number.POSITIVE_INFINITY
+    const visual = resolvePreCodeVisualOptions(options.codeBlockOptions)
+    const visualRowCount = getPreCodeVisualRowCount(node, options, visual)
+    contentHeight = Math.round(visualRowCount * visual.lineHeight + visual.padding + visual.paddingBottom)
+    cap = visual.maxHeight
   }
 
   const visibleContentHeight = Math.max(1, Math.min(contentHeight, cap))
   return {
     kind: 'code-block',
-    height: Math.round(visibleContentHeight + (showHeader ? CODE_BLOCK_HEADER_HEIGHT : 0)),
+    height: Math.round(visibleContentHeight + (
+      rendererKind === 'pre'
+        ? (showPreToolbar ? PRE_CODE_TOOLBAR_HEIGHT : 0)
+        : (showHeader ? CODE_BLOCK_HEADER_HEIGHT : 0)
+    )),
     contentHeight: visibleContentHeight,
     rendererKind,
     ...(isDiff && rendererKind === 'stream-diffs'

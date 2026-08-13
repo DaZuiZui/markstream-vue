@@ -17,15 +17,20 @@ const layouts = process.env.DIFF_LAYOUT === 'side-by-side'
   : process.env.DIFF_LAYOUT === 'inline'
     ? ['inline']
     : ['inline', 'side-by-side']
+const overflowModes = process.env.CODE_OVERFLOW === 'scroll'
+  ? ['scroll']
+  : process.env.CODE_OVERFLOW === 'wrap'
+    ? ['default']
+    : ['default', 'scroll']
+const beforeDescription = 'beforedescription'.repeat(12)
+const afterDescription = 'afterdescription'.repeat(12)
 const diffSample = [
   '```diff json:package.json',
   '{',
   '  "name": "markstream-vue",',
   '  "type": "module",',
-  '- "version": "0.0.49",',
-  '+ "version": "0.0.54-beta.1",',
-  `- "description": "${'before-description-'.repeat(24)}",`,
-  `+ "description": "${'after-description-'.repeat(24)}",`,
+  `- "description": "${beforeDescription}",`,
+  `+ "description": "${afterDescription}",`,
   ...Array.from({ length: 24 }, (_, index) => `  "unchanged-${String(index + 1).padStart(2, '0')}": ${index + 1},`),
   '}',
   '```',
@@ -131,16 +136,29 @@ async function readState(page) {
     const content = block.querySelector('.code-block-shell-content')
     const preRect = pre?.getBoundingClientRect()
     const preStyle = pre ? getComputedStyle(pre) : null
+    const diffStats = block.querySelector('.code-diff-stats')
     const round = value => Math.round(value * 100) / 100
     const preGeometry = pre instanceof HTMLElement
       ? Array.from(pre.querySelectorAll('.markstream-pre__diff-pane')).map((pane) => {
           const paneRect = pane.getBoundingClientRect()
           const changedLine = pane.querySelector('.markstream-pre__diff-line--added, .markstream-pre__diff-line--removed')
           const content = changedLine?.querySelector('.markstream-pre__diff-content')
+          const lineStyle = changedLine instanceof HTMLElement ? getComputedStyle(changedLine) : null
           return {
             paneOffset: round(paneRect.left - pre.getBoundingClientRect().left),
             codeOffset: content instanceof HTMLElement ? round(content.getBoundingClientRect().left - paneRect.left) : null,
             rowHeight: changedLine instanceof HTMLElement ? round(changedLine.getBoundingClientRect().height) : null,
+            lineHeight: lineStyle ? round(Number.parseFloat(lineStyle.lineHeight)) : null,
+            clientWidth: pane.clientWidth,
+            scrollWidth: pane.scrollWidth,
+            contentClientWidth: content instanceof HTMLElement ? content.clientWidth : null,
+            contentScrollWidth: content instanceof HTMLElement ? content.scrollWidth : null,
+            rows: Array.from(pane.querySelectorAll('.markstream-pre__diff-line')).map(line => ({
+              kind: [...line.classList].find(name => name.startsWith('markstream-pre__diff-line--')) ?? null,
+              height: round(line.getBoundingClientRect().height),
+              top: round(line.getBoundingClientRect().top - pre.getBoundingClientRect().top),
+              text: line.textContent?.slice(0, 24),
+            })),
           }
         })
       : null
@@ -167,10 +185,16 @@ async function readState(page) {
             const gutter = gutters[index]
             const gutterRect = gutter instanceof HTMLElement ? gutter.getBoundingClientRect() : null
             const codeText = changedLine?.querySelector(':scope > span')
+            const lineStyle = changedLine instanceof HTMLElement ? getComputedStyle(changedLine) : null
             return {
               paneOffset: gutterRect ? round(gutterRect.left - finalPre.getBoundingClientRect().left) : null,
               codeOffset: gutterRect && codeText instanceof HTMLElement ? round(codeText.getBoundingClientRect().left - gutterRect.left) : null,
               rowHeight: changedLine instanceof HTMLElement ? round(changedLine.getBoundingClientRect().height) : null,
+              lineHeight: lineStyle ? round(Number.parseFloat(lineStyle.lineHeight)) : null,
+              clientWidth: content.clientWidth,
+              scrollWidth: content.scrollWidth,
+              lineClientWidth: changedLine instanceof HTMLElement ? changedLine.clientWidth : null,
+              lineScrollWidth: changedLine instanceof HTMLElement ? changedLine.scrollWidth : null,
               grid: codeStyle
                 ? {
                     display: codeStyle.display,
@@ -192,6 +216,16 @@ async function readState(page) {
       preVisible,
       preCollapsedSections: pre?.querySelectorAll('.markstream-pre__diff-line--collapsed').length ?? 0,
       preWhiteSpace: preStyle?.whiteSpace ?? null,
+      preOverflowWrap: preStyle?.overflowWrap ?? null,
+      preOverflowX: preStyle?.overflowX ?? null,
+      preClientWidth: pre instanceof HTMLElement ? pre.clientWidth : null,
+      preScrollWidth: pre instanceof HTMLElement ? pre.scrollWidth : null,
+      diffStats: diffStats?.getAttribute('aria-label') ?? diffStats?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+      preStyleText: pre?.getAttribute('style') ?? null,
+      preHandoffHeight: pre?.dataset.markstreamDiffHandoffHeight ?? null,
+      preHandoffVariable: preStyle?.getPropertyValue('--markstream-diff-fallback-handoff-height') ?? null,
+      preCollapsedRowHeight: preStyle?.getPropertyValue('--markstream-pre-diff-collapsed-row-height') ?? null,
+      blockStyleText: block.getAttribute('style') ?? null,
       diffsCount: block.querySelectorAll('diffs-container').length,
       diffsText,
       preGeometry,
@@ -233,12 +267,42 @@ async function readState(page) {
       diffsWrap: diffs?.shadowRoot
         ? (() => {
             const finalPre = diffs.shadowRoot.querySelector('pre')
+            const surface = diffs.shadowRoot.querySelector('[data-file], [data-diff]')
             if (!(finalPre instanceof HTMLElement))
               return null
             const style = getComputedStyle(finalPre)
+            const changedLine = finalPre.querySelector('[data-content] [data-line-type="change-addition"], [data-content] [data-line-type="change-deletion"]')
+            const lineStyle = changedLine instanceof HTMLElement ? getComputedStyle(changedLine) : null
+            const codeOwners = Array.from(finalPre.querySelectorAll('code[data-code]')).map(code => ({
+              clientWidth: code.clientWidth,
+              scrollWidth: code.scrollWidth,
+              overflowX: getComputedStyle(code).overflowX,
+            }))
+            const separators = Array.from(finalPre.querySelectorAll('[data-separator]')).map(separator => ({
+              type: separator.getAttribute('data-separator'),
+              height: separator.getBoundingClientRect().height,
+              marginTop: getComputedStyle(separator).marginTop,
+              marginBottom: getComputedStyle(separator).marginBottom,
+            }))
+            const runtimeLines = Array.from(finalPre.querySelectorAll('[data-line]')).map(line => ({
+              type: line.getAttribute('data-line-type'),
+              height: line.getBoundingClientRect().height,
+              top: line.getBoundingClientRect().top - finalPre.getBoundingClientRect().top,
+              text: line.textContent?.slice(0, 24),
+            }))
             return {
               whiteSpace: style.whiteSpace,
+              overflowWrap: style.overflowWrap,
               overflowX: style.overflowX,
+              clientWidth: finalPre.clientWidth,
+              scrollWidth: finalPre.scrollWidth,
+              surfaceOverflow: surface?.getAttribute('data-overflow') ?? null,
+              lineWhiteSpace: lineStyle?.whiteSpace ?? null,
+              lineOverflowWrap: lineStyle?.overflowWrap ?? null,
+              lineWordBreak: lineStyle?.wordBreak ?? null,
+              codeOwners,
+              separators,
+              runtimeLines,
             }
           })()
         : null,
@@ -267,6 +331,73 @@ function compareHandoffGeometry(preGeometry, diffsGeometry) {
   return {
     ok: panes.every(pane => pane.paneOffsetDelta != null && pane.paneOffsetDelta <= 2 && pane.codeOffsetDelta != null && pane.codeOffsetDelta <= 2 && pane.rowHeightDelta != null && pane.rowHeightDelta <= 1),
     panes,
+  }
+}
+
+function verifyOverflowContract(state, overflowMode, expectedPaneCount) {
+  const prePanes = state?.preGeometry
+  const runtimePanes = state?.diffsGeometry
+  if (!Array.isArray(prePanes) || !Array.isArray(runtimePanes))
+    return { ok: false, reason: 'missing overflow geometry' }
+  if (prePanes.length !== expectedPaneCount || runtimePanes.length !== expectedPaneCount) {
+    return {
+      ok: false,
+      reason: `expected ${expectedPaneCount} panes`,
+      prePaneCount: prePanes.length,
+      runtimePaneCount: runtimePanes.length,
+    }
+  }
+
+  const isWrap = overflowMode === 'default'
+  const preRowsMatch = prePanes.every((pane) => {
+    if (pane.rowHeight == null || pane.lineHeight == null)
+      return false
+    return isWrap
+      ? pane.rowHeight > pane.lineHeight + 1
+      : Math.abs(pane.rowHeight - pane.lineHeight) <= 1
+  })
+  const runtimeRowsMatch = runtimePanes.every((pane) => {
+    if (pane.rowHeight == null || pane.lineHeight == null)
+      return false
+    return isWrap
+      ? pane.rowHeight > pane.lineHeight + 1
+      : Math.abs(pane.rowHeight - pane.lineHeight) <= 1
+  })
+  const preOverflowMatch = isWrap
+    ? state.preScrollWidth <= state.preClientWidth + 1
+    : state.preScrollWidth > state.preClientWidth + 1
+      || prePanes.some(pane => pane.scrollWidth > pane.clientWidth + 1 || pane.contentScrollWidth > pane.contentClientWidth + 1)
+  const runtimeCodeOwners = state.diffsWrap?.codeOwners
+  const hasRuntimeCodeOwners = Array.isArray(runtimeCodeOwners) && runtimeCodeOwners.length > 0
+  const runtimeOverflowMatch = !hasRuntimeCodeOwners
+    ? false
+    : isWrap
+      ? runtimeCodeOwners.every(owner => owner.scrollWidth <= owner.clientWidth + 1)
+      : runtimeCodeOwners.some(owner => owner.scrollWidth > owner.clientWidth + 1)
+  const styleMatch = isWrap
+    ? state.preWhiteSpace === 'pre-wrap'
+    && state.preOverflowWrap === 'anywhere'
+    && state.preOverflowX === 'hidden'
+    && state.diffsWrap?.surfaceOverflow === 'wrap'
+    && state.diffsWrap?.lineWhiteSpace === 'pre-wrap'
+    && state.diffsWrap?.lineOverflowWrap === 'anywhere'
+    && state.diffsWrap?.lineWordBreak === 'normal'
+    : state.preWhiteSpace === 'pre'
+      && state.preOverflowWrap === 'normal'
+      && state.preOverflowX === 'auto'
+      && state.diffsWrap?.surfaceOverflow === 'scroll'
+      && state.diffsWrap?.lineWhiteSpace === 'pre'
+      && state.diffsWrap?.lineOverflowWrap === 'normal'
+      && state.diffsWrap?.lineWordBreak === 'normal'
+
+  return {
+    ok: preRowsMatch && runtimeRowsMatch && preOverflowMatch && runtimeOverflowMatch && styleMatch,
+    expectedPaneCount,
+    preRowsMatch,
+    runtimeRowsMatch,
+    preOverflowMatch,
+    runtimeOverflowMatch,
+    styleMatch,
   }
 }
 
@@ -337,7 +468,7 @@ async function verifyFinalCollapseCycle(page) {
   })
 }
 
-async function runCase(browser, port, layout) {
+async function runCase(browser, port, layout, overflowMode) {
   const context = await browser.newContext({
     viewport: { width: 1600, height: 1200 },
     storageState: {
@@ -361,7 +492,10 @@ async function runCase(browser, port, layout) {
 
   try {
     const page = await context.newPage()
-    await page.goto(`http://${host}:${port}/test?diffLayout=${layout}`, { waitUntil: 'load' })
+    const query = new URLSearchParams({ diffLayout: layout })
+    if (overflowMode === 'scroll')
+      query.set('codeOverflow', 'scroll')
+    await page.goto(`http://${host}:${port}/test?${query}`, { waitUntil: 'load' })
     await page.waitForSelector('.editor-textarea')
     await page.evaluate((sample) => {
       const textarea = document.querySelector('.editor-textarea')
@@ -411,9 +545,17 @@ async function runCase(browser, port, layout) {
     const transitionStates = firstPre === -1
       ? stateKinds
       : stateKinds.slice(firstPre)
-    const handoffGeometry = compareHandoffGeometry(lastPre?.preGeometry, visibleStates.at(-1)?.diffsGeometry)
+    const finalState = visibleStates.at(-1) ?? null
+    const handoffGeometry = compareHandoffGeometry(lastPre?.preGeometry, finalState?.diffsGeometry)
+    const expectedPaneCount = layout === 'inline' ? 1 : 2
+    const overflowContract = verifyOverflowContract({
+      ...lastPre,
+      diffsGeometry: finalState?.diffsGeometry,
+      diffsWrap: finalState?.diffsWrap,
+    }, overflowMode, expectedPaneCount)
     const result = {
       layout,
+      overflowMode,
       sampledFrames: visibleStates.length,
       preFrames: stateKinds.filter(kind => kind === 'pre').length,
       preWithDiffsFrames: visibleStates.filter(state => state.preVisible && state.diffsCount === 1).length,
@@ -428,10 +570,11 @@ async function runCase(browser, port, layout) {
       streamingHeightDropSamples: streamingHeightDrops,
       unexpectedStreamingHeightDrops: unexpectedStreamingHeightDrops.length,
       unexpectedStreamingHeightDropSamples: unexpectedStreamingHeightDrops,
-      handoffHeightDelta: lastPre ? Math.abs(lastPre.height - (visibleStates.at(-1)?.height ?? lastPre.height)) : null,
+      handoffHeightDelta: lastPre ? Math.abs(lastPre.height - (finalState?.height ?? lastPre.height)) : null,
       handoffGeometry,
+      overflowContract,
       lastPre,
-      final: visibleStates.at(-1) ?? null,
+      final: finalState,
       timeline: process.env.E2E_TRACE === '1'
         ? visibleStates.map(({ codeBlockState, preVisible, diffsCount, height }) => ({
             codeBlockState,
@@ -451,12 +594,13 @@ async function runCase(browser, port, layout) {
       && result.unexpectedStreamingHeightDrops === 0
       && (result.handoffHeightDelta == null || result.handoffHeightDelta <= 2)
       && result.handoffGeometry.ok
+      && result.overflowContract.ok
       && result.collapseCycle.ok
       && result.final?.enhanced === true
-      && result.lastPre?.preWhiteSpace === 'pre'
-      && result.final?.diffsWrap?.whiteSpace === 'pre'
-      && finalText.includes('0.0.49')
-      && finalText.includes('0.0.54-beta.1')
+      && result.lastPre?.diffStats === '-1 +1'
+      && result.final?.diffStats === '-1 +1'
+      && finalText.includes(beforeDescription)
+      && finalText.includes(afterDescription)
       && visibleStates.every(state => state.diffsCount !== 1 || state.codeBlockState !== 'streaming' || state.preVisible)
 
     return { ok, ...result }
@@ -473,8 +617,10 @@ async function main() {
     await waitForPort(port)
     const browser = await chromium.launch(resolveChromeLaunchOptions())
     const results = []
-    for (const layout of layouts)
-      results.push(await runCase(browser, port, layout))
+    for (const layout of layouts) {
+      for (const overflowMode of overflowModes)
+        results.push(await runCase(browser, port, layout, overflowMode))
+    }
     await browser.close()
 
     const ok = results.every(result => result.ok)

@@ -39,9 +39,9 @@ CodeBlockNode                          controller + DOM surface
 
 `CodeBlockNode` 只有一条稳定的视觉路径：
 
-1. code 正在流式输出时，Vue 渲染 `PreCodeNode`。
+1. code 正在流式输出时，Vue 渲染共享 `PreCodeBlock`；`renderCodeBlocksAsPre` 直接使用同一个组件和同一套视觉默认参数。
 2. code 结束且进入可视区域后，组件动态加载 `stream-diffs` 根 runtime，并在既有容器中挂载一个 File 或 FileDiff surface。
-3. 组件把当前 theme 应用到 surface；surface ready 后才移除临时 `<pre>`。
+3. 组件把当前 theme 应用到 surface；surface ready 后才移除临时 `<pre>`。显示前，两层已共享字体指标、padding、gutter 几何、overflow 与主题背景；流式普通代码块不得继承旧的恢复高度 floor。
 4. 组件卸载时，由 Vue 适配层 dispose controller。
 
 结束态、可见性与卸载都是 `CodeBlockNode` 的职责，并不是 `stream-diffs` 的生命周期 hook。
@@ -61,7 +61,7 @@ Monaco JSON theme object 不会在 2.0 中直接改名。自定义主题需先�
 受支持的 surface 包括：
 
 - 宿主管理的排版与布局：`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`；
-- File 配置，例如 `disableLineNumbers`、`overflow`、高亮长度限制，以及虚拟化/高亮器控制；
+- File 配置，例如 `disableLineNumbers`、`overflow`、高亮长度限制，以及虚拟化/高亮器控制；`overflow: 'wrap'` 会通过兼容 runtime 映射为 `wordWrap: 'on'`，`overflow: 'scroll'` 映射为 `wordWrap: 'off'`；默认值是 `overflow: 'wrap'`。
 - FileDiff 布局、indicator、未变化区域折叠与 line diff 控制；
 - line/token 交互、selection callback、annotation、`onController` 与 `workerManager`。
 
@@ -82,3 +82,5 @@ void preloadCodeBlockRuntime()
 ## Diff 交互
 
 diff block 使用相同的适配边界。未提供对应 `codeBlockOptions` 时，增强 diff surface 使用 `stream-diffs` 默认值；可通过 `diffStyle`、`expandUnchanged`、`collapsedContextThreshold`、`hunkSeparators`、`lineDiffType` 与 `parseDiffOptions` 配置布局和折叠。
+
+fallback 与最终 surface 使用相同的 `collapsedContextThreshold` 判断：只有未变化区域的隐藏行数大于阈值时才折叠。unified 与 split diff fallback 都根据每个源文本真实的末尾换行状态生成 `No newline at end of file`，使用与最终 surface 一致的中性 metadata 前景色与背景色，并保持相同可见高度。新增/删除行 fill 在每个视觉区域只合成一次，使最终颜色与 enhanced surface 一致。换行模式下，内容背景、gutter 标记与行号背景覆盖测量后的完整逻辑行高度；在换行与滚动模式之间切换时，会在下一次布局绘制前清除旧的同步行高。最终 host 必须完整保留 `maxHeight` 以下的所有行，并在超过限制时使用可滚动 overflow；不得把超出的 diff 行隐藏在更大的 shell 内。

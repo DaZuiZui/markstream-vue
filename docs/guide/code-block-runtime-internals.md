@@ -36,6 +36,10 @@ The controller receives a plain `HTMLElement` plus code or diff strings. It has 
 4. Apply the active theme and reveal the surface only after its first render.
 5. Dispose it when the Vue component unmounts or changes identity.
 
+The fallback and enhanced surface share one visual handoff contract. The fallback uses the same resolved theme palette and code metrics as the enhanced surface; without explicit theme overrides, `isDark` selects `vitesse-dark` or `vitesse-light`. During enhancement, both layers occupy the same grid row, and `CodeBlockNode` removes the fallback in the same Vue patch that reveals the ready surface. There must be no intermediate blank frame, stacked-height frame, background change, or geometry change.
+
+`renderCodeBlocksAsPre` and an unavailable enhanced runtime both render the same shared `PreCodeBlock` component used by `CodeBlockNode` during enhancement. Their default line numbers, code font, font size, line height, four-edge padding, tab size, foreground, and background therefore follow one contract rather than parallel CSS implementations.
+
 This keeps high-frequency streaming updates out of the syntax-highlighting surface and gives each finalized block a single controller lifetime.
 
 ## Preload

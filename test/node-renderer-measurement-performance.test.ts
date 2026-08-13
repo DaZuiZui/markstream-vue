@@ -217,6 +217,124 @@ describe('node renderer measurement performance', () => {
     wrapper.unmount()
   })
 
+  it('recomputes pre estimates when runtime visual props change', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 640)
+
+    const NodeRenderer = (await import('../src/components/NodeRenderer')).default
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        nodes: [createCodeBlock(1)],
+        renderCodeBlocksAsPre: true,
+        viewportPriority: false,
+        codeBlockOptions: {
+          fontSize: 12,
+          lineHeight: 18,
+          fontFamily: 'monospace',
+          padding: 8,
+          maxHeight: 500,
+          tabSize: 4,
+          overflow: 'wrap',
+          diffStyle: 'split',
+        },
+        virtualScroll: {
+          enabled: true,
+          sessionKey: 'estimated-height-visual-props',
+        },
+      },
+    })
+
+    await flushAll()
+    const state = setupState(wrapper)
+    const readEstimate = () => {
+      const estimates = state.estimatedNodeHeights
+      return (Array.isArray(estimates) ? estimates : estimates.value)[0]
+    }
+    const initial = readEstimate()
+
+    await wrapper.setProps({
+      codeBlockOptions: {
+        fontSize: 20,
+        lineHeight: 32,
+        fontFamily: 'Courier New',
+        padding: 16,
+        maxHeight: 240,
+        tabSize: 8,
+        overflow: 'scroll',
+        diffStyle: 'unified',
+      },
+    })
+    await flushVueOnly()
+    const visualUpdate = readEstimate()
+    expect(visualUpdate).not.toBe(initial)
+    expect(visualUpdate.height).not.toBe(initial.height)
+
+    await wrapper.setProps({
+      codeBlockProps: {
+        showHeader: false,
+        showCopyButton: false,
+        showLineNumbers: false,
+      },
+    })
+    await flushVueOnly()
+    const headerUpdate = readEstimate()
+    expect(headerUpdate).not.toBe(visualUpdate)
+    expect(headerUpdate.height).toBeLessThan(visualUpdate.height)
+
+    wrapper.unmount()
+  })
+
+  it('passes estimated content height to pre blocks without duplicating header height', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 320)
+
+    const NodeRenderer = (await import('../src/components/NodeRenderer')).default
+    const nodes = [
+      createCodeBlock(1),
+      {
+        ...createCodeBlock(2),
+        code: Array.from({ length: 80 }, (_, index) => `console.log(${index})`).join('\n'),
+      },
+    ]
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        nodes,
+        renderCodeBlocksAsPre: true,
+        viewportPriority: false,
+        codeBlockProps: { showHeader: true },
+        virtualScroll: {
+          enabled: true,
+          sessionKey: 'estimated-pre-content-height',
+        },
+      },
+    })
+
+    await flushAll()
+    const state = setupState(wrapper)
+    const readItems = () => Array.isArray(state.renderedItems)
+      ? state.renderedItems
+      : state.renderedItems.value
+    const readEstimates = () => Array.isArray(state.estimatedNodeHeights)
+      ? state.estimatedNodeHeights
+      : state.estimatedNodeHeights.value
+
+    for (const [index, item] of readItems().entries()) {
+      const estimate = readEstimates()[index]
+      expect(estimate.kind).toBe('code-block')
+      expect(estimate.height - estimate.contentHeight).toBe(37)
+      expect(item.bindings.reservedHeightPx).toBe(estimate.contentHeight)
+    }
+
+    await wrapper.setProps({ codeBlockProps: { showHeader: false } })
+    await flushVueOnly()
+
+    for (const [index, item] of readItems().entries()) {
+      const estimate = readEstimates()[index]
+      expect(estimate.height).toBe(estimate.contentHeight)
+      expect(item.bindings.reservedHeightPx).toBe(estimate.contentHeight)
+    }
+
+    wrapper.unmount()
+  })
+
   it('recomputes estimated heights when custom code block components change', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 640)
 

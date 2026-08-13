@@ -2,10 +2,22 @@ import { readFileSync } from 'node:fs'
 
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { defineComponent, h, nextTick, ref } from 'vue'
 import PreCodeNode from '../src/components/PreCodeNode'
 
 describe('pre code node diff preview', () => {
+  it('clears async diff measurement state after a chunk failure', () => {
+    const source = readFileSync('src/components/PreCodeNode/PreCodeNode.vue', 'utf8')
+    const start = source.indexOf('function scheduleDiffLineMetricsSync()')
+    const end = source.indexOf('function setupDiffResizeObserver', start)
+    const scheduler = source.slice(start, end)
+
+    expect(scheduler).toContain('}, () => {')
+    expect(scheduler).toContain('diffMetricsModule = null')
+    expect(scheduler).toContain('.finally(() => {')
+    expect(scheduler).toContain('diffLineMetricsRaf = null')
+  })
+
   it('styles async code block loading content inside the bordered shell', () => {
     const source = readFileSync('src/components/PreCodeNode/PreCodeNode.vue', 'utf8')
     const selector = '.markstream-vue pre.code-pre-fallback[data-markstream-code-loading=\'1\']'
@@ -14,8 +26,8 @@ describe('pre code node diff preview', () => {
     const end = source.indexOf('}', start)
     const rule = source.slice(start, end)
 
-    expect(rule).toContain('background: var(--code-bg)')
-    expect(rule).toContain('color: var(--code-fg)')
+    expect(rule).toContain('background: var(--markstream-code-fallback-bg, var(--markstream-code-theme-bg, var(--code-bg)))')
+    expect(rule).toContain('color: var(--markstream-code-fallback-fg, var(--markstream-code-theme-fg, var(--code-fg)))')
     expect(rule).toContain('border: 0')
     expect(rule).toContain('border-radius: 0')
     expect(rule).toContain('font-family: var(')
@@ -64,6 +76,110 @@ describe('pre code node diff preview', () => {
     expect(wrapper.findAll('.markstream-pre__line-number')).toHaveLength(0)
     expect(wrapper.get('.markstream-pre__line-numbers-text').element.textContent).toBe('1\n2')
     expect(wrapper.get('.markstream-pre__code').element.textContent).toBe('const a = 1\n')
+
+    wrapper.unmount()
+  })
+
+  it('keeps wrapped visual rows under their logical source line number', () => {
+    const code = 'const message = "one logical source line that can wrap"\n\nreturn message\n'
+    const wrapper = mount(PreCodeNode, {
+      attrs: {
+        style: { whiteSpace: 'pre-wrap' },
+      },
+      props: {
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code,
+          raw: `\`\`\`ts\n${code}\`\`\``,
+        },
+      },
+    })
+
+    const logicalLines = wrapper.findAll('.markstream-pre__logical-line')
+    expect(wrapper.find('.markstream-pre__line-numbers-text').exists()).toBe(false)
+    expect(logicalLines.map(line => line.attributes('data-line-number'))).toEqual(['1', '2', '3'])
+    expect(logicalLines.map(line => line.element.textContent)).toEqual([
+      'const message = "one logical source line that can wrap"\n',
+      '\n',
+      'return message',
+    ])
+    expect(wrapper.get('.markstream-pre__code--wrapped').element.textContent).toBe(
+      'const message = "one logical source line that can wrap"\n\nreturn message',
+    )
+
+    wrapper.unmount()
+  })
+
+  it('preserves CRLF and CR as logical source-line delimiters while wrapping', () => {
+    const code = 'first\r\nsecond\rthird\nfourth\r\n'
+    const wrapper = mount(PreCodeNode, {
+      attrs: {
+        class: 'is-wrap',
+      },
+      props: {
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'txt',
+          code,
+          raw: code,
+        },
+      },
+    })
+
+    const logicalLines = wrapper.findAll('.markstream-pre__logical-line')
+    expect(logicalLines.map(line => line.attributes('data-line-number'))).toEqual(['1', '2', '3', '4'])
+    expect(logicalLines.map(line => line.element.textContent)).toEqual([
+      'first\r\n',
+      'second\r',
+      'third\n',
+      'fourth',
+    ])
+    expect(wrapper.get('.markstream-pre__code--wrapped').element.textContent).toBe(
+      'first\r\nsecond\rthird\nfourth',
+    )
+
+    wrapper.unmount()
+  })
+
+  it('keeps wrapped logical lines stable when a streamed CR becomes CRLF', async () => {
+    const wrapper = mount(PreCodeNode, {
+      attrs: {
+        class: 'is-wrap',
+      },
+      props: {
+        loading: true,
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'txt',
+          code: 'first\r',
+          raw: 'first\r',
+          loading: true,
+        },
+      },
+    })
+
+    expect(wrapper.findAll('.markstream-pre__logical-line').map(line => line.element.textContent)).toEqual([
+      'first\r',
+      '',
+    ])
+
+    await wrapper.setProps({
+      node: {
+        type: 'code_block',
+        language: 'txt',
+        code: 'first\r\nsecond',
+        raw: 'first\r\nsecond',
+        loading: true,
+      },
+    })
+
+    const logicalLines = wrapper.findAll('.markstream-pre__logical-line')
+    expect(logicalLines.map(line => line.attributes('data-line-number'))).toEqual(['1', '2'])
+    expect(logicalLines.map(line => line.element.textContent)).toEqual(['first\r\n', 'second'])
 
     wrapper.unmount()
   })
@@ -202,7 +318,11 @@ describe('pre code node diff preview', () => {
     const pre = wrapper.get('pre').element as HTMLElement
     expect(pre.style.getPropertyValue('--markstream-pre-line-number-width')).toBe('3ch')
     expect(pre.style.getPropertyValue('--markstream-pre-diff-line-number-width')).toBe('3ch')
-    expect(wrapper.get(`.markstream-pre__diff-pane--${pane} .markstream-pre__diff-line:last-child .markstream-pre__diff-number`).text()).toBe('100')
+    const numbers = wrapper
+      .findAll(`.markstream-pre__diff-pane--${pane} .markstream-pre__diff-number`)
+      .map(number => number.text())
+      .filter(Boolean)
+    expect(numbers.at(-1)).toBe('100')
 
     wrapper.unmount()
   })
@@ -284,6 +404,34 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
+  it('keeps wrapped diff content in one logical row per source line', () => {
+    const originalCode = 'const veryLongLineThatWrapsVisually = true'
+    const updatedCode = 'const veryLongLineThatWrapsVisually = false'
+    const wrapper = mount(PreCodeNode, {
+      attrs: { class: 'is-wrap' },
+      props: {
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          diff: true,
+          originalCode,
+          updatedCode,
+          code: '',
+          raw: '',
+        },
+      },
+    })
+
+    expect(wrapper.get('pre').classes()).toContain('is-wrap')
+    expect(wrapper.findAll('.markstream-pre__diff-pane--original .markstream-pre__diff-line')).toHaveLength(2)
+    expect(wrapper.findAll('.markstream-pre__diff-pane--modified .markstream-pre__diff-line')).toHaveLength(2)
+    expect(wrapper.get('.markstream-pre__diff-content-inner').element.textContent).toBe(originalCode)
+    expect(wrapper.get('.markstream-pre__diff-pane--modified .markstream-pre__diff-content-inner').element.textContent).toBe(updatedCode)
+
+    wrapper.unmount()
+  })
+
   it('does not paint terminal blank diff preview rows as added or removed', () => {
     const wrapper = mount(PreCodeNode, {
       props: {
@@ -304,6 +452,103 @@ describe('pre code node diff preview', () => {
 
     expect(emptyRows).toHaveLength(0)
 
+    wrapper.unmount()
+  })
+
+  it.each([
+    { diffInline: false, expectedRows: 2 },
+    { diffInline: true, expectedRows: 2 },
+  ])('shows no-final-newline metadata for both $diffInline diff sources', ({ diffInline, expectedRows }) => {
+    const wrapper = mount(PreCodeNode, {
+      props: {
+        showLineNumbers: true,
+        diffInline,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          diff: true,
+          originalCode: 'const value = "before"',
+          updatedCode: 'const value = "after"',
+          code: '',
+          raw: '',
+        },
+      },
+    })
+
+    const metadata = wrapper.findAll('.markstream-pre__diff-line--metadata')
+    expect(metadata).toHaveLength(expectedRows)
+    expect(metadata.every(row => row.text() === 'No newline at end of file')).toBe(true)
+    expect(metadata.some(row => row.classes().includes('markstream-pre__diff-line--metadata-removed'))).toBe(true)
+    expect(metadata.some(row => row.classes().includes('markstream-pre__diff-line--metadata-added'))).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it.each([
+    { diffInline: false },
+    { diffInline: true },
+  ])('omits no-final-newline metadata when both $diffInline diff sources end with LF', ({ diffInline }) => {
+    const wrapper = mount(PreCodeNode, {
+      props: {
+        showLineNumbers: true,
+        diffInline,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          diff: true,
+          originalCode: 'const value = "before"\n',
+          updatedCode: 'const value = "after"\n',
+          code: '',
+          raw: '',
+        },
+      },
+    })
+
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it('buffers the opposite split pane when only one source lacks a final newline', () => {
+    const wrapper = mount(PreCodeNode, {
+      props: {
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          diff: true,
+          originalCode: 'const value = "before"',
+          updatedCode: 'const value = "after"\n',
+          code: '',
+          raw: '',
+        },
+      },
+    })
+
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(1)
+    expect(wrapper.get('.markstream-pre__diff-pane--original .markstream-pre__diff-line--metadata').text()).toBe('No newline at end of file')
+    expect(wrapper.findAll('.markstream-pre__diff-pane--modified .markstream-pre__diff-line--spacer')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it.each(['line\n', 'line\r\n', 'line\r'])('treats %j as a final newline', (source) => {
+    const wrapper = mount(PreCodeNode, {
+      props: {
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          diff: true,
+          originalCode: source,
+          updatedCode: source,
+          code: '',
+          raw: '',
+        },
+      },
+    })
+
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(0)
     wrapper.unmount()
   })
 
@@ -347,9 +592,9 @@ describe('pre code node diff preview', () => {
     const numbers = originalRows.map(row => row.find('.markstream-pre__diff-number').text())
 
     expect(wrapper.get('pre').classes()).toContain('markstream-pre--diff-collapsed')
-    expect(originalRows).toHaveLength(10)
-    expect(modifiedRows).toHaveLength(10)
-    expect(numbers).toEqual(['1', '2', '3', '4', '5', '6', '', '23', '24', '25'])
+    expect(originalRows).toHaveLength(11)
+    expect(modifiedRows).toHaveLength(11)
+    expect(numbers).toEqual(['1', '2', '3', '4', '5', '6', '', '23', '24', '25', ''])
     expect(wrapper.findAll('.markstream-pre__diff-line--collapsed')).toHaveLength(2)
     expect(wrapper.get('.markstream-pre__diff-pane--original .markstream-pre__diff-line--collapsed').text()).toContain('Unmodified lines')
 
@@ -422,7 +667,9 @@ describe('pre code node diff preview', () => {
       .findAll('.markstream-pre__diff-pane--original .markstream-pre__diff-number')
       .map(row => row.text())
     expect(numbers.slice(0, 6)).toEqual(['1', '2', '3', '4', '5', '6'])
+    expect(numbers).toHaveLength(7)
     expect(wrapper.findAll('.markstream-pre__diff-line--collapsed')).toHaveLength(2)
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(0)
 
     wrapper.unmount()
   })
@@ -457,7 +704,7 @@ describe('pre code node diff preview', () => {
 
     const originalRows = wrapper.findAll('.markstream-pre__diff-pane--original .markstream-pre__diff-line')
     expect(originalRows[0].classes()).toContain('markstream-pre__diff-line--context')
-    expect(originalRows.at(-1)?.classes()).toContain('markstream-pre__diff-line--context')
+    expect(originalRows.at(-2)?.classes()).toContain('markstream-pre__diff-line--context')
 
     wrapper.unmount()
   })
@@ -557,7 +804,7 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
-  it('allows empty added and removed rows to receive diff fill styles', () => {
+  it('paints one added or removed fill layer in each visual region', () => {
     const source = readFileSync(
       'src/components/PreCodeNode/PreCodeNode.vue',
       'utf8',
@@ -566,20 +813,39 @@ describe('pre code node diff preview', () => {
     expect(source).toContain('.markstream-pre__diff-line--added::before')
     expect(source).toContain('.markstream-pre__diff-line--removed::before')
     expect(source).toContain('.markstream-pre__diff-line::after')
-    expect(source).toContain('.markstream-pre__diff-line--added::after')
-    expect(source).toContain('.markstream-pre__diff-line--removed::after')
+    expect(source).not.toContain('.markstream-pre__diff-line--added::after')
+    expect(source).not.toContain('.markstream-pre__diff-line--removed::after')
     expect(source).toContain('.markstream-pre__diff-line--added > .markstream-pre__diff-rail')
     expect(source).toContain('.markstream-pre__diff-line--removed > .markstream-pre__diff-rail')
     expect(source).toContain('.markstream-pre__diff-line--added > .markstream-pre__diff-number')
     expect(source).toContain('.markstream-pre__diff-line--removed > .markstream-pre__diff-number')
     expect(source).toContain('background: var(--markstream-diff-added-line-fill, transparent);')
     expect(source).toContain('background: var(--markstream-diff-removed-line-fill, transparent);')
-    expect(source).toContain('linear-gradient(\n      var(--markstream-diff-added-line-fill')
-    expect(source).toContain('linear-gradient(\n      var(--markstream-diff-removed-line-fill')
+    expect(source).not.toContain('linear-gradient(\n      var(--markstream-diff-added-line-fill')
+    expect(source).not.toContain('linear-gradient(\n      var(--markstream-diff-removed-line-fill')
     expect(source).toContain('--markstream-pre-diff-line-number-bg: var(')
     expect(source).toContain('background: var(--markstream-pre-diff-line-number-bg);')
     expect(source).toContain('border-right: var(--markstream-pre-diff-line-number-separator-width, 2px) solid var(--code-bg);')
     expect(source).toContain('--markstream-pre-diff-content-height')
+    for (const selector of [
+      'pre.markstream-pre--diff-preview .markstream-pre__diff-line::before',
+      'pre.markstream-pre--diff-preview .markstream-pre__diff-line::after',
+      'pre.markstream-pre--diff-preview .markstream-pre__diff-rail',
+      'pre.markstream-pre--diff-preview .markstream-pre__diff-number',
+    ]) {
+      const start = source.indexOf(selector)
+      const end = source.indexOf('\n}', start)
+      const rule = source.slice(start, end)
+      expect(rule).toContain('--markstream-pre-diff-synced-row-height')
+      expect(rule).not.toContain('--markstream-pre-diff-content-height')
+    }
+    const metadataStart = source.indexOf('pre.markstream-pre--diff-preview .markstream-pre__diff-line--metadata {')
+    const metadataEnd = source.indexOf('\n}', metadataStart)
+    const metadataRule = source.slice(metadataStart, metadataEnd)
+    expect(metadataRule).toContain('var(--markstream-diff-metadata-fg')
+    expect(metadataRule).toContain('var(--markstream-diff-metadata-bg')
+    expect(metadataRule).not.toContain('markstream-diff-added')
+    expect(metadataRule).not.toContain('markstream-diff-removed')
     expect(source).toContain('color: var(--markstream-diff-added-fg, var(--code-line-number));')
     expect(source).toContain('color: var(--markstream-diff-removed-fg, var(--code-line-number));')
     expect(source).not.toMatch(/\.markstream-pre__diff-line--added\s*\{\s*color:/)
@@ -603,6 +869,8 @@ describe('pre code node diff preview', () => {
     expect(source).toContain('pre.markstream-pre--diff-preview.is-wrap')
     expect(source).toContain('white-space: pre-wrap;')
     expect(source).toContain('overflow-wrap: anywhere;')
+    expect(source).toContain('pre.code-pre-fallback.markstream-pre--diff-preview.markstream-pre--diff-inline:not(.is-wrap) {\n  scrollbar-width: none;')
+    expect(source).toContain('pre.code-pre-fallback.markstream-pre--diff-preview.markstream-pre--diff-inline:not(.is-wrap)::-webkit-scrollbar {\n  width: 0;\n  height: 0;')
   })
 
   it('keeps diff fallback rows and content at least pane width', () => {
@@ -613,7 +881,7 @@ describe('pre code node diff preview', () => {
 
     expect(source).toContain('.markstream-pre__diff-line {\n  position: relative;\n  display: block;\n  box-sizing: border-box;\n  width: 100%;\n  min-width: 100%;')
     expect(source).toContain('.markstream-pre__diff-content {\n  position: relative;\n  z-index: 1;\n  display: block;\n  width: max-content;\n  min-width: 100%;')
-    expect(source).toContain('.markstream-pre--diff-preview.is-wrap .markstream-pre__diff-content {\n  width: auto;\n  min-width: 0;')
+    expect(source).toContain('.markstream-pre--diff-preview.is-wrap .markstream-pre__diff-content {\n  box-sizing: border-box;\n  width: auto;\n  min-width: 0;\n  padding-right: 1ch;')
   })
 
   it('uses modified gutter metrics without an extra gap for inline diff fallback', () => {
@@ -728,14 +996,16 @@ describe('pre code node diff preview', () => {
     const originalRows = summarize('.markstream-pre__diff-pane--original .markstream-pre__diff-line')
     const modifiedRows = summarize('.markstream-pre__diff-pane--modified .markstream-pre__diff-line')
 
-    expect(originalRows.map(row => row.number)).toEqual(['1', '2', '3', '4', '5'])
-    expect(modifiedRows.map(row => row.number)).toEqual(['1', '2', '', '', '3'])
+    expect(originalRows.map(row => row.number)).toEqual(['1', '2', '3', '4', '5', ''])
+    expect(modifiedRows.map(row => row.number)).toEqual(['1', '2', '', '', '3', ''])
     expect(originalRows[1].classes).toContain('markstream-pre__diff-line--removed')
     expect(modifiedRows[1].classes).toContain('markstream-pre__diff-line--added')
     expect(modifiedRows[2].classes).toContain('markstream-pre__diff-line--spacer')
     expect(modifiedRows[3].classes).toContain('markstream-pre__diff-line--spacer')
     expect(originalRows[4].text).toBe('tail')
     expect(modifiedRows[4].text).toBe('tail')
+    expect(originalRows[5].classes).toContain('markstream-pre__diff-line--metadata')
+    expect(modifiedRows[5].classes).toContain('markstream-pre__diff-line--metadata')
 
     wrapper.unmount()
   })
@@ -764,7 +1034,7 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
-  it('starts syncing side-by-side row heights when wrap is enabled after mount', async () => {
+  it('syncs side-by-side row heights when wrap is enabled', async () => {
     const rafCallbacks = new Map<number, FrameRequestCallback>()
     let rafId = 0
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
@@ -805,6 +1075,7 @@ describe('pre code node diff preview', () => {
 
     const wrapper = mount(PreCodeNode, {
       attachTo: document.body,
+      attrs: { class: 'is-wrap' },
       props: {
         showLineNumbers: true,
         node: {
@@ -820,15 +1091,13 @@ describe('pre code node diff preview', () => {
     })
 
     await nextTick()
+    await vi.dynamicImportSettled()
     const pre = wrapper.get('pre')
-    expect(pre.classes()).not.toContain('is-wrap')
+    expect(pre.classes()).toContain('is-wrap')
     expect(observe).toHaveBeenCalledWith(pre.element)
 
     flushRaf()
     await nextTick()
-    expect(wrapper.find('.markstream-pre__diff-line').attributes('style')).toBeUndefined()
-
-    pre.element.classList.add('is-wrap')
     resizeCallback?.([], {} as ResizeObserver)
     flushRaf()
     await nextTick()
@@ -844,6 +1113,90 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+  })
+
+  it('does not measure unified diff rows when wrap is enabled', async () => {
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame')
+    const originalGetBCR = Element.prototype.getBoundingClientRect
+    const contentReads = vi.fn()
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.classList.contains('markstream-pre__diff-content'))
+        contentReads()
+      return originalGetBCR.call(this)
+    })
+    const observe = vi.fn()
+    vi.stubGlobal('ResizeObserver', class {
+      observe = observe
+      unobserve() {}
+      disconnect() {}
+    })
+
+    const wrapper = mount(PreCodeNode, {
+      attrs: { class: 'is-wrap' },
+      props: {
+        showLineNumbers: true,
+        diffInline: true,
+        node: {
+          type: 'code_block',
+          language: 'diff',
+          diff: true,
+          originalCode: 'old value',
+          updatedCode: 'new value',
+          code: '-old value\n+new value',
+          raw: '',
+        },
+      },
+    })
+
+    await nextTick()
+    expect(requestFrame).not.toHaveBeenCalled()
+    expect(observe).not.toHaveBeenCalled()
+    expect(contentReads).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
+  it('clears and restores synchronized heights across wrap to scroll to wrap', async () => {
+    const wrap = ref(true)
+    const node = {
+      type: 'code_block' as const,
+      language: 'ts',
+      diff: true,
+      originalCode: 'a very long removed line that wraps',
+      updatedCode: 'a very long added line that wraps',
+      code: '',
+      raw: '',
+    }
+    const Host = defineComponent({
+      setup: () => () => h(PreCodeNode, {
+        class: wrap.value ? 'is-wrap' : '',
+        node,
+        showLineNumbers: true,
+      }),
+    })
+    const wrapper = mount(Host)
+
+    await nextTick()
+    await vi.dynamicImportSettled()
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    await nextTick()
+    expect(wrapper.findAll('.markstream-pre__diff-line').some(row => row.attributes('style')?.includes('--markstream-pre-diff-synced-row-height'))).toBe(true)
+
+    wrap.value = false
+    await nextTick()
+
+    expect(wrapper.findAll('.markstream-pre__diff-line').every(row => row.attributes('style') === undefined)).toBe(true)
+
+    wrap.value = true
+    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    await nextTick()
+
+    expect(wrapper.findAll('.markstream-pre__diff-line').every(row => row.attributes('style')?.includes('--markstream-pre-diff-synced-row-height'))).toBe(true)
+
+    wrapper.unmount()
   })
 
   it('renders inline diff fallback as one ordered diff stream instead of stacked panes', () => {
@@ -870,6 +1223,8 @@ describe('pre code node diff preview', () => {
       'old value',
       'new value',
       'same after',
+      'No newline at end of file',
+      'No newline at end of file',
     ])
     expect(wrapper.findAll('.markstream-pre__diff-line--removed')).toHaveLength(1)
     expect(wrapper.findAll('.markstream-pre__diff-line--added')).toHaveLength(1)
@@ -1040,6 +1395,8 @@ describe('pre code node diff preview', () => {
       'export {',
       '  createRunEngine,',
       '} from "./run-engine"',
+      'No newline at end of file',
+      'No newline at end of file',
     ])
 
     wrapper.unmount()
