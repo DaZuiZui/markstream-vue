@@ -85,7 +85,6 @@ export interface CodeBlockEstimateOptions {
   rendererKind: CodeRendererKind
   codeBlockOptions?: CodeBlockOptions
   showHeader?: boolean
-  showPreCopyToolbar?: boolean
   showLineNumbers?: boolean
   width?: number
   diffStyle?: 'split' | 'unified'

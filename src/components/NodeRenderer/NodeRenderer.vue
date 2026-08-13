@@ -1627,11 +1627,6 @@ function resolveCodeBlockShowHeader() {
   return showHeader !== false
 }
 
-function resolvePreCodeCopyToolbar() {
-  const props = rendererProps.codeBlockProps
-  return props?.showHeader !== false
-}
-
 function resolveCodeBlockShowCopyButton() {
   return rendererProps.codeBlockProps?.showCopyButton !== false
 }
@@ -1671,7 +1666,6 @@ function estimateNodeHeight(node: ParsedNode, index: number, width: number) {
         rendererKind,
         codeBlockOptions: rendererProps.codeBlockOptions,
         showHeader: resolveCodeBlockShowHeader(),
-        showPreCopyToolbar: resolvePreCodeCopyToolbar(),
         showLineNumbers: resolveCodeBlockShowLineNumbers(),
         width,
         diffStyle: rendererProps.codeBlockOptions?.diffStyle,
@@ -5478,7 +5472,7 @@ const renderedItems = computed(() => {
       if (usesPreCodeBindings) {
         bindings = {
           ...bindings,
-          reservedHeightPx: estimatedHeight.height ?? estimatedHeight.contentHeight,
+          reservedHeightPx: estimatedHeight.contentHeight,
         }
       }
       else {

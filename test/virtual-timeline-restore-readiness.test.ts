@@ -1641,7 +1641,7 @@ describe('virtual timeline restore visual readiness', () => {
   })
 
   it('reserves async code block loading fallback height from block estimates', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
 
     const wrapper = mount(CodeBlockNodeLoading as any, {
       attrs: {
@@ -1658,7 +1658,6 @@ describe('virtual timeline restore visual readiness', () => {
         'data-root-probe': 'outer',
       },
     })
-
     const pre = wrapper.get('pre.code-pre-fallback')
     const root = wrapper.get('.code-block-container')
     expect(pre.attributes('data-markstream-code-loading')).toBe('1')
@@ -1711,7 +1710,7 @@ describe('virtual timeline restore visual readiness', () => {
   })
 
   it('applies neutral code block options during async loading without leaking them to the DOM', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
     const wrapper = mount(CodeBlockNodeLoading as any, {
       props: {
         codeBlockOptions: {
@@ -1735,7 +1734,6 @@ describe('virtual timeline restore visual readiness', () => {
         showLineNumbers: true,
       },
     })
-
     const root = wrapper.get('.code-block-container')
     const pre = wrapper.get('pre.code-pre-fallback')
     expect(root.attributes('codeblockoptions')).toBeUndefined()
@@ -1755,7 +1753,7 @@ describe('virtual timeline restore visual readiness', () => {
   })
 
   it('uses the default wrapping mode in the async loading fallback', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
     const wrapper = mount(CodeBlockNodeLoading as any, {
       props: {
         node: {
@@ -1767,7 +1765,6 @@ describe('virtual timeline restore visual readiness', () => {
         },
       },
     })
-
     const pre = wrapper.get('pre.code-pre-fallback')
     expect((pre.element as HTMLElement).style.whiteSpace).toBe('pre-wrap')
     expect(pre.classes()).toContain('is-wrap')
@@ -1775,7 +1772,7 @@ describe('virtual timeline restore visual readiness', () => {
   })
 
   it('reserves preview-only and diff-only header chrome while loading', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
     const disabledActions = {
       showCopyButton: false,
       showCollapseButton: false,
@@ -1836,7 +1833,7 @@ describe('virtual timeline restore visual readiness', () => {
   })
 
   it('keeps async loading container state aligned with the final shell', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
     const wrapper = mount(CodeBlockNodeLoading as any, {
       props: {
         node: {
@@ -1856,7 +1853,6 @@ describe('virtual timeline restore visual readiness', () => {
         maxWidth: '80%',
       },
     })
-
     const root = wrapper.get('.code-block-container')
     expect(root.classes()).toContain('dark')
     expect(root.classes()).toContain('is-dark')

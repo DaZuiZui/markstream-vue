@@ -9,7 +9,8 @@ import { resolveLanguageIcon } from '../../utils/resolveLanguageIcon'
 import { isDiffCodeBlock, resolveCodeBlockHeader, resolveDiffInlineLayout } from '../CodeBlockNode/codeBlockHeader'
 import CodeBlockShell from '../CodeBlockNode/CodeBlockShell.vue'
 import PreCodeNode from './PreCodeNode.vue'
-import { resolvePreCodeThemePalette, resolvePreCodeVisualOptions } from './preCodeVisual'
+import { resolvePreCodeThemePalette } from './preCodeTheme'
+import { resolvePreCodeVisualOptions } from './preCodeVisual'
 
 interface PreCodeBlockProps extends PreCodeNodeProps {
   codeBlockOptions?: CodeBlockOptions
