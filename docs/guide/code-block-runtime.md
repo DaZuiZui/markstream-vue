@@ -61,7 +61,7 @@ Direct `CodeBlockNode` usage and the top-level `NodeRenderer` / `MarkdownRender`
 The supported surface includes:
 
 - host-managed typography and layout: `fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, and `tabSize`;
-- File options such as `disableLineNumbers`, `overflow`, highlighting limits, and virtualization/highlighter controls;
+- File options such as `disableLineNumbers`, `overflow`, highlighting limits, and virtualization/highlighter controls; `overflow: 'wrap'` is passed to the compatibility runtime as `wordWrap: 'on'`, while `overflow: 'scroll'` is passed as `wordWrap: 'off'`; the default is `overflow: 'wrap'`.
 - FileDiff layout, indicators, unchanged-region folding, and line-diff controls;
 - line/token interactions, selection callbacks, annotations, `onController`, and `workerManager`.
 
@@ -82,3 +82,5 @@ This only warms the optional module. It does not create a surface, finalize a st
 ## Diff interactions
 
 Diff blocks keep the same adapter boundary. The enhanced diff surface uses `stream-diffs` defaults unless the corresponding `codeBlockOptions` fields are supplied. For example, `diffStyle`, `expandUnchanged`, `collapsedContextThreshold`, `hunkSeparators`, `lineDiffType`, and `parseDiffOptions` configure layout and folding.
+
+The fallback applies the same `collapsedContextThreshold` decision as the finalized surface: an unchanged region is folded only when its hidden line count is greater than the threshold. Unified and split fallbacks derive `No newline at end of file` from each source's actual final-newline state, render it with the same neutral metadata palette as the finalized surface, and preserve the same visible height during handoff. In wrap mode, added/removed content fill, gutter marker, and line-number fill span the complete measured logical-row height. Switching between wrap and scroll clears the old synchronized row height before the next layout is painted.

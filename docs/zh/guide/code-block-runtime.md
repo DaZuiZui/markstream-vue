@@ -61,7 +61,7 @@ Monaco JSON theme object 不会在 2.0 中直接改名。自定义主题需先�
 受支持的 surface 包括：
 
 - 宿主管理的排版与布局：`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`；
-- File 配置，例如 `disableLineNumbers`、`overflow`、高亮长度限制，以及虚拟化/高亮器控制；
+- File 配置，例如 `disableLineNumbers`、`overflow`、高亮长度限制，以及虚拟化/高亮器控制；`overflow: 'wrap'` 会通过兼容 runtime 映射为 `wordWrap: 'on'`，`overflow: 'scroll'` 映射为 `wordWrap: 'off'`；默认值是 `overflow: 'wrap'`。
 - FileDiff 布局、indicator、未变化区域折叠与 line diff 控制；
 - line/token 交互、selection callback、annotation、`onController` 与 `workerManager`。
 
@@ -82,3 +82,5 @@ void preloadCodeBlockRuntime()
 ## Diff 交互
 
 diff block 使用相同的适配边界。未提供对应 `codeBlockOptions` 时，增强 diff surface 使用 `stream-diffs` 默认值；可通过 `diffStyle`、`expandUnchanged`、`collapsedContextThreshold`、`hunkSeparators`、`lineDiffType` 与 `parseDiffOptions` 配置布局和折叠。
+
+fallback 与最终 surface 使用相同的 `collapsedContextThreshold` 判断：只有未变化区域的隐藏行数大于阈值时才折叠。unified 与 split diff fallback 都根据每个源文本真实的末尾换行状态生成 `No newline at end of file`，使用与最终 surface 一致的中性 metadata 前景色与背景色，并保持相同可见高度。换行模式下，新增/删除内容背景、gutter 标记与行号背景覆盖测量后的完整逻辑行高度；在换行与滚动模式之间切换时，会在下一次布局绘制前清除旧的同步行高。

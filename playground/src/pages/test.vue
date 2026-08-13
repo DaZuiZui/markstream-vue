@@ -4,6 +4,7 @@ import type { HtmlPolicy } from 'stream-markdown-parser'
 import type { TestLabFrameworkId, TestLabSampleId } from '../../../playground-shared/testLabFixtures'
 import type { TestPageViewMode } from '../../../playground-shared/testPageState'
 import type { SandboxFrameworkId, SandboxRenderSource } from '../../../playground-shared/versionSandbox'
+import type { CodeBlockOptions } from '../../../src/types/component-props'
 import type { MarkstreamViewportPriorityOptions } from '../../../src/types/node-renderer-props'
 import type { StreamSliceMode } from '../composables/createLocalTextStream'
 import type { StreamPresetId } from '../composables/streamPresets'
@@ -158,6 +159,7 @@ const HTML_POLICY_OPTIONS = [
   { value: 'escape', label: 'Escape' },
 ] as const satisfies ReadonlyArray<{ value: HtmlPolicy, label: string }>
 type DiffLayoutMode = 'inline' | 'side-by-side'
+type CodeOverflowMode = NonNullable<CodeBlockOptions['overflow']>
 const DIFF_LAYOUT_OPTIONS = [
   { value: 'inline', label: 'Diff 1 列' },
   { value: 'side-by-side', label: 'Diff 2 列' },
@@ -185,7 +187,20 @@ function resolveInitialDiffLayoutMode(): DiffLayoutMode {
     : 'inline'
 }
 
+function resolveInitialCodeOverflowMode(): CodeOverflowMode | undefined {
+  if (typeof window === 'undefined')
+    return undefined
+
+  const overflow = new URL(window.location.href).searchParams.get('codeOverflow')
+  return overflow === 'scroll' || overflow === 'wrap' ? overflow : undefined
+}
+
 const diffLayoutMode = useLocalStorage<DiffLayoutMode>('vmr-test-diff-layout-mode', resolveInitialDiffLayoutMode())
+const codeOverflowMode = ref<CodeOverflowMode | undefined>(resolveInitialCodeOverflowMode())
+const previewCodeBlockOptions = computed<CodeBlockOptions>(() => ({
+  diffStyle: diffLayoutMode.value === 'side-by-side' ? 'split' : 'unified',
+  ...(codeOverflowMode.value ? { overflow: codeOverflowMode.value } : {}),
+}))
 
 const selectedSampleId = useLocalStorage<SampleId>('vmr-test-sample', 'baseline')
 const input = ref<string>(sampleCards[0].content)
@@ -3285,6 +3300,7 @@ watch(mermaidEnabled, (enabled) => {
                     :batch-rendering="previewBatchRendering"
                     :typewriter="typewriter"
                     :code-block-stream="codeBlockStream"
+                    :code-block-options="previewCodeBlockOptions"
                     :render-code-blocks-as-pre="renderCodeBlocksAsPre"
                     :max-live-nodes="previewMaxLiveNodes"
                     :live-node-buffer="previewLiveNodeBuffer"

@@ -5,8 +5,65 @@ import NodeRenderer from '../src/components/NodeRenderer'
 import PreCodeBlock from '../src/components/PreCodeNode/PreCodeBlock.vue'
 import { flushAll } from './setup/flush-all'
 
-describe('nodeRenderer plain pre copy toolbar', () => {
-  it('renders the toolbar before the unchanged pre and copies the original node code', async () => {
+describe('nodeRenderer plain pre shared shell', () => {
+  it('uses public codeBlockOptions.diffStyle for renderCodeBlocksAsPre layout', async () => {
+    const node = {
+      type: 'code_block' as const,
+      language: 'diff typescript',
+      diff: true,
+      originalCode: 'const answer = 41',
+      updatedCode: 'const answer = 42',
+      code: '-const answer = 41\n+const answer = 42',
+      raw: '```diff ts:src/answer.ts',
+    }
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        renderCodeBlocksAsPre: true,
+        codeBlockOptions: { diffStyle: 'unified' },
+        batchRendering: false,
+        nodes: [node],
+      },
+    })
+
+    await flushAll()
+    expect(wrapper.findAll('.markstream-pre__diff-pane')).toHaveLength(1)
+    expect(wrapper.get('.markstream-pre__diff-pane').classes()).toContain('markstream-pre__diff-pane--inline')
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(2)
+    expect(wrapper.text()).toContain('No newline at end of file')
+
+    await wrapper.setProps({ codeBlockOptions: { diffStyle: 'split' } })
+    await flushAll()
+    expect(wrapper.findAll('.markstream-pre__diff-pane')).toHaveLength(2)
+
+    wrapper.unmount()
+  })
+
+  it.each(['unified', 'split'] as const)('shows no-final-newline metadata in permanent %s pre', async (diffStyle) => {
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        renderCodeBlocksAsPre: true,
+        codeBlockOptions: { diffStyle },
+        batchRendering: false,
+        nodes: [{
+          type: 'code_block',
+          language: 'typescript',
+          diff: true,
+          originalCode: 'const answer = 41',
+          updatedCode: 'const answer = 42',
+          code: 'const answer = 42',
+          raw: '',
+        }],
+      },
+    })
+
+    await flushAll()
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(2)
+    expect(wrapper.text()).toContain('No newline at end of file')
+
+    wrapper.unmount()
+  })
+
+  it('renders the shared header before the unchanged pre and copies the original node code', async () => {
     const code = 'const answer = 42\n'
     const previousClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
     const writeText = vi.fn().mockResolvedValue(undefined)
@@ -36,15 +93,14 @@ describe('nodeRenderer plain pre copy toolbar', () => {
     try {
       await flushAll()
 
-      const toolbar = wrapper.get('.pre-code-block-toolbar')
-      const button = wrapper.get('button.pre-code-block-select-copy')
+      const container = wrapper.get('.code-block-container')
+      const header = wrapper.get('.code-block-header')
+      const button = wrapper.get('button.code-action-btn')
       const pre = wrapper.get('pre[data-markstream-pre="1"]')
-      const nodeContent = pre.element.parentElement
 
-      expect(nodeContent).not.toBeNull()
-      expect(toolbar.element.parentElement).toBe(nodeContent)
-      expect(pre.element.parentElement).toBe(nodeContent)
-      expect(toolbar.element.compareDocumentPosition(pre.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(header.element.parentElement).toBe(container.element)
+      expect(container.element.contains(pre.element)).toBe(true)
+      expect(header.element.compareDocumentPosition(pre.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
       expect(pre.classes()).toEqual(expect.arrayContaining([
         'code-pre-fallback',
         'is-wrap',
@@ -57,14 +113,15 @@ describe('nodeRenderer plain pre copy toolbar', () => {
       expect((pre.element as HTMLElement).style.paddingTop).toBe('8px')
       expect((pre.element as HTMLElement).style.paddingBottom).toBe('8px')
       expect((pre.element as HTMLElement).style.tabSize).toBe('4')
-      expect(button.text()).toContain('全选（复制）')
+      expect(button.attributes('aria-label')).toBe('Copy')
 
-      const selectNodeContents = vi.spyOn(Range.prototype, 'selectNodeContents')
+      window.getSelection()?.removeAllRanges()
       await button.trigger('click')
       await flushAll()
 
-      expect(selectNodeContents).toHaveBeenCalledWith(pre.get('code').element)
       expect(writeText).toHaveBeenCalledWith(code)
+      expect(window.getSelection()?.toString()).toBe('')
+      expect(window.getSelection()?.rangeCount).toBe(0)
       expect(wrapper.emitted('copy-code')).toEqual([[code]])
       expect(wrapper.emitted('copy')).toEqual([[code]])
     }

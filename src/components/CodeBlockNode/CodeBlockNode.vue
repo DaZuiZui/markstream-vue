@@ -20,7 +20,7 @@ import {
   resolvePreCodeThemePalette,
   resolvePreCodeVisualOptions,
 } from '../PreCodeNode/preCodeVisual'
-import { isDiffCodeBlock, resolveCodeBlockHeader } from './codeBlockHeader'
+import { isDiffCodeBlock, resolveCodeBlockHeader, resolveDiffHideUnchangedRegionsOption } from './codeBlockHeader'
 import CodeBlockShell from './CodeBlockShell.vue'
 import HtmlPreviewFrame from './HtmlPreviewFrame.vue'
 import {
@@ -249,8 +249,8 @@ const diffStats = ref({ removed: 0, added: 0 })
 const diffStatsAriaLabel = computed(() => `-${diffStats.value.removed} +${diffStats.value.added}`)
 function resolveDiffRenderPair(original: string, updated: string) {
   return {
-    original: getDisplayCode(original),
-    updated: getDisplayCode(updated),
+    original,
+    updated,
   }
 }
 
@@ -409,26 +409,7 @@ const preFallbackDiffInline = computed(() => {
   return resolvedEditorOptions.value?.diffStyle === 'unified'
 })
 const preFallbackDiffHideUnchangedRegions = computed(() => {
-  // stream-diffs keeps unchanged-region folding disabled while a diff is streaming,
-  // but the fallback pre must keep its final folded geometry. Otherwise the
-  // fallback expands all unchanged rows and visibly jumps when the editor reveals.
-  if (resolvedEditorOptions.value?.expandUnchanged === true)
-    return false
-
-  const contextLineCount = Number((resolvedEditorOptions.value?.parseDiffOptions as Record<string, unknown> | undefined)?.context)
-  const collapsedContextThreshold = Number(resolvedEditorOptions.value?.collapsedContextThreshold)
-  const context = Number.isFinite(contextLineCount) && contextLineCount >= 0
-    ? Math.floor(contextLineCount)
-    : 2
-  const threshold = Number.isFinite(collapsedContextThreshold) && collapsedContextThreshold >= 0
-    ? Math.floor(collapsedContextThreshold)
-    : 5
-  return {
-    enabled: true,
-    contextLineCount: context,
-    minimumLineCount: Math.max(1, threshold - context + 1),
-    revealLineCount: 5,
-  }
+  return resolveDiffHideUnchangedRegionsOption(resolvedEditorOptions.value)
 })
 function isHostScrollManagedCodeBlockElement(el?: HTMLElement | null) {
   if (hostScrollManaged?.value === true)
@@ -569,6 +550,10 @@ const codeFontSize = ref<number>(defaultCodeFontSize.value)
 const measuredEditorFontSize = ref<number | null>(null)
 const measuredEditorLineHeight = ref<number | null>(null)
 const measuredEditorCharacterWidth = ref<number | null>(null)
+// Set only during the diff fallback → finalized surface handoff. The fallback
+// and finalized surface use different folding DOMs, so the measured finalized
+// height must be kept in the Vue style contract rather than a one-off DOM write.
+const diffFallbackHandoffHeight = ref<number | null>(null)
 const fontBaselineReady = computed(() => {
   const a = defaultCodeFontSize.value
   const b = codeFontSize.value
@@ -601,14 +586,14 @@ const preFallbackTabSize = computed(() => {
 })
 const preFallbackVerticalPadding = computed(() => {
   const padding = props.codeBlockOptions?.padding
-  const defaultPadding = isDiff.value ? 0 : 8
+  const defaultPadding = 8
   const value = typeof padding === 'number' && Number.isFinite(padding) && padding >= 0
     ? padding
     : defaultPadding
   return { top: value, bottom: value }
 })
 const preFallbackVisualOptions = computed(() => {
-  const base = resolvePreCodeVisualOptions(props.codeBlockOptions, isDiff.value)
+  const base = resolvePreCodeVisualOptions(props.codeBlockOptions)
   return {
     ...base,
     fontSize: preFallbackFontSize.value,
@@ -656,7 +641,19 @@ const preFallbackLocalMinHeight = computed(() => {
     const value = String(source ?? '')
     if (!value)
       return 1
-    return Math.max(1, value.split(/\r\n|\n|\r/).length)
+    let count = 1
+    for (let i = 0; i < value.length; i++) {
+      if (value[i] === '\n') {
+        count++
+      }
+      else if (value[i] === '\r') {
+        count++
+        if (value[i + 1] === '\n') {
+          i++
+        }
+      }
+    }
+    return count
   }
 
   if (isDiff.value)
@@ -775,9 +772,18 @@ const preFallbackStyle = computed(() => {
   if (isDiff.value) {
     // Keep the pre diff fallback visually close to stream-diffs' diff line box.
     style['--markstream-pre-diff-line-height'] = `${preFallbackEffectiveLineHeight.value}px`
+    // Pierre's `line-info` separator occupies a 32px row plus its 8px leading
+    // margin. The fallback surface already owns the matching top/bottom gaps.
+    style['--markstream-pre-diff-collapsed-row-height'] = '40px'
     style['--markstream-pre-diff-pane-bottom-padding'] = preFallbackDiffInline.value
       ? '0px'
       : `${SIDE_BY_SIDE_DIFF_PREVIEW_BOTTOM_PADDING}px`
+    const handoffHeight = diffFallbackHandoffHeight.value
+    if (handoffHeight != null && handoffHeight > 0) {
+      style.height = `${handoffHeight}px`
+      style.minHeight = `${handoffHeight}px`
+      style.maxHeight = `${handoffHeight}px`
+    }
     Object.assign(style, getDiffVisualVars(resolvedSurfaceIsDark.value))
   }
 
@@ -837,12 +843,13 @@ function clearEstimatedEditorHeightFloor() {
 
 watch(
   () => [props.stream, props.loading, props.node.loading, isDiff.value] as const,
-  () => {
-    if (shouldUseStreamingLocalPreFallbackHeight()) {
+  ([stream, loading, _nodeLoading, diff]) => {
+    const shouldActivate = !diff && stream !== false && loading !== false
+    if (shouldActivate && !streamingLocalPreFallbackHeightActive.value) {
       streamingLocalPreFallbackHeightActive.value = true
       clearEstimatedEditorHeightFloor()
     }
-    else if (isDiff.value || props.stream === false) {
+    else if ((diff || stream === false) && streamingLocalPreFallbackHeightActive.value) {
       streamingLocalPreFallbackHeightActive.value = false
     }
   },
@@ -885,7 +892,8 @@ async function revealEditorDisplay() {
 
   // The editor is fully prepared while hidden. Flip the two layers in one Vue
   // patch so there is no visible pre-reveal or post-reveal validation state.
-  syncEditorHostToFallbackHeight() ?? syncDiffRevealHostHeight()
+  syncEditorHostToFallbackHeight()
+  syncDiffRevealHostHeight()
   layoutEditorToHost(true)
   syncDiffScrollFromFallback()
   syncInlineFoldProxies()
@@ -897,26 +905,165 @@ async function revealEditorDisplay() {
   layoutEditorToHost(true)
   await waitForAnimationFrame()
   layoutEditorToHost(true)
-  if (whenRuntimeVisualReady && !await whenRuntimeVisualReady())
-    return false
+  // `runEditorCreation()` already waited for the runtime's highlighted visual
+  // commit. Do not invoke the same readiness gate again after moving the hidden
+  // host into its final grid position: the runtime may start a new internal
+  // revision during layout, which would leave the fallback visible indefinitely.
   syncFallbackFontMetricsFromEditor()
   syncDiffRevealHostHeight()
-  layoutEditorToHost(true)
+  // Commit the measured runtime height to the fallback while it is still
+  // visible. The fallback and runtime use different diff row models; removing
+  // the fallback before the browser has laid out this reactive pin exposes the
+  // old folded-row height for one frame.
+  if (!await stabilizeDiffHandoffHeight())
+    return false
   editorDisplayReady.value = true
   await nextTick()
   syncDiffRevealHostHeight()
   layoutEditorToHost(true)
   syncFallbackFontMetricsFromEditor()
   syncInlineFoldProxies()
+  // Keep the handoff row pin through the removal frame. Clearing it
+  // synchronously after `nextTick()` can race the E2E/browser paint and expose
+  // the old folded row before the finalized surface owns the row.
+  // Keep the shell row pinned for two paint frames. The first frame is the
+  // actual fallback-removal patch; clearing it there lets the old folded row
+  // win the grid track before the finalized surface becomes the sole child.
+  safeRaf(() => {
+    if (isUnmounted)
+      return
+    safeRaf(() => {
+      if (isUnmounted)
+        return
+      clearDiffShellContentHeight()
+      scheduleEditorHeightSync(true)
+    })
+  })
   scheduleEditorHeightSync()
   return true
+}
+
+async function stabilizeDiffHandoffHeight() {
+  if (!isDiff.value)
+    return true
+
+  for (let frame = 0; frame < 4; frame++) {
+    const targetHeight = syncDiffRevealHostHeight()
+    layoutEditorToHost(true)
+    pinDiffFallbackToEditorHeight(targetHeight)
+    syncDiffShellContentHeight(targetHeight)
+    await nextTick()
+    await waitForAnimationFrame()
+
+    const fallback = container.value?.querySelector('pre.code-pre-fallback') as HTMLElement | null
+    if (!fallback)
+      return false
+
+    // jsdom and other layout-less renderers report zero-sized boxes. The
+    // enhanced DOM itself is sufficient there; real browsers must prove that
+    // the visible fallback has adopted the measured runtime height.
+    if (targetHeight == null)
+      return hasRenderedDiffEditorDom()
+
+    const fallbackHeight = fallback.getBoundingClientRect().height
+    if (fallbackHeight > 0 && Math.abs(fallbackHeight - targetHeight) <= 2)
+      return true
+  }
+
+  return false
+}
+
+function pinDiffFallbackToEditorHeight(targetHeight?: number | null) {
+  if (!isDiff.value)
+    return
+
+  const editorHost = codeEditor.value
+  const fallback = container.value?.querySelector('pre.code-pre-fallback') as HTMLElement | null
+  if (!editorHost || !fallback)
+    return
+
+  const editorHeight = targetHeight ?? Number.parseFloat(editorHost.style.height || '')
+  if (!Number.isFinite(editorHeight) || editorHeight <= 0)
+    return
+
+  const heightPx = Math.ceil(editorHeight)
+  const height = `${heightPx}px`
+  // Keep the pin in the reactive style contract as well as on the current DOM
+  // node. Vue may patch the fallback after this function returns; the computed
+  // style must reapply the same height instead of removing the direct pin.
+  diffFallbackHandoffHeight.value = heightPx
+  const handoffContainer = container.value
+  if (handoffContainer)
+    handoffContainer.dataset.markstreamDiffHandoffHeight = height
+  fallback.dataset.markstreamDiffHandoffHeight = height
+  fallback.style.setProperty('height', height)
+  fallback.style.setProperty('min-height', height)
+}
+
+function syncDiffShellContentHeight(height?: number | null) {
+  if (!isDiff.value)
+    return
+
+  const content = container.value?.querySelector('.code-block-shell-content') as HTMLElement | null
+  const layer = container.value?.querySelector('.code-editor-layer') as HTMLElement | null
+  if (!content || !layer)
+    return
+
+  const nextHeight = typeof height === 'number' && Number.isFinite(height) && height > 0
+    ? Math.ceil(height)
+    : Number.parseFloat(codeEditor.value?.style.height || '')
+  if (!Number.isFinite(nextHeight) || nextHeight <= 0)
+    return
+
+  const value = `${nextHeight}px`
+  // The editor layer is the actual grid-row owner. Keep both the layer and its
+  // shell content explicit during handoff; setting only the child editor height
+  // leaves the row at the previous folded fallback height until the next layout.
+  layer.style.height = value
+  layer.style.minHeight = value
+  content.style.height = value
+  content.style.minHeight = value
+}
+
+function clearDiffShellContentHeight() {
+  const content = container.value?.querySelector('.code-block-shell-content') as HTMLElement | null
+  const layer = container.value?.querySelector('.code-editor-layer') as HTMLElement | null
+  if (!content || !layer)
+    return
+
+  layer.style.removeProperty('height')
+  layer.style.removeProperty('min-height')
+  content.style.removeProperty('height')
+  content.style.removeProperty('min-height')
 }
 
 function syncDiffRevealHostHeight() {
   const editorHost = codeEditor.value
   if (editorHost && hasRenderedDiffEditorDom(editorHost)) {
     syncInlineFoldProxies()
+
+    // Read the finalized surface before the generic model-height path can size
+    // the hidden host back to the shorter fallback row. Unified Pierre diffs use
+    // separator DOM that is not represented by the fallback's source rows.
+    const renderedHeight = measureRenderedDiffHeight(editorHost)
+    if (renderedHeight != null && renderedHeight > 0) {
+      const height = Math.ceil(renderedHeight)
+      const value = `${height}px`
+      editorHost.style.height = value
+      editorHost.style.minHeight = '0px'
+      editorHost.style.maxHeight = `${Math.ceil(getMaxHeightValue())}px`
+      editorHost.style.overflow = 'hidden'
+
+      if (showPreWhileRuntimeLoads.value) {
+        diffFallbackHandoffHeight.value = height
+        pinDiffFallbackToEditorHeight(height)
+      }
+      scheduleStreamingDiffHeightChase()
+      return height
+    }
+
     syncEditorHostHeight({ preferModelDiffHeight: true })
+    pinDiffFallbackToEditorHeight()
     scheduleStreamingDiffHeightChase()
     return Number.parseFloat(editorHost.style.height || '') || null
   }
@@ -1064,19 +1211,14 @@ function getVerticalPaddingSafe(): number {
   return isDiff.value ? 24 : 0
 }
 
-function countChangedLineRange(start: number | undefined, end: number | undefined) {
-  if (typeof start !== 'number' || typeof end !== 'number')
-    return 0
-  if (start < 1 || end < start)
-    return 0
-  return end - start + 1
-}
-
 function splitCodeLines(source: string) {
-  if (!source)
+  // Match the displayed diff pair: a terminal line break is a delimiter, not
+  // an additional changed source line. Support all line-break forms because
+  // code blocks can be supplied directly without going through the parser.
+  const displaySource = getDisplayCode(source)
+  if (!displaySource)
     return [] as string[]
-  const lines = source.split(/\r?\n/)
-  return lines.length === 1 && lines[0] === '' ? [] : lines
+  return displaySource.split(/\r\n|\n|\r/)
 }
 
 function estimateDiffStats(originalSource: string, modifiedSource: string) {
@@ -1157,6 +1299,10 @@ function syncEstimatedDiffStats() {
     return
   }
 
+  // Use the same source-line diff model as the fallback. The enhanced runtime
+  // exposes hunk ranges, but those ranges describe the rendered diff surface
+  // and can include visual rows that do not represent additional source lines.
+  // Header counts are a source contract: one changed logical line is `-1 +1`.
   diffStats.value = estimateDiffStats(
     String(props.node.originalCode ?? ''),
     String(props.node.updatedCode ?? ''),
@@ -1164,37 +1310,11 @@ function syncEstimatedDiffStats() {
 }
 
 function refreshDiffStats() {
-  if (!isDiff.value) {
-    diffStats.value = { removed: 0, added: 0 }
-    return
-  }
-
-  try {
-    const diff = getDiffEditorView()
-    const lineChanges = diff?.getLineChanges?.()
-    if (!Array.isArray(lineChanges)) {
-      syncEstimatedDiffStats()
-      return
-    }
-
-    let removed = 0
-    let added = 0
-    for (const change of lineChanges) {
-      removed += countChangedLineRange(
-        change.originalStartLineNumber,
-        change.originalEndLineNumber,
-      )
-      added += countChangedLineRange(
-        change.modifiedStartLineNumber,
-        change.modifiedEndLineNumber,
-      )
-    }
-
-    diffStats.value = { removed, added }
-  }
-  catch {
-    syncEstimatedDiffStats()
-  }
+  // The runtime hunk ranges include the hunk's context rows in stream-diffs
+  // 0.0.2. They are useful for presentation, but not for the header contract:
+  // header counts must describe changed logical source lines, never visual
+  // wrapped rows or unchanged context inside a hunk.
+  syncEstimatedDiffStats()
 }
 
 function ensureFontBaseline() {
@@ -1300,23 +1420,25 @@ function measureRenderedDiffHeight(container: HTMLElement): number | null {
   if (typeof window === 'undefined')
     return null
   try {
-    const hostRect = container.getBoundingClientRect()
     const hostStyle = window.getComputedStyle(container)
-    if (hostStyle.display === 'none' || hostStyle.visibility === 'hidden')
+    // The enhanced host is intentionally visibility-hidden during handoff.
+    // Hidden elements still have layout boxes; rejecting them here prevents
+    // measuring the finalized surface before the fallback is removed.
+    if (hostStyle.display === 'none')
       return null
 
     const diffsRoot = container.querySelector('diffs-container')
     if (diffsRoot instanceof HTMLElement) {
       const diffsRect = diffsRoot.getBoundingClientRect()
-      if (diffsRect.height > 0 && diffsRect.bottom > hostRect.top)
-        return Math.ceil(diffsRect.bottom - hostRect.top)
+      if (diffsRect.height > 0)
+        return Math.ceil(diffsRect.height)
     }
 
     const shell = container.querySelector<HTMLElement>('.stream-diffs-shell')
     if (shell) {
       const shellRect = shell.getBoundingClientRect()
-      if (shellRect.height > 0 && shellRect.bottom > hostRect.top)
-        return Math.ceil(shellRect.bottom - hostRect.top)
+      if (shellRect.height > 0)
+        return Math.ceil(shellRect.height)
     }
 
     return null
@@ -1450,9 +1572,17 @@ function syncEditorHostToFallbackHeight() {
   if (!editorHost || !fallback)
     return null
 
-  const height = Math.ceil(fallback.getBoundingClientRect().height)
+  const fallbackHeight = Math.ceil(fallback.getBoundingClientRect().height)
+  const renderedDiffHeight = isDiff.value ? measureRenderedDiffHeight(editorHost) : null
+  const height = Math.max(
+    fallbackHeight,
+    renderedDiffHeight != null && renderedDiffHeight > 0 ? Math.ceil(renderedDiffHeight) : 0,
+  )
   if (!Number.isFinite(height) || height <= 0)
     return null
+
+  if (isDiff.value && height > fallbackHeight)
+    diffFallbackHandoffHeight.value = height
 
   editorHost.style.height = `${height}px`
   editorHost.style.minHeight = `${height}px`
@@ -1468,6 +1598,8 @@ function syncEditorCssVars() {
     return
   // Runtime theme variables belong to the editor container, not the shell.
   const targetEl = editorEl
+  targetEl.style.setProperty('--markstream-diff-metadata-bg', preFallbackThemePalette.value.background)
+  targetEl.style.setProperty('--markstream-diff-metadata-fg', preFallbackThemePalette.value.lineNumber)
   // Align the enhanced surface with the pre-fallback geometry. stream-diffs /
   // pierre honor these CSS variables on the editor host (custom properties
   // inherit across the pierre shadow boundary):
@@ -2589,6 +2721,16 @@ const containerStyle = computed(() => {
   s['--markstream-code-layout-character-width'] = measuredEditorCharacterWidth.value == null
     ? '1ch'
     : `${measuredEditorCharacterWidth.value}px`
+  s['--markstream-code-fallback-bg'] = preFallbackThemePalette.value.background
+  s['--markstream-code-fallback-fg'] = preFallbackThemePalette.value.foreground
+  s['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
+  s['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
+  s['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
+  s['--markstream-diff-editor-bg'] = preFallbackThemePalette.value.background
+  s['--markstream-diff-shell-bg'] = preFallbackThemePalette.value.background
+  s['--markstream-pre-resolved-theme-bg'] = preFallbackThemePalette.value.background
+  s['--markstream-pre-resolved-theme-fg'] = preFallbackThemePalette.value.foreground
+  s['--markstream-pre-resolved-theme-line-number'] = preFallbackThemePalette.value.lineNumber
   const fmt = (v: string | number | undefined) => {
     if (v == null)
       return undefined
@@ -2609,17 +2751,10 @@ const containerStyle = computed(() => {
     if (reserved != null)
       s.minHeight = `${reserved}px`
   }
-  if (!isDiff.value) {
-    s['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
-    s['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
-    s['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
-    s['--markstream-pre-resolved-theme-bg'] = preFallbackThemePalette.value.background
-    s['--markstream-pre-resolved-theme-fg'] = preFallbackThemePalette.value.foreground
-    s['--markstream-pre-resolved-theme-line-number'] = preFallbackThemePalette.value.lineNumber
-    s.color = 'var(--markstream-code-fallback-fg, var(--markstream-code-theme-fg, var(--markstream-pre-resolved-theme-fg)))'
-    s.backgroundColor = 'var(--markstream-code-fallback-bg, var(--markstream-code-theme-bg, var(--markstream-pre-resolved-theme-bg)))'
+  s.color = 'var(--markstream-code-fallback-fg, var(--markstream-code-theme-fg, var(--markstream-pre-resolved-theme-fg)))'
+  s.backgroundColor = 'var(--markstream-code-fallback-bg, var(--markstream-code-theme-bg, var(--markstream-pre-resolved-theme-bg)))'
+  if (!isDiff.value)
     s.borderColor = 'var(--markstream-code-border-color, var(--code-border))'
-  }
   return s
 })
 const tooltipsEnabled = computed(() => props.showTooltips !== false)
@@ -2761,6 +2896,7 @@ async function runEditorCreation(el: HTMLElement) {
   measuredEditorFontSize.value = null
   measuredEditorLineHeight.value = null
   measuredEditorCharacterWidth.value = null
+  diffFallbackHandoffHeight.value = null
   clearLayerMeasuredVars()
   resetEditorLayoutCache()
   armEstimatedEditorHeightFloor()
@@ -3167,10 +3303,40 @@ function themeLooksDark(theme: CodeBlockTheme | null | undefined) {
     && !lightTokens.some(token => normalized.includes(token))
 }
 
+function buildStreamDiffsOverflowCSS(overflow: 'scroll' | 'wrap') {
+  const whiteSpace = overflow === 'wrap' ? 'pre-wrap' : 'pre'
+  const overflowWrap = overflow === 'wrap' ? 'anywhere' : 'normal'
+  return `
+[data-file] [data-line],
+[data-diff] [data-line] {
+  white-space: ${whiteSpace} !important;
+  overflow-wrap: ${overflowWrap} !important;
+  word-break: normal !important;
+}`
+}
+
+function buildStreamDiffsMetadataCSS() {
+  return `
+[data-no-newline],
+[data-gutter-buffer="metadata"] {
+  --diffs-computed-decoration-bg: var(--markstream-diff-metadata-bg) !important;
+  --diffs-computed-diff-line-bg: var(--markstream-diff-metadata-bg) !important;
+  --diffs-computed-selected-line-bg: var(--markstream-diff-metadata-bg) !important;
+  --diffs-line-bg: var(--markstream-diff-metadata-bg) !important;
+  color: var(--markstream-diff-metadata-fg) !important;
+  background-color: var(--markstream-diff-metadata-bg) !important;
+}`
+}
+
 function buildStreamDiffsRuntimeOptions() {
+  const visualOptions = preFallbackVisualOptions.value
   const nextOptions = {
-    overflow: 'wrap',
     ...(resolvedEditorOptions.value || {}),
+    // stream-diffs@0.0.2 reads wordWrap in its compatibility adapter and
+    // derives the actual surface overflow from it. Keep this mapping next to
+    // the fallback resolver so both surfaces always use the same value.
+    wordWrap: visualOptions.overflow === 'wrap' ? 'on' : 'off',
+    overflow: visualOptions.overflow,
     themes: props.themes,
     stream: false,
     MAX_HEIGHT: props.codeBlockOptions?.maxHeight ?? 500,
@@ -3194,7 +3360,11 @@ function buildStreamDiffsRuntimeOptions() {
   const configuredUnsafeCSS = typeof nextOptions.unsafeCSS === 'string'
     ? nextOptions.unsafeCSS
     : ''
+  const overflowCSS = buildStreamDiffsOverflowCSS(visualOptions.overflow)
+  const metadataCSS = buildStreamDiffsMetadataCSS()
   nextOptions.unsafeCSS = `[data-file], [data-diff] { --diffs-min-number-column-width-default: 2ch !important; }
+${overflowCSS}
+${metadataCSS}
 ${configuredUnsafeCSS}`.trim()
 
   return nextOptions
@@ -3651,13 +3821,23 @@ onUnmounted(() => {
     :diff-hide-unchanged-regions="preFallbackDiffHideUnchangedRegions"
     :code-block-options="props.codeBlockOptions"
     :resolved-visual-options="preFallbackVisualOptions"
+    :reserved-height-px="isDiff ? diffFallbackHandoffHeight ?? undefined : undefined"
     :is-dark="props.isDark"
     :theme="props.theme"
     :dark-theme="props.darkTheme"
     :light-theme="props.lightTheme"
     :themes="props.themes"
-    :show-toolbar="false"
-  />
+    :show-header="props.showHeader"
+    :show-copy-button="props.showCopyButton"
+    :show-tooltips="props.showTooltips"
+  >
+    <template v-if="$slots['header-left']" #header-left>
+      <slot name="header-left" />
+    </template>
+    <template v-if="$slots['header-right']" #header-right>
+      <slot name="header-right" />
+    </template>
+  </PreCodeBlock>
   <div
     v-else
     ref="container"
@@ -3746,6 +3926,7 @@ onUnmounted(() => {
           :diff-hide-unchanged-regions="preFallbackDiffHideUnchangedRegions"
           :code-block-options="props.codeBlockOptions"
           :resolved-visual-options="preFallbackVisualOptions"
+          :reserved-height-px="isDiff ? diffFallbackHandoffHeight ?? undefined : undefined"
           :is-dark="props.isDark"
           :theme="props.theme"
           :dark-theme="props.darkTheme"
@@ -3941,9 +4122,8 @@ onUnmounted(() => {
   background: var(--markstream-diff-shell-bg);
   box-shadow: var(--markstream-diff-shell-shadow);
   --vscode-editor-selectionBackground: var(--markstream-diff-action-hover);
-  /* Override shared tokens so CodeBlockShell header inherits diff styling */
+  /* Keep shared header background; diff only changes foreground/border tokens. */
   --code-fg: var(--markstream-diff-shell-fg);
-  --code-header-bg: transparent;
   --code-border: var(--markstream-diff-header-border);
   --code-line-number: var(--markstream-diff-shell-muted);
   --code-action-fg: var(--markstream-diff-shell-muted);

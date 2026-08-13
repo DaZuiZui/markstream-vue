@@ -278,6 +278,8 @@ describe('codeBlockNode final Diffs gate', () => {
       fontFamily: 'Fira Code',
       diffStyle: 'unified',
       disableLineNumbers: true,
+      wordWrap: 'on',
+      overflow: 'wrap',
       stream: false,
       disableFileHeader: true,
       theme: 'github-dark',
@@ -290,10 +292,18 @@ describe('codeBlockNode final Diffs gate', () => {
     expect(firstOptions.padding).toBeUndefined()
     expect(firstOptions.tabSize).toBeUndefined()
     expect(firstOptions.unsafeCSS.indexOf('[data-file], [data-diff]')).toBeLessThan(firstOptions.unsafeCSS.indexOf('.consumer-rule'))
+    expect(firstOptions.unsafeCSS).toContain('overflow-wrap: anywhere !important')
+    expect(firstOptions.unsafeCSS).toContain('word-break: normal !important')
+    expect(firstOptions.unsafeCSS).toContain('[data-no-newline],')
+    expect(firstOptions.unsafeCSS).toContain('[data-gutter-buffer="metadata"]')
+    expect(firstOptions.unsafeCSS).toContain('color: var(--markstream-diff-metadata-fg) !important')
+    expect(firstOptions.unsafeCSS).toContain('background-color: var(--markstream-diff-metadata-bg) !important')
 
     const editorHost = wrapper.get('.code-editor-container').element as HTMLElement
     expect(editorHost.style.getPropertyValue('--diffs-tab-size')).toBe('8')
     expect(editorHost.style.getPropertyValue('--diffs-gap-block')).toBe('6px')
+    expect(editorHost.style.getPropertyValue('--markstream-diff-metadata-bg')).toBe('#121212')
+    expect(editorHost.style.getPropertyValue('--markstream-diff-metadata-fg')).toBe('#dedcd550')
 
     await wrapper.setProps({
       codeBlockOptions: {
@@ -307,6 +317,102 @@ describe('codeBlockNode final Diffs gate', () => {
     })
     expect(runtime.createCodeBlockRuntime.mock.calls[1]?.[0]?.diffStyle).toBe('split')
 
+    wrapper.unmount()
+  })
+
+  it('maps overflow scroll to a non-wrapping enhanced surface', async () => {
+    const runtime = helpers()
+    runtime.createEditor.mockImplementation(() => new Promise<void>(() => {}))
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const veryLongLine = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        codeBlockOptions: { overflow: 'scroll' },
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1))
+
+    const options = runtime.createCodeBlockRuntime.mock.calls[0]?.[0]
+    expect(options?.wordWrap).toBe('off')
+    expect(options?.overflow).toBe('scroll')
+    expect(options?.unsafeCSS).toContain('white-space: pre !important')
+    expect(options?.unsafeCSS).toContain('overflow-wrap: normal !important')
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    expect(pre.style.whiteSpace).toBe('pre')
+    expect(pre.style.overflowWrap).toBe('normal')
+    expect(wrapper.get('pre.code-pre-fallback').classes()).not.toContain('is-wrap')
+    wrapper.unmount()
+  })
+
+  it('counts changed source lines instead of runtime hunk rows', async () => {
+    const runtime = helpers()
+    const diffView = runtime.getDiffEditorView()
+    runtime.getDiffEditorView.mockReturnValue({
+      ...diffView,
+      getLineChanges: () => [{
+        originalStartLineNumber: 1,
+        originalEndLineNumber: 2,
+        modifiedStartLineNumber: 1,
+        modifiedEndLineNumber: 2,
+      }],
+    })
+    const originalCode = 'const value = true'
+    const updatedCode = 'const value = false'
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block' as const,
+          language: 'typescript',
+          code: '',
+          raw: '```diff\n-old\n+new\n```',
+          diff: true,
+          originalCode,
+          updatedCode,
+          loading: false,
+        },
+        loading: false,
+        stream: true,
+        showHeader: true,
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createDiffEditor).toHaveBeenCalledTimes(1))
+    await flush()
+
+    expect(wrapper.get('.code-diff-stats').attributes('aria-label')).toBe('-1 +1')
+    expect(wrapper.get('.code-diff-stat.removed').text()).toBe('-1')
+    expect(wrapper.get('.code-diff-stat.added').text()).toBe('+1')
+    wrapper.unmount()
+  })
+
+  it('keeps wrapped source lines as one logical line in the fallback', async () => {
+    const runtime = helpers()
+    runtime.createEditor.mockImplementation(async () => new Promise<void>(() => {}))
+    const code = 'const veryLongLineThatWrapsVisually = true'
+    const wrapper = mount(CodeBlockNode, {
+      props: {
+        node: makeNode(code, false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        codeBlockOptions: { overflow: 'wrap' },
+      },
+    })
+
+    await flush()
+    const lines = wrapper.findAll('.markstream-pre__logical-line')
+    expect(lines).toHaveLength(1)
+    expect(lines[0].attributes('data-line-number')).toBe('1')
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    expect(pre.style.whiteSpace).toBe('pre-wrap')
+    expect(pre.style.overflowWrap).toBe('anywhere')
     wrapper.unmount()
   })
 

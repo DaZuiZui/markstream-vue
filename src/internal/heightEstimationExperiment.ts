@@ -444,7 +444,7 @@ export function estimateCodeBlockHeight(
   }
   else {
     const lineCount = getCodeBlockVisibleLineCount(node)
-    const visual = resolvePreCodeVisualOptions(options.codeBlockOptions, isDiff)
+    const visual = resolvePreCodeVisualOptions(options.codeBlockOptions)
     contentHeight = Math.round(lineCount * visual.lineHeight + visual.padding + visual.paddingBottom)
     cap = visual.maxHeight
   }

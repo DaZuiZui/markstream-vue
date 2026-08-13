@@ -10,7 +10,8 @@ import { chromium } from 'playwright-core'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const host = '127.0.0.1'
-const route = '/line-number-handoff-check?theme=dark'
+const overflowMode = process.env.CODE_OVERFLOW === 'scroll' ? 'scroll' : 'wrap'
+const route = `/line-number-handoff-check?theme=dark&codeOverflow=${overflowMode}`
 const frameworkSpecs = {
   vue3: { directory: 'playground', runner: 'vite' },
   vue2: { directory: 'playground-vue2', prepare: 'vue2', runner: 'vite' },
@@ -618,6 +619,9 @@ async function collectResult(page, framework, url) {
       editorPaddingRight: editorStyle?.paddingRight || '',
       editorPaddingBottom: editorStyle?.paddingBottom || '',
       editorPaddingLeft: editorStyle?.paddingLeft || '',
+      editorOverflowX: editorStyle?.overflowX || '',
+      editorClientWidth: editorSurface?.clientWidth || 0,
+      editorScrollWidth: editorSurface?.scrollWidth || 0,
       preClientWidth: preElement?.clientWidth || 0,
       preScrollWidth: preElement?.scrollWidth || 0,
       preCodePaddingLeft: preCode ? getComputedStyle(preCode).paddingLeft : '',
@@ -680,6 +684,7 @@ async function collectResult(page, framework, url) {
 }
 
 function validateResult(result, { requireDark = true, requireNarrowPre = true, requireHeaderHover = true } = {}) {
+  const overflow = new URL(result.url).searchParams.get('codeOverflow') === 'scroll' ? 'scroll' : 'wrap'
   const expectedNumbers = Array.from({ length: 13 }, (_, index) => index + 1)
   const preSource = normalizeSource(result.preSource)
   const preLines = preSource.split('\n')
@@ -735,13 +740,26 @@ function validateResult(result, { requireDark = true, requireNarrowPre = true, r
   assert(result.prePaddingBottom === '8px', `shared Pre bottom padding is ${result.prePaddingBottom}, expected 8px`)
   assert(Math.abs(Number.parseFloat(result.prePaddingRight) - 7.20117) <= 0.1, `shared Pre right padding is ${result.prePaddingRight}, expected 1ch`)
   assert(Math.abs(Number.parseFloat(result.prePaddingLeft) - 45.207) <= 0.1, `shared Pre line-number padding is ${result.prePaddingLeft}, expected gutter plus 1ch`)
-  assert(result.preOverflowX === 'auto' || result.preOverflowX === 'scroll', `shared Pre overflow-x is ${result.preOverflowX}`)
+  assert(
+    result.preOverflowX === (overflow === 'wrap' ? 'hidden' : 'auto'),
+    `${overflow} shared Pre overflow-x is ${result.preOverflowX}`,
+  )
   assert(result.preCodePaddingLeft === '0px', `wrapped shared Pre code padding is ${result.preCodePaddingLeft}, expected 0px`)
   if (requireNarrowPre) {
-    assert(
-      result.narrowPreScrollWidth === result.narrowPreClientWidth && result.narrowPreScrollLeft === 0,
-      `shared wrapped Pre unexpectedly became horizontally scrollable at 800px (${result.narrowPreScrollWidth} vs ${result.narrowPreClientWidth}, scrollLeft=${result.narrowPreScrollLeft})`,
-    )
+    if (overflow === 'wrap') {
+      assert(
+        result.narrowPreScrollWidth === result.narrowPreClientWidth && result.narrowPreScrollLeft === 0,
+        `shared wrapped Pre unexpectedly became horizontally scrollable at 800px (${result.narrowPreScrollWidth} vs ${result.narrowPreClientWidth}, scrollLeft=${result.narrowPreScrollLeft})`,
+      )
+      assert(result.editorScrollWidth <= result.editorClientWidth + 1, `wrapped enhanced surface overflows (${result.editorScrollWidth} vs ${result.editorClientWidth})`)
+    }
+    else {
+      assert(
+        result.narrowPreScrollWidth > result.narrowPreClientWidth && result.narrowPreScrollLeft > 0,
+        `shared scroll Pre did not preserve horizontal overflow at 800px (${result.narrowPreScrollWidth} vs ${result.narrowPreClientWidth}, scrollLeft=${result.narrowPreScrollLeft})`,
+      )
+      assert(result.editorScrollWidth > result.editorClientWidth, `scroll enhanced surface did not overflow (${result.editorScrollWidth} vs ${result.editorClientWidth})`)
+    }
   }
   if (result.preGutterBorderColor || result.preGutterBorderWidth) {
     assert(

@@ -3,7 +3,7 @@ import type { CodeBlockDiffHideUnchangedRegions, CodeBlockDiffHideUnchangedRegio
 export const defaultDiffHideUnchangedRegions = Object.freeze({
   enabled: true,
   contextLineCount: 2,
-  minimumLineCount: 4,
+  minimumLineCount: 6,
   revealLineCount: 5,
 })
 
@@ -12,10 +12,24 @@ export function resolveDiffHideUnchangedRegionsOption(value: unknown): CodeBlock
     return value
   if (value && typeof value === 'object') {
     const raw = value as Record<string, unknown>
+    if (raw.expandUnchanged === true)
+      return false
+
+    const parseDiffOptions = raw.parseDiffOptions && typeof raw.parseDiffOptions === 'object'
+      ? raw.parseDiffOptions as Record<string, unknown>
+      : {}
+    const contextValue = Number(parseDiffOptions.context)
+    const thresholdValue = Number(raw.collapsedContextThreshold)
+    const contextLineCount = Number.isFinite(contextValue) && contextValue >= 0
+      ? Math.floor(contextValue)
+      : defaultDiffHideUnchangedRegions.contextLineCount
+    const collapsedContextThreshold = Number.isFinite(thresholdValue) && thresholdValue >= 0
+      ? Math.floor(thresholdValue)
+      : defaultDiffHideUnchangedRegions.minimumLineCount - 1
     return {
       ...defaultDiffHideUnchangedRegions,
-      ...raw,
-      enabled: raw.enabled ?? true,
+      contextLineCount,
+      minimumLineCount: collapsedContextThreshold + 1,
     } as CodeBlockDiffHideUnchangedRegionsOptions
   }
   return { ...defaultDiffHideUnchangedRegions }

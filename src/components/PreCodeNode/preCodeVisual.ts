@@ -97,7 +97,6 @@ export function resolvePreCodeThemePalette(input: PreCodeThemeInput): PreCodeThe
 
 export function resolvePreCodeVisualOptions(
   options: CodeBlockOptions | undefined,
-  isDiff = false,
 ): ResolvedPreCodeVisualOptions {
   const fontSize = positiveNumber(options?.fontSize) ?? DEFAULT_PRE_CODE_FONT_SIZE
   const lineHeight = positiveNumber(options?.lineHeight)
@@ -107,7 +106,7 @@ export function resolvePreCodeVisualOptions(
   const fontFamily = typeof options?.fontFamily === 'string' && options.fontFamily.trim()
     ? options.fontFamily.trim()
     : DEFAULT_PRE_CODE_FONT_FAMILY
-  const padding = nonNegativeNumber(options?.padding) ?? (isDiff ? 0 : DEFAULT_PRE_CODE_PADDING)
+  const padding = nonNegativeNumber(options?.padding) ?? DEFAULT_PRE_CODE_PADDING
 
   return {
     fontFamily,

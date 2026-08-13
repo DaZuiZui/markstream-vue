@@ -15,6 +15,7 @@ import {
 } from '../CodeBlockNode/codeBlockHeader'
 import { getKatex } from '../MathInlineNode/katex'
 import PreCodeNode from '../PreCodeNode'
+import { resolvePreCodeThemePalette, resolvePreCodeVisualOptions } from '../PreCodeNode/preCodeVisual'
 import TextNode from '../TextNode'
 
 interface ProcessLike {
@@ -159,43 +160,47 @@ export const CodeBlockNodeLoading = defineComponent({
       const diffInline = isDiff && (props.estimatedDiffInline
         ?? resolveDiffInlineLayout(codeBlockOptions as unknown as Record<string, unknown>))
       const isSurfaceDark = props.isDark === true
-      const fontSize = typeof codeBlockOptions.fontSize === 'number' && Number.isFinite(codeBlockOptions.fontSize) && codeBlockOptions.fontSize > 0
-        ? codeBlockOptions.fontSize
-        : 12
-      const lineHeight = typeof codeBlockOptions.lineHeight === 'number' && Number.isFinite(codeBlockOptions.lineHeight) && codeBlockOptions.lineHeight > 0
-        ? codeBlockOptions.lineHeight
-        : fontSize === 12 ? 18 : Math.max(12, Math.round(fontSize * 1.5))
-      const tabSize = typeof codeBlockOptions.tabSize === 'number' && Number.isFinite(codeBlockOptions.tabSize) && codeBlockOptions.tabSize > 0
-        ? codeBlockOptions.tabSize
-        : 4
-      const defaultPadding = isDiff ? 0 : 8
-      const padding = typeof codeBlockOptions.padding === 'number' && Number.isFinite(codeBlockOptions.padding) && codeBlockOptions.padding >= 0
-        ? codeBlockOptions.padding
-        : defaultPadding
-      const paddingTop = padding
-      const paddingBottom = padding
-      const fontFamily = typeof codeBlockOptions.fontFamily === 'string' ? codeBlockOptions.fontFamily.trim() : ''
-      const maxHeight = typeof codeBlockOptions.maxHeight === 'number' && Number.isFinite(codeBlockOptions.maxHeight) && codeBlockOptions.maxHeight > 0
-        ? codeBlockOptions.maxHeight
-        : 500
+      const visualOptions = resolvePreCodeVisualOptions(codeBlockOptions)
+      const themePalette = resolvePreCodeThemePalette({
+        darkTheme: props.darkTheme,
+        isDark: props.isDark,
+        lightTheme: props.lightTheme,
+        theme: props.theme,
+        themes: props.themes,
+      })
       const fallbackMaxHeight = !isDiff && typeof props.estimatedContentHeightPx === 'number' && Number.isFinite(props.estimatedContentHeightPx)
-        ? Math.min(maxHeight, Math.ceil(props.estimatedContentHeightPx))
-        : maxHeight
+        ? Math.min(visualOptions.maxHeight, Math.ceil(props.estimatedContentHeightPx))
+        : visualOptions.maxHeight
       const showLineNumbers = props.showLineNumbers ?? (codeBlockOptions.disableLineNumbers !== true)
       const preStyle = {
-        'fontSize': `${fontSize}px`,
-        'lineHeight': `${lineHeight}px`,
-        'tabSize': tabSize,
-        'paddingTop': `${paddingTop}px`,
-        'paddingBottom': `${paddingBottom}px`,
+        'fontSize': `${visualOptions.fontSize}px`,
+        'lineHeight': `${visualOptions.lineHeight}px`,
+        'tabSize': visualOptions.tabSize,
+        'paddingTop': `${visualOptions.padding}px`,
+        'paddingBottom': `${visualOptions.paddingBottom}px`,
         'maxHeight': `${fallbackMaxHeight}px`,
         'overflow': 'auto',
-        'whiteSpace': codeBlockOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
-        '--markstream-pre-line-number-top': `${paddingTop}px`,
-        ...(isDiff ? { '--markstream-pre-diff-line-height': `${lineHeight}px` } : {}),
-        ...(fontFamily
-          ? { '--markstream-code-font-family': fontFamily, fontFamily }
-          : {}),
+        'overflowX': visualOptions.overflow === 'wrap' ? 'hidden' : 'auto',
+        'overflowY': 'auto',
+        'whiteSpace': visualOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
+        'overflowWrap': visualOptions.overflow === 'wrap' ? 'anywhere' : 'normal',
+        'wordBreak': 'normal',
+        '--markstream-pre-line-number-top': `${visualOptions.padding}px`,
+        ...(isDiff ? { '--markstream-pre-diff-line-height': `${visualOptions.lineHeight}px` } : {}),
+        '--markstream-code-font-family': visualOptions.fontFamily,
+        '--markstream-code-fallback-bg': themePalette.background,
+        '--markstream-code-fallback-fg': themePalette.foreground,
+        '--markstream-code-theme-bg': themePalette.background,
+        '--markstream-code-theme-fg': themePalette.foreground,
+        '--markstream-code-theme-line-number': themePalette.lineNumber,
+        '--markstream-diff-metadata-bg': themePalette.background,
+        '--markstream-diff-metadata-fg': themePalette.lineNumber,
+        '--markstream-pre-resolved-theme-bg': themePalette.background,
+        '--markstream-pre-resolved-theme-fg': themePalette.foreground,
+        '--markstream-pre-resolved-theme-line-number': themePalette.lineNumber,
+        'backgroundColor': themePalette.background,
+        'color': themePalette.foreground,
+        'fontFamily': visualOptions.fontFamily,
       }
       const actionPlaceholder = () => h('button', {
         'class': 'code-action-btn inline-flex items-center justify-center p-[var(--ms-action-btn-padding)] rounded leading-none shrink-0',
@@ -215,15 +220,21 @@ export const CodeBlockNodeLoading = defineComponent({
       }
       const containerStyle = {
         '--markstream-code-layout-character-width': '1ch',
+        '--markstream-code-fallback-bg': themePalette.background,
+        '--markstream-code-fallback-fg': themePalette.foreground,
+        '--markstream-code-theme-bg': themePalette.background,
+        '--markstream-code-theme-fg': themePalette.foreground,
+        '--markstream-code-theme-line-number': themePalette.lineNumber,
+        '--markstream-diff-editor-bg': themePalette.background,
+        '--markstream-diff-shell-bg': themePalette.background,
+        '--markstream-pre-resolved-theme-bg': themePalette.background,
+        '--markstream-pre-resolved-theme-fg': themePalette.foreground,
+        '--markstream-pre-resolved-theme-line-number': themePalette.lineNumber,
+        'color': themePalette.foreground,
+        'backgroundColor': themePalette.background,
         ...(formatSize(props.minWidth) ? { minWidth: formatSize(props.minWidth) } : {}),
         ...(formatSize(props.maxWidth) ? { maxWidth: formatSize(props.maxWidth) } : {}),
-        ...(!isDiff
-          ? {
-              color: 'var(--vscode-editor-foreground, var(--markstream-code-fallback-fg, var(--code-fg)))',
-              backgroundColor: 'var(--markstream-code-fallback-bg, var(--code-bg, #fff))',
-              borderColor: 'var(--markstream-code-border-color, var(--code-border))',
-            }
-          : {}),
+        ...(!isDiff ? { borderColor: 'var(--markstream-code-border-color, var(--code-border))' } : {}),
       }
       return h('div', {
         ...attrs,
@@ -334,12 +345,15 @@ export const CodeBlockNodeLoading = defineComponent({
             'showLineNumbers': showLineNumbers,
             'reservedHeightPx': isDiff || props.estimatedContentHeightPx == null
               ? undefined
-              : Math.min(props.estimatedContentHeightPx, maxHeight),
+              : Math.min(props.estimatedContentHeightPx, visualOptions.maxHeight),
             'diffInline': diffInline,
             'diffHideUnchangedRegions': isDiff
               ? resolveDiffHideUnchangedRegionsOption(codeBlockOptions)
               : undefined,
-            'class': 'code-pre-fallback',
+            'class': [
+              'code-pre-fallback',
+              { 'is-wrap': visualOptions.overflow === 'wrap' },
+            ],
             'style': preStyle,
             'data-markstream-code-loading': '1',
           }),

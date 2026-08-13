@@ -228,9 +228,116 @@ describe('diff CodeBlockNode fallback height stability', () => {
     await flushPendingMicrotasks()
 
     const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
-    expect(pre.style.paddingTop).toBe('0px')
-    expect(pre.style.paddingBottom).toBe('0px')
+    expect(pre.style.paddingTop).toBe('8px')
+    expect(pre.style.paddingBottom).toBe('8px')
     expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.padding).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it.each(['unified', 'split'] as const)('shows no-final-newline metadata in the initial %s pre', async (diffStyle) => {
+    const helpers = getStreamDiffsHelpers()
+    helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
+
+    const wrapper = mount(CodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'const value = "after"',
+          raw: '',
+          diff: true,
+          originalCode: 'const value = "before"',
+          updatedCode: 'const value = "after"',
+        },
+        codeBlockOptions: { diffStyle },
+        loading: false,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await flushPendingMicrotasks()
+
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(2)
+    expect(wrapper.text()).toContain('No newline at end of file')
+
+    wrapper.unmount()
+  })
+
+  it('preserves final newlines when handing a diff pair to the enhanced runtime', async () => {
+    const helpers = getStreamDiffsHelpers()
+
+    const wrapper = mount(CodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'const value = "after"\n',
+          raw: '',
+          diff: true,
+          originalCode: 'const value = "before"\n',
+          updatedCode: 'const value = "after"\n',
+        },
+        loading: false,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await vi.waitFor(() => expect(helpers.createDiffEditor).toHaveBeenCalled())
+    expect(helpers.createDiffEditor).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      'const value = "before"\n',
+      'const value = "after"\n',
+      'typescript',
+    )
+
+    wrapper.unmount()
+  })
+
+  it('keeps the short handoff fixture expanded when the runtime threshold does not fold it', async () => {
+    const helpers = getStreamDiffsHelpers()
+    helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
+    const code = [
+      ' export interface HandoffResult {',
+      '   id: string',
+      '   description: string',
+      ' }',
+      ' ',
+      ' export function createHandoffResult(id: string): HandoffResult {',
+      `-  const description = '${'before-handoff-'.repeat(24)}'`,
+      `+  const description = '${'after-handoff-'.repeat(24)}'`,
+      '   return { id, description }',
+      ' }',
+    ].join('\n')
+
+    const wrapper = mount(CodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'diff ts:src/handoff.ts',
+          code,
+          raw: `\`\`\`diff ts:src/handoff.ts\n${code}`,
+          diff: true,
+        },
+        codeBlockOptions: {
+          diffStyle: 'split',
+          overflow: 'scroll',
+        },
+        loading: false,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await flushPendingMicrotasks()
+
+    expect(wrapper.findAll('.markstream-pre__diff-line--collapsed')).toHaveLength(0)
+    expect(wrapper.findAll('.markstream-pre__diff-pane--original .markstream-pre__diff-line')).toHaveLength(9)
+    expect(wrapper.findAll('.markstream-pre__diff-pane--modified .markstream-pre__diff-line')).toHaveLength(9)
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(0)
+    expect(helpers.createCodeBlockRuntime.mock.calls[0]?.[0]?.collapsedContextThreshold).toBe(5)
 
     wrapper.unmount()
   })
@@ -353,6 +460,7 @@ describe('diff CodeBlockNode fallback height stability', () => {
     expect(pre.exists()).toBe(true)
     expect(wrapper.findAll('.markstream-pre__diff-pane--original .markstream-pre__diff-line')).toHaveLength(6)
     expect(wrapper.findAll('.markstream-pre__diff-pane--modified .markstream-pre__diff-line')).toHaveLength(6)
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(0)
     expect((pre.element as HTMLElement).style.minHeight).toBe('')
 
     wrapper.unmount()

@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import type { CodeBlockOptions } from '../../../src/types/component-props'
 import MarkdownRender from '../../../src/components/NodeRenderer'
 
 const isDark = ref(typeof window !== 'undefined'
   && new URLSearchParams(window.location.search).get('theme') === 'dark')
+const overflow = typeof window !== 'undefined'
+  && new URLSearchParams(window.location.search).get('codeOverflow') === 'scroll'
+  ? 'scroll'
+  : 'wrap'
+const codeBlockOptions: CodeBlockOptions = { overflow }
 
 const markdown = [
   '# Pre → Highlight Line Number Handoff',
@@ -11,7 +17,7 @@ const markdown = [
   '```ts',
   'export function chunk(input: string) {',
   '  const lines = input.split(/\\r?\\n/)',
-  '  return lines.map((line, index) => ({ index, value: line.trim(), block: 1 }))',
+  `  return lines.map((line, index) => ({ index, value: line.trim(), description: '${'handoff-description-'.repeat(24)}' }))`,
   '}',
   '',
   'for (const item of chunk(\'alpha\\nbeta\\ngamma\')) {',
@@ -37,12 +43,12 @@ const markdown = [
 
     <h2>1) Highlight (stream-diffs, default)</h2>
     <section class="col" data-handoff-case="enhanced">
-      <MarkdownRender :content="markdown" :final="true" :is-dark="isDark" code-block-dark-theme="vitesse-dark" code-block-light-theme="vitesse-light" />
+      <MarkdownRender :content="markdown" :final="true" :is-dark="isDark" :code-block-options="codeBlockOptions" code-block-dark-theme="vitesse-dark" code-block-light-theme="vitesse-light" />
     </section>
 
     <h2>2) Pre fallback (render-code-blocks-as-pre)</h2>
     <section class="col" data-handoff-case="pre">
-      <MarkdownRender :content="markdown" :final="true" :is-dark="isDark" render-code-blocks-as-pre :code-block-props="{ showLineNumbers: true }" code-block-dark-theme="vitesse-dark" code-block-light-theme="vitesse-light" />
+      <MarkdownRender :content="markdown" :final="true" :is-dark="isDark" render-code-blocks-as-pre :code-block-options="codeBlockOptions" :code-block-props="{ showLineNumbers: true }" code-block-dark-theme="vitesse-dark" code-block-light-theme="vitesse-light" />
     </section>
   </div>
 </template>

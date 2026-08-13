@@ -58,7 +58,7 @@ const codeBlockOptions: CodeBlockOptions = {
 </template>
 ```
 
-排版/布局字段（`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`）由 Markstream 协调，确保流式 fallback 与最终 surface 一致。受支持的 File/FileDiff 字段包括 `disableLineNumbers`、`overflow`、高亮限制、diff 布局/折叠、交互、selection callback、annotation、`onController` 与 `workerManager`。主题、语言/内容、流式状态、header、挂载、显示和释放仍由宿主管理，并具有更高优先级。
+排版/布局字段（`fontSize`、`lineHeight`、`fontFamily`、number 类型且单位为 px 的 `maxHeight`、number 类型且单位为 px 的上下对称 `padding`、`tabSize`）由 Markstream 协调，确保流式 fallback 与最终 surface 一致。受支持的 File/FileDiff 字段包括 `disableLineNumbers`、`overflow`、高亮限制、diff 布局/折叠、交互、selection callback、annotation、`onController` 与 `workerManager`。默认 `overflow` 是 `'wrap'`，会同时应用到 fallback 与 enhanced surface；传入 `'scroll'` 时两者均保持 `white-space: pre` 并使用横向滚动。主题、语言/内容、流式状态、header、挂载、显示和释放仍由宿主管理，并具有更高优先级。
 
 主题使用已注册的 string 名称。直接 `CodeBlockNode.theme` 接收 string 或 `{ dark, light }`，`themes` 是要加载的 `[dark, light]` 对。旧 Monaco JSON theme object 没有直接改名：先调用 `stream-diffs/pierre` 的 `registerCustomTheme`，再传入注册名称。
 
@@ -86,6 +86,17 @@ if (typeof window !== 'undefined')
 ## 回退
 
 若未安装 `stream-diffs`，代码块 loader 返回 `null`，渲染器回退为简单的 `pre`/`code` 表现。回退层仍然显示行号并遵循 `--code-*` 主题 token。
+
+fallback 行号按 `\n`、`\r\n` 或 `\r` 分隔的逻辑源码行计算。`overflow: 'wrap'` 下，超长逻辑行可以占据多个可视行，但只保留一个行号；自动换行不会创建额外的源码行号或 diff 行。内置 diff header 的 `- / +` 统计也只描述实际变更的逻辑源码行。
+
+unified 与 split diff 的 fallback 和最终 surface 使用相同的未变化区域折叠阈值。只有源文本确实缺少末尾 LF 时才显示 `No newline at end of file`；该行使用中性的 metadata 前景色与背景色，并在两个 surface 中占用相同可见高度。diff 行换行时，新增/删除内容背景、gutter 标记与行号背景会覆盖完整逻辑行；在换行和滚动模式之间切换会立即丢弃之前测量的行高。
+
+```text
+1 │ const short = true
+2 │ const long = "一条会换成多个可视行的逻辑源码行"
+  │ onto another visual row
+3 │ return long
+```
 
 ## 参考链接
 

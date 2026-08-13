@@ -96,7 +96,9 @@ Fallback line numbers count logical source lines delimited by `\n`, `\r\n`, or `
 3 │ return long
 ```
 
-Automatic wrapping never creates an additional source line number. With `overflow: 'scroll'`, the fallback keeps the compact non-wrapping line-number representation.
+Automatic wrapping never creates an additional source line number or diff row. The default is `overflow: 'wrap'`, and the same value is applied to the fallback and enhanced code surface. With `overflow: 'scroll'`, both surfaces keep non-wrapping content and horizontal scrolling.
+
+For unified and split diffs, the fallback and finalized surface use the same unchanged-region threshold. `No newline at end of file` is shown only for a source that actually lacks a final LF, uses a neutral metadata foreground/background, and occupies the same visible height in both surfaces. When diff rows wrap, the added/removed content background, gutter marker, and line-number background fill the complete logical row; changing between wrap and scroll discards the previous measured row height immediately.
 
 ## Links & further reading
 

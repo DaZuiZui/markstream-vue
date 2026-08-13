@@ -39,6 +39,8 @@ keywords:
 
 fallback 与最终 surface 使用同一组折叠配置；流式状态不会覆盖用户设置的 `expandUnchanged`。即使提供 `codeBlockOptions`，主题、内容/语言、header、挂载/显示时机与释放仍由宿主管理。
 
+`overflow` 同时控制 fallback `<pre>` 和 enhanced surface。默认值是 `'wrap'`；需要不换行并使用横向滚动时传入 `'scroll'`。视觉换行不会增加逻辑 diff 行，也不会改变内置 `- / +` 统计。
+
 Diff 代码块的内置 header 现在也会显示 `- / +` 行数统计。
 
 ## Slots 插槽

@@ -1700,8 +1700,10 @@ describe('virtual timeline restore visual readiness', () => {
       expect(icon.attributes('height')).toBe('14')
     }
     expect(wrapper.get('.code-block-container').classes()).toContain('border')
-    expect((root.element as HTMLElement).style.color).toBe('var(--vscode-editor-foreground, var(--markstream-code-fallback-fg, var(--code-fg)))')
-    expect((root.element as HTMLElement).style.backgroundColor).toBe('var(--markstream-code-fallback-bg, var(--code-bg, #fff))')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-code-fallback-bg')).toBe('#ffffff')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-code-fallback-fg')).toBe('#393a34')
+    expect((root.element as HTMLElement).style.backgroundColor).toBe('rgb(255, 255, 255)')
+    expect((pre.element as HTMLElement).style.backgroundColor).toBe('rgb(255, 255, 255)')
     expect((root.element as HTMLElement).style.borderColor).toBe('var(--markstream-code-border-color, var(--code-border))')
     expect(pre.classes()).not.toContain('border')
 
@@ -1748,6 +1750,27 @@ describe('virtual timeline restore visual readiness', () => {
     expect((pre.element as HTMLElement).style.paddingBottom).toBe('6px')
     expect((pre.element as HTMLElement).style.tabSize).toBe('8')
     expect((pre.element as HTMLElement).style.whiteSpace).toBe('pre')
+    expect(pre.classes()).not.toContain('is-wrap')
+    wrapper.unmount()
+  })
+
+  it('uses the default wrapping mode in the async loading fallback', async () => {
+    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const wrapper = mount(CodeBlockNodeLoading as any, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'const longLine = true',
+          raw: '```ts\nconst longLine = true\n```',
+          loading: true,
+        },
+      },
+    })
+
+    const pre = wrapper.get('pre.code-pre-fallback')
+    expect((pre.element as HTMLElement).style.whiteSpace).toBe('pre-wrap')
+    expect(pre.classes()).toContain('is-wrap')
     wrapper.unmount()
   })
 
@@ -1829,6 +1852,14 @@ describe('virtual timeline restore visual readiness', () => {
     expect(root.classes()).toContain('dark')
     expect(root.classes()).toContain('is-dark')
     expect(root.classes()).toContain('is-rendering')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-code-fallback-bg')).toBe('#121212')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-diff-editor-bg')).toBe('#121212')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-diff-shell-bg')).toBe('#121212')
+    expect((root.element as HTMLElement).style.backgroundColor).toBe('rgb(18, 18, 18)')
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    expect(pre.style.getPropertyValue('--markstream-code-fallback-bg')).toBe('#121212')
+    expect(pre.style.getPropertyValue('--markstream-diff-metadata-bg')).toBe('#121212')
+    expect(pre.style.backgroundColor).toBe('rgb(18, 18, 18)')
     expect(root.attributes('style')).toContain('min-width: 120px')
     expect(root.attributes('style')).toContain('max-width: 80%')
     expect(wrapper.get('pre.code-pre-fallback').attributes('style')).toContain('--markstream-pre-diff-line-height: 18px')
