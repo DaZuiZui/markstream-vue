@@ -1034,9 +1034,9 @@ function updateContainerHeight(newContainerWidth?: number, options?: { force?: b
     const newHeight = effectiveWidth * aspectRatio
     const resolvedHeight = maxHeight == null ? newHeight : Math.min(newHeight, maxHeight)
     const previewHeight = Math.max(resolvedHeight, resolveEstimatedPreviewHeight())
-    contentHeight.value = `${Math.max(resolvedHeight, previewHeight)}px`
     if (!freezePreviewHeight && !hasExternalPreviewHeightEstimate())
       containerHeight.value = `${previewHeight}px`
+    contentHeight.value = containerHeight.value
   }
 }
 
@@ -2567,17 +2567,9 @@ const computedButtonStyle = 'mermaid-action-btn p-[var(--ms-action-btn-padding)]
   width: 100%;
   height: 100%;
 }
-.fullscreen ._mermaid svg {
-  max-height: none;
-}
 </style>
 
 <style scoped>
-/* ── SVG auto-fit ── */
-._mermaid svg {
-  max-height: 100%;
-}
-
 /* ── Outer container ── */
 .mermaid-block-container {
   margin: var(--ms-flow-diagram-y) 0;
@@ -2688,7 +2680,12 @@ const computedButtonStyle = 'mermaid-action-btn p-[var(--ms-action-btn-padding)]
 ._mermaid :deep(svg) {
   width: 100%;
   height: auto;
+  max-height: 100%;
   display: block;
+}
+
+.fullscreen ._mermaid :deep(svg) {
+  max-height: none;
 }
 
 .fullscreen {

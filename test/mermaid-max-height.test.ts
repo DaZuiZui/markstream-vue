@@ -86,17 +86,18 @@ describe('mermaid block max height', () => {
     await nextTick()
 
     expect(container.style.height).toBe('360px')
-    expect(content.style.height).toBe('500px')
+    expect(content.style.height).toBe('360px')
 
     await wrapper.setProps({ loading: false })
     setupState.updateContainerHeight(undefined, { force: true })
     await nextTick()
 
     expect(container.style.height).toBe('360px')
+    expect(content.style.height).toBe('360px')
     wrapper.unmount()
   })
 
-  it('sizes capped preview content to the full SVG height', async () => {
+  it('sizes capped preview content to the preview height', async () => {
     const { wrapper } = await renderWithMaxHeight('500px')
     const content = wrapper.get('div._mermaid').element as HTMLElement
 
@@ -131,6 +132,7 @@ describe('mermaid block max height', () => {
           raw: '```mermaid\ngraph LR\nA-->B\n```',
         },
         loading: false,
+        maxHeight: 'none',
       },
       attachTo: document.body,
     })
@@ -165,7 +167,7 @@ describe('mermaid block max height', () => {
     // Unscaled width is 50 / 0.5 = 100 -> height = 100 * (2000 / 100) = 2000px.
     // Regression: the scaled width (50) was used directly, shrinking the
     // content height to 1000px and cropping the diagram after collapse/expand.
-    expect(content.style.height).toBe('500px')
+    expect(content.style.height).toBe('2000px')
 
     wrapper.unmount()
   })
