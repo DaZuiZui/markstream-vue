@@ -1,38 +1,25 @@
 import type { CodeBlockDiffHideUnchangedRegions, CodeBlockDiffHideUnchangedRegionsOptions } from '../../types/component-props'
 
-export const defaultDiffHideUnchangedRegions = Object.freeze({
-  enabled: true,
-  contextLineCount: 2,
-  minimumLineCount: 6,
-  revealLineCount: 5,
-})
-
 export function resolveDiffHideUnchangedRegionsOption(value: unknown): CodeBlockDiffHideUnchangedRegions {
   if (typeof value === 'boolean')
     return value
-  if (value && typeof value === 'object') {
-    const raw = value as Record<string, unknown>
-    if (raw.expandUnchanged === true)
-      return false
-
-    const parseDiffOptions = raw.parseDiffOptions && typeof raw.parseDiffOptions === 'object'
-      ? raw.parseDiffOptions as Record<string, unknown>
-      : {}
-    const contextValue = Number(parseDiffOptions.context)
-    const thresholdValue = Number(raw.collapsedContextThreshold)
-    const contextLineCount = Number.isFinite(contextValue) && contextValue >= 0
-      ? Math.floor(contextValue)
-      : defaultDiffHideUnchangedRegions.contextLineCount
-    const collapsedContextThreshold = Number.isFinite(thresholdValue) && thresholdValue >= 0
-      ? Math.floor(thresholdValue)
-      : defaultDiffHideUnchangedRegions.minimumLineCount - 1
-    return {
-      ...defaultDiffHideUnchangedRegions,
-      contextLineCount,
-      minimumLineCount: collapsedContextThreshold + 1,
-    } as CodeBlockDiffHideUnchangedRegionsOptions
-  }
-  return { ...defaultDiffHideUnchangedRegions }
+  const raw = value as {
+    collapsedContextThreshold?: unknown
+    expandUnchanged?: unknown
+    parseDiffOptions?: { context?: unknown }
+  } | undefined
+  if (raw?.expandUnchanged === true)
+    return false
+  const context = Number(raw?.parseDiffOptions?.context)
+  const threshold = Number(raw?.collapsedContextThreshold)
+  return {
+    enabled: true,
+    // eslint-disable-next-line unicorn/prefer-number-properties
+    contextLineCount: isFinite(context) && context >= 0 ? Math.floor(context) : 2,
+    // eslint-disable-next-line unicorn/prefer-number-properties
+    minimumLineCount: isFinite(threshold) && threshold >= 0 ? Math.floor(threshold) + 1 : 6,
+    revealLineCount: 5,
+  } as CodeBlockDiffHideUnchangedRegionsOptions
 }
 
 export function resolveDiffInlineLayout(options: Record<string, unknown>) {

@@ -620,6 +620,19 @@ describe('markdownRender deferNodesUntilVisible', () => {
 
       expect(codeBlock.element.outerHTML).not.toContain('codeblockoptions=')
       expect(codeBlock.element.outerHTML).not.toContain('showlinenumbers=')
+
+      await wrapper.setProps({
+        codeBlockOptions: {
+          disableLineNumbers: true,
+          overflow: 'wrap',
+        },
+      })
+      await flushAll()
+      const wrappedPre = wrapper.get('pre.code-pre-fallback')
+      expect(wrappedPre.attributes('data-markstream-line-numbers')).toBeUndefined()
+      expect(wrappedPre.classes()).toContain('is-wrap')
+      expect(getComputedStyle(wrappedPre.element).whiteSpace).toBe('pre-wrap')
+      expect(getComputedStyle(wrappedPre.element).overflowWrap).toBe('anywhere')
     }
     finally {
       wrapper?.unmount()
@@ -636,10 +649,15 @@ describe('markdownRender deferNodesUntilVisible', () => {
     let wrapper: ReturnType<typeof mount> | null = null
     try {
       const { default: MarkdownRender } = await import('../src/components/NodeRenderer')
+      const unchanged = Array.from({ length: 10 }, (_, index) => ` stable ${index}`)
       wrapper = mount(MarkdownRender, {
         props: {
-          content: '```diff\n-old\n+new\n```',
+          content: ['```diff', '-old', '+new', ...unchanged, '-tail', '+next', '```'].join('\n'),
           batchRendering: false,
+          codeBlockOptions: {
+            collapsedContextThreshold: 3,
+            parseDiffOptions: { context: 1 },
+          },
           deferNodesUntilVisible: false,
           final: true,
           viewportPriority: true,
@@ -655,6 +673,7 @@ describe('markdownRender deferNodesUntilVisible', () => {
       expect(pre.classes()).toContain('markstream-pre--diff-preview')
       expect(pre.classes()).not.toContain('markstream-pre--diff-inline')
       expect(pre.findAll('.markstream-pre__diff-pane')).toHaveLength(2)
+      expect(pre.findAll('.markstream-pre__diff-line--collapsed')).toHaveLength(2)
     }
     finally {
       wrapper?.unmount()

@@ -6,6 +6,18 @@ import { defineComponent, h, nextTick, ref } from 'vue'
 import PreCodeNode from '../src/components/PreCodeNode'
 
 describe('pre code node diff preview', () => {
+  it('clears async diff measurement state after a chunk failure', () => {
+    const source = readFileSync('src/components/PreCodeNode/PreCodeNode.vue', 'utf8')
+    const start = source.indexOf('function scheduleDiffLineMetricsSync()')
+    const end = source.indexOf('function setupDiffResizeObserver', start)
+    const scheduler = source.slice(start, end)
+
+    expect(scheduler).toContain('}, () => {')
+    expect(scheduler).toContain('diffMetricsModule = null')
+    expect(scheduler).toContain('.finally(() => {')
+    expect(scheduler).toContain('diffLineMetricsRaf = null')
+  })
+
   it('styles async code block loading content inside the bordered shell', () => {
     const source = readFileSync('src/components/PreCodeNode/PreCodeNode.vue', 'utf8')
     const selector = '.markstream-vue pre.code-pre-fallback[data-markstream-code-loading=\'1\']'

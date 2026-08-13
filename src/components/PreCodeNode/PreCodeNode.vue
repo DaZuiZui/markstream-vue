@@ -830,15 +830,14 @@ function scheduleDiffLineMetricsSync() {
   if (diffLineMetricsRaf != null)
     return
 
-  diffMetricsModule ??= import('./preCodeDiffMetrics')
+  const module = diffMetricsModule ??= import('./preCodeDiffMetrics')
   diffLineMetricsRaf = window.requestAnimationFrame(() => {
-    void diffMetricsModule!.then(({ measurePreCodeDiffLines }) => {
-      const root = preRef.value
-      if (!disposed && root) {
-        const next = measurePreCodeDiffLines(root, diffLineMetrics.value)
-        if (next !== diffLineMetrics.value)
-          diffLineMetrics.value = next
-      }
+    void module.then(({ measurePreCodeDiffLines }) => {
+      if (!disposed && preRef.value)
+        diffLineMetrics.value = measurePreCodeDiffLines(preRef.value, diffLineMetrics.value)
+    }, () => {
+      diffMetricsModule = null
+    }).finally(() => {
       diffLineMetricsRaf = null
     })
   })
@@ -1113,7 +1112,7 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
   height: 0;
 }
 
-.markstream-vue pre.markstream-pre--diff-preview.is-wrap {
+.markstream-vue pre.is-wrap {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: normal;

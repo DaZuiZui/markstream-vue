@@ -6,7 +6,7 @@ import type {
 } from '../../types/component-props'
 import { defineAsyncComponent, defineComponent, getCurrentInstance, h, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useOffscreenHeavyNodeDeferral, useViewportPriority, useViewportPriorityOptions } from '../../composables/viewportPriority'
-import { isDiffCodeBlock } from '../CodeBlockNode/codeBlockHeader'
+import { isDiffCodeBlock, resolveDiffHideUnchangedRegionsOption } from '../CodeBlockNode/codeBlockHeader'
 import { getKatex } from '../MathInlineNode/katex'
 import PreCodeNode from '../PreCodeNode'
 import { preCodeThemeLooksDark, resolvePreCodeThemeName } from '../PreCodeNode/preCodeThemeName'
@@ -148,7 +148,7 @@ const CodeBlockNodeLoadingShell = defineComponent({
       const visual = resolvePreCodeVisualOptions(options)
       const themeName = resolvePreCodeThemeName(props)
       const dark = preCodeThemeLooksDark(themeName, props.isDark === true)
-      const builtin = themeName === 'vitesse-dark' || themeName === 'vitesse-light'
+      const builtin = /^vitesse-(?:dark|light)$/.test(themeName)
       const palette = dark
         ? ['#121212', '#dbd7caee', '#dedcd550']
         : ['#ffffff', '#393a34', '#393a3450']
@@ -160,11 +160,12 @@ const CodeBlockNodeLoadingShell = defineComponent({
       const isDiff = isDiffCodeBlock(props.node)
       const diffInline = isDiff && Boolean(props.diffInline ?? props.estimatedDiffInline ?? options.diffStyle === 'unified')
       const showLineNumbers = props.showLineNumbers ?? options.disableLineNumbers !== true
+      const wrap = visual.overflow === 'wrap'
       const reservedHeight = Number(props.estimatedContentHeightPx ?? props.reservedHeightPx)
       const estimated = Number.isFinite(reservedHeight) && reservedHeight > 0
         ? Math.min(visual.maxHeight, Math.ceil(reservedHeight))
         : undefined
-      const safeAttrs = Object.fromEntries(Object.entries(attrs).filter(([key]) => key === 'class' || key === 'style' || /^(?:data|aria)-/.test(key)))
+      const safeAttrs = { class: attrs.class, style: attrs.style }
       return h('div', {
         ...safeAttrs,
         'class': ['code-block-container', {
@@ -190,18 +191,21 @@ const CodeBlockNodeLoadingShell = defineComponent({
           'loading': props.loading,
           'showLineNumbers': showLineNumbers,
           'diffInline': diffInline,
+          'diffHideUnchangedRegions': isDiff
+            ? props.diffHideUnchangedRegions ?? resolveDiffHideUnchangedRegionsOption(options)
+            : undefined,
           'reservedHeightPx': estimated,
           'class': ['code-pre-fallback', {
-            'is-wrap': visual.overflow === 'wrap',
+            'is-wrap': wrap,
           }],
-          'style': {
+          'style': [wrap && 'white-space:pre-wrap;overflow-wrap:anywhere', {
             '--markstream-code-padding-x': `${visual.padding}px`,
             '--markstream-code-padding-y': `${visual.padding}px`,
             '--markstream-code-tab-size': visual.tabSize,
             '--markstream-pre-diff-line-height': `${visual.lineHeight}px`,
             'font': `${visual.fontSize}px/${visual.lineHeight}px ${visual.fontFamily}`,
             'maxHeight': `${estimated ?? visual.maxHeight}px`,
-          },
+          }],
           'data-markstream-code-loading': '1',
         }),
       ])

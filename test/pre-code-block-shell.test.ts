@@ -99,6 +99,17 @@ describe('pre code block shared shell', () => {
     expect(shellStyle.getPropertyValue('--markstream-code-fallback-bg')).toBe('var(--markstream-code-theme-bg, #121212)')
   })
 
+  it.each([
+    ['monokai', false, true],
+    ['night-owl', false, true],
+    ['github-light', true, false],
+    ['catppuccin-latte', true, false],
+    ['rose-pine-dawn', true, false],
+    ['lotus', true, false],
+  ])('detects fixed theme %s independently from isDark', (theme, isDark, dark) => {
+    expect(resolvePreCodeThemePalette({ theme, isDark }).dark).toBe(dark)
+  })
+
   it('lets header-left and header-right replace the built-in regions', () => {
     const wrapper = mount(PreCodeBlock, {
       props: { node, loading: false },
