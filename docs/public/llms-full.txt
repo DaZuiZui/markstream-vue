@@ -89,7 +89,7 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 
 ### stream-markdown-parser
 - Package name: stream-markdown-parser
-- Version: 1.2.5-beta.1
+- Version: 1.2.6-beta.1
 - Maturity label: stable
 - Framework/runtime: Any JavaScript or TypeScript app
 - Description: Framework-agnostic streaming Markdown parser that outputs structured nodes for Markstream renderers and custom render pipelines.
