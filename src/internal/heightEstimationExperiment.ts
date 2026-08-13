@@ -86,6 +86,7 @@ export interface CodeBlockEstimateOptions {
   codeBlockOptions?: CodeBlockOptions
   showHeader?: boolean
   showPreCopyToolbar?: boolean
+  showLineNumbers?: boolean
   width?: number
   diffStyle?: 'split' | 'unified'
 }
@@ -348,7 +349,7 @@ export function estimateSimpleTextBlockHeight(
 function countCodeLines(source: string) {
   if (!source)
     return 1
-  const lines = String(source).split(/\r?\n/)
+  const lines = String(source).split(/\r\n|\n|\r/)
   return Math.max(1, lines.length)
 }
 
@@ -412,6 +413,87 @@ function getCodeBlockVisibleLineCount(
   return countCodeLines(getDisplayCode((node as any).code, (node as any).loading === true))
 }
 
+function getCodeColumns(line: string, tabSize: number) {
+  let columns = 0
+  for (const character of line) {
+    if (character === '\t') {
+      columns += tabSize - (columns % tabSize)
+      continue
+    }
+    columns += /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE10-\uFE19\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/u.test(character) ? 2 : 1
+  }
+  return columns
+}
+
+function getWrappedLineRows(line: string, availableWidth: number, characterWidth: number, tabSize: number) {
+  const columnsPerRow = Math.max(1, Math.floor(availableWidth / characterWidth))
+  return Math.max(1, Math.ceil(getCodeColumns(line, tabSize) / columnsPerRow))
+}
+
+function getPreCodeContentWidth(
+  width: number,
+  characterWidth: number,
+  lineCount: number,
+  visual: ReturnType<typeof resolvePreCodeVisualOptions>,
+  options: CodeBlockEstimateOptions,
+  splitPane: boolean,
+) {
+  const paneWidth = splitPane ? width / 2 : width
+  const horizontalPadding = options.codeBlockOptions?.padding == null
+    ? characterWidth
+    : visual.padding
+  const showLineNumbers = options.showLineNumbers
+    ?? (options.codeBlockOptions?.disableLineNumbers !== true)
+  const lineNumberWidth = Math.max(2, String(Math.max(1, lineCount)).length) * characterWidth
+  const gutterWidth = showLineNumbers
+    ? (3 * characterWidth + lineNumberWidth + 2 + horizontalPadding)
+    : horizontalPadding
+  return Math.max(characterWidth, paneWidth - gutterWidth - horizontalPadding)
+}
+
+function getPreCodeVisualRowCount(
+  node: ParsedNode,
+  options: CodeBlockEstimateOptions,
+  visual: ReturnType<typeof resolvePreCodeVisualOptions>,
+) {
+  const logicalLineCount = getCodeBlockVisibleLineCount(node, options.diffStyle)
+  const width = Number(options.width)
+  if (visual.overflow !== 'wrap' || !Number.isFinite(width) || width <= 0)
+    return logicalLineCount
+
+  const characterWidth = Math.max(1, visual.fontSize * 0.6)
+  const isDiff = Boolean((node as any).diff)
+  const diffInline = isDiff && resolveDiffInlineLayout({ diffStyle: options.diffStyle })
+
+  if (!isDiff || diffInline) {
+    const source = isDiff
+      ? (getDisplayCode((node as any).raw) || [
+          getDisplayCode((node as any).originalCode),
+          getDisplayCode((node as any).updatedCode),
+        ].filter(Boolean).join('\n'))
+      : getDisplayCode((node as any).code, (node as any).loading === true)
+    const lines = source.split(/\r\n|\n|\r/)
+    const contentWidth = getPreCodeContentWidth(width, characterWidth, lines.length, visual, options, false)
+    return lines.reduce((rows, line) => rows + getWrappedLineRows(line, contentWidth, characterWidth, visual.tabSize), 0)
+  }
+
+  const original = getDisplayCode((node as any).originalCode).split(/\r\n|\n|\r/)
+  const updated = getDisplayCode((node as any).updatedCode).split(/\r\n|\n|\r/)
+  if ((node as any).originalCode == null && (node as any).updatedCode == null)
+    return logicalLineCount
+
+  const lineCount = Math.max(original.length, updated.length)
+  const contentWidth = getPreCodeContentWidth(width, characterWidth, lineCount, visual, options, true)
+  let rows = 0
+  for (let index = 0; index < lineCount; index++) {
+    rows += Math.max(
+      getWrappedLineRows(original[index] ?? '', contentWidth, characterWidth, visual.tabSize),
+      getWrappedLineRows(updated[index] ?? '', contentWidth, characterWidth, visual.tabSize),
+    )
+  }
+  return rows
+}
+
 function resolveStreamDiffsLineHeight() {
   return 18
 }
@@ -429,8 +511,7 @@ export function estimateCodeBlockHeight(
 
   const rendererKind = options.rendererKind
   const showHeader = rendererKind !== 'pre' && options.showHeader !== false
-  const showPreCopyToolbar = rendererKind === 'pre'
-    && options.showPreCopyToolbar === true
+  const showPreToolbar = rendererKind === 'pre' && options.showHeader !== false
   const isDiff = Boolean((node as any).diff)
   let contentHeight = 0
   let cap = CODE_BLOCK_DEFAULT_CAP
@@ -443,9 +524,9 @@ export function estimateCodeBlockHeight(
     contentHeight = Math.round(lineCount * lineHeight + verticalPadding)
   }
   else {
-    const lineCount = getCodeBlockVisibleLineCount(node)
     const visual = resolvePreCodeVisualOptions(options.codeBlockOptions)
-    contentHeight = Math.round(lineCount * visual.lineHeight + visual.padding + visual.paddingBottom)
+    const visualRowCount = getPreCodeVisualRowCount(node, options, visual)
+    contentHeight = Math.round(visualRowCount * visual.lineHeight + visual.padding + visual.paddingBottom)
     cap = visual.maxHeight
   }
 
@@ -454,7 +535,7 @@ export function estimateCodeBlockHeight(
     kind: 'code-block',
     height: Math.round(visibleContentHeight + (
       rendererKind === 'pre'
-        ? (showPreCopyToolbar ? PRE_CODE_TOOLBAR_HEIGHT : 0)
+        ? (showPreToolbar ? PRE_CODE_TOOLBAR_HEIGHT : 0)
         : (showHeader ? CODE_BLOCK_HEADER_HEIGHT : 0)
     )),
     contentHeight: visibleContentHeight,

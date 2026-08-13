@@ -41,7 +41,7 @@ import ListItemNode from '../../components/ListItemNode'
 import ListNode from '../../components/ListNode'
 import ParagraphNode from '../../components/ParagraphNode'
 import PreCodeNode from '../../components/PreCodeNode'
-import PreCodeBlock from '../../components/PreCodeNode/PreCodeBlock.vue'
+import { resolvePreCodeVisualOptions } from '../../components/PreCodeNode/preCodeVisual'
 import ReferenceNode from '../../components/ReferenceNode'
 import StrikethroughNode from '../../components/StrikethroughNode'
 import StrongNode from '../../components/StrongNode'
@@ -74,7 +74,7 @@ import { normalizeTypewriterCursorMode } from '../../utils/typewriter'
 import HtmlBlockNode from '../HtmlBlockNode/HtmlBlockNode.vue'
 import HtmlInlineNode from '../HtmlInlineNode/HtmlInlineNode.vue'
 import { createMathBlockMinHeightCache, provideMathBlockMinHeightCache } from '../MathBlockNode/minHeightCache'
-import { CodeBlockNodeAsync, MathBlockNodeAsync, MathInlineNodeAsync, withViewportDeferredLoading } from './asyncComponent'
+import { CodeBlockNodeAsync, MathBlockNodeAsync, MathInlineNodeAsync, PreCodeBlockAsync, withViewportDeferredLoading } from './asyncComponent'
 import { useBatchRenderingScheduler } from './composables/useBatchRenderingScheduler'
 import { useBatchRenderingState } from './composables/useBatchRenderingState'
 import { useFocusSyncScheduler } from './composables/useFocusSyncScheduler'
@@ -1607,7 +1607,7 @@ function setupExperimentResizeObserver() {
 
 const codeBlockComponent = computed(() => {
   if (resolvedRenderCodeBlocksAsPre.value)
-    return PreCodeBlock
+    return PreCodeBlockAsync
   return CodeBlockNodeAsync
 })
 
@@ -1615,7 +1615,7 @@ function resolveCodeBlockRendererKind(node: ParsedNode) {
   if (node.type !== 'code_block')
     return null
   const component = getNodeComponent(node, getCodeBlockLanguage(node))
-  if (component === PreCodeBlock)
+  if (component === PreCodeBlockAsync)
     return 'pre'
   if (component === codeBlockComponent.value || component === CodeBlockNodeAsync)
     return 'stream-diffs'
@@ -1629,7 +1629,18 @@ function resolveCodeBlockShowHeader() {
 
 function resolvePreCodeCopyToolbar() {
   const props = rendererProps.codeBlockProps
-  return props?.showHeader !== false && props?.showCopyButton !== false
+  return props?.showHeader !== false
+}
+
+function resolveCodeBlockShowCopyButton() {
+  return rendererProps.codeBlockProps?.showCopyButton !== false
+}
+
+function resolveCodeBlockShowLineNumbers() {
+  const value = rendererProps.codeBlockProps?.showLineNumbers
+  return typeof value === 'boolean'
+    ? value
+    : rendererProps.codeBlockOptions?.disableLineNumbers !== true
 }
 
 function isParagraphTextEstimateAffectedByCustomComponent(node: ParsedNode) {
@@ -1661,6 +1672,7 @@ function estimateNodeHeight(node: ParsedNode, index: number, width: number) {
         codeBlockOptions: rendererProps.codeBlockOptions,
         showHeader: resolveCodeBlockShowHeader(),
         showPreCopyToolbar: resolvePreCodeCopyToolbar(),
+        showLineNumbers: resolveCodeBlockShowLineNumbers(),
         width,
         diffStyle: rendererProps.codeBlockOptions?.diffStyle,
       })
@@ -1671,12 +1683,24 @@ function estimateNodeHeight(node: ParsedNode, index: number, width: number) {
 }
 
 function getEstimatedNodeHeightContext(width: number) {
+  const visual = resolvePreCodeVisualOptions(rendererProps.codeBlockOptions)
   return [
     Math.round(width),
     textEstimationEnabled.value,
     codeBlockEstimationEnabled.value,
     simpleTextProbeProfile.value,
+    visual.fontSize,
+    visual.lineHeight,
+    visual.fontFamily,
+    visual.padding,
+    visual.paddingBottom,
+    visual.maxHeight,
+    visual.tabSize,
+    visual.overflow,
+    rendererProps.codeBlockOptions?.diffStyle ?? 'split',
+    resolveCodeBlockShowLineNumbers(),
     resolveCodeBlockShowHeader(),
+    resolveCodeBlockShowCopyButton(),
     resolvedRenderCodeBlocksAsPre.value,
     customComponentsMap.value,
     heightEstimationExperimentRevision.value,
@@ -5446,7 +5470,7 @@ const renderedItems = computed(() => {
 
     const usesPreCodeBindings = node.type === 'code_block'
       && resolvedRenderCodeBlocksAsPre.value
-      && component === PreCodeBlock
+      && component === PreCodeBlockAsync
       && !getCustomCodeLanguageComponent(customComponentsMap.value, language)
     let bindings = { ...getBindingsFor(node, language, component) } as Record<string, unknown>
     const estimatedHeight = heightEstimationActive.value ? estimatedNodeHeights.value[item.index] : null
@@ -5589,7 +5613,7 @@ function getNodeComponent(node: ParsedNode, language?: string) {
 
     if (resolvedRenderCodeBlocksAsPre.value) {
       const customCodeBlock = customComponents.code_block
-      return customCodeBlock || PreCodeBlock
+      return customCodeBlock || PreCodeBlockAsync
     }
 
     // Keep Mermaid blocks routed to MermaidBlockNode unless a specific
@@ -5640,7 +5664,7 @@ function getBindingsFor(node: ParsedNode, language?: string, component?: unknown
       component
       && resolvedRenderCodeBlocksAsPre.value
       && !customLanguageComponent
-      && component === PreCodeBlock
+      && component === PreCodeBlockAsync
     ) {
       return preCodeBlockBindings.value
     }

@@ -315,8 +315,8 @@ describe('codeBlockNode final Diffs gate', () => {
     const editorHost = wrapper.get('.code-editor-container').element as HTMLElement
     expect(editorHost.style.getPropertyValue('--diffs-tab-size')).toBe('8')
     expect(editorHost.style.getPropertyValue('--diffs-gap-block')).toBe('6px')
-    expect(editorHost.style.getPropertyValue('--markstream-diff-metadata-bg')).toBe('#121212')
-    expect(editorHost.style.getPropertyValue('--markstream-diff-metadata-fg')).toBe('#dedcd550')
+    expect(editorHost.style.getPropertyValue('--markstream-diff-metadata-bg')).toBe('var(--markstream-code-theme-bg, #121212)')
+    expect(editorHost.style.getPropertyValue('--markstream-diff-metadata-fg')).toBe('var(--markstream-code-theme-line-number, #dedcd550)')
 
     await wrapper.setProps({
       codeBlockOptions: {

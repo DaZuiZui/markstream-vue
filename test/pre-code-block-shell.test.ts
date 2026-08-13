@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import PreCodeBlock from '../src/components/PreCodeNode/PreCodeBlock.vue'
+import { resolvePreCodeThemePalette } from '../src/components/PreCodeNode/preCodeVisual'
 
 const node = {
   type: 'code_block' as const,
@@ -66,6 +67,36 @@ describe('pre code block shared shell', () => {
     await wrapper.setProps({ isDark: false })
     expect(shell.style.backgroundColor).toBe('rgb(255, 255, 255)')
     expect(pre.style.getPropertyValue('--markstream-code-theme-bg')).toBe('#ffffff')
+  })
+
+  it('keeps custom theme tokens external and detects fixed dark themes', () => {
+    const dracula = resolvePreCodeThemePalette({
+      isDark: false,
+      theme: 'dracula',
+    })
+    const customLight = resolvePreCodeThemePalette({
+      isDark: true,
+      theme: 'github-light',
+    })
+
+    expect(dracula).toMatchObject({
+      builtin: false,
+      dark: true,
+      name: 'dracula',
+    })
+    expect(dracula.background).toBe('var(--markstream-code-theme-bg, #121212)')
+    expect(customLight).toMatchObject({
+      builtin: false,
+      dark: false,
+      name: 'github-light',
+    })
+
+    const wrapper = mount(PreCodeBlock, {
+      props: { node, loading: false, isDark: false, theme: 'dracula' },
+    })
+    const shellStyle = wrapper.get<HTMLElement>('.code-block-container').element.style
+    expect(shellStyle.getPropertyValue('--markstream-code-theme-bg')).toBe('')
+    expect(shellStyle.getPropertyValue('--markstream-code-fallback-bg')).toBe('var(--markstream-code-theme-bg, #121212)')
   })
 
   it('lets header-left and header-right replace the built-in regions', () => {

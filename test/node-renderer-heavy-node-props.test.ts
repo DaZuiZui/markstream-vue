@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, inject } from 'vue'
 import MermaidBlockNode from '../src/components/MermaidBlockNode'
 import NodeRenderer from '../src/components/NodeRenderer'
@@ -301,6 +301,9 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     })
 
     await flushAll()
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-markstream-code-loading="1"]').exists()).toBe(false)
+    })
 
     const pre = wrapper.get('pre[data-markstream-pre="1"]')
     expect(pre.attributes('data-markstream-line-numbers')).toBe('1')
@@ -364,6 +367,9 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     })
 
     await flushAll()
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-markstream-code-loading="1"]').exists()).toBe(false)
+    })
 
     const pre = wrapper.get('pre[data-markstream-pre="1"]')
     expect(pre.attributes('data-markstream-line-numbers')).toBe('1')

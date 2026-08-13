@@ -84,9 +84,13 @@ const themePalette = computed(() => resolvePreCodeThemePalette({
 const shellStyle = computed<CSSProperties>(() => ({
   '--markstream-code-fallback-bg': themePalette.value.background,
   '--markstream-code-fallback-fg': themePalette.value.foreground,
-  '--markstream-code-theme-bg': themePalette.value.background,
-  '--markstream-code-theme-fg': themePalette.value.foreground,
-  '--markstream-code-theme-line-number': themePalette.value.lineNumber,
+  ...(themePalette.value.builtin
+    ? {
+        '--markstream-code-theme-bg': themePalette.value.background,
+        '--markstream-code-theme-fg': themePalette.value.foreground,
+        '--markstream-code-theme-line-number': themePalette.value.lineNumber,
+      }
+    : {}),
   '--markstream-diff-added-line-fill': themePalette.value.diffAddedLine,
   '--markstream-diff-added-number-fill': themePalette.value.diffAddedNumber,
   '--markstream-diff-editor-bg': themePalette.value.background,
@@ -129,9 +133,13 @@ const preStyle = computed<CSSProperties>(() => {
     '--markstream-pre-line-number-padding-left': '2ch',
     '--markstream-pre-line-number-padding-right': '1ch',
     '--markstream-pre-line-number-separator-width': '2px',
-    '--markstream-code-theme-bg': themePalette.value.background,
-    '--markstream-code-theme-fg': themePalette.value.foreground,
-    '--markstream-code-theme-line-number': themePalette.value.lineNumber,
+    ...(themePalette.value.builtin
+      ? {
+          '--markstream-code-theme-bg': themePalette.value.background,
+          '--markstream-code-theme-fg': themePalette.value.foreground,
+          '--markstream-code-theme-line-number': themePalette.value.lineNumber,
+        }
+      : {}),
     '--markstream-diff-added-line-fill': themePalette.value.diffAddedLine,
     '--markstream-diff-added-number-fill': themePalette.value.diffAddedNumber,
     '--markstream-diff-metadata-bg': themePalette.value.background,

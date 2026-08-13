@@ -16,6 +16,7 @@ import PreCodeBlock from '../PreCodeNode/PreCodeBlock.vue'
 import {
   DEFAULT_PRE_CODE_FONT_SIZE,
   DEFAULT_PRE_CODE_LINE_HEIGHT,
+  preCodeThemeLooksDark,
   resolvePreCodeThemeName,
   resolvePreCodeThemePalette,
   resolvePreCodeVisualOptions,
@@ -772,9 +773,11 @@ const preFallbackStyle = computed(() => {
 
   style['--markstream-code-fallback-bg'] = preFallbackThemePalette.value.background
   style['--markstream-code-fallback-fg'] = preFallbackThemePalette.value.foreground
-  style['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
-  style['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
-  style['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
+  if (preFallbackThemePalette.value.builtin) {
+    style['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
+    style['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
+    style['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
+  }
   style['--markstream-pre-line-number-top'] = `${preFallbackVerticalPadding.value.top}px`
   style['--markstream-pre-line-number-left'] = '0px'
   style['--markstream-pre-line-number-padding-left'] = '2ch'
@@ -2732,9 +2735,11 @@ const containerStyle = computed(() => {
     : `${measuredEditorCharacterWidth.value}px`
   s['--markstream-code-fallback-bg'] = preFallbackThemePalette.value.background
   s['--markstream-code-fallback-fg'] = preFallbackThemePalette.value.foreground
-  s['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
-  s['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
-  s['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
+  if (preFallbackThemePalette.value.builtin) {
+    s['--markstream-code-theme-bg'] = preFallbackThemePalette.value.background
+    s['--markstream-code-theme-fg'] = preFallbackThemePalette.value.foreground
+    s['--markstream-code-theme-line-number'] = preFallbackThemePalette.value.lineNumber
+  }
   s['--markstream-diff-added-line-fill'] = preFallbackThemePalette.value.diffAddedLine
   s['--markstream-diff-added-number-fill'] = preFallbackThemePalette.value.diffAddedNumber
   s['--markstream-diff-editor-bg'] = preFallbackThemePalette.value.background
@@ -3281,36 +3286,7 @@ async function themeUpdate(options: { appearanceOnly?: boolean } = {}) {
 
 function themeLooksDark(theme: CodeBlockTheme | null | undefined) {
   const themeName = getThemeName(theme) ?? ''
-  const normalized = themeName.toLowerCase()
-  if (!normalized)
-    return !!props.isDark
-  const darkTokens = [
-    'dark',
-    'night',
-    'moon',
-    'black',
-    'dracula',
-    'mocha',
-    'frappe',
-    'macchiato',
-    'palenight',
-    'ocean',
-    'poimandres',
-    'monokai',
-    'laserwave',
-    'tokyo',
-    'slack-dark',
-    'rose-pine',
-    'github-dark',
-    'material-theme',
-    'one-dark',
-    'catppuccin-mocha',
-    'catppuccin-frappe',
-    'catppuccin-macchiato',
-  ]
-  const lightTokens = ['light', 'latte', 'dawn', 'lotus']
-  return darkTokens.some(token => normalized.includes(token))
-    && !lightTokens.some(token => normalized.includes(token))
+  return preCodeThemeLooksDark(themeName, props.isDark === true)
 }
 
 function buildStreamDiffsOverflowCSS(overflow: 'scroll' | 'wrap') {

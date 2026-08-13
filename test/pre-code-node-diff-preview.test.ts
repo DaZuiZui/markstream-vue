@@ -520,6 +520,26 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
+  it.each(['line\n', 'line\r\n', 'line\r'])('treats %j as a final newline', (source) => {
+    const wrapper = mount(PreCodeNode, {
+      props: {
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          diff: true,
+          originalCode: source,
+          updatedCode: source,
+          code: '',
+          raw: '',
+        },
+      },
+    })
+
+    expect(wrapper.findAll('.markstream-pre__diff-line--metadata')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
   it('matches side-by-side enhanced unchanged-region folding before handoff', () => {
     const originalLines = [
       'import { computed, ref } from \'vue\'',
@@ -1082,6 +1102,49 @@ describe('pre code node diff preview', () => {
     vi.unstubAllGlobals()
   })
 
+  it('does not measure unified diff rows when wrap is enabled', async () => {
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame')
+    const originalGetBCR = Element.prototype.getBoundingClientRect
+    const contentReads = vi.fn()
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.classList.contains('markstream-pre__diff-content'))
+        contentReads()
+      return originalGetBCR.call(this)
+    })
+    const observe = vi.fn()
+    vi.stubGlobal('ResizeObserver', class {
+      observe = observe
+      unobserve() {}
+      disconnect() {}
+    })
+
+    const wrapper = mount(PreCodeNode, {
+      attrs: { class: 'is-wrap' },
+      props: {
+        showLineNumbers: true,
+        diffInline: true,
+        node: {
+          type: 'code_block',
+          language: 'diff',
+          diff: true,
+          originalCode: 'old value',
+          updatedCode: 'new value',
+          code: '-old value\n+new value',
+          raw: '',
+        },
+      },
+    })
+
+    await nextTick()
+    expect(requestFrame).not.toHaveBeenCalled()
+    expect(observe).not.toHaveBeenCalled()
+    expect(contentReads).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
   it('clears and restores synchronized heights across wrap to scroll to wrap', async () => {
     const wrap = ref(true)
     const node = {
@@ -1113,6 +1176,8 @@ describe('pre code node diff preview', () => {
     expect(wrapper.findAll('.markstream-pre__diff-line').every(row => row.attributes('style') === undefined)).toBe(true)
 
     wrap.value = true
+    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
     await nextTick()
 
     expect(wrapper.findAll('.markstream-pre__diff-line').every(row => row.attributes('style')?.includes('--markstream-pre-diff-synced-row-height'))).toBe(true)

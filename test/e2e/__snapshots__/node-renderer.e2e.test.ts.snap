@@ -123,7 +123,41 @@ exports[`markdownRender node e2e coverage > renders code block node 1`] = `
   <!--v-if-->
   <div data-v-8dfe8a80="" class="node-slot" data-node-index="0" data-node-type="code_block">
     <div data-v-8dfe8a80="" class="node-content">
-      <!-- Skip wrapping code_block nodes in transitions to avoid touching stream-diffs internals --><pre data-v-8dfe8a80="" class="language-ts" aria-busy="false" aria-label="Code block: ts" data-language="ts" data-markstream-pre="1" tabindex="0" index-key="markdown-renderer-0" is-dark="false"><!--v-if--><code translate="no" class="markstream-pre__code">export const sum = (a: number, b: number) =&gt; a + b</code></pre>
+      <!-- Skip wrapping code_block nodes in transitions to avoid touching stream-diffs internals -->
+      <div data-v-8dfe8a80="" style="--markstream-code-fallback-bg: #ffffff; --markstream-code-fallback-fg: #393a34; --markstream-code-theme-bg: #ffffff; --markstream-code-theme-fg: #393a34; --markstream-code-theme-line-number: #393a3450; --markstream-diff-added-line-fill: color-mix(in lab, #ffffff 88%, #1e754f); --markstream-diff-added-number-fill: color-mix(in lab, #ffffff 91%, #1e754f); --markstream-diff-editor-bg: #ffffff; --markstream-diff-removed-line-fill: color-mix(in lab, #ffffff 88%, #ab5959); --markstream-diff-removed-number-fill: color-mix(in lab, #ffffff 91%, #ab5959); --markstream-diff-shell-bg: #ffffff; --markstream-pre-resolved-theme-bg: #ffffff; --markstream-pre-resolved-theme-fg: #393a34; --markstream-pre-resolved-theme-line-number: #393a3450; background-color: rgb(255, 255, 255); color: rgb(57, 58, 52);" class="code-block-container rounded-lg border">
+        <!-- Header -->
+        <div class="code-block-header flex justify-between items-center border-b px-[var(--ms-inset-panel-x)] py-[var(--ms-inset-panel-y)] border-[var(--code-border)] bg-[var(--code-header-bg)] text-[var(--code-fg)]">
+          <!-- left: language icon + title (provided by parent via slot) -->
+          <div class="code-header-main"><span class="icon-slot h-4 w-4 flex-shrink-0"><svg xmlns="http://www.w3.org/2000/svg" xml:space="preserve" viewBox="0 0 16 16"><path fill="#0288d1" d="M2 2v12h12V2zm4 6h3v1H8v4H7V9H6zm5 0h2v1h-2v1h1a1.003 1.003 0 0 1 1 1v1a1.003 1.003 0 0 1-1 1h-2v-1h2v-1h-1a1.003 1.003 0 0 1-1-1V9a1.003 1.003 0 0 1 1-1"></path></svg></span>
+            <div class="code-header-copy">
+              <div class="code-header-title">Typescript</div>
+              <!--v-if-->
+            </div>
+          </div><!-- right: action buttons -->
+          <div class="flex items-center gap-0.5">
+            <!-- Diff stats (optional) -->
+            <!--v-if-->
+            <!-- Copy (primary action — always visible) --><button type="button" class="code-action-btn inline-flex items-center justify-center p-[var(--ms-action-btn-padding)] rounded leading-none shrink-0 cursor-pointer text-[var(--code-action-fg)] hover:bg-[var(--code-action-hover-bg)] hover:text-[var(--code-action-hover-fg)] active:scale-[0.96] disabled:opacity-40 disabled:cursor-not-allowed transition-colors" aria-label="Copy"><svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="1em" height="1em" viewBox="0 0 24 24" class="action-icon">
+                <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                </g>
+              </svg></button><!-- Collapse (structural — always visible) -->
+            <!--v-if-->
+            <!-- More menu (overflow for secondary actions) -->
+            <!--v-if-->
+          </div>
+        </div><!-- Content: keep slot subtree mounted so stream-diffs/renderer state survives collapse. -->
+        <div class="code-block-shell-content"><pre style="--markstream-pre-line-number-width: 2ch; --markstream-pre-diff-line-number-width: 2ch; --markstream-code-padding-left: calc(var(--markstream-pre-line-number-padding-left, 2ch) + var(--markstream-pre-line-number-width, 2ch) + var(--markstream-pre-line-number-padding-right, 1ch) + var(--markstream-pre-line-number-separator-width, 2px) + var(--markstream-pre-line-number-gap-to-code, 1ch)); --markstream-code-font-family: &quot;SF Mono&quot;, Monaco, Consolas, &quot;Ubuntu Mono&quot;, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace; --markstream-code-padding-x: 1ch; --markstream-code-padding-y: 8px; --markstream-code-padding-bottom: 8px; --markstream-code-scrollbar-gutter: 6px; --markstream-code-tab-size: 4; --markstream-pre-line-number-top: 8px; --markstream-pre-line-number-left: 0px; --markstream-pre-line-number-padding-left: 2ch; --markstream-pre-line-number-padding-right: 1ch; --markstream-pre-line-number-separator-width: 2px; --markstream-code-theme-bg: #ffffff; --markstream-code-theme-fg: #393a34; --markstream-code-theme-line-number: #393a3450; --markstream-diff-added-line-fill: color-mix(in lab, #ffffff 88%, #1e754f); --markstream-diff-added-number-fill: color-mix(in lab, #ffffff 91%, #1e754f); --markstream-diff-metadata-bg: #ffffff; --markstream-diff-metadata-fg: #393a3450; --markstream-diff-removed-line-fill: color-mix(in lab, #ffffff 88%, #ab5959); --markstream-diff-removed-number-fill: color-mix(in lab, #ffffff 91%, #ab5959); --markstream-pre-resolved-theme-bg: #ffffff; --markstream-pre-resolved-theme-fg: #393a34; --markstream-pre-resolved-theme-line-number: #393a3450; --markstream-pre-line-number-gap-to-code: 1ch; --markstream-diff-fallback-handoff-height: auto; background-color: var(--markstream-code-fallback-bg, var(--markstream-code-theme-bg, var(--markstream-pre-resolved-theme-bg))); box-sizing: border-box; color: var(--markstream-code-fallback-fg, var(--markstream-code-theme-fg, var(--markstream-pre-resolved-theme-fg))); font-family: &quot;SF Mono&quot;, Monaco, Consolas, &quot;Ubuntu Mono&quot;, &quot;Liberation Mono&quot;, &quot;Courier New&quot;, monospace; font-size: 12px; line-height: 18px; margin: 0px; max-height: 500px; overflow: auto; overflow-x: hidden; overflow-y: auto; padding: 8px 1ch 8px var(--markstream-code-padding-left); scrollbar-gutter: stable; tab-size: 4; white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; width: 100%;" class="language-ts markstream-pre--line-numbers code-pre-fallback is-wrap" aria-busy="false" aria-label="Code block: ts" data-language="ts" data-markstream-line-numbers="1" data-markstream-pre="1" tabindex="0" index-key="markdown-renderer-0" data-markstream-code-theme="vitesse-light"><code translate="no" class="markstream-pre__code markstream-pre__code--wrapped"><span class="markstream-pre__logical-line" data-line-number="1">export const sum = (a: number, b: number) =&gt; a + b</span></code></pre>
+        </div><!-- Loading skeleton -->
+        <div class="code-loading-placeholder" style="display: none;">
+          <div class="loading-skeleton">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line short"></div>
+          </div>
+        </div><!-- Screen reader copy status --><span class="sr-only" aria-live="polite" role="status"></span>
+      </div>
     </div>
   </div>
   <!--v-if-->

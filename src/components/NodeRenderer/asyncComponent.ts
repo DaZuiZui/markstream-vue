@@ -159,7 +159,6 @@ export const CodeBlockNodeLoading = defineComponent({
       const codeBlockOptions = props.codeBlockOptions ?? {}
       const diffInline = isDiff && (props.estimatedDiffInline
         ?? resolveDiffInlineLayout(codeBlockOptions as unknown as Record<string, unknown>))
-      const isSurfaceDark = props.isDark === true
       const visualOptions = resolvePreCodeVisualOptions(codeBlockOptions)
       const themePalette = resolvePreCodeThemePalette({
         darkTheme: props.darkTheme,
@@ -168,6 +167,7 @@ export const CodeBlockNodeLoading = defineComponent({
         theme: props.theme,
         themes: props.themes,
       })
+      const isSurfaceDark = themePalette.dark
       const fallbackMaxHeight = !isDiff && typeof props.estimatedContentHeightPx === 'number' && Number.isFinite(props.estimatedContentHeightPx)
         ? Math.min(visualOptions.maxHeight, Math.ceil(props.estimatedContentHeightPx))
         : visualOptions.maxHeight
@@ -190,9 +190,13 @@ export const CodeBlockNodeLoading = defineComponent({
         '--markstream-code-font-family': visualOptions.fontFamily,
         '--markstream-code-fallback-bg': themePalette.background,
         '--markstream-code-fallback-fg': themePalette.foreground,
-        '--markstream-code-theme-bg': themePalette.background,
-        '--markstream-code-theme-fg': themePalette.foreground,
-        '--markstream-code-theme-line-number': themePalette.lineNumber,
+        ...(themePalette.builtin
+          ? {
+              '--markstream-code-theme-bg': themePalette.background,
+              '--markstream-code-theme-fg': themePalette.foreground,
+              '--markstream-code-theme-line-number': themePalette.lineNumber,
+            }
+          : {}),
         '--markstream-diff-added-line-fill': themePalette.diffAddedLine,
         '--markstream-diff-added-number-fill': themePalette.diffAddedNumber,
         '--markstream-diff-metadata-bg': themePalette.background,
@@ -226,9 +230,13 @@ export const CodeBlockNodeLoading = defineComponent({
         '--markstream-code-layout-character-width': '1ch',
         '--markstream-code-fallback-bg': themePalette.background,
         '--markstream-code-fallback-fg': themePalette.foreground,
-        '--markstream-code-theme-bg': themePalette.background,
-        '--markstream-code-theme-fg': themePalette.foreground,
-        '--markstream-code-theme-line-number': themePalette.lineNumber,
+        ...(themePalette.builtin
+          ? {
+              '--markstream-code-theme-bg': themePalette.background,
+              '--markstream-code-theme-fg': themePalette.foreground,
+              '--markstream-code-theme-line-number': themePalette.lineNumber,
+            }
+          : {}),
         '--markstream-diff-added-line-fill': themePalette.diffAddedLine,
         '--markstream-diff-added-number-fill': themePalette.diffAddedNumber,
         '--markstream-diff-editor-bg': themePalette.background,
@@ -363,6 +371,7 @@ export const CodeBlockNodeLoading = defineComponent({
               { 'is-wrap': visualOptions.overflow === 'wrap' },
             ],
             'style': preStyle,
+            'data-markstream-code-theme': themePalette.name,
             'data-markstream-code-loading': '1',
           }),
         ]),
@@ -380,6 +389,13 @@ export const CodeBlockNodeLoading = defineComponent({
       ])
     }
   },
+})
+
+export const PreCodeBlockAsync: Component = defineAsyncComponent({
+  loader: () => import('../PreCodeNode/PreCodeBlock.vue'),
+  loadingComponent: CodeBlockNodeLoading,
+  delay: 0,
+  suspensible: true,
 })
 
 const CodeBlockNodeInnerAsync = defineAsyncComponent({

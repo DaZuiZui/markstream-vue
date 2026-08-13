@@ -680,7 +680,7 @@ describe('node renderer virtual-scroll coordination', () => {
     const metrics = await (wrapper.vm as any).forceMeasure('manual')
 
     expect(metrics.estimatedCount).toBe(1)
-    expect(metrics.totalHeight).toBeGreaterThan(1000)
+    expect(metrics.totalHeight).toBe(537)
 
     wrapper.unmount()
   })

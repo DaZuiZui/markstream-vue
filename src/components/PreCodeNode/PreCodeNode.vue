@@ -195,7 +195,7 @@ function splitDiffSource(source: unknown) {
 }
 
 function hasFinalNewline(source: unknown) {
-  return String(source ?? '').endsWith('\n')
+  return /(?:\r\n|\n|\r)$/.test(String(source ?? ''))
 }
 
 function createMetadataLine(
@@ -891,6 +891,7 @@ function syncDiffLineMetrics() {
   if (
     !root
     || !isDiffPreview.value
+    || isInlineDiffPreview.value
     || !wrapsDiffPreviewLines.value
   ) {
     if (diffLineMetrics.value.length)
@@ -926,11 +927,18 @@ function syncDiffLineMetrics() {
 }
 
 function scheduleDiffLineMetricsSync() {
-  if (disposed || typeof window === 'undefined')
+  if (
+    disposed
+    || typeof window === 'undefined'
+    || !isDiffPreview.value
+    || isInlineDiffPreview.value
+    || !wrapsDiffPreviewLines.value
+  ) {
     return
+  }
 
   if (diffLineMetricsRaf != null)
-    window.cancelAnimationFrame(diffLineMetricsRaf)
+    return
 
   diffLineMetricsRaf = window.requestAnimationFrame(() => {
     diffLineMetricsRaf = null
@@ -947,6 +955,8 @@ function setupDiffResizeObserver(el: HTMLElement | null) {
   if (
     !el
     || !isDiffPreview.value
+    || isInlineDiffPreview.value
+    || !wrapsDiffPreviewLines.value
     || typeof ResizeObserver === 'undefined'
   ) {
     return
@@ -962,7 +972,7 @@ watch(
   preRef,
   (el) => {
     setupDiffResizeObserver(el)
-    syncDiffLineMetrics()
+    scheduleDiffLineMetricsSync()
   },
   { flush: 'post' },
 )
@@ -971,7 +981,12 @@ watch(
   [isDiffPreview, isInlineDiffPreview, diffPreviewPanes, wrapsDiffPreviewLines],
   () => {
     setupDiffResizeObserver(preRef.value)
-    syncDiffLineMetrics()
+    if (!isDiffPreview.value || isInlineDiffPreview.value || !wrapsDiffPreviewLines.value) {
+      if (diffLineMetrics.value.length)
+        diffLineMetrics.value = []
+      return
+    }
+    scheduleDiffLineMetricsSync()
   },
   { flush: 'post', immediate: true },
 )

@@ -320,6 +320,9 @@ After`,
       expectedText: ['export const sum = (a: number, b: number) => a + b'],
       assert: async (wrapper) => {
         await flushAll()
+        await vi.waitFor(() => {
+          expect(wrapper.find('[data-markstream-code-loading="1"]').exists()).toBe(false)
+        })
         const fallback = wrapper.find('pre code')
         expect(fallback.exists()).toBe(true)
         expect(fallback.text()).toContain('export const sum = (a: number, b: number) => a + b')

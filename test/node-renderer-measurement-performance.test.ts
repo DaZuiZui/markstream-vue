@@ -217,6 +217,72 @@ describe('node renderer measurement performance', () => {
     wrapper.unmount()
   })
 
+  it('recomputes pre estimates when runtime visual props change', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 640)
+
+    const NodeRenderer = (await import('../src/components/NodeRenderer')).default
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        nodes: [createCodeBlock(1)],
+        renderCodeBlocksAsPre: true,
+        viewportPriority: false,
+        codeBlockOptions: {
+          fontSize: 12,
+          lineHeight: 18,
+          fontFamily: 'monospace',
+          padding: 8,
+          maxHeight: 500,
+          tabSize: 4,
+          overflow: 'wrap',
+          diffStyle: 'split',
+        },
+        virtualScroll: {
+          enabled: true,
+          sessionKey: 'estimated-height-visual-props',
+        },
+      },
+    })
+
+    await flushAll()
+    const state = setupState(wrapper)
+    const readEstimate = () => {
+      const estimates = state.estimatedNodeHeights
+      return (Array.isArray(estimates) ? estimates : estimates.value)[0]
+    }
+    const initial = readEstimate()
+
+    await wrapper.setProps({
+      codeBlockOptions: {
+        fontSize: 20,
+        lineHeight: 32,
+        fontFamily: 'Courier New',
+        padding: 16,
+        maxHeight: 240,
+        tabSize: 8,
+        overflow: 'scroll',
+        diffStyle: 'unified',
+      },
+    })
+    await flushVueOnly()
+    const visualUpdate = readEstimate()
+    expect(visualUpdate).not.toBe(initial)
+    expect(visualUpdate.height).not.toBe(initial.height)
+
+    await wrapper.setProps({
+      codeBlockProps: {
+        showHeader: false,
+        showCopyButton: false,
+        showLineNumbers: false,
+      },
+    })
+    await flushVueOnly()
+    const headerUpdate = readEstimate()
+    expect(headerUpdate).not.toBe(visualUpdate)
+    expect(headerUpdate.height).toBeLessThan(visualUpdate.height)
+
+    wrapper.unmount()
+  })
+
   it('recomputes estimated heights when custom code block components change', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 640)
 
