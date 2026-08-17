@@ -47,8 +47,25 @@ export interface StructuredStreamGroupBoundary {
 
 export interface StructuredStreamRuntimeState {
   groupBoundaries: StructuredStreamGroupBoundary[]
+  /** Absolute token indices where each reusable group starts. */
+  groupStarts: number[]
+  /** Number of top-level tokens when this cache was written. */
+  tokenCount: number
+  /** Reference to the token array from the parse that produced this cache. */
+  tokens: MarkdownToken[]
+  /** Whether any top-level group is a single-token (non-paired) reusable type. */
+  mixed: boolean
   source: string
   nodes: ParsedNode[]
+  /** Cached prefix node raws for incremental linkify demotion seeding. */
+  seed: string[]
+  /**
+   * Absolute pre-pass indices of `<details>` opener html_block nodes. The html
+   * passes re-run from the earliest such index because tokenizer-committed
+   * details fragments span "stable" group boundaries and are only stitched by
+   * combineStructuredDetailsHtmlBlocks.
+   */
+  detailsOpenIndices: number[]
   stableGroupCount: number
   requireClosingStrong: boolean | undefined
   validateLink: ParseOptions['validateLink']
@@ -101,6 +118,12 @@ export class ParserRuntime {
   readonly streamParseEnvs = new Map<string, Record<string, unknown>>()
   topLevelStreamParseMode?: string
   structuredStream?: StructuredStreamRuntimeState
+  /**
+   * Number of reused (stable) prefix nodes when the last
+   * processTopLevelTokensWithReuse call actually reused nodes; undefined when
+   * it re-processed the whole document. Lets downstream passes tail-window.
+   */
+  structuredReuseTailStart?: number
   siblingHtmlChildren?: SiblingHtmlChildrenRuntimeState
   nodeSourceRanges = new WeakMap<object, { start: number, end: number }>()
   private documentSource?: string

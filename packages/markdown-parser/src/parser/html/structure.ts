@@ -185,8 +185,9 @@ export function structureGenericHtmlBlockChildren(
   context: HtmlStructureContext,
   options: ParseContext,
   final: boolean,
+  tailStart = 0,
 ): ParsedNode[] {
-  return nodes.map((node) => {
+  const processNode = (node: ParsedNode): ParsedNode => {
     if (node?.type !== 'html_block')
       return node
 
@@ -231,12 +232,16 @@ export function structureGenericHtmlBlockChildren(
       ...node,
       children,
     } as ParsedNode
-  })
+  }
+
+  if (tailStart <= 0)
+    return nodes.map(processNode)
+  return nodes.slice(0, tailStart).concat(nodes.slice(tailStart).map(processNode))
 }
 
-export function hasTopLevelHtmlBlock(nodes: ParsedNode[]) {
-  for (const node of nodes) {
-    if (node?.type === 'html_block')
+export function hasTopLevelHtmlBlock(nodes: ParsedNode[], start = 0) {
+  for (let i = start; i < nodes.length; i++) {
+    if (nodes[i]?.type === 'html_block')
       return true
   }
   return false
@@ -308,11 +313,14 @@ export function combineStructuredDetailsHtmlBlocks(
   options: ParseContext,
   final: boolean,
   sourceCursor = 0,
+  tailStart = 0,
 ): [ParsedNode[], number] {
   const merged: ParsedNode[] = []
+  for (let k = 0; k < tailStart; k++)
+    merged.push(nodes[k])
   let cursor = sourceCursor
 
-  for (let i = 0; i < nodes.length; i++) {
+  for (let i = tailStart; i < nodes.length; i++) {
     const node = nodes[i]
     const nodeRaw = getMergeableNodeRaw(node)
     let nodePos = -1
@@ -446,14 +454,16 @@ export function mergeSplitTopLevelHtmlBlocks(
   source: string,
   context: HtmlStructureContext,
   options?: ParseContext,
+  tailStart = 0,
+  sourceCursorStart = 0,
 ) {
   if (!source)
     return nodes
 
   const merged = nodes.slice()
-  let sourceHtmlCursor = 0
+  let sourceHtmlCursor = sourceCursorStart
 
-  for (let i = 0; i < merged.length; i++) {
+  for (let i = tailStart; i < merged.length; i++) {
     const node = merged[i]
     const nodeRaw = getMergeableNodeRaw(node)
     const nodePos = nodeRaw ? source.indexOf(nodeRaw, sourceHtmlCursor) : -1
