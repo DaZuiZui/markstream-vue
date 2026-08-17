@@ -195,49 +195,27 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
     }
   }
 
-  // The structured-reuse path only rebuilds nodes from the dirty tail, so the
-  // html structure passes can run over a tail window instead of the whole
-  // result every append. The window starts at the reused tail, extended back to
-  // the earliest `<details>` opener (details fragments are stitched across
-  // tokenizer-committed groups, so they span "stable" boundaries and must be
-  // re-processed); everything before that is settled and skipped.
+  // The structured-reuse path rebuilds nodes from the dirty tail, but the
+  // html passes still run over the whole result: mergeSplit and combine
+  // re-derive post-pass prefix nodes from the pre-pass cache (split html
+  // fragments and un-stitched details live in the reused prefix), so they must
+  // re-run every append. structureGeneric only structures non-details html
+  // blocks, which never appear in a reusable prefix (top-level `html_block`
+  // tokens are not reusable), so it can start at the reused tail safely.
   const reuseTailStart = runtime.structuredReuseTailStart
   const tailStart = reuseTailStart && reuseTailStart > 0 && reuseTailStart < result.length
     ? reuseTailStart
     : 0
-  let windowStart = tailStart
-  const detailsOpenIndices = runtime.structuredStream?.detailsOpenIndices ?? []
-  for (let i = 0; i < detailsOpenIndices.length; i++) {
-    const index = detailsOpenIndices[i]
-    if (index < windowStart)
-      windowStart = index
-  }
-  if (hasTopLevelHtmlBlock(result, windowStart)) {
+  if (hasTopLevelHtmlBlock(result)) {
     const htmlPassesStartedAt = timing ? getParserNow() : 0
     const htmlStructureContext: HtmlStructureContext = {
       getInternalNodeSourceRange: node => getInternalNodeSourceRange(node, runtime),
       markdownIt: md,
       parseFragment: (fragment, fragmentOptions) => parseMarkdownWithContext(fragment, fragmentOptions),
     }
-    // Seed the source cursor at the first window node so the passes only scan
-    // the dirty region instead of re-locating every prefix html block.
-    let sourceCursorStart = 0
-    if (windowStart > 0) {
-      const firstWindowNode = result[windowStart]
-      const range = getInternalNodeSourceRange(firstWindowNode, runtime)
-      if (range) {
-        sourceCursorStart = range.start
-      }
-      else {
-        const firstRaw = String((firstWindowNode as { raw?: unknown } | null)?.raw ?? '')
-        sourceCursorStart = firstRaw ? safeMarkdown.indexOf(firstRaw, 0) : 0
-        if (sourceCursorStart < 0)
-          sourceCursorStart = 0
-      }
-    }
-    result = mergeSplitTopLevelHtmlBlocks(result, isFinal, safeMarkdown, htmlStructureContext, internalOptions, windowStart, sourceCursorStart)
-    result = combineStructuredDetailsHtmlBlocks(result, safeMarkdown, htmlStructureContext, internalOptions, isFinal, sourceCursorStart, windowStart)[0]
-    result = structureGenericHtmlBlockChildren(result, htmlStructureContext, internalOptions, isFinal, windowStart)
+    result = mergeSplitTopLevelHtmlBlocks(result, isFinal, safeMarkdown, htmlStructureContext, internalOptions)
+    result = combineStructuredDetailsHtmlBlocks(result, safeMarkdown, htmlStructureContext, internalOptions, isFinal)[0]
+    result = structureGenericHtmlBlockChildren(result, htmlStructureContext, internalOptions, isFinal, tailStart)
     if (timing)
       addTiming(timing, 'htmlBlockPassesMs', getParserNow() - htmlPassesStartedAt)
   }

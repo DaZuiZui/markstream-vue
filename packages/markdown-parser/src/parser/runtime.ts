@@ -59,13 +59,6 @@ export interface StructuredStreamRuntimeState {
   nodes: ParsedNode[]
   /** Cached prefix node raws for incremental linkify demotion seeding. */
   seed: string[]
-  /**
-   * Absolute pre-pass indices of `<details>` opener html_block nodes. The html
-   * passes re-run from the earliest such index because tokenizer-committed
-   * details fragments span "stable" group boundaries and are only stitched by
-   * combineStructuredDetailsHtmlBlocks.
-   */
-  detailsOpenIndices: number[]
   stableGroupCount: number
   requireClosingStrong: boolean | undefined
   validateLink: ParseOptions['validateLink']
@@ -124,6 +117,13 @@ export class ParserRuntime {
    * it re-processed the whole document. Lets downstream passes tail-window.
    */
   structuredReuseTailStart?: number
+  /**
+   * Stitched `<details>` output cache keyed by the pre-pass details opener
+   * html_block node. Reused prefix details keep the same opener object across
+   * appends, so combineStructuredDetailsHtmlBlocks can skip re-parsing and
+   * re-rendering the (unchanged) middle of closed details on every append.
+   */
+  detailsStitchCache = new WeakMap<object, { openRaw: string, explicitClose: boolean, closeSliceEnd: number, middleSource: string, node: ParsedNode }>()
   siblingHtmlChildren?: SiblingHtmlChildrenRuntimeState
   nodeSourceRanges = new WeakMap<object, { start: number, end: number }>()
   private documentSource?: string
@@ -228,6 +228,7 @@ export class ParserRuntime {
     this.topLevelStreamParseMode = undefined
     this.structuredStream = undefined
     this.siblingHtmlChildren = undefined
+    this.detailsStitchCache = new WeakMap()
     this.nodeSourceRanges = new WeakMap()
   }
 }

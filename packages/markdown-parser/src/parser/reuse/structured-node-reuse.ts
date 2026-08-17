@@ -187,7 +187,7 @@ function sourceEndsWithBlankLine(source: string) {
   return /\r?\n[\t ]*\r?\n[\t ]*$/.test(source)
 }
 
-function canReuseStructuredStreamNodes(options: ParseOptions) {
+export function canReuseStructuredStreamNodes(options: ParseOptions) {
   return options.reuseStableTopLevelNodes === true
     && options.final !== true
     && !options.preTransformTokens
@@ -263,28 +263,6 @@ function isSameTokenShapeForReuse(left: Token | MarkdownToken | undefined, right
     && sameTokenAttrs(left, right)
 }
 
-/**
- * Indices (offset + i) of `<details>` opener html_block nodes in a pre-html-pass
- * node array. Details fragments are stitched across tokenizer-committed groups
- * by combineStructuredDetailsHtmlBlocks, so the html passes must re-run from
- * the earliest such index.
- */
-function getDetailsOpenIndices(nodes: ParsedNode[], offset: number): number[] {
-  const out: number[] = []
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i]
-    if (node?.type !== 'html_block')
-      continue
-    const tag = String((node as { tag?: unknown }).tag ?? '').toLowerCase()
-    if (tag !== 'details')
-      continue
-    const raw = String((node as { raw?: unknown }).raw ?? (node as { content?: unknown }).content ?? '')
-    if (/^\s*<details\b/i.test(raw))
-      out.push(offset + i)
-  }
-  return out
-}
-
 function updateStructuredStreamCache(
   runtime: ParserRuntime,
   source: string,
@@ -292,7 +270,6 @@ function updateStructuredStreamCache(
   groups: ReusableTopLevelTokenGroups,
   nodes: ParsedNode[],
   options: ParseOptions,
-  detailsOpenIndices: number[],
 ) {
   const groupStarts = groups.starts
   if (groupStarts.length === 0 || nodes.length !== groupStarts.length) {
@@ -309,6 +286,10 @@ function updateStructuredStreamCache(
     }
   })
 
+  const stableGroupCount = groups.mixed
+    ? Math.max(0, groupStarts.length - 1)
+    : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1)
+
   runtime.structuredStream = {
     groupBoundaries,
     groupStarts,
@@ -318,10 +299,7 @@ function updateStructuredStreamCache(
     source,
     nodes,
     seed: nodes.map(node => String((node as Record<string, unknown>).raw ?? '')),
-    detailsOpenIndices,
-    stableGroupCount: groups.mixed
-      ? Math.max(0, groupStarts.length - 1)
-      : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1),
+    stableGroupCount,
     requireClosingStrong: options.requireClosingStrong,
     validateLink: options.validateLink,
   }
@@ -382,7 +360,11 @@ export function processTopLevelTokensWithReuse(
   const reuseEnabled = shouldUseTopLevelStreamParse(runtime, options)
     && canReuseStructuredStreamNodes(options)
 
-  runtime.structuredReuseTailStart = undefined
+  // Reset the reuse-tail marker only for top-level parses: fragment parses
+  // (details/div children) run with the same runtime and must not clobber the
+  // outer document's marker, which the html passes consult while stitching.
+  if (!options.isFragment)
+    runtime.structuredReuseTailStart = undefined
 
   if (!reuseEnabled) {
     // Fragment parses (e.g. children of <details>/custom html blocks) run with
@@ -455,15 +437,12 @@ export function processTopLevelTokensWithReuse(
       const result = previous.nodes.slice(0, stableGroupCount).concat(tailNodes)
       runtime.structuredReuseTailStart = stableGroupCount
       callbacks.recordReusedTopLevelNodes?.(stableGroupCount)
-      const detailsOpenIndices = previous.detailsOpenIndices
-        .filter(index => index < stableGroupCount)
-        .concat(getDetailsOpenIndices(tailNodes, stableGroupCount))
-      updateStructuredStreamCache(runtime, source, tokens, groups, result, options, detailsOpenIndices)
+      updateStructuredStreamCache(runtime, source, tokens, groups, result, options)
       return result
     }
   }
 
   const result = callbacks.processTokens(tokens, options)
-  updateStructuredStreamCache(runtime, source, tokens, groups, result, options, getDetailsOpenIndices(result, 0))
+  updateStructuredStreamCache(runtime, source, tokens, groups, result, options)
   return result
 }
