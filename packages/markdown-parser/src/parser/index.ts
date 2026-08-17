@@ -195,6 +195,17 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
     }
   }
 
+  // The structured-reuse path rebuilds nodes from the dirty tail, but the
+  // html passes still run over the whole result: mergeSplit and combine
+  // re-derive post-pass prefix nodes from the pre-pass cache (split html
+  // fragments and un-stitched details live in the reused prefix), so they must
+  // re-run every append. structureGeneric only structures non-details html
+  // blocks, which never appear in a reusable prefix (top-level `html_block`
+  // tokens are not reusable), so it can start at the reused tail safely.
+  const reuseTailStart = runtime.structuredReuseTailStart
+  const tailStart = reuseTailStart && reuseTailStart > 0 && reuseTailStart < result.length
+    ? reuseTailStart
+    : 0
   if (hasTopLevelHtmlBlock(result)) {
     const htmlPassesStartedAt = timing ? getParserNow() : 0
     const htmlStructureContext: HtmlStructureContext = {
@@ -204,7 +215,7 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
     }
     result = mergeSplitTopLevelHtmlBlocks(result, isFinal, safeMarkdown, htmlStructureContext, internalOptions)
     result = combineStructuredDetailsHtmlBlocks(result, safeMarkdown, htmlStructureContext, internalOptions, isFinal)[0]
-    result = structureGenericHtmlBlockChildren(result, htmlStructureContext, internalOptions, isFinal)
+    result = structureGenericHtmlBlockChildren(result, htmlStructureContext, internalOptions, isFinal, tailStart)
     if (timing)
       addTiming(timing, 'htmlBlockPassesMs', getParserNow() - htmlPassesStartedAt)
   }

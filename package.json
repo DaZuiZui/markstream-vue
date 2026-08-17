@@ -356,6 +356,7 @@
     "lz-string": "^1.5.0",
     "markdown-it-emoji": "^3.1.0",
     "material-icon-theme": "^5.37.0",
+    "octane": "^0.1.21",
     "picocolors": "^1.1.1",
     "playwright-core": "^1.62.0",
     "postcss-cli": "^11.0.1",

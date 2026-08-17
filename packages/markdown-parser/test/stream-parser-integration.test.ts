@@ -1684,4 +1684,124 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     expect(stats.cacheHits + stats.appendHits + stats.tailHits).toBeGreaterThan(0)
     expect(seen).toEqual(['cached', 'cached'])
   })
+
+  it('keeps stitched details consistent with a cold parse across fine-grained appends', () => {
+    // Regression guard for the per-opener details stitch cache: a reused
+    // (stable-prefix) details opener is keyed on explicitClose + closeSliceEnd
+    // + middleSource, so an open->closed transition and a trailing line-ending
+    // extension must invalidate the cached stitched node instead of returning a
+    // stale (still-loading or short-raw) node.
+    const md = getMarkdown('stream-parser-details-stitch-cache')
+    const coldMd = getMarkdown('stream-parser-details-stitch-cache-cold')
+
+    const base = `${buildLargeAppendFriendlyDoc(40)}\n\n`
+    const tail = [
+      '<details>',
+      '<summary>Closed one</summary>',
+      '',
+      'Body **bold** with `code` inside.',
+      '',
+      '</details>',
+      '',
+      '<details open>',
+      '<summary>Growing one</summary>',
+      '',
+      'This details stays open while streaming and only closes at the very end.',
+      '',
+      '</details>',
+      '',
+    ].join('\n')
+
+    parseMarkdownToStructure(base, md, {
+      final: false,
+      streamParse: true,
+      reuseStableTopLevelNodes: true,
+    })
+
+    // Small commits so `</details>` and its trailing newline land on separate
+    // boundaries, exercising the open->closed and close-extension cache keys.
+    const chunkSize = 7
+    let current = base
+    for (let i = 0; i < tail.length; i += chunkSize) {
+      current = base + tail.slice(0, i + chunkSize)
+      const streamed = parseMarkdownToStructure(current, md, {
+        final: false,
+        streamParse: true,
+        reuseStableTopLevelNodes: true,
+      })
+      const cold = parseMarkdownToStructure(current, coldMd, {
+        final: false,
+        streamParse: false,
+      })
+      expect(streamed).toEqual(cold)
+    }
+
+    // final parse of the full document must also match a cold final parse
+    const finalNodes = parseMarkdownToStructure(base + tail, md, {
+      final: true,
+      streamParse: true,
+      reuseStableTopLevelNodes: true,
+    })
+    const finalCold = parseMarkdownToStructure(base + tail, coldMd, {
+      final: true,
+      streamParse: false,
+    })
+    expect(finalNodes).toEqual(finalCold)
+  })
+
+  it('keeps split-opener details (summary committed in a later group) consistent with a cold parse', () => {
+    // Regression guard: at fine commit granularity the stream can commit a
+    // `<details>` opener as a stable group before its `<summary>` arrives,
+    // freezing a partial opener fragment in the reuse cache. combine must
+    // re-derive the content boundaries and the summary child from the source so
+    // the streamed node matches a full parse (the summary must be structured,
+    // not lost or emitted as a raw childless html_block).
+    const md = getMarkdown('stream-parser-details-split-opener')
+    const coldMd = getMarkdown('stream-parser-details-split-opener-cold')
+
+    const sections = Array.from({ length: 60 }, (_, index) => {
+      return [
+        `## Section ${index}`,
+        '',
+        '<details open>',
+        `<summary>Details ${index}</summary>`,
+        '',
+        `Inside details ${index} with a list:`,
+        '',
+        `- item a${index}`,
+        `- item b${index}`,
+        `- item c${index}`,
+        '',
+        '</details>',
+        '',
+      ].join('\n')
+    }).join('\n')
+
+    let current = ''
+    const chunkSize = 128
+    for (let i = 0; i < sections.length; i += chunkSize) {
+      current = sections.slice(0, i + chunkSize)
+      const streamed = parseMarkdownToStructure(current, md, {
+        final: false,
+        streamParse: true,
+        reuseStableTopLevelNodes: true,
+      })
+      const cold = parseMarkdownToStructure(current, coldMd, {
+        final: false,
+        streamParse: false,
+      })
+      expect(streamed).toEqual(cold)
+    }
+
+    const finalNodes = parseMarkdownToStructure(sections, md, {
+      final: true,
+      streamParse: true,
+      reuseStableTopLevelNodes: true,
+    })
+    const finalCold = parseMarkdownToStructure(sections, coldMd, {
+      final: true,
+      streamParse: false,
+    })
+    expect(finalNodes).toEqual(finalCold)
+  })
 })

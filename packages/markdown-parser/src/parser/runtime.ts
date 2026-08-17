@@ -47,8 +47,18 @@ export interface StructuredStreamGroupBoundary {
 
 export interface StructuredStreamRuntimeState {
   groupBoundaries: StructuredStreamGroupBoundary[]
+  /** Absolute token indices where each reusable group starts. */
+  groupStarts: number[]
+  /** Number of top-level tokens when this cache was written. */
+  tokenCount: number
+  /** Reference to the token array from the parse that produced this cache. */
+  tokens: MarkdownToken[]
+  /** Whether any top-level group is a single-token (non-paired) reusable type. */
+  mixed: boolean
   source: string
   nodes: ParsedNode[]
+  /** Cached prefix node raws for incremental linkify demotion seeding. */
+  seed: string[]
   stableGroupCount: number
   requireClosingStrong: boolean | undefined
   validateLink: ParseOptions['validateLink']
@@ -101,6 +111,19 @@ export class ParserRuntime {
   readonly streamParseEnvs = new Map<string, Record<string, unknown>>()
   topLevelStreamParseMode?: string
   structuredStream?: StructuredStreamRuntimeState
+  /**
+   * Number of reused (stable) prefix nodes when the last
+   * processTopLevelTokensWithReuse call actually reused nodes; undefined when
+   * it re-processed the whole document. Lets downstream passes tail-window.
+   */
+  structuredReuseTailStart?: number
+  /**
+   * Stitched `<details>` output cache keyed by the pre-pass details opener
+   * html_block node. Reused prefix details keep the same opener object across
+   * appends, so combineStructuredDetailsHtmlBlocks can skip re-parsing and
+   * re-rendering the (unchanged) middle of closed details on every append.
+   */
+  detailsStitchCache = new WeakMap<object, { openRaw: string, explicitClose: boolean, closeSliceEnd: number, middleSource: string, node: ParsedNode }>()
   siblingHtmlChildren?: SiblingHtmlChildrenRuntimeState
   nodeSourceRanges = new WeakMap<object, { start: number, end: number }>()
   private documentSource?: string
@@ -205,6 +228,7 @@ export class ParserRuntime {
     this.topLevelStreamParseMode = undefined
     this.structuredStream = undefined
     this.siblingHtmlChildren = undefined
+    this.detailsStitchCache = new WeakMap()
     this.nodeSourceRanges = new WeakMap()
   }
 }

@@ -106,13 +106,20 @@ function getReusableTopLevelPairedCloseType(tokenType: string) {
   return containerMatch ? `container_${containerMatch[1]}_close` : undefined
 }
 
+/**
+ * Compute reusable top-level token groups. With `startIndex > 0` the prefix is
+ * assumed to have been validated on a previous call (the caller only does this
+ * when the token array identity proves the prefix is unchanged), so only the
+ * tail tokens are scanned.
+ */
 function getReusableTopLevelTokenGroups(
   tokens: MarkdownToken[],
   validateLink: ParseOptions['validateLink'],
+  startIndex = 0,
 ): ReusableTopLevelTokenGroups | null {
   const groupStarts: number[] = []
   let mixed = false
-  let index = 0
+  let index = startIndex
 
   while (index < tokens.length) {
     const token = tokens[index]
@@ -180,7 +187,7 @@ function sourceEndsWithBlankLine(source: string) {
   return /\r?\n[\t ]*\r?\n[\t ]*$/.test(source)
 }
 
-function canReuseStructuredStreamNodes(options: ParseOptions) {
+export function canReuseStructuredStreamNodes(options: ParseOptions) {
   return options.reuseStableTopLevelNodes === true
     && options.final !== true
     && !options.preTransformTokens
@@ -279,13 +286,20 @@ function updateStructuredStreamCache(
     }
   })
 
+  const stableGroupCount = groups.mixed
+    ? Math.max(0, groupStarts.length - 1)
+    : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1)
+
   runtime.structuredStream = {
     groupBoundaries,
+    groupStarts,
+    tokenCount: tokens.length,
+    tokens,
+    mixed: groups.mixed,
     source,
     nodes,
-    stableGroupCount: groups.mixed
-      ? Math.max(0, groupStarts.length - 1)
-      : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1),
+    seed: nodes.map(node => String((node as Record<string, unknown>).raw ?? '')),
+    stableGroupCount,
     requireClosingStrong: options.requireClosingStrong,
     validateLink: options.validateLink,
   }
@@ -297,6 +311,12 @@ function hasStableStructuredStreamGroupBoundaries(
   groupStarts: number[],
   stableGroupCount: number,
 ) {
+  // Fast path: markdown-it-ts returns the SAME cached token array across
+  // append/tail parses, so array identity proves the entire prefix (including
+  // every group boundary) is byte-for-byte unchanged — O(1) instead of O(groups).
+  if (previous.tokens === tokens)
+    return true
+
   const lastGroupIndex = groupStarts.length - 1
   for (let index = 0; index < stableGroupCount; index++) {
     const start = groupStarts[index]
@@ -340,6 +360,12 @@ export function processTopLevelTokensWithReuse(
   const reuseEnabled = shouldUseTopLevelStreamParse(runtime, options)
     && canReuseStructuredStreamNodes(options)
 
+  // Reset the reuse-tail marker only for top-level parses: fragment parses
+  // (details/div children) run with the same runtime and must not clobber the
+  // outer document's marker, which the html passes consult while stitching.
+  if (!options.isFragment)
+    runtime.structuredReuseTailStart = undefined
+
   if (!reuseEnabled) {
     // Fragment parses (e.g. children of <details>/custom html blocks) run with
     // the same md instance and must not evict the top-level document's
@@ -352,15 +378,39 @@ export function processTopLevelTokensWithReuse(
   if (structuredReuseDisabled)
     return callbacks.processTokens(tokens, options)
 
-  const groups = getReusableTopLevelTokenGroups(tokens, options.validateLink)
+  const previous = runtime.structuredStream
+  const mode = getTopLevelStreamParseMode(runtime)
+  // markdown-it-ts returns the SAME cached token array (with the same prefix
+  // token objects) across append/tail parses, so identity proves the prefix is
+  // unchanged without re-scanning any prefix token.
+  const prefixUnchanged = !!previous
+    && (mode === 'append' || mode === 'tail')
+    && previous.tokenCount !== undefined
+    && previous.tokenCount <= tokens.length
+    && tokens === previous.tokens
+
+  let groups: ReusableTopLevelTokenGroups | null
+  if (prefixUnchanged) {
+    // Incremental scan: prefix groups were validated on the previous call and
+    // the token array identity guarantees they are unchanged, so only the new
+    // tail tokens need scanning.
+    const tailGroups = getReusableTopLevelTokenGroups(tokens, options.validateLink, previous.tokenCount)
+    groups = tailGroups
+      ? {
+          starts: previous.groupStarts.concat(tailGroups.starts),
+          mixed: previous.mixed || tailGroups.mixed,
+        }
+      : getReusableTopLevelTokenGroups(tokens, options.validateLink)
+  }
+  else {
+    groups = getReusableTopLevelTokenGroups(tokens, options.validateLink)
+  }
   if (!groups) {
     runtime.structuredStream = undefined
     return callbacks.processTokens(tokens, options)
   }
 
   const groupStarts = groups.starts
-  const previous = runtime.structuredStream
-  const mode = getTopLevelStreamParseMode(runtime)
   const stableGroupCount = previous && groups.mixed
     ? Math.min(previous.stableGroupCount, Math.max(0, previous.groupBoundaries.length - 1))
     : previous?.stableGroupCount ?? 0
@@ -377,17 +427,15 @@ export function processTopLevelTokensWithReuse(
     const tailStart = groupStarts[stableGroupCount] ?? tokens.length
     const tailNodes = callbacks.processTokens(tokens.slice(tailStart), {
       ...options,
-      // Replay the reused prefix node raws into the tail's linkify demotion
-      // tracker so tail linkify decisions see the same accumulated context a
-      // full parse would have produced.
-      linkifyDemotionSeed: previous.nodes
-        .slice(0, stableGroupCount)
-        .map(node => String((node as Record<string, unknown>).raw ?? '')),
+      // Prefix raws are cached and append-only: reuse the stored seed instead
+      // of re-slicing + re-stringifying every prefix node on each append.
+      linkifyDemotionSeed: previous.seed.slice(0, stableGroupCount),
     } as ParseContext)
     const expectedTailNodes = groupStarts.length - stableGroupCount
 
     if (tailNodes.length === expectedTailNodes) {
       const result = previous.nodes.slice(0, stableGroupCount).concat(tailNodes)
+      runtime.structuredReuseTailStart = stableGroupCount
       callbacks.recordReusedTopLevelNodes?.(stableGroupCount)
       updateStructuredStreamCache(runtime, source, tokens, groups, result, options)
       return result
