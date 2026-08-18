@@ -133,6 +133,10 @@ interface DiffPreviewLine {
   empty: boolean
   key: string
   number: number | string
+  /** True when this collapsed row replaces the very first diff rows. */
+  collapsedFirst?: boolean
+  /** True when this collapsed row extends to the end of the diff (terminal). */
+  collapsedLast?: boolean
 }
 
 interface DiffPreviewPane {
@@ -627,7 +631,7 @@ function collapseDiffPanes(panes: DiffPreviewPane[]) {
         && original[lineIndex].code === modified[lineIndex].code
       )
     )
-  const collapsedRanges: Array<{ start: number, end: number }> = []
+  const collapsedRanges: Array<{ start: number, end: number, first: boolean, last: boolean }> = []
   let index = 0
   while (index < sourceLineCount) {
     const start = index
@@ -644,6 +648,8 @@ function collapseDiffPanes(panes: DiffPreviewPane[]) {
         collapsedRanges.push({
           start: hiddenStart,
           end: isTerminalRange ? original.length : hiddenEnd,
+          first: hiddenStart === 0,
+          last: isTerminalRange,
         })
       }
     }
@@ -665,6 +671,8 @@ function collapseDiffPanes(panes: DiffPreviewPane[]) {
         empty: false,
         key: `${pane.key}-collapsed-${range.start}-${range.end}`,
         number: '',
+        collapsedFirst: range.first,
+        collapsedLast: range.last,
       })
       sourceIndex = range.end
     }
@@ -925,7 +933,7 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
     :data-markstream-line-numbers="props.showLineNumbers ? '1' : undefined"
     data-markstream-pre="1"
     tabindex="0"
-  ><code v-if="isDiffPreview" translate="no" class="markstream-pre__diff-code"><span v-for="pane in diffPreviewPanes" :key="pane.key" class="markstream-pre__diff-pane" :class="pane.className"><span class="markstream-pre__diff-pane-content"><span v-for="(line, index) in pane.lines" :key="line.key" class="markstream-pre__diff-line" :class="[`markstream-pre__diff-line--${line.kind}`, line.metadataKind ? `markstream-pre__diff-line--metadata-${line.metadataKind}` : '', { 'markstream-pre__diff-line--empty': line.empty }]" :style="getDiffLineStyle(index, pane.key as 'original' | 'modified')"><span class="markstream-pre__diff-rail" aria-hidden="true" /><span class="markstream-pre__diff-number" aria-hidden="true">{{ line.number }}</span><span class="markstream-pre__diff-content"><span class="markstream-pre__diff-content-inner">{{ line.code }}</span></span></span></span></span></code><template v-else><code v-if="wrapsPlainCodeLines()" translate="no" class="markstream-pre__code markstream-pre__code--wrapped"><span v-for="(line, index) in logicalCodeLines" :key="index" class="markstream-pre__logical-line" :data-line-number="index + 1" v-text="line" /></code><template v-else><span v-if="props.showLineNumbers" class="markstream-pre__line-numbers" aria-hidden="true"><span class="markstream-pre__line-numbers-text" v-text="lineNumbersText" /></span><code translate="no" class="markstream-pre__code" v-text="displayCode" /></template></template></pre>
+  ><code v-if="isDiffPreview" translate="no" class="markstream-pre__diff-code"><span v-for="pane in diffPreviewPanes" :key="pane.key" class="markstream-pre__diff-pane" :class="pane.className"><span class="markstream-pre__diff-pane-content"><span v-for="(line, index) in pane.lines" :key="line.key" class="markstream-pre__diff-line" :class="[`markstream-pre__diff-line--${line.kind}`, line.metadataKind ? `markstream-pre__diff-line--metadata-${line.metadataKind}` : '', { 'markstream-pre__diff-line--empty': line.empty, 'markstream-pre__diff-line--collapsed-first': line.collapsedFirst === true, 'markstream-pre__diff-line--collapsed-last': line.collapsedLast === true }]" :style="getDiffLineStyle(index, pane.key as 'original' | 'modified')"><span class="markstream-pre__diff-rail" aria-hidden="true" /><span class="markstream-pre__diff-number" aria-hidden="true">{{ line.number }}</span><span class="markstream-pre__diff-content"><span class="markstream-pre__diff-content-inner">{{ line.code }}</span></span></span></span></span></code><template v-else><code v-if="wrapsPlainCodeLines()" translate="no" class="markstream-pre__code markstream-pre__code--wrapped"><span v-for="(line, index) in logicalCodeLines" :key="index" class="markstream-pre__logical-line" :data-line-number="index + 1" v-text="line" /></code><template v-else><span v-if="props.showLineNumbers" class="markstream-pre__line-numbers" aria-hidden="true"><span class="markstream-pre__line-numbers-text" v-text="lineNumbersText" /></span><code translate="no" class="markstream-pre__code" v-text="displayCode" /></template></template></pre>
 </template>
 
 <style>
@@ -1382,16 +1390,64 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
 }
 
 .markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--collapsed {
-  min-height: var(--markstream-pre-diff-collapsed-row-height, 32px);
-  padding-left: 0;
-  color: var(--markstream-diff-unchanged-fg, var(--code-line-number));
+  /* The finalized highlight surface renders its "N unmodified lines" widget as a
+     32px pill separated from the surrounding diff rows by an 8px gap on each
+     side (pierre's `line-info` separator with its 8px `--diffs-gap-fallback`).
+     The first/last collapsed rows drop the outer gap (pierre's
+     `data-separator-first/last` rules): a terminal row reuses the pre's own
+     8px bottom padding so the pill sits at the bottom of the pre. */
+  min-height: calc(
+    var(--markstream-pre-diff-collapsed-row-height, 32px)
+    + var(--markstream-pre-diff-collapsed-row-gap-top, var(--markstream-pre-diff-collapsed-row-gap, 8px))
+    + var(--markstream-pre-diff-collapsed-row-gap-bottom, var(--markstream-pre-diff-collapsed-row-gap, 8px))
+  );
+  padding:
+    var(--markstream-pre-diff-collapsed-row-gap-top, var(--markstream-pre-diff-collapsed-row-gap, 8px))
+    0
+    var(--markstream-pre-diff-collapsed-row-gap-bottom, var(--markstream-pre-diff-collapsed-row-gap, 8px));
+  /* Match the finalized separator's text: pierre paints "N unmodified lines" in
+     its header/sans-serif font in the muted `--diffs-fg-number` gray
+     (`color-mix(in lab, fg 65%, bg)`), not the code's monospace foreground. */
+  color: color-mix(
+    in lab,
+    var(--markstream-code-theme-fg, var(--markstream-code-fallback-fg, var(--markstream-pre-resolved-theme-fg, var(--code-fg, #000)))) 65%,
+    var(--markstream-code-theme-bg, var(--markstream-code-fallback-bg, var(--markstream-pre-resolved-theme-bg, var(--code-bg, #fff))))
+  );
+  font-family: var(
+    --markstream-pre-diff-header-font,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    'Noto Sans',
+    'Liberation Sans',
+    Arial,
+    sans-serif
+  );
   line-height: var(--markstream-pre-diff-collapsed-row-height, 32px);
 }
 
 .markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--collapsed::before {
-  left: 0;
+  top: var(--markstream-pre-diff-collapsed-row-gap-top, var(--markstream-pre-diff-collapsed-row-gap, 8px));
+  left: 8px;
+  right: 8px;
   height: var(--markstream-pre-diff-collapsed-row-height, 32px);
+  border-radius: 6px;
   background: var(--markstream-diff-unchanged-bg, rgb(0 0 0 / 4%));
+}
+
+/* First collapsed region: flush against the top diff rows (pierre's
+   `data-separator-first` clears the leading margin). */
+.markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--collapsed-first {
+  --markstream-pre-diff-collapsed-row-gap-top: 0px;
+}
+
+/* Terminal collapsed region: the pill sits at the bottom of the pre and the
+   pre's own 8px bottom padding provides the gap (pierre's
+   `data-separator-last` clears the trailing margin). */
+.markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--collapsed-last {
+  --markstream-pre-diff-collapsed-row-gap-bottom: 0px;
 }
 
 .markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line--collapsed::after,

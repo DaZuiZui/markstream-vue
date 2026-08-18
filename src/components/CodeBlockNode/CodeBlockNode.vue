@@ -786,9 +786,8 @@ const preFallbackStyle = computed(() => {
   if (isDiff.value) {
     // Keep the pre diff fallback visually close to stream-diffs' diff line box.
     style['--markstream-pre-diff-line-height'] = `${preFallbackEffectiveLineHeight.value}px`
-    // Pierre's `line-info` separator occupies a 32px row plus its 8px leading
-    // margin. The fallback surface already owns the matching top/bottom gaps.
-    style['--markstream-pre-diff-collapsed-row-height'] = '40px'
+    // The collapsed "unmodified lines" row defaults to pierre's 32px pill +
+    // 8px gap rhythm in PreCodeNode, so no row-height override is needed here.
     style['--markstream-pre-diff-pane-bottom-padding'] = preFallbackDiffInline.value
       ? '0px'
       : `${SIDE_BY_SIDE_DIFF_PREVIEW_BOTTOM_PADDING}px`
