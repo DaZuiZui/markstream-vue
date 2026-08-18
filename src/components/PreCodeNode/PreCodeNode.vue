@@ -831,9 +831,10 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
   width: 100%;
   min-width: 0;
   /* Match the finalized separator's text offset: pierre's `line-info` pill
-     sits 8px from the code-area left (`padding-inline: 8px`) and the text
-     follows a 34px expand-button column (8px + 34px). */
-  padding-left: calc(8px + 34px);
+     sits 8px from the code-area left (`padding-inline: 8px`), the text
+     follows a 34px expand-button column, and the content itself carries
+     `padding: 0 1ch` (8px + 34px + 1ch). */
+  padding-left: calc(8px + 34px + 1ch);
   line-height: var(--markstream-pre-diff-collapsed-row-height, 32px);
 }
 
