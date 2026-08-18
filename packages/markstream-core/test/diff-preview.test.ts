@@ -95,6 +95,50 @@ describe('buildDiffPreviewPanes', () => {
     expect(panes[1].lines[1].number).toBe(1)
   })
 
+  it('numbers split patch rows from each hunk header across multiple hunks', () => {
+    const panes = buildDiffPreviewPanes({
+      code: [
+        'diff --git a/file.ts b/file.ts',
+        'index 1111111..2222222 100644',
+        '--- a/file.ts',
+        '+++ b/file.ts',
+        '@@ -10,4 +20,4 @@',
+        ' context ten',
+        '-removed ten',
+        '+added twenty',
+        ' context eleven',
+        '@@ -30,2 +40,2 @@',
+        ' context thirty',
+        '-removed thirty',
+        '+added forty',
+      ].join('\n'),
+      language: 'diff',
+    })
+
+    // git file headers are dropped; hunk rows carry no line number, and each
+    // hunk restarts numbering from its `@@ -orig +mod @@` header.
+    expect(panes[0].lines.map(line => line.kind)).toEqual([
+      'hunk',
+      'context',
+      'removed',
+      'context',
+      'hunk',
+      'context',
+      'removed',
+    ])
+    expect(panes[1].lines.map(line => line.kind)).toEqual([
+      'hunk',
+      'context',
+      'added',
+      'context',
+      'hunk',
+      'context',
+      'added',
+    ])
+    expect(panes[0].lines.map(line => line.number)).toEqual(['', 10, 11, 12, '', 30, 31])
+    expect(panes[1].lines.map(line => line.number)).toEqual(['', 20, 21, 22, '', 40, 41])
+  })
+
   it('marks a terminal collapsed range as last so the pill can reuse the pre bottom padding', () => {
     const original = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`)
     const modified = original.slice()
