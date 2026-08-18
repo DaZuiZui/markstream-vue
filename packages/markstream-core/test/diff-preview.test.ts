@@ -37,7 +37,9 @@ describe('buildDiffPreviewPanes', () => {
       'context',
       'collapsed',
     ])
-    expect(panes[0].lines.at(-1)?.code).toBe('Unmodified lines')
+    // The collapsed row reports the hidden source-line count (44), even though
+    // the terminal range also consumes the trailing no-newline metadata row.
+    expect(panes[0].lines.at(-1)?.code).toBe('44 unmodified lines')
     expect(panes[1].lines.at(-1)?.code).toBe('')
   })
 
@@ -107,7 +109,7 @@ describe('buildDiffPreviewPanes', () => {
     const collapsed = panes[0].lines.find(line => line.kind === 'collapsed')
     expect(collapsed?.collapsedFirst).toBe(false)
     expect(collapsed?.collapsedLast).toBe(true)
-    expect(collapsed?.code).toBe('Unmodified lines')
+    expect(collapsed?.code).toBe('24 unmodified lines')
   })
 
   it('marks a leading unchanged range as first so the pill flushes to the top rows', () => {

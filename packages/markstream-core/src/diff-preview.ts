@@ -473,7 +473,7 @@ function collapseDiffPanes(
         && original[lineIndex].code === modified[lineIndex].code
       )
     )
-  const collapsedRanges: Array<{ start: number, end: number, first: boolean, last: boolean }> = []
+  const collapsedRanges: Array<{ start: number, end: number, count: number, first: boolean, last: boolean }> = []
   let index = 0
   while (index < sourceLineCount) {
     const start = index
@@ -489,7 +489,11 @@ function collapseDiffPanes(
       if (hiddenEnd - hiddenStart >= options.minimumLineCount) {
         collapsedRanges.push({
           start: hiddenStart,
+          // A terminal range extends through any trailing no-newline metadata
+          // row (kept in the pane, matching the legacy fallback), but the
+          // reported line count is based on the trimmed source rows only.
           end: isTerminalRange ? original.length : hiddenEnd,
+          count: isTerminalRange ? sourceLineCount - hiddenStart : hiddenEnd - hiddenStart,
           first: hiddenStart === 0,
           last: isTerminalRange,
         })
@@ -508,7 +512,7 @@ function collapseDiffPanes(
     for (const range of collapsedRanges) {
       lines.push(...pane.lines.slice(sourceIndex, range.start))
       lines.push({
-        code: paneIndex === 0 ? 'Unmodified lines' : '',
+        code: paneIndex === 0 ? `${range.count} unmodified lines` : '',
         kind: 'collapsed',
         empty: false,
         key: `${pane.key}-collapsed-${range.start}-${range.end}`,
