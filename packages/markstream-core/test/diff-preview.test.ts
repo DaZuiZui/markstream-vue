@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDiffPreviewPanes } from '../src/diff-preview'
+import { buildDiffPreviewPanes, createDiffMatchCache } from '../src/diff-preview'
 
 describe('buildDiffPreviewPanes', () => {
   it('aligns changed source rows and collapses the same unchanged ranges in both panes', () => {
@@ -186,5 +186,81 @@ describe('buildDiffPreviewPanes', () => {
     expect(panes[0].lines.at(-1)?.kind).toBe('spacer')
     expect(panes[1].lines.at(-1)?.kind).toBe('metadata')
     expect(panes[1].lines.at(-1)?.metadataKind).toBe('added')
+  })
+
+  it('reuses the cached LCS incrementally for append-only streaming frames', () => {
+    const cache = createDiffMatchCache()
+    buildDiffPreviewPanes({
+      originalCode: ['a', 'b', 'c', 'old'].join('\n'),
+      updatedCode: ['a', 'b', 'c', 'new'].join('\n'),
+      matchCache: cache,
+    })
+
+    // Both sides append an isolated line ('d' is absent from the previous
+    // content of the other side), so the incremental path must reuse the
+    // cached matches and only diff the tail — with an identical result to a
+    // fresh full recompute.
+    const incremental = buildDiffPreviewPanes({
+      originalCode: ['a', 'b', 'c', 'old', 'd'].join('\n'),
+      updatedCode: ['a', 'b', 'c', 'new', 'd'].join('\n'),
+      matchCache: cache,
+    })
+    const full = buildDiffPreviewPanes({
+      originalCode: ['a', 'b', 'c', 'old', 'd'].join('\n'),
+      updatedCode: ['a', 'b', 'c', 'new', 'd'].join('\n'),
+    })
+
+    expect(incremental).toEqual(full)
+    expect(cache.original).toEqual(['a', 'b', 'c', 'old', 'd'])
+  })
+
+  it('falls back to a full recompute when appended lines could match old unmatched lines', () => {
+    const cache = createDiffMatchCache()
+    buildDiffPreviewPanes({
+      originalCode: ['a', 'x'].join('\n'),
+      updatedCode: ['a', 'b'].join('\n'),
+      matchCache: cache,
+    })
+
+    // Appending 'x' to the updated side would let the tail match the
+    // previously-unmatched original 'x'. The incremental shortcut must be
+    // bypassed so the new match is picked up exactly like a full recompute.
+    const incremental = buildDiffPreviewPanes({
+      originalCode: ['a', 'x'].join('\n'),
+      updatedCode: ['a', 'b', 'x'].join('\n'),
+      matchCache: cache,
+    })
+    const full = buildDiffPreviewPanes({
+      originalCode: ['a', 'x'].join('\n'),
+      updatedCode: ['a', 'b', 'x'].join('\n'),
+    })
+
+    expect(incremental).toEqual(full)
+    // The full LCS matches both 'a' (original line 1) and the appended 'x'
+    // (original line 2, now context instead of removed) — the tail-only
+    // shortcut would have kept 'x' unmatched.
+    expect(full[0].lines.filter(line => line.kind === 'context').map(line => line.number)).toEqual([1, 2])
+    expect(full[0].lines.filter(line => line.kind === 'context').map(line => line.code)).toEqual(['a', 'x'])
+  })
+
+  it('falls back to a full recompute when the source is not append-only', () => {
+    const cache = createDiffMatchCache()
+    buildDiffPreviewPanes({
+      originalCode: ['a', 'b'].join('\n'),
+      updatedCode: ['a', 'c'].join('\n'),
+      matchCache: cache,
+    })
+
+    const incremental = buildDiffPreviewPanes({
+      originalCode: ['a', 'z'].join('\n'),
+      updatedCode: ['a', 'c'].join('\n'),
+      matchCache: cache,
+    })
+    const full = buildDiffPreviewPanes({
+      originalCode: ['a', 'z'].join('\n'),
+      updatedCode: ['a', 'c'].join('\n'),
+    })
+
+    expect(incremental).toEqual(full)
   })
 })

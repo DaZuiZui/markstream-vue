@@ -31,6 +31,8 @@ export interface BuildDiffPreviewOptions {
   inline?: boolean
   language?: unknown
   loading?: boolean
+  /** Cross-frame LCS cache for incremental reuse while streaming (optional). */
+  matchCache?: DiffMatchCache
   originalCode?: unknown
   raw?: unknown
   updatedCode?: unknown
@@ -39,6 +41,53 @@ export interface BuildDiffPreviewOptions {
 interface SourceLineMatch {
   modifiedIndex: number
   originalIndex: number
+}
+
+/**
+ * Cross-frame cache for incremental LCS reuse while a diff streams (append-only
+ * content). `buildDiffPreviewPanes`/`computeMatches` mutate it in place; pass a
+ * fresh one per diff block (e.g. a ref in the component) — it self-validates
+ * against non-append content changes and re-seeds on a full recompute.
+ */
+export interface DiffMatchCache {
+  /** Original lines the cached matches were computed for. */
+  original: string[]
+  /** Modified lines the cached matches were computed for. */
+  modified: string[]
+  /** LCS matches for the above inputs. */
+  matches: SourceLineMatch[]
+  /** All original lines, used for the append-isolation check. */
+  originalLines: Set<string>
+  /** All modified lines, used for the append-isolation check. */
+  modifiedLines: Set<string>
+}
+
+export function createDiffMatchCache(): DiffMatchCache {
+  return {
+    original: [],
+    modified: [],
+    matches: [],
+    originalLines: new Set(),
+    modifiedLines: new Set(),
+  }
+}
+
+function isLinePrefix(prefix: string[], lines: string[]): boolean {
+  if (prefix.length === 0 || prefix.length > lines.length)
+    return false
+  for (let index = 0; index < prefix.length; index++) {
+    if (prefix[index] !== lines[index])
+      return false
+  }
+  return true
+}
+
+function reseedMatchCache(cache: DiffMatchCache, original: string[], modified: string[], matches: SourceLineMatch[]) {
+  cache.original = original
+  cache.modified = modified
+  cache.matches = matches
+  cache.originalLines = new Set(original)
+  cache.modifiedLines = new Set(modified)
 }
 
 const DIFF_HEADER_PREFIXES = ['diff ', 'index ', '--- ', '+++ ', '@@ ']
@@ -149,7 +198,42 @@ function hasPatchLines(lines: string[], language: unknown, raw: unknown) {
     || (isExplicitDiffLanguage(language, raw) && (hasRemoved || hasAdded))
 }
 
-function computeMatches(original: string[], modified: string[]): SourceLineMatch[] {
+function computeMatches(original: string[], modified: string[], cache?: DiffMatchCache): SourceLineMatch[] {
+  // Incremental reuse for append-only streaming: when the new sources are a
+  // pure suffix-append of the previously computed pair AND none of the appended
+  // lines appears in the other side's previous content, the cached matches stay
+  // optimal and only the appended tail needs a fresh LCS. The result is exact
+  // (identical to a full recompute), so streaming stays consistent with the
+  // settled render — the dominant cost becomes the tail size instead of the
+  // whole changed region on every frame.
+  if (
+    cache
+    && isLinePrefix(cache.original, original)
+    && isLinePrefix(cache.modified, modified)
+  ) {
+    const deltaOriginal = original.slice(cache.original.length)
+    const deltaModified = modified.slice(cache.modified.length)
+    const isolated = deltaOriginal.every(line => !cache.modifiedLines.has(line))
+      && deltaModified.every(line => !cache.originalLines.has(line))
+    if (isolated) {
+      const matches = cache.matches.concat(
+        computeLcs(deltaOriginal, deltaModified).map(match => ({
+          originalIndex: match.originalIndex + cache.original.length,
+          modifiedIndex: match.modifiedIndex + cache.modified.length,
+        })),
+      )
+      reseedMatchCache(cache, original, modified, matches)
+      return matches
+    }
+  }
+
+  const matches = computeLcs(original, modified)
+  if (cache)
+    reseedMatchCache(cache, original, modified, matches)
+  return matches
+}
+
+function computeLcs(original: string[], modified: string[]): SourceLineMatch[] {
   const prefix: SourceLineMatch[] = []
   let start = 0
   while (start < original.length && start < modified.length && original[start] === modified[start]) {
@@ -271,10 +355,11 @@ function buildInlineSourcePreviewLines(
   originalSource: unknown,
   modifiedSource: unknown,
   loading: boolean,
+  cache?: DiffMatchCache,
 ): DiffPreviewLine[] {
   const original = splitSource(originalSource, loading)
   const modified = splitSource(modifiedSource, loading)
-  const matches = computeMatches(original, modified)
+  const matches = computeMatches(original, modified, cache)
   if (matches.length > 0) {
     const result: DiffPreviewLine[] = []
     let originalIndex = 0
@@ -357,10 +442,11 @@ function buildSideBySideSourcePreviewPanes(
   modifiedSource: unknown,
   loading: boolean,
   hideUnchangedRegions: BuildDiffPreviewOptions['hideUnchangedRegions'],
+  cache?: DiffMatchCache,
 ): DiffPreviewPane[] {
   const originalSourceLines = splitSource(originalSource, loading)
   const modifiedSourceLines = splitSource(modifiedSource, loading)
-  const matches = computeMatches(originalSourceLines, modifiedSourceLines)
+  const matches = computeMatches(originalSourceLines, modifiedSourceLines, cache)
   const originalLines: DiffPreviewLine[] = []
   const modifiedLines: DiffPreviewLine[] = []
   let originalIndex = 0
@@ -538,7 +624,7 @@ export function buildDiffPreviewPanes(options: BuildDiffPreviewOptions): DiffPre
   if (inline) {
     const lines = hasSourcePair
       ? appendInlineSourceMetadata(
-          buildInlineSourcePreviewLines(originalCode, updatedCode, loading),
+          buildInlineSourcePreviewLines(originalCode, updatedCode, loading, options.matchCache),
           originalCode,
           updatedCode,
         )
@@ -559,6 +645,7 @@ export function buildDiffPreviewPanes(options: BuildDiffPreviewOptions): DiffPre
       updatedCode,
       loading,
       options.hideUnchangedRegions,
+      options.matchCache,
     )
   }
 

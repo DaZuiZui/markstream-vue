@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import type { PreCodeNodeProps } from '../../types/component-props'
 import type { DiffLineMetric } from './preCodeDiffMetrics'
-import { buildDiffPreviewPanes } from 'markstream-core'
+import { buildDiffPreviewPanes, createDiffMatchCache } from 'markstream-core'
 
 import { computed, normalizeClass, normalizeStyle, onBeforeUnmount, ref, useAttrs, watch } from 'vue'
 
 const props = defineProps<PreCodeNodeProps>()
 const attrs = useAttrs()
+
+/**
+ * Cross-frame LCS cache so append-only streaming frames reuse the previous
+ * match result and only diff the appended tail (see `computeMatches`).
+ */
+const diffMatchCache = createDiffMatchCache()
 
 function getDisplayCode(code: unknown, loading?: boolean) {
   const value = String(code ?? '')
@@ -137,6 +143,7 @@ const diffPreviewPanes = computed(() => {
     inline: isInlineDiffPreview.value,
     language: props.node?.language,
     loading: isLoading.value,
+    matchCache: diffMatchCache,
     originalCode: props.node?.originalCode,
     raw: props.node?.raw,
     updatedCode: props.node?.updatedCode,
