@@ -596,7 +596,7 @@ describe('pre code node diff preview', () => {
     expect(modifiedRows).toHaveLength(11)
     expect(numbers).toEqual(['1', '2', '3', '4', '5', '6', '', '23', '24', '25', ''])
     expect(wrapper.findAll('.markstream-pre__diff-line--collapsed')).toHaveLength(2)
-    expect(wrapper.get('.markstream-pre__diff-pane--original .markstream-pre__diff-line--collapsed').text()).toContain('Unmodified lines')
+    expect(wrapper.get('.markstream-pre__diff-pane--original .markstream-pre__diff-line--collapsed').text()).toContain('unmodified lines')
 
     wrapper.unmount()
   })
