@@ -37,7 +37,7 @@ describe('buildDiffPreviewPanes', () => {
       'context',
       'collapsed',
     ])
-    expect(panes[0].lines.at(-1)?.code).toBe('44 unmodified lines')
+    expect(panes[0].lines.at(-1)?.code).toBe('Unmodified lines')
     expect(panes[1].lines.at(-1)?.code).toBe('')
   })
 
@@ -47,8 +47,12 @@ describe('buildDiffPreviewPanes', () => {
       updatedCode: 'before\nnew one\nafter',
     })
 
-    expect(panes[0].lines.map(line => line.kind)).toEqual(['context', 'removed', 'removed', 'context'])
-    expect(panes[1].lines.map(line => line.kind)).toEqual(['context', 'added', 'spacer', 'context'])
+    expect(panes[0].lines.map(line => line.kind)).toEqual(['context', 'removed', 'removed', 'context', 'metadata'])
+    expect(panes[1].lines.map(line => line.kind)).toEqual(['context', 'added', 'spacer', 'context', 'metadata'])
+    // Sources without a final newline surface a no-newline metadata row on the
+    // side that is missing it (removed for the original, added for the modified).
+    expect(panes[0].lines.at(-1)?.metadataKind).toBe('removed')
+    expect(panes[1].lines.at(-1)?.metadataKind).toBe('added')
   })
 
   it('keeps multi-hunk row classification stable while streaming', () => {
@@ -87,5 +91,54 @@ describe('buildDiffPreviewPanes', () => {
     expect(panes[1].lines.map(line => line.kind)).toEqual(['hunk', 'added'])
     expect(panes[0].lines[1].number).toBe(1)
     expect(panes[1].lines[1].number).toBe(1)
+  })
+
+  it('marks a terminal collapsed range as last so the pill can reuse the pre bottom padding', () => {
+    const original = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`)
+    const modified = original.slice()
+    modified[3] = 'changed'
+
+    const panes = buildDiffPreviewPanes({
+      originalCode: original.join('\n'),
+      updatedCode: modified.join('\n'),
+      hideUnchangedRegions: true,
+    })
+
+    const collapsed = panes[0].lines.find(line => line.kind === 'collapsed')
+    expect(collapsed?.collapsedFirst).toBe(false)
+    expect(collapsed?.collapsedLast).toBe(true)
+    expect(collapsed?.code).toBe('Unmodified lines')
+  })
+
+  it('marks a leading unchanged range as first so the pill flushes to the top rows', () => {
+    const original = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`)
+    const modified = original.slice()
+    modified[28] = 'changed'
+
+    const panes = buildDiffPreviewPanes({
+      originalCode: original.join('\n'),
+      updatedCode: modified.join('\n'),
+      hideUnchangedRegions: true,
+    })
+
+    const collapsed = panes[0].lines.find(line => line.kind === 'collapsed')
+    expect(collapsed?.collapsedFirst).toBe(true)
+    expect(collapsed?.collapsedLast).toBe(false)
+  })
+
+  it('renders a no-newline patch metadata row instead of a numbered context row', () => {
+    const panes = buildDiffPreviewPanes({
+      code: [
+        '@@ -1 +1 @@',
+        '-const oldValue = 1',
+        '+const newValue = 1',
+        '\\ No newline at end of file',
+      ].join('\n'),
+      language: 'diff',
+    })
+
+    expect(panes[0].lines.at(-1)?.kind).toBe('spacer')
+    expect(panes[1].lines.at(-1)?.kind).toBe('metadata')
+    expect(panes[1].lines.at(-1)?.metadataKind).toBe('added')
   })
 })
