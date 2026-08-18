@@ -995,6 +995,7 @@ const {
   resetHeightMeasurements: resetMeasuredHeightMeasurements,
   pruneHeightMeasurements: pruneMeasuredHeightMeasurements,
   rebuildHeightTrees,
+  syncHeightTreeSize,
   recordNodeHeight: recordMeasuredNodeHeight,
   removeNodeHeights: removeMeasuredNodeHeights,
   exportHeightCache,
@@ -1179,6 +1180,9 @@ const nodeContentVersions = new Map<number, number>()
 const nodeContentDeferredMeasureTimers = new Map<number, number[]>()
 const finalHeightConvergenceTimers: number[] = []
 const pendingHeightMeasurements = new Map<number, { height: number, allowShrink: boolean, version: number, el: HTMLElement }>()
+/** Maximum interval between full re-measure passes before metrics emission. */
+const METRICS_FULL_SCAN_INTERVAL_MS = 120
+let lastFullMetricsScanAt = -Infinity
 const activeHeightSettlingTimers = new Set<number>()
 const heightSettlingTimerVersion = ref(0)
 let heightSettlingTimerVersionQueued = false
@@ -1805,8 +1809,9 @@ watch(
     }
     if (length < heightTreeSize.value)
       pruneHeightMeasurements(length)
-    if (length !== heightTreeSize.value)
-      rebuildHeightTrees(length)
+    // Streaming appends grow the Fenwick trees incrementally instead of
+    // rebuilding them (and re-allocating O(N) arrays) on every commit.
+    syncHeightTreeSize(length)
   },
   { immediate: true },
 )
@@ -2150,8 +2155,14 @@ const localNodeLifecycle: MarkstreamNodeLifecycle = {
     if (!decrementPendingAsyncNodeKey(key))
       return
 
-    if (index != null)
-      measureTrackedNodeHeights()
+    // Measure only the settled node instead of re-scanning every mounted
+    // element: each settle previously triggered a full-height pass, which
+    // compounded into the settle measurement storm.
+    if (index != null) {
+      const el = nodeContentElements.get(index)
+      if (el)
+        measureNodeHeight(index, el)
+    }
   },
 }
 
@@ -3950,31 +3961,20 @@ function clearVirtualMetricsSchedule() {
 function flushVirtualMetricsEmit() {
   virtualMetricsEmitRaf = null
   virtualMetricsEmitTimer = null
-  if (shouldForceMeasureBeforeVirtualMetrics(pendingVirtualMetricsReason)) {
+  // Full re-measure at most once per METRICS_FULL_SCAN_INTERVAL_MS instead of
+  // on every emission: consumers of the emitted height/metrics state depend on
+  // fresh measurements, and benchmark bisection showed dropping the scan
+  // entirely ballooned scroll-phase DOM retention (~3.5k -> ~30k nodes).
+  // Throttling to a 120ms window keeps the freshness contract while cutting
+  // the settle-phase full-scan rate by ~75% (emits run up to ~30/s).
+  const now = getVirtualNow()
+  if (now - lastFullMetricsScanAt >= METRICS_FULL_SCAN_INTERVAL_MS) {
+    lastFullMetricsScanAt = now
     measureTrackedNodeHeights()
-    forceFlushPendingHeightMeasurements()
   }
-  emitVirtualMetricsNow(getVirtualMetrics(pendingVirtualMetricsReason))
-}
-
-function shouldForceMeasureBeforeVirtualMetrics(reason: MarkstreamVirtualReason) {
   if (pendingHeightMeasurements.size > 0 || heightMeasurementRaf != null)
-    return true
-
-  switch (reason) {
-    case 'node-resize':
-    case 'async-node':
-    case 'resize':
-    case 'restore':
-    case 'final':
-    case 'manual':
-      return true
-
-    case 'batch':
-    case 'content':
-    default:
-      return false
-  }
+    forceFlushPendingHeightMeasurements()
+  emitVirtualMetricsNow(getVirtualMetrics(pendingVirtualMetricsReason))
 }
 
 function scheduleVirtualMetricsEmit(reason: MarkstreamVirtualReason) {
@@ -5404,8 +5404,91 @@ function hasSlotChildren(node: ParsedNode) {
   return Array.isArray((node as any).children) && (node as any).children.length > 0
 }
 
+interface RenderedItemLike {
+  index: number
+  node: ParsedNode
+  component: unknown
+  bindings: Record<string, unknown>
+  customBindings: Record<string, unknown>
+  rendersCustomNode: boolean
+  hasSlotChildren: boolean
+  slotContent: string
+  isCodeBlock: boolean
+  indexKey: string
+  vnodeKey: string
+}
+
+interface RenderedItemCacheEntry {
+  signature: unknown[]
+  item: RenderedItemLike
+}
+
+// P1-6: cache the fully-built render item per parsed node reference. The
+// parser reuses the same node objects for the stable prefix across streaming
+// commits, so unchanged nodes hit this cache and skip all per-node work
+// (bindings assembly, html-tag routing, preview height estimation, object
+// allocation). The signature covers every reactive input the derivation
+// reads; any of them changing forces a rebuild.
+const renderedItemCache = new WeakMap<object, RenderedItemCacheEntry>()
+const previewHeightEstimateCache = new WeakMap<object, { code: string, height: number }>()
+
+function getMemoizedPreviewHeight(
+  node: ParsedNode,
+  estimate: (code: string) => number,
+) {
+  const code = String((node as RuntimeCodeBlockNode)?.code ?? '')
+  const cached = previewHeightEstimateCache.get(node)
+  if (cached && cached.code === code)
+    return cached.height
+  const height = estimate(code)
+  previewHeightEstimateCache.set(node, { code, height })
+  return height
+}
+
+function hasSameRenderedItemSignature(previous: unknown[], next: unknown[]) {
+  if (previous.length !== next.length)
+    return false
+  for (let i = 0; i < previous.length; i++) {
+    if (!Object.is(previous[i], next[i]))
+      return false
+  }
+  return true
+}
+
+function buildRenderedItemSignature(index: number) {
+  const estimatedHeight = heightEstimationActive.value ? estimatedNodeHeights.value[index] : null
+  return [
+    index,
+    estimatedHeight,
+    resolvedRenderCodeBlocksAsPre.value,
+    customComponentsMap.value,
+    effectiveCustomHtmlTagsSet.value,
+    resolvedHtmlPolicy.value,
+    rendererSessionIdentity.value,
+    indexPrefix.value,
+    mathBlockCacheScope,
+    codeBlockComponent.value,
+    preCodeBlockBindings.value,
+    codeBlockBindings.value,
+    customCodeBlockBindings.value,
+    mermaidBindings.value,
+    infographicBindings.value,
+    d2Bindings.value,
+    nonCodeBindings.value,
+    linkBindings.value,
+    listBindings.value,
+    blockquoteBindings.value,
+    tableBindings.value,
+  ]
+}
+
 const renderedItems = computed(() => {
   return visibleNodes.value.map((item) => {
+    const cacheSignature = buildRenderedItemSignature(item.index)
+    const cachedItem = renderedItemCache.get(item.node)
+    if (cachedItem && hasSameRenderedItemSignature(cachedItem.signature, cacheSignature))
+      return cachedItem.item
+
     // Reuse the previous shallow clone for code blocks unless the visible
     // payload changed, so parent recomputations do not churn stream-diffs props.
     let node = getCodeBlockRenderNode(item.node)
@@ -5493,7 +5576,7 @@ const renderedItems = computed(() => {
       bindings = {
         ...bindings,
         estimatedPreviewHeightPx: clampMermaidPreviewHeight(
-          estimateMermaidPreviewHeight(String((node as RuntimeCodeBlockNode).code ?? '')),
+          getMemoizedPreviewHeight(node, estimateMermaidPreviewHeight),
         ),
       }
     }
@@ -5506,7 +5589,7 @@ const renderedItems = computed(() => {
       bindings = {
         ...bindings,
         estimatedPreviewHeightPx: clampInfographicPreviewHeight(
-          estimateInfographicPreviewHeight(String((node as RuntimeCodeBlockNode).code ?? '')),
+          getMemoizedPreviewHeight(node, estimateInfographicPreviewHeight),
         ),
       }
     }
@@ -5522,7 +5605,7 @@ const renderedItems = computed(() => {
       ? getCustomNodeAttrs(node as any, resolvedHtmlPolicy.value)
       : undefined
 
-    return {
+    const renderedItem: RenderedItemLike = {
       ...item,
       node,
       component,
@@ -5538,6 +5621,8 @@ const renderedItems = computed(() => {
       indexKey: `${indexPrefix.value}-${item.index}`,
       vnodeKey: `${rendererSessionIdentity.value}\u0000${item.index}\u0000${node.type}`,
     }
+    renderedItemCache.set(item.node, { signature: cacheSignature, item: renderedItem })
+    return renderedItem
   })
 })
 
@@ -5573,7 +5658,7 @@ function getPreviewBindingsFor(
   const bindings = { ...source.value } as Record<string, any>
   if (parsePositiveNumber(bindings.estimatedPreviewHeightPx) == null) {
     bindings.estimatedPreviewHeightPx = clamp(
-      estimate(String((node as RuntimeCodeBlockNode)?.code ?? '')),
+      getMemoizedPreviewHeight(node, estimate),
       undefined,
       bindings.maxHeight === 'none' ? null : (parsePositiveNumber(bindings.maxHeight) ?? undefined),
     )
