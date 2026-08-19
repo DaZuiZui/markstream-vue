@@ -82,6 +82,30 @@ function newIncrementalUpdate(
   return dirtyStart
 }
 
+function fakeNodeSnapshot(node: FakeNode) {
+  return [node.raw, undefined, undefined, undefined, undefined, undefined, undefined] as const
+}
+
+// Scan-only variant with build-time snapshots (mirrors the component's
+// in-place mutation detection): returns the first index whose cached item
+// identity OR content snapshot no longer matches.
+function findDirtyWithSnapshots(
+  nodes: FakeNode[],
+  cache: Array<{ node: FakeNode, item: { node: FakeNode, index: number } } | undefined>,
+  snapshots: Array<readonly unknown[] | undefined>,
+) {
+  const identityLimit = Math.min(cache.length, nodes.length)
+  for (let index = 0; index < identityLimit; index++) {
+    const snapshot = snapshots[index]
+    const snapshotMatches = !!snapshot
+      && snapshot.length === 7
+      && Object.is(snapshot[0], nodes[index]?.raw)
+    if (cache[index]?.node !== nodes[index] || !snapshotMatches)
+      return index
+  }
+  return identityLimit
+}
+
 describe('render item incremental maintenance benchmark', () => {
   it('reduces per-commit work to the dirty tail at scale', () => {
     const N0 = 5000
@@ -123,6 +147,42 @@ describe('render item incremental maintenance benchmark', () => {
       newTotal += performance.now() - start
     }
     const newMs = newTotal / iterations
+
+    // Correctness (outside the timed loop): the incremental cache must agree
+    // with a from-scratch rebuild at the final state (same node per index,
+    // same ordering).
+    {
+      const cache: Array<{ node: FakeNode, item: { node: FakeNode, index: number } } | undefined> = []
+      let base = N0
+      for (let a = 0; a < appends; a++) {
+        const additions = makeNodes(chunk).map(n => ({ ...n, id: n.id + base }))
+        newNodes = [...newNodes, ...additions]
+        base += chunk
+        newIncrementalUpdate(newNodes, cache)
+      }
+      const rebuiltFinal = oldFullRebuild(newNodes, new Map<FakeNode, unknown[]>())
+      expect(cache.length).toBe(newNodes.length)
+      for (let i = 0; i < newNodes.length; i++) {
+        expect(cache[i]?.node).toBe(newNodes[i])
+        expect((cache[i]?.item as { node: FakeNode, index: number })?.node).toBe((rebuiltFinal[i] as { node: FakeNode })?.node)
+      }
+    }
+
+    // In-place mutation recovery: mutating a reused node object (same
+    // identity) must be detected by the snapshot scan so the item is
+    // rebuilt on the next pass instead of serving stale metadata.
+    {
+      const node = makeNodes(1)[0]!
+      const cache: Array<{ node: FakeNode, item: { node: FakeNode, index: number } } | undefined> = []
+      const snapshots: Array<readonly unknown[] | undefined> = []
+      newIncrementalUpdate([node], cache)
+      snapshots[0] = fakeNodeSnapshot(node)
+      // pass 2: identity and snapshot both match -> no dirty range
+      expect(findDirtyWithSnapshots([node], cache, snapshots)).toBe(1)
+      // in-place edit keeps identity but changes content
+      node.raw = 'mutated'
+      expect(findDirtyWithSnapshots([node], cache, snapshots)).toBe(0)
+    }
 
     const speedup = oldMs / Math.max(0.0001, newMs)
     console.log(`[render-items-bench] old=${oldMs.toFixed(2)}ms/session new=${newMs.toFixed(2)}ms/session`)
