@@ -385,6 +385,14 @@ export function useHeightModel(options: HeightModelOptions) {
   const fallbackHeightPrefixCache: number[] = [0]
   let fallbackHeightPrefixCacheKey = ''
   let fallbackHeightPrefixAverageNodeHeight = -1
+  let fallbackHeightPrefixIncrementalBuilds = 0
+
+  /**
+   * Force a full prefix rebuild every N incremental rebuilds. Streaming
+   * appends normally invalidate only the dirty tail; this periodic full pass
+   * guards against a wrong dirty start silently leaving stale prefix sums.
+   */
+  const PREFIX_FULL_REBUILD_INTERVAL = 200
 
   /**
    * Mark the fallback height prefix stale from `fromIndex` onward.
@@ -481,6 +489,16 @@ export function useHeightModel(options: HeightModelOptions) {
       // The retained prefix stays valid because appends never mutate earlier
       // nodes and the parser's dirty-start notifications cover rewrites.
       fallbackHeightPrefixInvalidFrom = cachedLength
+    }
+
+    // Safety net for the dirty-start trust chain: if the parser ever reports
+    // a wrong (too large) dirty start, incremental rebuilds would keep stale
+    // prefix sums forever. Periodically force a full rebuild; the cost is one
+    // O(N) addition pass (~tens of microseconds at N=5000) every interval.
+    fallbackHeightPrefixIncrementalBuilds += 1
+    if (fallbackHeightPrefixIncrementalBuilds >= PREFIX_FULL_REBUILD_INTERVAL) {
+      fallbackHeightPrefixIncrementalBuilds = 0
+      markFallbackHeightPrefixDirty(0)
     }
 
     // Never recompute entries that were never computed: the retained prefix

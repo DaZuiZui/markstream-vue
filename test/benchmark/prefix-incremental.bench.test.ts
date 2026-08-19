@@ -101,6 +101,27 @@ describe('fallback prefix incremental benchmark', () => {
     }
     const fullMs = totalMs / iterations
 
+    // Correctness (outside the timed loops): the incremental prefix must
+    // agree with a forced full rebuild at every sampled commit.
+    {
+      const { model: modelInc, nodesRef: nodesInc, estimates: estimatesInc } = setup(nodes)
+      modelInc.estimateHeightRange(0, N0)
+      let base = N0
+      for (let a = 0; a < appends; a++) {
+        const next = base + (a + 1) * chunk
+        const additions = Array.from({ length: chunk }, (_, i) => paragraph(`appended ${a}.${i} ${'y'.repeat((a + i) % 50)}`))
+        nodesInc.value = [...nodesInc.value, ...additions]
+        estimatesInc.value = [...estimatesInc.value, ...additions.map(n => estimateNodeHeight(n))]
+        const dirtyStart = base + a * chunk
+        modelInc.markFallbackHeightPrefixDirty(dirtyStart)
+        const incremental = modelInc.estimateHeightRange(0, next)
+        modelInc.markFallbackHeightPrefixDirty(0)
+        const fullRebuild = modelInc.estimateHeightRange(0, next)
+        expect(incremental).toBe(fullRebuild)
+        base = next
+      }
+    }
+
     console.log(`[prefix-bench] incremental=${incrementalMs.toFixed(2)}ms/session full=${fullMs.toFixed(2)}ms/session`)
     console.log(`[prefix-bench] speedup=${(fullMs / Math.max(0.001, incrementalMs)).toFixed(2)}x (${N0} nodes, ${appends} appends x ${chunk})`)
     expect(incrementalMs).toBeLessThan(fullMs)
