@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, inject } from 'vue'
 import MermaidBlockNode from '../src/components/MermaidBlockNode'
 import NodeRenderer from '../src/components/NodeRenderer'
@@ -301,10 +301,16 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     })
 
     await flushAll()
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-markstream-code-loading="1"]').exists()).toBe(false)
+    })
 
     const pre = wrapper.get('pre[data-markstream-pre="1"]')
-    expect(pre.attributes('data-markstream-line-numbers')).toBeUndefined()
-    expect((pre.element as HTMLElement).style.whiteSpace).toBe('')
+    expect(pre.attributes('data-markstream-line-numbers')).toBe('1')
+    expect((pre.element as HTMLElement).style.whiteSpace).toBe('pre-wrap')
+    expect(pre.attributes('data-markstream-code-theme')).toBe('vitesse-light')
+    expect((pre.element as HTMLElement).style.fontSize).toBe('12px')
+    expect((pre.element as HTMLElement).style.lineHeight).toBe('18px')
     expect(wrapper.find('[data-markstream-code-block="1"]').exists()).toBe(false)
   })
 
@@ -361,6 +367,9 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     })
 
     await flushAll()
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-markstream-code-loading="1"]').exists()).toBe(false)
+    })
 
     const pre = wrapper.get('pre[data-markstream-pre="1"]')
     expect(pre.attributes('data-markstream-line-numbers')).toBe('1')

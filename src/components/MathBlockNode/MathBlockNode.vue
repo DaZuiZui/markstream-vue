@@ -384,6 +384,42 @@ function isAppendUpdate(
   return next.inner === previous.inner
 }
 
+// Coalesce streaming math renders: token bursts often produce several
+// content commits within one frame, and each renderMath() call aborts the
+// in-flight worker request. Deduplicate identical content and merge rapid
+// streaming appends into a single render burst (32ms window). Final/complete
+// content (loading=false) renders immediately.
+let mathRenderCoalesceTimer: ReturnType<typeof setTimeout> | null = null
+let lastMathRenderRequestKey = `${mathContent.value}\u0000${props.node.loading ? '1' : '0'}`
+
+function scheduleMathRender() {
+  const content = mathContent.value
+  const isStreaming = props.node.loading === true
+  // The worker-busy fallback path is loading-dependent, so the dedupe key
+  // must include the loading flag: identical content with a different
+  // loading state still needs a fresh render attempt.
+  const requestKey = `${content}\u0000${isStreaming ? '1' : '0'}`
+  if (requestKey === lastMathRenderRequestKey)
+    return
+  lastMathRenderRequestKey = requestKey
+
+  if (!isStreaming) {
+    if (mathRenderCoalesceTimer != null) {
+      clearTimeout(mathRenderCoalesceTimer)
+      mathRenderCoalesceTimer = null
+    }
+    renderMath()
+    return
+  }
+
+  if (mathRenderCoalesceTimer != null)
+    return
+  mathRenderCoalesceTimer = setTimeout(() => {
+    mathRenderCoalesceTimer = null
+    renderMath()
+  }, 32)
+}
+
 watch(
   () => [props.node.content, props.node.loading, props.node.raw] as const,
   ([content, , raw], [previousContent, , previousRaw]) => {
@@ -394,7 +430,7 @@ watch(
     if (!appendOnly)
       clearLockedMinHeight()
 
-    renderMath()
+    scheduleMathRender()
   },
   { flush: 'post' },
 )
@@ -425,6 +461,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   // prevent any pending worker responses from touching the DOM
   isUnmounted = true
+  if (mathRenderCoalesceTimer != null) {
+    clearTimeout(mathRenderCoalesceTimer)
+    mathRenderCoalesceTimer = null
+  }
   clearLifecyclePending()
   if (currentAbortController) {
     currentAbortController.abort()

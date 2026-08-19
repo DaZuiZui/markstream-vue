@@ -320,6 +320,9 @@ After`,
       expectedText: ['export const sum = (a: number, b: number) => a + b'],
       assert: async (wrapper) => {
         await flushAll()
+        await vi.waitFor(() => {
+          expect(wrapper.find('[data-markstream-code-loading="1"]').exists()).toBe(false)
+        })
         const fallback = wrapper.find('pre code')
         expect(fallback.exists()).toBe(true)
         expect(fallback.text()).toContain('export const sum = (a: number, b: number) => a + b')
@@ -641,6 +644,37 @@ After`,
       }
     }, 20000)
   }
+
+  it('does not paint a partial closing fence in the streaming pre', async () => {
+    const body = '```python\nprint("ok")\n'
+    const marker = String.fromCharCode(96)
+    const wrapper = await mountMarkdown(`${body}${marker}`, {
+      batchRendering: false,
+      deferNodesUntilVisible: false,
+      fade: false,
+      final: false,
+      nodeVirtual: false,
+      renderCodeBlocksAsPre: true,
+      viewportPriority: false,
+    })
+
+    try {
+      const renderedCode = () => wrapper.get('pre[data-markstream-pre="1"] code').element.textContent
+
+      expect(renderedCode()).toBe('print("ok")')
+
+      await wrapper.setProps({ content: `${body}${marker.repeat(2)}` })
+      await flushAll()
+      expect(renderedCode()).toBe('print("ok")')
+
+      await wrapper.setProps({ content: `${body}${marker.repeat(3)}` })
+      await flushAll()
+      expect(renderedCode()).toBe('print("ok")')
+    }
+    finally {
+      wrapper.unmount()
+    }
+  })
 
   it('resizes table columns from header drag handles', async () => {
     const wrapper = await mountMarkdown('| Name | Role |\n| --- | --- |\n| Alice | Developer |')

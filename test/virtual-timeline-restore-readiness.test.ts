@@ -1641,7 +1641,7 @@ describe('virtual timeline restore visual readiness', () => {
   })
 
   it('reserves async code block loading fallback height from block estimates', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
 
     const wrapper = mount(CodeBlockNodeLoading as any, {
       attrs: {
@@ -1658,7 +1658,6 @@ describe('virtual timeline restore visual readiness', () => {
         'data-root-probe': 'outer',
       },
     })
-
     const pre = wrapper.get('pre.code-pre-fallback')
     const root = wrapper.get('.code-block-container')
     expect(pre.attributes('data-markstream-code-loading')).toBe('1')
@@ -1700,8 +1699,10 @@ describe('virtual timeline restore visual readiness', () => {
       expect(icon.attributes('height')).toBe('14')
     }
     expect(wrapper.get('.code-block-container').classes()).toContain('border')
-    expect((root.element as HTMLElement).style.color).toBe('var(--vscode-editor-foreground, var(--markstream-code-fallback-fg, var(--code-fg)))')
-    expect((root.element as HTMLElement).style.backgroundColor).toBe('var(--markstream-code-fallback-bg, var(--code-bg, #fff))')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-code-fallback-bg')).toBe('#ffffff')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-code-fallback-fg')).toBe('#393a34')
+    expect((root.element as HTMLElement).style.backgroundColor).toBe('rgb(255, 255, 255)')
+    expect((pre.element as HTMLElement).style.backgroundColor).toBe('rgb(255, 255, 255)')
     expect((root.element as HTMLElement).style.borderColor).toBe('var(--markstream-code-border-color, var(--code-border))')
     expect(pre.classes()).not.toContain('border')
 
@@ -1709,7 +1710,7 @@ describe('virtual timeline restore visual readiness', () => {
   })
 
   it('applies neutral code block options during async loading without leaking them to the DOM', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
     const wrapper = mount(CodeBlockNodeLoading as any, {
       props: {
         codeBlockOptions: {
@@ -1733,7 +1734,6 @@ describe('virtual timeline restore visual readiness', () => {
         showLineNumbers: true,
       },
     })
-
     const root = wrapper.get('.code-block-container')
     const pre = wrapper.get('pre.code-pre-fallback')
     expect(root.attributes('codeblockoptions')).toBeUndefined()
@@ -1748,11 +1748,31 @@ describe('virtual timeline restore visual readiness', () => {
     expect((pre.element as HTMLElement).style.paddingBottom).toBe('6px')
     expect((pre.element as HTMLElement).style.tabSize).toBe('8')
     expect((pre.element as HTMLElement).style.whiteSpace).toBe('pre')
+    expect(pre.classes()).not.toContain('is-wrap')
+    wrapper.unmount()
+  })
+
+  it('uses the default wrapping mode in the async loading fallback', async () => {
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
+    const wrapper = mount(CodeBlockNodeLoading as any, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'ts',
+          code: 'const longLine = true',
+          raw: '```ts\nconst longLine = true\n```',
+          loading: true,
+        },
+      },
+    })
+    const pre = wrapper.get('pre.code-pre-fallback')
+    expect((pre.element as HTMLElement).style.whiteSpace).toBe('pre-wrap')
+    expect(pre.classes()).toContain('is-wrap')
     wrapper.unmount()
   })
 
   it('reserves preview-only and diff-only header chrome while loading', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
     const disabledActions = {
       showCopyButton: false,
       showCollapseButton: false,
@@ -1797,14 +1817,23 @@ describe('virtual timeline restore visual readiness', () => {
     })
     expect(diff.findAll('.code-action-btn')).toHaveLength(0)
     expect(diff.findAll('.code-diff-stat')).toHaveLength(2)
-    expect(diff.get('.code-block-container').classes()).toContain('is-diff')
+    const diffRoot = diff.get('.code-block-container')
+    expect(diffRoot.classes()).toContain('is-diff')
+    expect((diffRoot.element as HTMLElement).style.getPropertyValue('--markstream-diff-added-line-fill'))
+      .toBe('color-mix(in lab, #ffffff 88%, #1e754f)')
+    expect((diffRoot.element as HTMLElement).style.getPropertyValue('--markstream-diff-added-number-fill'))
+      .toBe('color-mix(in lab, #ffffff 91%, #1e754f)')
+    expect((diffRoot.element as HTMLElement).style.getPropertyValue('--markstream-diff-removed-line-fill'))
+      .toBe('color-mix(in lab, #ffffff 88%, #ab5959)')
+    expect((diffRoot.element as HTMLElement).style.getPropertyValue('--markstream-diff-removed-number-fill'))
+      .toBe('color-mix(in lab, #ffffff 91%, #ab5959)')
     expect(diff.get('pre.code-pre-fallback').attributes('style')).not.toContain('36px')
     expect(diff.get('pre.code-pre-fallback').classes()).not.toContain('markstream-pre--diff-inline')
     diff.unmount()
   })
 
   it('keeps async loading container state aligned with the final shell', async () => {
-    const { CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/asyncComponent')
+    const { default: CodeBlockNodeLoading } = await import('../src/components/NodeRenderer/CodeBlockNodeLoading')
     const wrapper = mount(CodeBlockNodeLoading as any, {
       props: {
         node: {
@@ -1824,11 +1853,18 @@ describe('virtual timeline restore visual readiness', () => {
         maxWidth: '80%',
       },
     })
-
     const root = wrapper.get('.code-block-container')
     expect(root.classes()).toContain('dark')
     expect(root.classes()).toContain('is-dark')
     expect(root.classes()).toContain('is-rendering')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-code-fallback-bg')).toBe('#121212')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-diff-editor-bg')).toBe('#121212')
+    expect((root.element as HTMLElement).style.getPropertyValue('--markstream-diff-shell-bg')).toBe('#121212')
+    expect((root.element as HTMLElement).style.backgroundColor).toBe('rgb(18, 18, 18)')
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    expect(pre.style.getPropertyValue('--markstream-code-fallback-bg')).toBe('#121212')
+    expect(pre.style.getPropertyValue('--markstream-diff-metadata-bg')).toBe('#121212')
+    expect(pre.style.backgroundColor).toBe('rgb(18, 18, 18)')
     expect(root.attributes('style')).toContain('min-width: 120px')
     expect(root.attributes('style')).toContain('max-width: 80%')
     expect(wrapper.get('pre.code-pre-fallback').attributes('style')).toContain('--markstream-pre-diff-line-height: 18px')

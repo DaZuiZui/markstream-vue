@@ -110,9 +110,9 @@ Map common old fields explicitly:
 | `wordWrap: 'on'` / `'off'` | `overflow: 'wrap'` / `'scroll'`; choose manually for `wordWrapColumn` or `bounded`. |
 | `renderSideBySide: true` / `false` | `diffStyle: 'split'` / `'unified'` |
 | `diffUnchangedRegionStyle` | `hunkSeparators` |
-| `diffHideUnchangedRegions` | Map `false` / `{ enabled: false }` to `expandUnchanged: true`, and `true` / `{ enabled: true }` to `expandUnchanged: false`. Use `parseDiffOptions.context`, `collapsedContextThreshold`, and `expansionLineCount` for the remaining behavior; tune them because there is no field-for-field conversion. |
+| `diffHideUnchangedRegions` | Map `false` / `{ enabled: false }` to `expandUnchanged: true`, and `true` / `{ enabled: true }` to `expandUnchanged: false`. Use `parseDiffOptions.context`, `collapsedContextThreshold`, and `expansionLineCount` for the remaining behavior; tune them because there is no field-for-field conversion. The plain `<pre>` fallback path (`renderCodeBlocksAsPre` / no-peer fallback) still accepts `diffHideUnchangedRegions` on `PreCodeNode`. |
 
-Theme values are registered names. Direct `CodeBlockNode.theme` accepts a string or `{ dark, light }`, while `themes` is the `[dark, light]` pair. A former Monaco JSON object must first be converted to a Shiki `ThemeRegistration`; translate Monaco `rules` into Shiki `tokenColors` or `settings` before registering it:
+Theme values are registered names. Direct `CodeBlockNode.theme` accepts a string or `{ dark, light }`, while `themes` is the `[dark, light]` pair. Vue 3 keeps the old `darkTheme` / `lightTheme` props as deprecated aliases of `theme` (top-level `codeBlockDarkTheme` / `codeBlockLightTheme`); React and Octane use `darkTheme` / `lightTheme` as their active-name props. A former Monaco JSON object must first be converted to a Shiki `ThemeRegistration`; translate Monaco `rules` into Shiki `tokenColors` or `settings` before registering it:
 
 ```ts
 import type { ThemeRegistration } from 'stream-diffs/pierre'

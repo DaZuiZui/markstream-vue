@@ -47,4 +47,9 @@ describe('code block handoff guards', () => {
     for (const source of [vue3Source, vue2Source, reactSource, svelteSource, angularSource])
       expect(source).toContain('--diffs-gap-block')
   })
+
+  it('overlays the shared Vue fallback across the PreCodeBlock component boundary', () => {
+    expect(vue3Source).toContain('.code-editor-layer > :deep(pre.code-pre-fallback)')
+    expect(vue3Source).toMatch(/\.code-editor-layer > :deep\(pre\.code-pre-fallback\) \{[\s\S]*?grid-area: 1 \/ 1;/)
+  })
 })

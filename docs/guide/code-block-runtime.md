@@ -39,9 +39,9 @@ The `stream-diffs` root entry is framework-agnostic. It does not import Vue or o
 
 `CodeBlockNode` uses one stable visual path:
 
-1. While code is streaming, Vue renders `PreCodeNode`.
+1. While code is streaming, Vue renders the shared `PreCodeBlock`; `renderCodeBlocksAsPre` uses the same component and resolved visual defaults.
 2. After the block is complete and visible, the component dynamically imports the `stream-diffs` root runtime and mounts one File or FileDiff surface into its existing container.
-3. The component applies the active theme to that surface and removes the temporary `<pre>` only when the surface is ready.
+3. The component applies the active theme to that surface and removes the temporary `<pre>` only when the surface is ready. Before reveal, both surfaces already share font metrics, padding, gutter geometry, overflow, and theme background; a streaming plain block never inherits a stale restored-height floor.
 4. On component unmount, the Vue adapter disposes the controller.
 
 Completion, visibility, and unmount are `CodeBlockNode` concerns. They are not `stream-diffs` lifecycle hooks.
@@ -61,7 +61,7 @@ Direct `CodeBlockNode` usage and the top-level `NodeRenderer` / `MarkdownRender`
 The supported surface includes:
 
 - host-managed typography and layout: `fontSize`, `lineHeight`, `fontFamily`, numeric-pixel `maxHeight`, numeric-pixel symmetric `padding`, and `tabSize`;
-- File options such as `disableLineNumbers`, `overflow`, highlighting limits, and virtualization/highlighter controls;
+- File options such as `disableLineNumbers`, `overflow`, highlighting limits, and virtualization/highlighter controls; `overflow: 'wrap'` is passed to the compatibility runtime as `wordWrap: 'on'`, while `overflow: 'scroll'` is passed as `wordWrap: 'off'`; the default is `overflow: 'wrap'`.
 - FileDiff layout, indicators, unchanged-region folding, and line-diff controls;
 - line/token interactions, selection callbacks, annotations, `onController`, and `workerManager`.
 
@@ -82,3 +82,5 @@ This only warms the optional module. It does not create a surface, finalize a st
 ## Diff interactions
 
 Diff blocks keep the same adapter boundary. The enhanced diff surface uses `stream-diffs` defaults unless the corresponding `codeBlockOptions` fields are supplied. For example, `diffStyle`, `expandUnchanged`, `collapsedContextThreshold`, `hunkSeparators`, `lineDiffType`, and `parseDiffOptions` configure layout and folding.
+
+The fallback applies the same `collapsedContextThreshold` decision as the finalized surface: an unchanged region is folded only when its hidden line count is greater than the threshold. Unified and split fallbacks derive `No newline at end of file` from each source's actual final-newline state, render it with the same neutral metadata palette as the finalized surface, and preserve the same visible height during handoff. Added/removed line fill is composited once per visual region so its effective color matches the finalized surface. In wrap mode, content fill, gutter marker, and line-number fill span the complete measured logical-row height. Switching between wrap and scroll clears the old synchronized row height before the next layout is painted. The finalized host preserves every row below `maxHeight` and uses scrollable overflow above it; it never hides overflowing diff rows behind a larger shell.

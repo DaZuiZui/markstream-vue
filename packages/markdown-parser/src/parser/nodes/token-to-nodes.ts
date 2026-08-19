@@ -54,13 +54,26 @@ function getNodeFields(node: ParsedNode) {
   return node as ParsedNodeWithFields
 }
 
+// Normalized custom-tag sets are identical across the many paragraph
+// promotions within one parse, so cache by exact tag list key. The list of
+// custom tags is bounded in practice, keeping the cache small.
+const customHtmlTagSetCache = new Map<string, Set<string>>()
+
 function getCustomHtmlTagSet(options?: ParseOptions) {
   const custom = options?.customHtmlTags
   if (!Array.isArray(custom) || custom.length === 0)
     return null
 
+  const cacheKey = custom.join('\0')
+  const cached = customHtmlTagSetCache.get(cacheKey)
+  if (cached)
+    return cached
+
   const normalized = normalizeCustomHtmlTags(custom)
-  return normalized.length ? new Set(normalized) : null
+  const set = normalized.length ? new Set(normalized) : null
+  if (set)
+    customHtmlTagSetCache.set(cacheKey, set)
+  return set
 }
 
 function stringifyInlineNodeRaw(node: ParsedNode) {

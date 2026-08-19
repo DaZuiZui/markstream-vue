@@ -48,9 +48,22 @@ function helpers() {
   return (globalThis as any).__streamDiffsHelpers
 }
 
-function installFinalDiffsDom(container: HTMLElement) {
+function installFinalDiffsDom(container: HTMLElement, height?: number) {
   const surface = document.createElement('diffs-container')
   surface.textContent = 'final diffs surface'
+  if (height != null) {
+    surface.getBoundingClientRect = () => ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: height,
+      width: 800,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect
+  }
   container.replaceChildren(surface)
 }
 
@@ -278,6 +291,8 @@ describe('codeBlockNode final Diffs gate', () => {
       fontFamily: 'Fira Code',
       diffStyle: 'unified',
       disableLineNumbers: true,
+      wordWrap: 'on',
+      overflow: 'wrap',
       stream: false,
       disableFileHeader: true,
       theme: 'github-dark',
@@ -290,10 +305,18 @@ describe('codeBlockNode final Diffs gate', () => {
     expect(firstOptions.padding).toBeUndefined()
     expect(firstOptions.tabSize).toBeUndefined()
     expect(firstOptions.unsafeCSS.indexOf('[data-file], [data-diff]')).toBeLessThan(firstOptions.unsafeCSS.indexOf('.consumer-rule'))
+    expect(firstOptions.unsafeCSS).toContain('overflow-wrap: anywhere !important')
+    expect(firstOptions.unsafeCSS).toContain('word-break: normal !important')
+    expect(firstOptions.unsafeCSS).toContain('[data-no-newline],')
+    expect(firstOptions.unsafeCSS).toContain('[data-gutter-buffer="metadata"]')
+    expect(firstOptions.unsafeCSS).toContain('color: var(--markstream-diff-metadata-fg) !important')
+    expect(firstOptions.unsafeCSS).toContain('background-color: var(--markstream-diff-metadata-bg) !important')
 
     const editorHost = wrapper.get('.code-editor-container').element as HTMLElement
     expect(editorHost.style.getPropertyValue('--diffs-tab-size')).toBe('8')
     expect(editorHost.style.getPropertyValue('--diffs-gap-block')).toBe('6px')
+    expect(editorHost.style.getPropertyValue('--markstream-diff-metadata-bg')).toBe('var(--markstream-code-theme-bg, #121212)')
+    expect(editorHost.style.getPropertyValue('--markstream-diff-metadata-fg')).toBe('var(--markstream-code-theme-line-number, #dedcd550)')
 
     await wrapper.setProps({
       codeBlockOptions: {
@@ -307,6 +330,102 @@ describe('codeBlockNode final Diffs gate', () => {
     })
     expect(runtime.createCodeBlockRuntime.mock.calls[1]?.[0]?.diffStyle).toBe('split')
 
+    wrapper.unmount()
+  })
+
+  it('maps overflow scroll to a non-wrapping enhanced surface', async () => {
+    const runtime = helpers()
+    runtime.createEditor.mockImplementation(() => new Promise<void>(() => {}))
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const veryLongLine = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        codeBlockOptions: { overflow: 'scroll' },
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createCodeBlockRuntime).toHaveBeenCalledTimes(1))
+
+    const options = runtime.createCodeBlockRuntime.mock.calls[0]?.[0]
+    expect(options?.wordWrap).toBe('off')
+    expect(options?.overflow).toBe('scroll')
+    expect(options?.unsafeCSS).toContain('white-space: pre !important')
+    expect(options?.unsafeCSS).toContain('overflow-wrap: normal !important')
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    expect(pre.style.whiteSpace).toBe('pre')
+    expect(pre.style.overflowWrap).toBe('normal')
+    expect(wrapper.get('pre.code-pre-fallback').classes()).not.toContain('is-wrap')
+    wrapper.unmount()
+  })
+
+  it('counts changed source lines instead of runtime hunk rows', async () => {
+    const runtime = helpers()
+    const diffView = runtime.getDiffEditorView()
+    runtime.getDiffEditorView.mockReturnValue({
+      ...diffView,
+      getLineChanges: () => [{
+        originalStartLineNumber: 1,
+        originalEndLineNumber: 2,
+        modifiedStartLineNumber: 1,
+        modifiedEndLineNumber: 2,
+      }],
+    })
+    const originalCode = 'const value = true'
+    const updatedCode = 'const value = false'
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block' as const,
+          language: 'typescript',
+          code: '',
+          raw: '```diff\n-old\n+new\n```',
+          diff: true,
+          originalCode,
+          updatedCode,
+          loading: false,
+        },
+        loading: false,
+        stream: true,
+        showHeader: true,
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createDiffEditor).toHaveBeenCalledTimes(1))
+    await flush()
+
+    expect(wrapper.get('.code-diff-stats').attributes('aria-label')).toBe('-1 +1')
+    expect(wrapper.get('.code-diff-stat.removed').text()).toBe('-1')
+    expect(wrapper.get('.code-diff-stat.added').text()).toBe('+1')
+    wrapper.unmount()
+  })
+
+  it('keeps wrapped source lines as one logical line in the fallback', async () => {
+    const runtime = helpers()
+    runtime.createEditor.mockImplementation(async () => new Promise<void>(() => {}))
+    const code = 'const veryLongLineThatWrapsVisually = true'
+    const wrapper = mount(CodeBlockNode, {
+      props: {
+        node: makeNode(code, false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        codeBlockOptions: { overflow: 'wrap' },
+      },
+    })
+
+    await flush()
+    const lines = wrapper.findAll('.markstream-pre__logical-line')
+    expect(lines).toHaveLength(1)
+    expect(lines[0].attributes('data-line-number')).toBe('1')
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    expect(pre.style.whiteSpace).toBe('pre-wrap')
+    expect(pre.style.overflowWrap).toBe('anywhere')
     wrapper.unmount()
   })
 
@@ -680,6 +799,69 @@ describe('codeBlockNode final Diffs gate', () => {
       expect(wrapper.find('pre.code-pre-fallback').exists()).toBe(false)
       expect(wrapper.get('[data-markstream-code-block="1"]').attributes('data-markstream-code-block-state')).toBe('settled')
     })
+    wrapper.unmount()
+  })
+
+  it.each([
+    { diffStyle: 'unified' as const, contentHeight: 120, expectedHeight: 120, expectedOverflow: 'hidden' },
+    { diffStyle: 'unified' as const, contentHeight: 720, expectedHeight: 240, expectedOverflow: 'auto' },
+    { diffStyle: 'split' as const, contentHeight: 120, expectedHeight: 120, expectedOverflow: 'hidden' },
+    { diffStyle: 'split' as const, contentHeight: 720, expectedHeight: 240, expectedOverflow: 'auto' },
+  ])('keeps a finalized $diffStyle diff with height $contentHeight visible or scrollable', async ({
+    diffStyle,
+    contentHeight,
+    expectedHeight,
+    expectedOverflow,
+  }) => {
+    const runtime = helpers()
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+      if (!this.matches('pre.code-pre-fallback'))
+        return originalGetBoundingClientRect.call(this)
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 800,
+        bottom: expectedHeight,
+        width: 800,
+        height: expectedHeight,
+        toJSON: () => ({}),
+      } as DOMRect
+    })
+    runtime.createDiffEditor.mockImplementation(async (container: HTMLElement) => {
+      installFinalDiffsDom(container, contentHeight)
+    })
+    runtime.whenVisualReady = vi.fn(() => Promise.resolve(true))
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'typescript',
+          code: '',
+          raw: '```diff\n-const before = 1\n+const after = 2\n```',
+          diff: true,
+          originalCode: 'const before = 1',
+          updatedCode: 'const after = 2',
+          loading: false,
+        },
+        codeBlockOptions: { diffStyle, maxHeight: 240 },
+        loading: false,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(wrapper.find('pre.code-pre-fallback').exists()).toBe(false))
+
+    const host = wrapper.get('.code-editor-container').element as HTMLElement
+    expect(host.style.height).toBe(`${expectedHeight}px`)
+    expect(host.style.maxHeight).toBe('240px')
+    expect(host.style.overflow).toBe(expectedOverflow)
+
     wrapper.unmount()
   })
 

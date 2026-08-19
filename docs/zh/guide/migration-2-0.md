@@ -108,9 +108,9 @@ npm view "$PACKAGE@next" version
 | `wordWrap: 'on'` / `'off'` | `overflow: 'wrap'` / `'scroll'`。`wordWrapColumn` 或 `bounded` 需要人工选择其中一种行为。 |
 | `renderSideBySide: true` / `false` | `diffStyle: 'split'` / `'unified'` |
 | `diffUnchangedRegionStyle` | `hunkSeparators` |
-| `diffHideUnchangedRegions` | 没有单个对象可直接替换。把 `false` / `{ enabled: false }` 改成 `expandUnchanged: true`，把 `true` / `{ enabled: true }` 改成 `expandUnchanged: false`。用 `parseDiffOptions.context` 控制上下文、`collapsedContextThreshold` 控制何时折叠、`expansionLineCount` 控制每次展开行数。新旧算法并不相同，需要重新调节阈值。 |
+| `diffHideUnchangedRegions` | 增强 `stream-diffs` 路径没有单一对象可直接替换。把 `false` / `{ enabled: false }` 改成 `expandUnchanged: true`，把 `true` / `{ enabled: true }` 改成 `expandUnchanged: false`。用 `parseDiffOptions.context` 控制上下文、`collapsedContextThreshold` 控制何时折叠、`expansionLineCount` 控制每次展开行数。新旧算法并不相同，需要重新调节阈值。纯 `<pre>` 回退路径（`renderCodeBlocksAsPre` 或无 peer 回退）在 `PreCodeNode` 上仍保留 `diffHideUnchangedRegions`，行为不变。 |
 
-主题值是名称，而不是 Monaco theme JSON。在 Vue 3、Svelte、Angular 和 Vue 2 中，`CodeBlockNode.theme` 接收固定 string 或 `{ dark, light }`；React 和 Octane 则通过 `darkTheme` / `lightTheme` 指定当前主题名称。所有 adapter 的 `themes` 都是用于加载的 `[dark, light]` 名称对。注册前必须先把旧 Monaco theme 转为 Shiki theme 格式；尤其不能直接复用 Monaco `rules`，需要改成 Shiki `tokenColors` 或 `settings`：
+主题值是名称，而不是 Monaco theme JSON。在 Vue 3、Svelte、Angular 和 Vue 2 中，`CodeBlockNode.theme` 接收固定 string 或 `{ dark, light }`；React 和 Octane 则通过 `darkTheme` / `lightTheme` 指定当前主题名称。Vue 3 中旧的 `CodeBlockNode.darkTheme` / `lightTheme` props 保留为 `theme` 的 deprecated 别名，仍然可用；顶层通过 `codeBlockDarkTheme` / `codeBlockLightTheme` 转发，未来大版本会移除。所有 adapter 的 `themes` 都是用于加载的 `[dark, light]` 名称对。注册前必须先把旧 Monaco theme 转为 Shiki theme 格式；尤其不能直接复用 Monaco `rules`，需要改成 Shiki `tokenColors` 或 `settings`：
 
 ```ts
 import type { ThemeRegistration } from 'stream-diffs/pierre'

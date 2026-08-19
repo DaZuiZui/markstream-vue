@@ -36,6 +36,8 @@ Default finalized diff UX when no `codeBlockOptions` override is supplied:
 
 The same folding options apply to the fallback and finalized surface; streaming state does not override the consumer's `expandUnchanged` choice. Theme, content/language, header, mount/reveal timing, and disposal remain host-owned even when `codeBlockOptions` is present.
 
+`overflow` controls both the fallback `<pre>` and the enhanced surface. The default is `'wrap'`; use `'scroll'` for non-wrapping content with horizontal scrolling. Visual wrapping never creates extra logical diff rows or changes the built-in `- / +` counts.
+
 Diff blocks also show `- / +` line counts in the built-in header.
 
 ## Slots

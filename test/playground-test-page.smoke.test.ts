@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { buildTestPageHref, decodeMarkdownHashAsync } from '../playground-shared/testPageState'
+import DiffHandoffCheckPage from '../playground/src/pages/diff-handoff-check.vue'
 import TestPage from '../playground/src/pages/test.vue'
 import { flushAll } from './setup/flush-all'
 
@@ -50,6 +51,22 @@ vi.mock('../src/components/NodeRenderer', () => ({
       infographicProps: {
         type: Object,
         default: () => ({}),
+      },
+      codeBlockOptions: {
+        type: Object,
+        default: () => ({}),
+      },
+      codeBlockProps: {
+        type: Object,
+        default: () => ({}),
+      },
+      isDark: {
+        type: Boolean,
+        default: false,
+      },
+      renderCodeBlocksAsPre: {
+        type: Boolean,
+        default: false,
       },
       viewportPriority: {
         type: Boolean,
@@ -153,6 +170,54 @@ async function mountTestPage() {
   await nextTick()
   return wrapper
 }
+
+describe('playground /diff-handoff-check smoke', () => {
+  it('renders the ordinary, unified, and split handoff matrix with one linked overflow mode', async () => {
+    window.history.replaceState({}, '', '/diff-handoff-check?theme=dark&codeOverflow=scroll')
+
+    const wrapper = mount(DiffHandoffCheckPage)
+    await nextTick()
+
+    expect(wrapper.classes()).toContain('dark')
+    expect(wrapper.findAll('[data-handoff-case]')).toHaveLength(6)
+
+    for (const scenario of ['ordinary', 'unified', 'split']) {
+      const enhanced = wrapper.get(`[data-handoff-case="${scenario}-enhanced"]`)
+        .getComponent({ name: 'MarkdownRenderStub' })
+      const pre = wrapper.get(`[data-handoff-case="${scenario}-pre"]`)
+        .getComponent({ name: 'MarkdownRenderStub' })
+
+      expect(enhanced.props('content')).toBe(pre.props('content'))
+      expect(pre.props('codeBlockOptions')).toEqual(enhanced.props('codeBlockOptions'))
+      expect(pre.props('renderCodeBlocksAsPre')).toBe(true)
+      expect(pre.props('codeBlockProps')).toEqual({ showLineNumbers: true })
+    }
+
+    expect(wrapper.get('[data-handoff-case="ordinary-enhanced"]')
+      .getComponent({ name: 'MarkdownRenderStub' }).props('codeBlockOptions')).toEqual({
+      overflow: 'scroll',
+    })
+    expect(wrapper.get('[data-handoff-case="unified-enhanced"]')
+      .getComponent({ name: 'MarkdownRenderStub' }).props('codeBlockOptions')).toEqual({
+      diffStyle: 'unified',
+      overflow: 'scroll',
+    })
+    expect(wrapper.get('[data-handoff-case="split-enhanced"]')
+      .getComponent({ name: 'MarkdownRenderStub' }).props('codeBlockOptions')).toEqual({
+      diffStyle: 'split',
+      overflow: 'scroll',
+    })
+
+    await wrapper.get('[data-overflow-toggle="wrap"]').trigger('click')
+
+    for (const surface of wrapper.findAllComponents({ name: 'MarkdownRenderStub' }))
+      expect(surface.props('codeBlockOptions').overflow).toBe('wrap')
+    expect(new URL(window.location.href).searchParams.get('codeOverflow')).toBe('wrap')
+    expect(new URL(window.location.href).searchParams.get('theme')).toBe('dark')
+
+    wrapper.unmount()
+  })
+})
 
 async function waitForClipboardWrite(callCount = 1) {
   const writeText = navigator.clipboard.writeText as ReturnType<typeof vi.fn>
@@ -523,6 +588,22 @@ describe('playground /test smoke', () => {
     expect(wrapper.text()).toContain('HTML trusted')
 
     wrapper.unmount()
+  })
+
+  it('forwards the selected diff layout to codeBlockOptions', async () => {
+    window.history.replaceState({}, '', '/test?diffLayout=inline')
+    const inlineWrapper = await mountTestPage()
+    expect(inlineWrapper.getComponent({ name: 'MarkdownRenderStub' }).props('codeBlockOptions')).toEqual({
+      diffStyle: 'unified',
+    })
+    inlineWrapper.unmount()
+
+    window.history.replaceState({}, '', '/test?diffLayout=side-by-side')
+    const splitWrapper = await mountTestPage()
+    expect(splitWrapper.getComponent({ name: 'MarkdownRenderStub' }).props('codeBlockOptions')).toEqual({
+      diffStyle: 'split',
+    })
+    splitWrapper.unmount()
   })
 
   it('opens storage-backed preview links directly in preview-only mode', async () => {

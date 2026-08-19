@@ -70,7 +70,7 @@ describe('height estimation experiment internals', () => {
     expect(estimated?.height).toBeGreaterThan(estimated?.contentHeight ?? 0)
   })
 
-  it('estimates standalone pre code blocks without shell header height', () => {
+  it('estimates pre code blocks with the shared shell header height', () => {
     const estimated = estimateCodeBlockHeight(
       {
         type: 'code_block',
@@ -85,8 +85,49 @@ describe('height estimation experiment internals', () => {
     )
 
     expect(estimated?.rendererKind).toBe('pre')
-    expect(estimated?.contentHeight).toBe(84)
-    expect(estimated?.height).toBe(84)
+    expect(estimated?.contentHeight).toBe(70)
+    expect(estimated?.height).toBe(107)
+  })
+
+  it('uses container width to estimate wrapped visual rows', () => {
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      code: `const value = "${'x'.repeat(240)}"`,
+      raw: '',
+    } as any
+    const narrow = estimateCodeBlockHeight(node, {
+      rendererKind: 'pre',
+      showHeader: false,
+      width: 240,
+    })
+    const wide = estimateCodeBlockHeight(node, {
+      rendererKind: 'pre',
+      showHeader: false,
+      width: 960,
+    })
+
+    expect(narrow?.contentHeight).toBeGreaterThan(wide?.contentHeight ?? 0)
+    expect(wide?.contentHeight).toBeGreaterThan(16)
+  })
+
+  it('caps a long wrapped pre line while retaining the shared header', () => {
+    const estimated = estimateCodeBlockHeight(
+      {
+        type: 'code_block',
+        language: 'txt',
+        code: 'x'.repeat(4000),
+        raw: '',
+      } as any,
+      {
+        rendererKind: 'pre',
+        showHeader: true,
+        width: 320,
+      },
+    )
+
+    expect(estimated?.contentHeight).toBe(500)
+    expect(estimated?.height).toBe(537)
   })
 
   it('does not count a terminal newline as an extra ordinary code line', () => {

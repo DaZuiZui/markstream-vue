@@ -13,7 +13,8 @@ function readStreamRenderVersion(wrapper: any) {
 }
 
 describe('node renderer smooth streaming', () => {
-  afterEach(() => {
+  afterEach(async () => {
+    await vi.dynamicImportSettled()
     vi.unstubAllGlobals()
   })
 

@@ -36,6 +36,10 @@ controller 接收普通 `HTMLElement` 与 code 或 diff 字符串。它不知道
 4. 应用当前主题，在第一次 render 完成后才显示 surface。
 5. Vue component 卸载或 identity 变化时释放 surface。
 
+fallback 与 enhanced surface 遵循同一个视觉交接 contract。fallback 使用 enhanced surface 的同一组主题 palette 与代码排版指标；没有显式主题 override 时，`isDark` 选择 `vitesse-dark` 或 `vitesse-light`。增强期间两层占用同一个 grid row，`CodeBlockNode` 在同一个 Vue patch 中移除 fallback 并显示已 ready 的 surface。中间不得出现空白帧、叠加高度帧、背景变化或几何变化。
+
+`renderCodeBlocksAsPre` 与 enhanced runtime 不可用时，都渲染 `CodeBlockNode` 在增强期间使用的同一个共享 `PreCodeBlock` 组件。默认行号、正文字体、字号、行高、四边 padding、tab size、前景色和背景色因此共用一个 contract，而不是各自维护平行 CSS。
+
 这样高频流式更新不会进入语法高亮 surface，每个结束态代码块只有一次 controller 生命周期。
 
 ## 预热

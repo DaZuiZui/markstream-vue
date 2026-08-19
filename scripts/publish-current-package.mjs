@@ -147,7 +147,6 @@ try {
       run('pnpm', ['publish', '--access', 'public', ...distTagArgs, ...pnpmDryRunPublishArgs], packageDir)
     else
       run('npm', ['publish', '--access', 'public', ...distTagArgs, ...dryRunPublishArgs], packageDir)
-    run('node', ['scripts/tag-package.mjs', '--package-json', path.relative(repoRoot, packageJsonPath), ...(args.dryRun ? ['--dry-run', '--allow-dirty'] : ['--push'])])
   }
 }
 finally {
@@ -155,4 +154,10 @@ finally {
     writeFileSync(packageJsonPath, originalManifest)
     console.log('[publish-current] Restored workspace:* dependency ranges.')
   }
+}
+
+// Create/push the release tag only after the manifest has been restored,
+// otherwise tag-package's clean-tree check fails on the materialized ranges.
+if (!published) {
+  run('node', ['scripts/tag-package.mjs', '--package-json', path.relative(repoRoot, packageJsonPath), ...(args.dryRun ? ['--dry-run', '--allow-dirty'] : ['--push'])])
 }

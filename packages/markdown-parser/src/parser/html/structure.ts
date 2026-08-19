@@ -7,6 +7,7 @@ import { isCacheStableLinkValidator } from '../../plugins/linkTokenMetadata'
 import { parseHtmlBlock } from '../node-parsers/html-block-parser'
 import { createSourceMapFromOffsets } from '../node-source-map'
 import { createChildParseContext } from '../parse-context'
+import { canReuseStructuredStreamNodes } from '../reuse/structured-node-reuse'
 import {
   buildHtmlBlockContent,
   canFindNodeRawAfterSourceIndex,
@@ -185,8 +186,9 @@ export function structureGenericHtmlBlockChildren(
   context: HtmlStructureContext,
   options: ParseContext,
   final: boolean,
+  tailStart = 0,
 ): ParsedNode[] {
-  return nodes.map((node) => {
+  const processNode = (node: ParsedNode): ParsedNode => {
     if (node?.type !== 'html_block')
       return node
 
@@ -231,12 +233,16 @@ export function structureGenericHtmlBlockChildren(
       ...node,
       children,
     } as ParsedNode
-  })
+  }
+
+  if (tailStart <= 0)
+    return nodes.map(processNode)
+  return nodes.slice(0, tailStart).concat(nodes.slice(tailStart).map(processNode))
 }
 
-export function hasTopLevelHtmlBlock(nodes: ParsedNode[]) {
-  for (const node of nodes) {
-    if (node?.type === 'html_block')
+export function hasTopLevelHtmlBlock(nodes: ParsedNode[], start = 0) {
+  for (let i = start; i < nodes.length; i++) {
+    if (nodes[i]?.type === 'html_block')
       return true
   }
   return false
@@ -361,23 +367,6 @@ export function combineStructuredDetailsHtmlBlocks(
         })()
       : openRaw
 
-    const middleNodes = selfContained
-      ? []
-      : closeIndex === -1 ? nodes.slice(i + 1) : nodes.slice(i + 1, closeIndex)
-    const [children] = combineStructuredDetailsHtmlBlocks(
-      middleNodes,
-      source,
-      context,
-      options,
-      final,
-      openStart + openRaw.length,
-    )
-    const prefixChildren = buildDetailsPrefixChildren(
-      effectiveOpenRaw,
-      context,
-      buildDetailsChildParseOptions(options, final),
-    )
-
     const closeRaw = closeIndex === -1
       ? '</details>'
       : String(nodes[closeIndex].raw ?? getMergeableNodeRaw(nodes[closeIndex]) ?? '</details>')
@@ -390,16 +379,16 @@ export function combineStructuredDetailsHtmlBlocks(
         })()
       : source.length
     const openTagEndIndex = findTagCloseIndexOutsideQuotes(openRaw)
-    const middleSourceStart = selfContained && openTagEndIndex !== -1
+    // Derive the content boundaries from the source open tag rather than the
+    // cached fragment raw: the stream can commit the `<details>` opener as a
+    // stable group before its `<summary>` arrives, freezing a partial fragment
+    // (`<details open>\n`). Only the source is authoritative for where the
+    // opener ends and the rendered middle begins, so a full parse and the
+    // split-fragment stream produce identical content.
+    const middleSourceStart = openTagEndIndex !== -1
       ? openStart + openTagEndIndex + 1
       : openStart + openRaw.length
     const middleSource = source.slice(middleSourceStart, closeStart === -1 ? source.length : closeStart)
-    const middleTokens = context.markdownIt.parse(middleSource, { __markstreamFinal: final }) as unknown as MarkdownToken[]
-    const renderedMiddle = context.markdownIt.renderer.render(
-      middleTokens as unknown as Token[],
-      context.markdownIt.options,
-      { __markstreamFinal: final },
-    )
     const closeMarkupEnd = closeStart + trimmedCloseRaw.length
     const closeSliceEnd = explicitClose
       ? Math.max(closeStart + closeRaw.length, extendHtmlBlockCloseToLineEnding(source, closeMarkupEnd))
@@ -411,8 +400,94 @@ export function combineStructuredDetailsHtmlBlocks(
       ? source.slice(openStart, closeSliceEnd)
       : source.slice(openStart)
 
-    const contentPrefix = selfContained && openTagEndIndex !== -1
-      ? openRaw.slice(0, openTagEndIndex + 1)
+    // Cached path: a reused (stable-prefix) details opener keeps the same node
+    // identity across appends, and its middle source is unchanged, so the
+    // stitched output from a previous append can be reused instead of
+    // re-parsing + re-rendering the whole (unchanged) middle on every commit.
+    // Only consulted when the current top-level parse actually reused nodes;
+    // on full-reparse commits the opener objects are fresh, so a cache lookup
+    // would be pure overhead.
+    const stitchCache = canReuseStructuredStreamNodes(options)
+      && (options.runtime?.structuredReuseTailStart ?? 0) > 0
+      ? options.runtime?.detailsStitchCache
+      : undefined
+    const cachedDetails = stitchCache?.get(node)
+    if (cachedDetails
+      && cachedDetails.openRaw === openRaw
+      && cachedDetails.explicitClose === explicitClose
+      && cachedDetails.closeSliceEnd === closeSliceEnd
+      && cachedDetails.middleSource === middleSource) {
+      merged.push(cachedDetails.node)
+      cursor = explicitClose ? closeSliceEnd : source.length
+      if (closeIndex === -1 && !selfContained)
+        break
+      if (closeIndex !== -1)
+        i = closeIndex
+      continue
+    }
+
+    const middleNodes = selfContained
+      ? []
+      : closeIndex === -1 ? nodes.slice(i + 1) : nodes.slice(i + 1, closeIndex)
+    const [children] = combineStructuredDetailsHtmlBlocks(
+      middleNodes,
+      source,
+      context,
+      options,
+      final,
+      openStart + openRaw.length,
+    )
+    let prefixChildren = buildDetailsPrefixChildren(
+      effectiveOpenRaw,
+      context,
+      buildDetailsChildParseOptions(options, final),
+    )
+
+    // The stream can commit the `<details>` opener as a stable group before its
+    // `<summary>` arrives, freezing a partial fragment that contains no summary
+    // (and, depending on the split, the summary may or may not have its own
+    // node in the array). A full parse always structures the summary, so
+    // recover it here to keep the streamed output identical to the cold parse:
+    // - if the summary is a leading raw middle fragment, structure it in place;
+    // - otherwise reconstruct it from the source and prepend it to the prefix.
+    let structuredChildren = children
+    const leadingChild = children[0] as ParsedNodeWithFields | undefined
+    const hasPrefixSummary = prefixChildren.some((child) => {
+      const fields = child as ParsedNodeWithFields
+      return fields?.type === 'html_block' && String(fields.tag ?? '').toLowerCase() === 'summary'
+    })
+    if (!hasPrefixSummary) {
+      if (leadingChild?.type === 'html_block'
+        && String(leadingChild.tag ?? '').toLowerCase() === 'summary'
+        && !Array.isArray(leadingChild.children)) {
+        structuredChildren = [
+          buildStructuredSummaryNode(String(leadingChild.raw ?? leadingChild.content ?? ''), context, buildDetailsChildParseOptions(options, final)),
+          ...children.slice(1),
+        ]
+      }
+      else if (openTagEndIndex !== -1) {
+        const summaryBlock = findNextHtmlBlockFromSource(source, 'summary', openStart + openTagEndIndex + 1)
+        if (summaryBlock && summaryBlock.closed) {
+          const gap = source.slice(openStart + openTagEndIndex + 1, summaryBlock.start)
+          if (/^[\t \r\n]*$/.test(gap)) {
+            prefixChildren = [
+              buildStructuredSummaryNode(summaryBlock.raw, context, buildDetailsChildParseOptions(options, final)),
+              ...prefixChildren,
+            ]
+          }
+        }
+      }
+    }
+
+    const middleTokens = context.markdownIt.parse(middleSource, { __markstreamFinal: final }) as unknown as MarkdownToken[]
+    const renderedMiddle = context.markdownIt.renderer.render(
+      middleTokens as unknown as Token[],
+      context.markdownIt.options,
+      { __markstreamFinal: final },
+    )
+
+    const contentPrefix = openTagEndIndex !== -1
+      ? source.slice(openStart, openStart + openTagEndIndex + 1)
       : openRaw
 
     const detailsNode = {
@@ -421,12 +496,18 @@ export function combineStructuredDetailsHtmlBlocks(
       attrs: parseTagAttrs(openRaw.slice(0, openTagEndIndex + 1)),
       raw: mergedRaw,
       content: `${contentPrefix}${renderedMiddle}${renderedCloseRaw}`,
-      children: [...prefixChildren, ...children],
+      children: [...prefixChildren, ...structuredChildren],
       loading: !final && !explicitClose,
     } as ParsedNode
 
     if (options.includeSourceMap)
       detailsNode.sourceMap = createSourceMapFromOffsets(source, openStart, explicitClose ? closeSliceEnd : source.length, options)
+
+    // Only closed details are cached: an open details grows every append, so
+    // caching it would return a stale (still-loading) node once its close
+    // arrives (the open-to-closed transition can share the same middleSource).
+    if (stitchCache && explicitClose)
+      stitchCache.set(node, { openRaw, explicitClose, closeSliceEnd, middleSource, node: detailsNode })
 
     merged.push(detailsNode)
 

@@ -10,7 +10,8 @@ import { chromium } from 'playwright-core'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const host = '127.0.0.1'
-const route = '/line-number-handoff-check?theme=dark'
+const overflowMode = process.env.CODE_OVERFLOW === 'scroll' ? 'scroll' : 'wrap'
+const route = `/line-number-handoff-check?theme=dark&codeOverflow=${overflowMode}`
 const frameworkSpecs = {
   vue3: { directory: 'playground', runner: 'vite' },
   vue2: { directory: 'playground-vue2', prepare: 'vue2', runner: 'vite' },
@@ -249,6 +250,8 @@ async function installDocumentStartSampler(page) {
       maximumFallbackHeight: 0,
       heightBeforeHandoff: null,
       firstEditorHeight: null,
+      minimumOverlapHeight: Number.POSITIVE_INFINITY,
+      maximumOverlapHeight: 0,
       contentVisibility: '',
       containIntrinsicSize: '',
       fixedIntrinsicPlaceholderSeen: false,
@@ -257,6 +260,7 @@ async function installDocumentStartSampler(page) {
       fallbackSeen: false,
       fallbackLineNumbers: '',
       fallbackBackground: '',
+      fallbackTheme: '',
       fallbackFontSize: '',
       fallbackLineHeight: '',
       fallbackPaddingTop: '',
@@ -329,19 +333,28 @@ async function installDocumentStartSampler(page) {
       if (visibleFallbackPre) {
         const style = getComputedStyle(visibleFallbackPre)
         const gutter = visibleFallbackPre.querySelector('.markstream-pre__line-numbers-text')
+        const logicalLines = Array.from(visibleFallbackPre.querySelectorAll('.markstream-pre__logical-line'))
+        const logicalLineNumbers = logicalLines
+          .map(line => line.getAttribute('data-line-number') || '')
+          .filter(Boolean)
+          .join(' ')
         const gutterBox = visibleFallbackPre.querySelector('.markstream-pre__line-numbers')
         const gutterStyle = gutterBox ? getComputedStyle(gutterBox) : null
-        state.fallbackLineNumbers ||= gutter?.textContent || ''
-        state.fallbackBackground ||= style.backgroundColor
+        state.fallbackLineNumbers = gutter?.textContent || logicalLineNumbers
+        state.fallbackBackground = style.backgroundColor
+        state.fallbackTheme = visibleFallbackPre.getAttribute('data-markstream-code-theme') || state.fallbackTheme
         state.fallbackFontSize ||= style.fontSize
         state.fallbackLineHeight ||= style.lineHeight
         state.fallbackPaddingTop ||= style.paddingTop
         state.fallbackPaddingBottom ||= style.paddingBottom
         state.fallbackGutterBorderColor ||= gutterStyle?.borderRightColor || ''
         state.fallbackGutterBorderWidth ||= gutterStyle?.borderRightWidth || ''
-        state.fallbackGutterRight ??= gutter?.getBoundingClientRect().right || null
+        if (gutter) {
+          state.fallbackGutterRight = gutter.getBoundingClientRect().right
+        }
         const fallbackCode = visibleFallbackPre.querySelector('.markstream-pre__code, code')
         const fallbackCodeRect = firstVisibleCharacterRect(fallbackCode)
+
         const fallbackCodeStyle = fallbackCode ? getComputedStyle(fallbackCode) : null
         state.fallbackCodeStart ??= fallbackCodeRect?.left ?? null
         state.fallbackCodeTop ??= fallbackCodeRect?.top ?? null
@@ -395,6 +408,10 @@ async function installDocumentStartSampler(page) {
           }
           if (state.currentEditorVisible && !state.currentFallbackVisible)
             state.firstEditorHeight ??= height
+          if (state.currentFallbackVisible && state.currentEditorVisible) {
+            state.minimumOverlapHeight = Math.min(state.minimumOverlapHeight, height)
+            state.maximumOverlapHeight = Math.max(state.maximumOverlapHeight, height)
+          }
           if (state.previousHeight != null) {
             state.maximumHeightDrop = Math.max(state.maximumHeightDrop, state.previousHeight - height)
             state.maximumHeightGrowth = Math.max(state.maximumHeightGrowth, height - state.previousHeight)
@@ -517,10 +534,17 @@ async function collectResult(page, framework, url) {
     const preElement = pre?.querySelector('pre[data-markstream-pre="1"]')
     const preCode = preElement?.querySelector('code')
     const gutter = preElement?.querySelector('.markstream-pre__line-numbers-text')
+    const logicalLines = Array.from(preElement?.querySelectorAll('.markstream-pre__logical-line') || [])
+    const logicalLineNumbers = logicalLines
+      .map(element => element.getAttribute('data-line-number') || '')
+      .filter(Boolean)
+      .join(' ')
     const gutterBox = preElement?.querySelector('.markstream-pre__line-numbers')
     const preStyle = preElement ? getComputedStyle(preElement) : null
     const gutterStyle = gutterBox ? getComputedStyle(gutterBox) : null
     const editor = queryDeep(enhancedBlock, 'diffs-container, .stream-diffs-shell, [data-stream-diffs-state], .code-block-render .shiki')
+    const editorSurface = queryDeep(enhancedBlock, '[data-code]') || editor
+    const editorStyle = editorSurface ? getComputedStyle(editorSurface) : null
     const editorNumberElements = queryAllDeep(editor, '.line-numbers, [data-line-number-content], [data-line-number]')
     const editorFileHeaders = queryAllDeep(editor, '[data-diffs-header], [data-file-header], .stream-diffs-file-header')
       .filter(visible)
@@ -575,7 +599,7 @@ async function collectResult(page, framework, url) {
       headerActionHeight: headerActionButton?.getBoundingClientRect().height || 0,
       headerActionOpacity: headerActionButton ? getComputedStyle(headerActionButton).opacity : '',
       preSource: preCode?.textContent || '',
-      preLineNumbers: gutter?.textContent || '',
+      preLineNumbers: gutter?.textContent || logicalLineNumbers,
       preBackground: preStyle?.backgroundColor || '',
       preColor: preStyle?.color || '',
       preFontFamily: preStyle?.fontFamily || '',
@@ -586,6 +610,18 @@ async function collectResult(page, framework, url) {
       prePaddingBottom: preStyle?.paddingBottom || '',
       prePaddingLeft: preStyle?.paddingLeft || '',
       preOverflowX: preStyle?.overflowX || '',
+      editorBackground: editorStyle?.backgroundColor || '',
+      editorColor: editorStyle?.color || '',
+      editorFontFamily: editorStyle?.fontFamily || '',
+      editorFontSize: editorStyle?.fontSize || '',
+      editorLineHeight: editorStyle?.lineHeight || '',
+      editorPaddingTop: editorStyle?.paddingTop || '',
+      editorPaddingRight: editorStyle?.paddingRight || '',
+      editorPaddingBottom: editorStyle?.paddingBottom || '',
+      editorPaddingLeft: editorStyle?.paddingLeft || '',
+      editorOverflowX: editorStyle?.overflowX || '',
+      editorClientWidth: editorSurface?.clientWidth || 0,
+      editorScrollWidth: editorSurface?.scrollWidth || 0,
       preClientWidth: preElement?.clientWidth || 0,
       preScrollWidth: preElement?.scrollWidth || 0,
       preCodePaddingLeft: preCode ? getComputedStyle(preCode).paddingLeft : '',
@@ -609,6 +645,8 @@ async function collectResult(page, framework, url) {
       maximumFallbackHeight: probe.maximumFallbackHeight || null,
       heightBeforeHandoff: probe.heightBeforeHandoff || null,
       firstEditorHeight: probe.firstEditorHeight || null,
+      minimumOverlapHeight: Number.isFinite(probe.minimumOverlapHeight) ? probe.minimumOverlapHeight : null,
+      maximumOverlapHeight: probe.maximumOverlapHeight || null,
       contentVisibility: probe.contentVisibility || '',
       containIntrinsicSize: probe.containIntrinsicSize || '',
       fixedIntrinsicPlaceholderSeen: probe.fixedIntrinsicPlaceholderSeen || false,
@@ -616,6 +654,7 @@ async function collectResult(page, framework, url) {
       fallbackSeen: probe.fallbackSeen || false,
       fallbackLineNumbers: probe.fallbackLineNumbers || '',
       fallbackBackground: probe.fallbackBackground || '',
+      fallbackTheme: probe.fallbackTheme || '',
       fallbackFontSize: probe.fallbackFontSize || '',
       fallbackLineHeight: probe.fallbackLineHeight || '',
       fallbackPaddingTop: probe.fallbackPaddingTop || '',
@@ -644,7 +683,8 @@ async function collectResult(page, framework, url) {
   }, { framework, url })
 }
 
-function validateResult(result) {
+function validateResult(result, { requireDark = true, requireNarrowPre = true, requireHeaderHover = true } = {}) {
+  const overflow = new URL(result.url).searchParams.get('codeOverflow') === 'scroll' ? 'scroll' : 'wrap'
   const expectedNumbers = Array.from({ length: 13 }, (_, index) => index + 1)
   const preSource = normalizeSource(result.preSource)
   const preLines = preSource.split('\n')
@@ -652,7 +692,8 @@ function validateResult(result) {
   const fallbackNumbers = parseLineNumbers(result.fallbackLineNumbers)
   const editorNumbers = result.editorLineNumbers.map(Number).filter(Number.isFinite)
 
-  assert(result.darkInitially, 'the ?theme=dark page did not initialize in dark mode')
+  if (requireDark)
+    assert(result.darkInitially, 'the ?theme=dark page did not initialize in dark mode')
   if (result.framework === 'svelte') {
     assert(result.enhancedHeadingAnimation === 'none', `enhanced Markdown heading animation is ${result.enhancedHeadingAnimation}`)
     assert(result.preHeadingAnimation === 'none', `Pre Markdown heading animation is ${result.preHeadingAnimation}`)
@@ -678,53 +719,76 @@ function validateResult(result) {
       `code header action is ${result.headerActionWidth}x${result.headerActionHeight}, expected 26x26`,
     )
     assert(result.headerActionOpacity === '1', `code header action opacity is ${result.headerActionOpacity}, expected 1`)
-    assert(result.headerActionHoverBackground === 'rgb(61, 61, 61)', `dark code header action hover background is ${result.headerActionHoverBackground}, expected rgb(61, 61, 61)`)
-    assert(result.headerActionHoverColor === 'rgb(237, 237, 237)', `dark code header action hover color is ${result.headerActionHoverColor}, expected rgb(237, 237, 237)`)
+    if (requireHeaderHover) {
+      assert(result.headerActionHoverBackground === 'rgb(61, 61, 61)', `dark code header action hover background is ${result.headerActionHoverBackground}, expected rgb(61, 61, 61)`)
+      assert(result.headerActionHoverColor === 'rgb(237, 237, 237)', `dark code header action hover color is ${result.headerActionHoverColor}, expected rgb(237, 237, 237)`)
+    }
   }
   assert(preLines.length === 13, `Pre fixture has ${preLines.length} lines instead of 13`)
   assert(preLines.at(-1) === 'done()', `Pre fixture does not end with done(): ${JSON.stringify(preLines.at(-1))}`)
   assert(expectedNumbers.every((number, index) => preNumbers[index] === number), `Pre gutter is not 1..13: ${preNumbers.join(', ')}`)
-  assert(result.preBackground === 'rgb(17, 24, 39)', `dark Pre background is ${result.preBackground}, expected rgb(17, 24, 39)`)
-  assert(result.preFontSize === '16px', `direct Pre font size is ${result.preFontSize}, expected 16px`)
-  assert(result.preLineHeight === '28px', `direct Pre line height is ${result.preLineHeight}, expected 28px`)
+  assert(result.preBackground === 'rgb(18, 18, 18)', `dark Pre background is ${result.preBackground}, expected rgb(18, 18, 18)`)
+  assert(result.fallbackTheme === 'vitesse-dark', `dark fallback theme is ${result.fallbackTheme}, expected vitesse-dark`)
+  assert(result.editorBackground === result.preBackground, `pre/highlight background mismatch: ${result.preBackground} vs ${result.editorBackground}`)
+  assert(result.editorColor === result.preColor, `pre/highlight foreground mismatch: ${result.preColor} vs ${result.editorColor}`)
+  assert(result.preFontSize === result.editorFontSize, `pre/highlight font size mismatch: ${result.preFontSize} vs ${result.editorFontSize}`)
+  assert(result.preLineHeight === result.editorLineHeight, `pre/highlight line height mismatch: ${result.preLineHeight} vs ${result.editorLineHeight}`)
+  assert(result.preFontFamily === result.editorFontFamily, `pre/highlight font family mismatch: ${result.preFontFamily} vs ${result.editorFontFamily}`)
+  assert(result.preFontSize === '12px', `shared Pre font size is ${result.preFontSize}, expected 12px`)
+  assert(result.preLineHeight === '18px', `shared Pre line height is ${result.preLineHeight}, expected 18px`)
+  assert(result.prePaddingTop === '8px', `shared Pre top padding is ${result.prePaddingTop}, expected 8px`)
+  assert(result.prePaddingBottom === '8px', `shared Pre bottom padding is ${result.prePaddingBottom}, expected 8px`)
+  assert(Math.abs(Number.parseFloat(result.prePaddingRight) - 7.20117) <= 0.1, `shared Pre right padding is ${result.prePaddingRight}, expected 1ch`)
+  assert(Math.abs(Number.parseFloat(result.prePaddingLeft) - 45.207) <= 0.1, `shared Pre line-number padding is ${result.prePaddingLeft}, expected gutter plus 1ch`)
   assert(
-    [result.prePaddingTop, result.prePaddingRight, result.prePaddingBottom, result.prePaddingLeft].every(value => value === '0px'),
-    `direct Pre padding must stay on code, got ${result.prePaddingTop} ${result.prePaddingRight} ${result.prePaddingBottom} ${result.prePaddingLeft}`,
+    result.preOverflowX === (overflow === 'wrap' ? 'hidden' : 'auto'),
+    `${overflow} shared Pre overflow-x is ${result.preOverflowX}`,
   )
-  assert(Number.parseFloat(result.preCodePaddingLeft) > 0, `direct Pre code gutter padding is ${result.preCodePaddingLeft}`)
-  assert(result.preOverflowX === 'auto' || result.preOverflowX === 'scroll', `direct Pre overflow-x is ${result.preOverflowX}`)
-  assert(
-    result.narrowPreScrollWidth > result.narrowPreClientWidth && result.narrowPreScrollLeft > 0,
-    `direct Pre long line is not horizontally scrollable at 800px (${result.narrowPreScrollWidth} <= ${result.narrowPreClientWidth}, scrollLeft=${result.narrowPreScrollLeft})`,
-  )
-  assert(
-    result.preFontFamily === 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-    `direct Pre font family is ${result.preFontFamily}`,
-  )
-  assert(
-    result.preGutterBorderColor === 'rgba(0, 0, 0, 0)' || result.preGutterBorderWidth === '0px',
-    `Pre gutter draws a visible separator (${result.preGutterBorderWidth} ${result.preGutterBorderColor})`,
-  )
+  assert(result.preCodePaddingLeft === '0px', `wrapped shared Pre code padding is ${result.preCodePaddingLeft}, expected 0px`)
+  if (requireNarrowPre) {
+    if (overflow === 'wrap') {
+      assert(
+        result.narrowPreScrollWidth === result.narrowPreClientWidth && result.narrowPreScrollLeft === 0,
+        `shared wrapped Pre unexpectedly became horizontally scrollable at 800px (${result.narrowPreScrollWidth} vs ${result.narrowPreClientWidth}, scrollLeft=${result.narrowPreScrollLeft})`,
+      )
+      assert(result.editorScrollWidth <= result.editorClientWidth + 1, `wrapped enhanced surface overflows (${result.editorScrollWidth} vs ${result.editorClientWidth})`)
+    }
+    else {
+      assert(
+        result.narrowPreScrollWidth > result.narrowPreClientWidth && result.narrowPreScrollLeft > 0,
+        `shared scroll Pre did not preserve horizontal overflow at 800px (${result.narrowPreScrollWidth} vs ${result.narrowPreClientWidth}, scrollLeft=${result.narrowPreScrollLeft})`,
+      )
+      assert(result.editorScrollWidth > result.editorClientWidth, `scroll enhanced surface did not overflow (${result.editorScrollWidth} vs ${result.editorClientWidth})`)
+    }
+  }
+  if (result.preGutterBorderColor || result.preGutterBorderWidth) {
+    assert(
+      result.preGutterBorderColor === 'rgba(0, 0, 0, 0)' || result.preGutterBorderWidth === '0px',
+      `Pre gutter draws a visible separator (${result.preGutterBorderWidth} ${result.preGutterBorderColor})`,
+    )
+  }
   assert(result.fallbackSeen, 'enhanced fallback was never observed before the enhanced surface')
   assert(expectedNumbers.every((number, index) => fallbackNumbers[index] === number), `enhanced fallback gutter is not 1..13: ${fallbackNumbers.join(', ')}`)
-  assert(result.fallbackBackground === 'rgb(17, 24, 39)', `dark enhanced fallback background is ${result.fallbackBackground}, expected rgb(17, 24, 39)`)
+  assert(result.fallbackBackground === 'rgb(18, 18, 18)', `dark enhanced fallback background is ${result.fallbackBackground}, expected rgb(18, 18, 18)`)
   assert(result.fallbackFontSize === '12px', `enhanced fallback font size is ${result.fallbackFontSize}, expected 12px`)
   assert(result.fallbackLineHeight === '18px', `enhanced fallback line height is ${result.fallbackLineHeight}, expected 18px`)
   assert(result.fallbackPaddingTop === '8px', `enhanced fallback top padding is ${result.fallbackPaddingTop}, expected 8px`)
   assert(result.fallbackPaddingBottom === '8px', `enhanced fallback bottom padding is ${result.fallbackPaddingBottom}, expected 8px`)
-  assert(
-    result.fallbackGutterBorderColor === 'rgba(0, 0, 0, 0)' || result.fallbackGutterBorderWidth === '0px',
-    `enhanced fallback gutter draws a visible separator (${result.fallbackGutterBorderWidth} ${result.fallbackGutterBorderColor})`,
-  )
+  if (result.fallbackGutterBorderColor || result.fallbackGutterBorderWidth) {
+    assert(
+      result.fallbackGutterBorderColor === 'rgba(0, 0, 0, 0)' || result.fallbackGutterBorderWidth === '0px',
+      `enhanced fallback gutter draws a visible separator (${result.fallbackGutterBorderWidth} ${result.fallbackGutterBorderColor})`,
+    )
+  }
   assert(result.editorVisible && result.editorReadySeen, 'enhanced code surface never became visible')
   assert(
-    result.fallbackGutterRight != null && result.firstEditorGutterRight != null,
-    'handoff line-number gutter positions were not observed',
+    result.fallbackCodeStart != null && result.firstEditorCodeStart != null,
+    'handoff first code-character positions were not observed',
   )
-  const gutterTolerance = strictCodeHandoffFrameworks.has(result.framework) ? 0.02 : 1
+  const codeStartTolerance = strictCodeHandoffFrameworks.has(result.framework) ? codeCharacterHandoffTolerance : 1
   assert(
-    Math.abs(result.fallbackGutterRight - result.firstEditorGutterRight) <= gutterTolerance,
-    `enhanced handoff moved the line-number gutter from ${result.fallbackGutterRight.toFixed(4)}px to ${result.firstEditorGutterRight.toFixed(4)}px`,
+    Math.abs(result.fallbackCodeStart - result.firstEditorCodeStart) <= codeStartTolerance,
+    `enhanced handoff moved the first code character from ${result.fallbackCodeStart.toFixed(4)}px to ${result.firstEditorCodeStart.toFixed(4)}px`,
   )
   if (strictCodeHandoffFrameworks.has(result.framework)) {
     assert(
@@ -788,6 +852,11 @@ function validateResult(result) {
     result.minimumHeight >= result.maximumHeight * 0.85,
     `enhanced code block collapsed to ${result.minimumHeight.toFixed(1)}px while its rendered maximum was ${result.maximumHeight.toFixed(1)}px`,
   )
+  const allowedLayoutJitter = Math.max(2, result.finalHeight * 0.01)
+  assert(
+    result.maximumHeight - result.minimumHeight <= allowedLayoutJitter,
+    `enhanced code block jittered by ${(result.maximumHeight - result.minimumHeight).toFixed(1)}px (allowed ${allowedLayoutJitter.toFixed(1)}px)`,
+  )
   assert(
     result.minimumFallbackHeight != null && result.maximumFallbackHeight != null,
     'no fallback-stage height samples were collected',
@@ -833,8 +902,14 @@ async function runFramework(browser, framework, spec) {
     const cdp = await context.newCDPSession(page)
     await cdp.send('Network.enable')
     await cdp.send('Network.setCacheDisabled', { cacheDisabled: true })
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 })
-    await page.reload({ waitUntil: 'domcontentloaded', timeout: 120000 })
+    await page.goto(url, { waitUntil: 'commit', timeout: 120000 })
+    // Validate a fresh document independently from the reload document. The
+    // page can keep a Vite connection open, so reload waits for `commit`; the
+    // collector then waits for the actual rendered contract instead of a load event.
+    const firstNavigationResult = await collectResult(page, framework, url)
+    validateResult(firstNavigationResult, { requireNarrowPre: false, requireHeaderHover: false })
+
+    await page.reload({ waitUntil: 'commit', timeout: 120000 })
     const result = await collectResult(page, framework, url)
     if (vue3HeaderParityFrameworks.has(framework)) {
       const headerAction = page.locator([
@@ -867,8 +942,35 @@ async function runFramework(browser, framework, spec) {
 
     await page.getByRole('button', { name: 'Toggle dark' }).click()
     await page.waitForFunction(() => !document.querySelector('.handoff-check')?.classList.contains('dark'))
-    result.lightPreBackground = await page.locator('[data-handoff-case="pre"] pre[data-markstream-pre="1"]').evaluate(element => getComputedStyle(element).backgroundColor)
+    const lightVisual = await page.evaluate(() => {
+      const queryDeep = (root, selector) => {
+        const direct = root?.querySelector?.(selector)
+        if (direct)
+          return direct
+        for (const element of root?.querySelectorAll?.('*') || []) {
+          const nested = element.shadowRoot && queryDeep(element.shadowRoot, selector)
+          if (nested)
+            return nested
+        }
+        return null
+      }
+      const pre = document.querySelector('[data-handoff-case="pre"] pre[data-markstream-pre="1"]')
+      const code = queryDeep(document.querySelector('[data-handoff-case="enhanced"]'), '[data-code]')
+      const preStyle = pre ? getComputedStyle(pre) : null
+      const codeStyle = code ? getComputedStyle(code) : null
+      return {
+        preBackground: preStyle?.backgroundColor || '',
+        preTheme: pre?.getAttribute('data-markstream-code-theme') || '',
+        codeBackground: codeStyle?.backgroundColor || '',
+        codeColor: codeStyle?.color || '',
+        preColor: preStyle?.color || '',
+      }
+    })
+    result.lightPreBackground = lightVisual.preBackground
     assert(result.lightPreBackground === 'rgb(255, 255, 255)', `light Pre background is ${result.lightPreBackground}, expected rgb(255, 255, 255)`)
+    assert(lightVisual.preTheme === 'vitesse-light', `light fallback theme is ${lightVisual.preTheme}, expected vitesse-light`)
+    assert(lightVisual.codeBackground === lightVisual.preBackground, `light pre/highlight background mismatch: ${lightVisual.preBackground} vs ${lightVisual.codeBackground}`)
+    assert(lightVisual.codeColor === lightVisual.preColor, `light pre/highlight foreground mismatch: ${lightVisual.preColor} vs ${lightVisual.codeColor}`)
     result.darkToggled = true
     result.browserErrors = browserErrors
     assert(browserErrors.length === 0, `browser errors:\n${browserErrors.join('\n')}`)

@@ -1,3 +1,58 @@
+## [2.0.0-beta.3](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0-beta.2...markstream-vue@2.0.0-beta.3) (2026-08-18)
+
+### What's Changed
+
+- code-block：折叠的 "unmodified lines" pill 与最终高亮面完全对齐（[#690](https://github.com/Simon-He95/markstream-vue/pull/690)）：
+  - 流式 pre 回退以 32px pill（6px 圆角、8px 左右内边距、首尾感知的 8px 间距）渲染折叠行，流式切换高亮面时不再有行高/宽度跳变
+  - 恢复 `47 unmodified lines` 计数文案、chevron 图标与 1ch 内容间距，与 pierre 分隔符逐像素对齐
+- refactor(core)：`buildDiffPreviewPanes` 成为 diff 预览的单一实现（[#690](https://github.com/Simon-He95/markstream-vue/pull/690)）——折叠行 `collapsedFirst/collapsedLast` 标记、"No newline at end of file" 元数据行、git 文件头丢弃、side-by-side 行分组与 hunk 头编号、流式 LCS 完整匹配全部收敛到 markstream-core，Vue 3 `PreCodeNode` 删除内联副本
+- perf(core)：LCS 跨帧增量复用（[#690](https://github.com/Simon-He95/markstream-vue/pull/690)）——流式追加帧只对新增尾部重新计算，2000 行 diff（50 处变更、20 帧）整体 7.9× 提速（184.3ms → 23.4ms），结果与全量重算一致
+- perf：五项渲染器性能优化 + benchmark 证据（[#691](https://github.com/Simon-He95/markstream-vue/pull/691)）：
+  - 批量调度器：纯追加增长不再重置自适应批量大小
+  - 高度模型：Fenwick 树增量生长（高度树微基准 3.1–10.8× 提速）
+  - 测量：`markSettled` 只测量已 settle 的节点
+  - 虚拟时间线：线程状态记忆节流为每 80ms 一次
+  - 渲染项：按解析节点身份缓存（reactive signature）
+  - web-vitals 实测：滚动 DOM 节点 5062 → 3494（-31%），scroll interactionId 7529 → 2297（-69.5%），无回归
+- perf(renderer)：指标 emit 前的全量重测节流到每 120ms 一次（[#691](https://github.com/Simon-He95/markstream-vue/pull/691)），settle 阶段扫描率降低约 75%
+- 解析器同步 `stream-markdown-parser@1.2.7-beta.1`：消除流式解析管线中每次 append 的 O(n) 扫描（[#686](https://github.com/Simon-He95/markstream-vue/pull/686)）、流式 fence 前缀抖动（[#687](https://github.com/Simon-He95/markstream-vue/pull/687)）、split-opener details 拼接修正与缓存
+
+### Coordinated beta versions
+
+- `stream-markdown-parser@1.2.7-beta.1`
+- `markstream-core@1.1.0-beta.3`
+- `markstream-react@0.1.0-beta.4`
+- `markstream-octane@0.1.0-beta.4`
+- `markstream-svelte@0.1.0-beta.4`
+- `markstream-angular@0.1.0-beta.4`
+- `markstream-vue2@0.1.0-beta.4`
+
+## [2.0.0-beta.2](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0-beta.1...markstream-vue@2.0.0-beta.2) (2026-08-14)
+
+### What's Changed
+
+- code-block：统一 pre 回退的视觉契约并修复流式高度估算（[#677](https://github.com/Simon-He95/markstream-vue/pull/677)）：
+  - 提取共享 `PreCodeBlock` 组件，回退与 renderer pre 路径共用一套渲染，`showLineNumbers` 默认开启
+  - 新增 `preCodeVisual` 主题解析：dark → `vitesse-dark`，light → `vitesse-light`
+  - 移除流式高度下限，回退高度即时跟随实际内容
+  - 普通与 diff 回退的几何、EOF 元数据、主题色板、header、复制行为对齐最终高亮面，补齐 wrap / scroll / unified / split 布局的 handoff 回归门
+- mermaid：超大图自动适配预览区（[#676](https://github.com/Simon-He95/markstream-vue/pull/676)）：
+  - CSS `max-height` 等比缩放并居中，替代约 100 行 JS 手动 fit；`resetZoom` 恢复原生 100%
+  - 容器高度在 max-height 裁剪后变化时自动重新适配，模式/主题切换保留已适配视图
+  - worker 超时（WORKER_TIMEOUT）回退主线程解析，不再永久 pending
+- 解析器：保留中文数字区间中的波浪号，并收紧行内 sub/sup/mark/ins 配对规则，防止 CJK 交叉误配对（[#680](https://github.com/Simon-He95/markstream-vue/pull/680)）
+- 新增 parser 主分支发布脚本（[#683](https://github.com/Simon-He95/markstream-vue/pull/683)）
+
+### Coordinated beta versions
+
+- `stream-markdown-parser@1.2.6-beta.1`
+- `markstream-core@1.1.0-beta.2`
+- `markstream-react@0.1.0-beta.3`
+- `markstream-octane@0.1.0-beta.3`
+- `markstream-svelte@0.1.0-beta.3`
+- `markstream-angular@0.1.0-beta.3`
+- `markstream-vue2@0.1.0-beta.3`
+
 ## [2.0.0-beta.1](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@1.1.2-beta.3...markstream-vue@2.0.0-beta.1) (2026-08-11)
 
 ### ⚠ Breaking changes

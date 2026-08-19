@@ -1736,7 +1736,7 @@ async function runBrowserCase(browser, port, mode, testCase) {
     })
     const client = await page.context().newCDPSession(page)
     await client.send('Performance.enable')
-    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'load' })
+    await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'networkidle' })
     await page.waitForFunction(() => window.__ready === true)
     if (browserCpuThrottleRate > 1)
       await client.send('Emulation.setCPUThrottlingRate', { rate: browserCpuThrottleRate })
