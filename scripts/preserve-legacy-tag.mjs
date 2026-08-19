@@ -11,7 +11,7 @@
 // Usage: node scripts/preserve-legacy-tag.mjs <package-name> <version>
 import { spawnSync } from 'node:child_process'
 import process from 'node:process'
-import { resolveDistTagPlan, readPublishedDistTags } from './resolve-dist-tag.mjs'
+import { readPublishedDistTags, resolveDistTagPlan } from './resolve-dist-tag.mjs'
 
 const [packageName, version] = process.argv.slice(2)
 if (!packageName || !version)

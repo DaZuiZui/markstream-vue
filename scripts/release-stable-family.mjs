@@ -158,6 +158,10 @@ if (bumped === 0)
 run('pnpm', ['install', '--lockfile-only'])
 run('pnpm', ['run', 'docs:llms:generate'])
 run('pnpm', ['run', 'docs:sync-zh'])
+// Full-repo lint before tagging: the Release (Stable) workflow runs
+// `pnpm lint` inside release:verify for markstream-vue, so any lint error
+// would otherwise kill the publish run at the head of the queue.
+run('pnpm', ['run', 'lint'])
 run('pnpm', ['run', 'check:peer-deps'])
 
 const changelog = readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8')
