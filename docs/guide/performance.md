@@ -89,6 +89,52 @@ pnpm benchmark:1.0
 
 This builds the playground, runs the scenarios through `vite preview`, and writes JSON and Markdown summaries under `benchmark/`, including environment disclosure so release notes can cite measured numbers instead of informal claims.
 
+## 2.0 measured results
+
+Run the same command on the `2.0.0` line and compare against the checked-in 1.0.x reports under `benchmark/` on the same machine. The table below records the comparable scenarios from a 2.0.0-beta.3 run (Apple M1 Pro, Chrome 151, viewport 1600×1200) against the `1.0.6-beta.3` report from the same machine. Diagnostic Studio rows are **not** directly comparable: 1.0 ran them in the plain `markdown` render mode, 2.0 runs the enhanced `stream-diffs` code surface, which mounts more DOM and does more work by design.
+
+### Main playground chat (reverse-flex)
+
+| Metric | 1.0.6-beta.3 | 2.0.0-beta.3 | Change |
+| --- | ---: | ---: | --- |
+| initial LCP (ms) | 276 | 360 | +30% (2.0 default surfaces) |
+| initial settle (ms) | 588 | 653 | +11% |
+| initial frame p95 (ms) | 10.2 | 8.8 | **−14%** |
+| initial long task total (ms) | 139 | 181 | +30% |
+| stream replay settle (ms) | 442 | 445 | ~flat |
+| replay frame p95 (ms) | 9.5 | 9.0 | **−5%** |
+| replay page DOM nodes | 331 | 309 | **−7%** |
+| replay heap before unmount (MB) | 14.9 | 13.5 | **−10%** |
+| full-scroll heavy settle frame p95 (ms) | 10.1 | 8.4 | **−17%** |
+| full-scroll parse total (ms) | 1.7 | 1.1 | **−35%** |
+
+The 2.0 regression behind the initial-phase increases is the default activation of extra surfaces (enhanced code-block runtime, viewport-priority plumbing); interactive scrolling and streaming replay are strictly better. Re-run locally before quoting any single number.
+
+### Bundle size vs 1.0.6
+
+Measured from `pnpm build` output on the same machine (all `dist/*.js` concatenated, gzip):
+
+| Artifact | 1.0.6 | 2.0.0-beta.3 | Change |
+| --- | ---: | ---: | --- |
+| JS gzip | 178.4 KB | 180.0 KB | +0.9% |
+| CSS gzip | 47.7 KB | 40.5 KB | **−15%** |
+| npm pack tarball | 269.8 KB | 267.3 KB | −0.9% |
+| npm unpacked | 1.1 MB | 1.0 MB | **−9%** |
+
+2.0 ships virtualized rendering, the virtual timeline protocol, and the stream-diffs code surface with essentially flat JS size and a smaller stylesheet.
+
+### Renderer hot-path micro-benchmarks (2.0 optimizations)
+
+Measured by the checked-in benchmark tests (`pnpm test` runs them; outputs are logged with `[prefix-bench]`, `[render-items-bench]`):
+
+| Hot path | Before | After | Speedup |
+| --- | ---: | ---: | --- |
+| Fallback height prefix rebuild per streaming session | 1029 ms | 225 ms | **4.6x** |
+| Height-signature invalidation per commit | 0.0277 ms | 0.0009 ms | **32x** |
+| Non-virtualized render-item maintenance per session | 170.7 ms | 4.6 ms | **36.8x** |
+| custom-HTML stream session (parser regex reuse) | 166.7 ms | 153.7 ms | **−7.8%** |
+| KaTeX burst renders (4 appends) | 4 requests | 1 request | **4x fewer** |
+
 ## Bundle size workflow (maintainers)
 
 If you are changing code paths that can impact build size (renderers, code blocks, optional peers), run this flow before merging:
@@ -130,7 +176,7 @@ For immediate rendering of every heavy node, use `<MarkdownRender :content="md" 
 
 `MarkdownRender` keeps a moving window of nodes in memory so extremely long documents stay responsive:
 
-- `maxLiveNodes` (default `220`) caps how many fully rendered nodes remain in the DOM. Tune this based on your layout — lower values reduce memory but require slightly more placeholder churn; higher values prioritise scrollback.
+- `maxLiveNodes` (default `320`) caps how many fully rendered nodes remain in the DOM. Tune this based on your layout — lower values reduce memory but require slightly more placeholder churn; higher values prioritise scrollback.
 - `liveNodeBuffer` controls overscan on both sides of the focus window (default `60`). Increase it when nodes vary wildly in height to avoid visible pop-in while scrolling fast.
 - `deferNodesUntilVisible` together with `viewportPriority` defers mounting heavy nodes (Mermaid, enhanced code surfaces, KaTeX) until an observer reports they are close to the viewport.
 - `batchRendering`, `initialRenderBatchSize`, `renderBatchSize`, `renderBatchDelay`, and `renderBatchBudgetMs` govern how many nodes switch from placeholders to full components per frame. This incremental mode only runs when virtualization is disabled (`:max-live-nodes="0"`); otherwise the virtual window already limits DOM work, so nodes are rendered immediately without placeholders.

@@ -166,7 +166,7 @@ flowchart TD
 
 | Prop | 默认值 | 说明 |
 | ---- | ------ | ---- |
-| `max-live-nodes` | `220` | 虚拟化阈值；设为 `0` 可关闭虚拟化（全部渲染）。 |
+| `max-live-nodes` | `320` | 虚拟化阈值；设为 `0` 可关闭虚拟化（全部渲染）。 |
 | `live-node-buffer` | `60` | 视窗前后保留的节点数量（overscan）。 |
 | `batch-rendering` | `true` | 分批渲染（仅当 `max-live-nodes <= 0` 时启用）。 |
 | `smooth-streaming` | `'auto'` | 在 typewriter / 增量模式下内置流式 pacing（`typewriter=true`、`typewriter='simple'`、`typewriter='precise'` 或 `max-live-nodes <= 0`）。设 `true` 强制启用，`false` 按原始 chunk 节奏渲染。 |
@@ -177,6 +177,24 @@ flowchart TD
 | `render-batch-budget-ms` | `6` | 单批预算（ms），超过后会自适应缩小后续 batch。 |
 | `render-batch-idle-timeout-ms` | `120` | `requestIdleCallback` 切片的超时（ms，若可用）。 |
 | `virtual-scroll` | – | 向外层 virtualizer 报告逻辑高度与恢复状态。监听 `height-change`，并使用 `metrics.totalHeight` 作为消息/item 高度。`enabled=true` 时请传稳定的 `sessionKey`。 |
+
+## `MarkdownRender` 事件
+
+| 事件 | 载荷 | 触发时机 |
+| ---- | ---- | ---- |
+| `copy` | `string` | 代码块复制按钮复制了代码。 |
+| `copy-code` | `string` | 与 `copy` 相同（保留的 kebab-case 别名，属于公开事件契约）。 |
+| `handle-artifact-click` | `CodeBlockPreviewPayload` | 点击了代码块 HTML 预览产物。 |
+| `click` | `MouseEvent` | 渲染内容中的点击事件冒泡。 |
+| `mouseover` | `MouseEvent` | 鼠标进入渲染内容。 |
+| `mouseout` | `MouseEvent` | 鼠标离开渲染内容。 |
+| `height-change` | `MarkstreamVirtualMetrics` | 发起逻辑高度指标（外部虚拟滚动协调；按 `emitIntervalMs` 节流）。 |
+| `virtual-state-change` | `MarkstreamVirtualState` | 发起虚拟布局状态快照（测量、锚点、高度缓存）。 |
+| `render-settled` | `MarkstreamVirtualMetrics` | 内容/测量变化后渲染收敛。 |
+| `render-final` | `MarkstreamVirtualMetrics` | 最终渲染完成（`final` 内容收敛后）。 |
+| `anchor-change` | `MarkstreamVirtualAnchor` | 虚拟滚动锚点变化（用于恢复协调）。 |
+
+所有载荷类型均从 `markstream-vue` 导出（`MarkstreamVirtualMetrics`、`MarkstreamVirtualState`、`MarkstreamVirtualAnchor`、`CodeBlockPreviewPayload`）。
 
 ## 代码块全局选项（由 `MarkdownRender` 下发）
 
