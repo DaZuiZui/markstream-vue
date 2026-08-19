@@ -39,6 +39,76 @@ pnpm benchmark:1.0
 
 它会构建 playground，通过 `vite preview` 跑 Diagnostic Studio baseline/thinking/diff/stress、主 playground reverse-flex chat 场景，以及百万字符恢复与脚本滚动的真实浏览器 Web Vitals probe，并在 `benchmark/` 下生成 JSON 与 Markdown 报告，包含环境披露、LCP、CLS、settle time、p95 `requestAnimationFrame` interval、long task、page 与 renderer DOM 节点数、fallback、重节点 readiness、滚动漂移和 Chrome-only best-effort 的 renderer unmount + GC 后 heap 等指标。1000 code blocks、100 Mermaid、10k nodes 这类 synthetic 场景属于后续 1.0.x 覆盖，未接入脚本前不要作为 1.0 release evidence。
 
+## 2.0 实测结果
+
+同机同日对比：在 Apple M1 Pro、Chrome 151（1600×1200 视口）上按「1.0.6 → 2.0.0-beta.3」与「2.0.0-beta.3 → 1.0.6」交替串行跑了两轮，各版本使用自己 repo 内的 playground 与 benchmark 脚本。下表为两轮中位数；两轮偏差超过 ±10 个百分点的指标标注为高波动，不建议写进发布说明。
+
+### 主 playground 对话（reverse-flex）
+
+| 指标 | 1.0.6 | 2.0.0-beta.3 | 中位变化 | 第 1 轮 / 第 2 轮 |
+| --- | ---: | ---: | ---: | --- |
+| 首帧 LCP（ms） | 346 | 384 | ↑11%（高波动） | +23.5% / −1.1% |
+| 首帧 settle（ms） | 628 | 649 | ↑3% | +7.4% / −0.8% |
+| 首帧 JS heap（MB） | 12.2 | 13.6 | **↑11%** | +11.6% / +11.0% |
+| 全滚动后重节点 settle frame p95（ms） | 9.0 | 10.0 | **↑8%** | +8.9% / +7.5% |
+| 全滚动 JS heap（MB） | 12.9 | 13.5 | ↑5% | +5.8% / +3.7% |
+| 流式回放 settle（ms） | 372 | 451 | ↑26%（高波动） | +49.9% / +1.7% |
+| 回放 renderer DOM 节点数 | 9 | 13 | **↑44%** | 两轮一致 |
+| 回放卸装前 JS heap（MB） | 14.5 | 13.6 | **↓6%** | −4.4% / −7.8% |
+| 卸装后 memory（MB） | 8.8 | 9.1 | ↑4% | +4.5% / +3.6% |
+
+稳定结论：
+
+- **2.0 会多挂少量 renderer DOM 节点（回放 9 → 13）**，常驻状态使**首帧 JS heap 增加约 +11%**——这是 1.x 没有的虚拟滚动协议、高度模型与 async-node 记账的代价。
+- **流式回放内存严格更优（卸装前 heap −6%）**——增量 render-item 与 dirty-start 高度失效在初始 pacing 结束后开始生效。
+- 首帧 LCP / 回放 settle 的上升真实存在但**高波动**（围栏原子提交带来每围栏一次 parse+布局，具体成本取决于文档含多少围栏与浏览器调度）。
+
+初始阶段与回放的上升主要来自 **markstream-core 1.1 新增的流式代码围栏原子提交**：reveal 在未闭合的 ``` 处暂停，围栏（marker、info 行、内容）作为原子单元提交，含多个围栏的文档因此被切成更多更小的围栏对齐提交，每次提交多一次解析与布局。这是流式正确性特性（1.x 会把半开的围栏提前暴露给渲染器），并非代码块表面的成本。
+
+**已在 2.0.0-beta.4+ 缓解**：`SmoothMarkdownStreamOptions.burstInitialContent`（渲染器对非 typewriter 流默认开启）会把 pending ≥ 2048 字的一次性内容在单次提交中 reveal 到围栏安全边界。用 node rAF harness 实测 4589 字文档：38 次 reveal / ~1943ms → 2 次 reveal / ~87ms，未闭合的围栏开始行仍会被 withhold。上表 playground 中回放 DOM 节点回归（13 → 9）与全滚动重节点 frame p95（10.0 → 8.4ms）已被消除；chat 场景按 ~1.4KB 分片喂入（低于 burst 阈值），因此其 initial LCP 按设计保持不变。
+
+Diagnostic Studio 场景跨版本不可比：1.0 用普通 `markdown` 渲染模式，2.0 用增强的 `stream-diffs` 代码表面。
+
+### Parser 吞吐（同机同日）
+
+用官方 corpus（prose-code-math 与 headings-lists，1x/2x/4x）分别对两个版本的 parser 构建跑 `scripts/benchmark-parser-performance.mjs`：
+
+| 场景 | 1.0.6 commit 中位 | 2.0.0-beta.3 commit 中位 | 变化 |
+| --- | ---: | ---: | ---: |
+| prose-code-math 1x | 0.417 ms | 0.376 ms | **−9.8%** |
+| prose-code-math 2x | 0.437 ms | 0.329 ms | **−24.7%** |
+| prose-code-math 4x | 0.592 ms | 0.336 ms | **−43.2%** |
+| headings-lists 1x | 0.507 ms | 0.466 ms | **−8.1%** |
+| headings-lists 2x | 0.591 ms | 0.426 ms | **−27.9%** |
+| headings-lists 4x | 0.833 ms | 0.470 ms | **−43.6%** |
+
+2.0 parser 全面更快（流式 token 复用、dirty-tail 节点复用），且文档越大差距越明显——大流式回答收益最大。
+
+### 与 1.0.6 的包体积对比
+
+同机 `pnpm build` 产物（拼接全部 `dist/*.js`，gzip）：
+
+| 产物 | 1.0.6 | 2.0.0-beta.3 | 变化 |
+| --- | ---: | ---: | ---: |
+| JS gzip | 178.4 KB | 180.0 KB | +0.9% |
+| CSS gzip | 47.7 KB | 40.5 KB | **−15%** |
+| npm pack 压缩包 | 269.8 KB | 267.3 KB | −0.9% |
+| npm unpacked | 1.1 MB | 1.0 MB | **−9%** |
+
+2.0 在加入虚拟化渲染、虚拟时间线协议与 stream-diffs 代码表面的情况下，JS 体积基本持平、样式体积更小。
+
+### 渲染器热路径微基准（2.0 优化）
+
+由入库的基准测试测得（`pnpm test` 会运行它们，输出带 `[prefix-bench]`、`[render-items-bench]` 前缀）：
+
+| 热路径 | 前 | 后 | 加速 |
+| --- | ---: | ---: | ---: |
+| 每次流式会话的 fallback 高度前缀重建 | 1029 ms | 225 ms | **4.6x** |
+| 每次 commit 的高度签名失效 | 0.0277 ms | 0.0009 ms | **32x** |
+| 每会话非虚拟化 render-item 维护 | 170.7 ms | 4.6 ms | **36.8x** |
+| custom-HTML 流式会话（parser 正则复用） | 166.7 ms | 153.7 ms | **−7.8%** |
+| KaTeX 突发渲染（4 次 append） | 4 次请求 | 1 次请求 | **少 4 倍** |
+
 ## 包体积优化流程（维护者）
 
 当你修改可能影响构建体积的路径（渲染器、代码块、可选 peer）时，建议在合并前执行：
@@ -64,7 +134,7 @@ pnpm benchmark:1.0
 
 `MarkdownRender` 会维护一个滑动窗口，只让一部分节点常驻 DOM，从而在极长的对话或文档中保持流畅：
 
-- `maxLiveNodes`（默认 `220`）定义了 DOM 中最多保留多少个已完全渲染的节点。减小可以省内存、增大可以保留更多回溯内容。
+- `maxLiveNodes`（默认 `320`）定义了 DOM 中最多保留多少个已完全渲染的节点。减小可以省内存、增大可以保留更多回溯内容。
 - `liveNodeBuffer` 控制窗口前后的超前/超后范围（默认 `60`）。如果节点高度差异巨大，可增大该值以避免快速滚动时闪烁。
 - `deferNodesUntilVisible` 搭配 `viewportPriority` 使用，可以让 Mermaid、增强代码 surface、KaTeX 等重型节点在进入视口之前保持占位骨架。
 - `batchRendering` 以及 `initialRenderBatchSize`、`renderBatchSize`、`renderBatchDelay`、`renderBatchBudgetMs` 控制每一帧有多少节点从占位态切换为真实组件。该增量模式仅在关闭虚拟化（`:max-live-nodes="0"`）时生效；默认开启虚拟化时，所有节点会立即渲染，依靠窗口裁剪来限制 DOM 工作量。

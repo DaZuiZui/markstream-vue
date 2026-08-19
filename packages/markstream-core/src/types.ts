@@ -8,6 +8,16 @@ export interface SmoothMarkdownStreamOptions {
   startDelayMs?: number
   maxCharsPerCommit?: number
   flushOnFinish?: boolean
+  /**
+   * When true, a single content block of at least `burstRevealThresholdChars`
+   * is revealed up to the fence-safe boundary in one commit instead of being
+   * paced per-character. Keeps streaming-correctness (unclosed fences are
+   * still withheld) while large one-shot documents render immediately.
+   * Typewriter callers should keep this off. Defaults to false.
+   */
+  burstInitialContent?: boolean
+  /** Minimum pending chars for `burstInitialContent` to apply. Defaults to 2048. */
+  burstRevealThresholdChars?: number
 }
 
 export interface SmoothMarkdownStreamSnapshot {

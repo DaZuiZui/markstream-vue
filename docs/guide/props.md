@@ -15,7 +15,7 @@ Use this page when you need to fine-tune streaming behaviour, control heavy node
 
 ## 1.0 API tiers
 
-Stable props for 1.x: `content`, `nodes`, `final`, `parseOptions`, `customMarkdownIt`, `customHtmlTags`, `htmlPolicy`, `mode`, `domMode`, `showTooltips`, `isDark`, `customId`, `typewriter`, `smoothStreaming`, `smoothStreamingOptions`, `codeRenderer`, `renderCodeBlocksAsPre`, `codeBlockStream`, `codeBlockProps`, `codeBlockDarkTheme`, `codeBlockLightTheme`, `mermaidProps`, `d2Props`, `infographicProps`, `batchRendering`, `deferNodesUntilVisible`, `maxLiveNodes`, `liveNodeBuffer`, `nodeVirtual`, and `virtualScroll`.
+Stable props for 1.x: `content`, `nodes`, `final`, `parseOptions`, `customMarkdownIt`, `customHtmlTags`, `htmlPolicy`, `mode`, `domMode`, `showTooltips`, `isDark`, `customId`, `typewriter`, `smoothStreaming`, `smoothStreamingOptions`, `renderCodeBlocksAsPre`, `codeBlockStream`, `codeBlockProps`, `codeBlockDarkTheme`, `codeBlockLightTheme`, `mermaidProps`, `d2Props`, `infographicProps`, `batchRendering`, `deferNodesUntilVisible`, `maxLiveNodes`, `liveNodeBuffer`, `nodeVirtual`, and `virtualScroll`.
 
 Advanced performance tuning prop: `parseCoalesceMs` is available in 1.x, but its scheduling semantics may be refined.
 
@@ -176,7 +176,7 @@ Use `html-policy="escape"` when you want literal HTML text to stay visible inste
 
 | Prop | Default | Notes |
 | ---- | ------- | ----- |
-| `max-live-nodes` | `220` | Virtualization threshold; set `0` to disable virtualization (renders everything). |
+| `max-live-nodes` | `320` | Virtualization threshold; set `0` to disable virtualization (renders everything). |
 | `live-node-buffer` | `60` | Overscan window (how many nodes to keep before/after the focus range). |
 | `batch-rendering` | `true` | Incremental rendering batches (only when `max-live-nodes <= 0`). |
 | `smooth-streaming` | `'auto'` | Built-in stream pacing in typewriter/incremental mode (`typewriter=true`, `typewriter='simple'`, `typewriter='precise'`, or `max-live-nodes <= 0`). Set `true` to force-enable, `false` for raw chunk cadence. |
@@ -187,6 +187,24 @@ Use `html-policy="escape"` when you want literal HTML text to stay visible inste
 | `render-batch-budget-ms` | `6` | Time budget (ms) before adaptive batch sizes shrink. |
 | `render-batch-idle-timeout-ms` | `120` | Timeout (ms) for `requestIdleCallback` slices (when available). |
 | `virtual-scroll` | – | Reports logical height and restore state to an outer virtualizer. Listen to `height-change` and use `metrics.totalHeight` as the message/item size. When `enabled=true`, pass a stable `sessionKey`. |
+
+## Events on `MarkdownRender`
+
+| Event | Payload | Fires when |
+| ----- | ------- | ---------- |
+| `copy` | `string` | A code block copy button copies code. |
+| `copy-code` | `string` | Same as `copy` (kebab-case alias kept for the public event contract). |
+| `handle-artifact-click` | `CodeBlockPreviewPayload` | A code-block HTML preview artifact is clicked. |
+| `click` | `MouseEvent` | A click bubbles up from renderer content. |
+| `mouseover` | `MouseEvent` | Mouse enters renderer content. |
+| `mouseout` | `MouseEvent` | Mouse leaves renderer content. |
+| `height-change` | `MarkstreamVirtualMetrics` | Logical height metrics are emitted (host virtual-scroll coordination; throttled to the configured `emitIntervalMs`). |
+| `virtual-state-change` | `MarkstreamVirtualState` | A capture of the virtual layout state (measurements, anchor, height cache) is emitted. |
+| `render-settled` | `MarkstreamVirtualMetrics` | Rendering settled after content/measurement changes. |
+| `render-final` | `MarkstreamVirtualMetrics` | Final render completion (after `final` content converges). |
+| `anchor-change` | `MarkstreamVirtualAnchor` | The virtual scroll anchor changes (used for restore coordination). |
+
+All payload types are exported from `markstream-vue` (`MarkstreamVirtualMetrics`, `MarkstreamVirtualState`, `MarkstreamVirtualAnchor`, `CodeBlockPreviewPayload`).
 
 ## Global code block options (forwarded from `MarkdownRender`)
 

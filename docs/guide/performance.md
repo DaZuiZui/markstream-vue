@@ -89,6 +89,86 @@ pnpm benchmark:1.0
 
 This builds the playground, runs the scenarios through `vite preview`, and writes JSON and Markdown summaries under `benchmark/`, including environment disclosure so release notes can cite measured numbers instead of informal claims.
 
+## 2.0 measured results
+
+Same-machine, same-day comparison: the benchmark was run twice in alternating order
+(`1.0.6` → `2.0.0-beta.3`, then `2.0.0-beta.3` → `1.0.6`) on an Apple M1 Pro with
+Chrome 151 (viewport 1600×1200), using each version's own checked-in playground and
+benchmark script. Rows below are the median of the two rounds. Metrics whose two
+rounds disagree by more than ±10 points are flagged as high-variance and should not
+be cited in release notes.
+
+### Main playground chat (reverse-flex)
+
+| Metric | 1.0.6 | 2.0.0-beta.3 | Median change | Round 1 / Round 2 |
+| --- | ---: | ---: | ---: | --- |
+| initial LCP (ms) | 346 | 384 | ↑11% (high variance) | +23.5% / −1.1% |
+| initial settle (ms) | 628 | 649 | ↑3% | +7.4% / −0.8% |
+| initial JS heap (MB) | 12.2 | 13.6 | **↑11%** | +11.6% / +11.0% |
+| full-scroll heavy-settle frame p95 (ms) | 9.0 | 10.0 | **↑8%** | +8.9% / +7.5% |
+| full-scroll JS heap (MB) | 12.9 | 13.5 | ↑5% | +5.8% / +3.7% |
+| replay settle (ms) | 372 | 451 | ↑26% (high variance) | +49.9% / +1.7% |
+| replay renderer DOM nodes | 9 | 13 | **↑44%** | both rounds identical |
+| replay JS heap before unmount (MB) | 14.5 | 13.6 | **↓6%** | −4.4% / −7.8% |
+| memory after unmount (MB) | 8.8 | 9.1 | ↑4% | +4.5% / +3.6% |
+
+Stable findings:
+
+- **2.0 mounts a few extra renderer DOM nodes (replay: 9 → 13)** and its resident state costs about **+11% initial JS heap** — the price of the virtual-scroll protocol, the height model, and async-node bookkeeping that did not exist in 1.x.
+- **Streaming replay memory is strictly better (−6% heap before unmount)** — the incremental render-item and dirty-start height work pays off once the initial paced reveal settles.
+- Initial LCP/replay-settle movement is real but **high-variance** (fence-atomic smooth commits add per-fence parse+layout passes; the exact cost depends on how many fences the document contains and browser scheduling).
+
+The initial-phase and replay increases are dominated by the **streaming code-fence atomicity** added in markstream-core 1.1: reveal pauses at unclosed ``` fences and each fence (marker, info line, body) commits as one atomic unit, so documents with several fences are revealed as more, smaller fence-aligned commits, each costing one parse + layout pass. This is a streaming-correctness feature (1.x could expose half-open fences to the renderer), not a code-block-surface cost.
+
+**Mitigated in 2.0.0-beta.4+**: `SmoothMarkdownStreamOptions.burstInitialContent` (enabled by the renderer for non-typewriter streams) reveals one-shot content of ≥2048 pending chars up to the fence-safe boundary in a single commit. Measured on a 4589-char document with a node rAF harness: 38 reveals / ~1943 ms → 2 reveals / ~87 ms, with unclosed fence opening lines still withheld. In the playground benchmark above, the replay DOM-node regression (13 → back to 9) and full-scroll heavy-settle frame p95 (10.0 → 8.4 ms) are already gone; the chat scenario feeds ~1.4 KB slices (below the burst threshold), so its initial LCP is unchanged by design.
+
+Diagnostic Studio rows are not comparable across versions: 1.0 runs them in the plain
+`markdown` render mode, 2.0 in the enhanced `stream-diffs` code surface.
+
+### Parser throughput (same machine, same-day)
+
+`scripts/benchmark-parser-performance.mjs` run against both parser builds with the
+official corpus (prose-code-math and headings-lists, scales 1x/2x/4x):
+
+| Case | 1.0.6 commit median | 2.0.0-beta.3 commit median | Change |
+| --- | ---: | ---: | ---: |
+| prose-code-math 1x | 0.417 ms | 0.376 ms | **−9.8%** |
+| prose-code-math 2x | 0.437 ms | 0.329 ms | **−24.7%** |
+| prose-code-math 4x | 0.592 ms | 0.336 ms | **−43.2%** |
+| headings-lists 1x | 0.507 ms | 0.466 ms | **−8.1%** |
+| headings-lists 2x | 0.591 ms | 0.426 ms | **−27.9%** |
+| headings-lists 4x | 0.833 ms | 0.470 ms | **−43.6%** |
+
+The 2.0 parser is faster across the board (stream-token reuse, dirty-tail node
+reuse, and the incremental height/rendering work behind these numbers are the
+same optimizations benchmarked in the hot-path table below). The gap widens with
+document size, so large streaming answers benefit the most.
+
+### Bundle size vs 1.0.6
+
+Measured from `pnpm build` output on the same machine (all `dist/*.js` concatenated, gzip):
+
+| Artifact | 1.0.6 | 2.0.0-beta.3 | Change |
+| --- | ---: | ---: | --- |
+| JS gzip | 178.4 KB | 180.0 KB | +0.9% |
+| CSS gzip | 47.7 KB | 40.5 KB | **−15%** |
+| npm pack tarball | 269.8 KB | 267.3 KB | −0.9% |
+| npm unpacked | 1.1 MB | 1.0 MB | **−9%** |
+
+2.0 ships virtualized rendering, the virtual timeline protocol, and the stream-diffs code surface with essentially flat JS size and a smaller stylesheet.
+
+### Renderer hot-path micro-benchmarks (2.0 optimizations)
+
+Measured by the checked-in benchmark tests (`pnpm test` runs them; outputs are logged with `[prefix-bench]`, `[render-items-bench]`):
+
+| Hot path | Before | After | Speedup |
+| --- | ---: | ---: | --- |
+| Fallback height prefix rebuild per streaming session | 1029 ms | 225 ms | **4.6x** |
+| Height-signature invalidation per commit | 0.0277 ms | 0.0009 ms | **32x** |
+| Non-virtualized render-item maintenance per session | 170.7 ms | 4.6 ms | **36.8x** |
+| custom-HTML stream session (parser regex reuse) | 166.7 ms | 153.7 ms | **−7.8%** |
+| KaTeX burst renders (4 appends) | 4 requests | 1 request | **4x fewer** |
+
 ## Bundle size workflow (maintainers)
 
 If you are changing code paths that can impact build size (renderers, code blocks, optional peers), run this flow before merging:
@@ -130,7 +210,7 @@ For immediate rendering of every heavy node, use `<MarkdownRender :content="md" 
 
 `MarkdownRender` keeps a moving window of nodes in memory so extremely long documents stay responsive:
 
-- `maxLiveNodes` (default `220`) caps how many fully rendered nodes remain in the DOM. Tune this based on your layout — lower values reduce memory but require slightly more placeholder churn; higher values prioritise scrollback.
+- `maxLiveNodes` (default `320`) caps how many fully rendered nodes remain in the DOM. Tune this based on your layout — lower values reduce memory but require slightly more placeholder churn; higher values prioritise scrollback.
 - `liveNodeBuffer` controls overscan on both sides of the focus window (default `60`). Increase it when nodes vary wildly in height to avoid visible pop-in while scrolling fast.
 - `deferNodesUntilVisible` together with `viewportPriority` defers mounting heavy nodes (Mermaid, enhanced code surfaces, KaTeX) until an observer reports they are close to the viewport.
 - `batchRendering`, `initialRenderBatchSize`, `renderBatchSize`, `renderBatchDelay`, and `renderBatchBudgetMs` govern how many nodes switch from placeholders to full components per frame. This incremental mode only runs when virtualization is disabled (`:max-live-nodes="0"`); otherwise the virtual window already limits DOM work, so nodes are rendered immediately without placeholders.
