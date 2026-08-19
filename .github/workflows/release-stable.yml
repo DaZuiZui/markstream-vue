@@ -167,7 +167,18 @@ jobs:
             exit 0
           fi
 
-          DIST_TAG="$(node scripts/resolve-dist-tag.mjs "${PACKAGE_NAME}" "${PACKAGE_VERSION}")"
+          DIST_TAG=""
+          for attempt in 1 2 3 4 5; do
+            if DIST_TAG="$(node scripts/resolve-dist-tag.mjs "${PACKAGE_NAME}" "${PACKAGE_VERSION}")"; then
+              break
+            fi
+            echo "dist-tag resolution not yet consistent; retry ${attempt}/5"
+            sleep 5
+          done
+          if [[ -z "${DIST_TAG}" ]]; then
+            echo "Unable to resolve a stable dist-tag for ${PACKAGE_NAME}@${PACKAGE_VERSION}." >&2
+            exit 1
+          fi
           TARBALL="${RUNNER_TEMP}/${PACKAGE_NAME}-${PACKAGE_VERSION}.tgz"
           pnpm --dir "${PACKAGE_DIR}" pack --pack-destination "${RUNNER_TEMP}"
           npm publish "${TARBALL}" --access public --tag "${DIST_TAG}"
