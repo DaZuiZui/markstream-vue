@@ -65,6 +65,8 @@ pnpm benchmark:1.0
 
 初始阶段与回放的上升主要来自 **markstream-core 1.1 新增的流式代码围栏原子提交**：reveal 在未闭合的 ``` 处暂停，围栏（marker、info 行、内容）作为原子单元提交，含多个围栏的文档因此被切成更多更小的围栏对齐提交，每次提交多一次解析与布局。这是流式正确性特性（1.x 会把半开的围栏提前暴露给渲染器），并非代码块表面的成本。
 
+**已在 2.0.0-beta.4+ 缓解**：`SmoothMarkdownStreamOptions.burstInitialContent`（渲染器对非 typewriter 流默认开启）会把 pending ≥ 2048 字的一次性内容在单次提交中 reveal 到围栏安全边界。用 node rAF harness 实测 4589 字文档：38 次 reveal / ~1943ms → 2 次 reveal / ~87ms，未闭合的围栏开始行仍会被 withhold。上表 playground 中回放 DOM 节点回归（13 → 9）与全滚动重节点 frame p95（10.0 → 8.4ms）已被消除；chat 场景按 ~1.4KB 分片喂入（低于 burst 阈值），因此其 initial LCP 按设计保持不变。
+
 Diagnostic Studio 场景跨版本不可比：1.0 用普通 `markdown` 渲染模式，2.0 用增强的 `stream-diffs` 代码表面。
 
 ### Parser 吞吐（同机同日）
