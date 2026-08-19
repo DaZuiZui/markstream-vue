@@ -120,6 +120,8 @@ Stable findings:
 
 The initial-phase and replay increases are dominated by the **streaming code-fence atomicity** added in markstream-core 1.1: reveal pauses at unclosed ``` fences and each fence (marker, info line, body) commits as one atomic unit, so documents with several fences are revealed as more, smaller fence-aligned commits, each costing one parse + layout pass. This is a streaming-correctness feature (1.x could expose half-open fences to the renderer), not a code-block-surface cost.
 
+**Mitigated in 2.0.0-beta.4+**: `SmoothMarkdownStreamOptions.burstInitialContent` (enabled by the renderer for non-typewriter streams) reveals one-shot content of ≥2048 pending chars up to the fence-safe boundary in a single commit. Measured on a 4589-char document with a node rAF harness: 38 reveals / ~1943 ms → 2 reveals / ~87 ms, with unclosed fence opening lines still withheld. In the playground benchmark above, the replay DOM-node regression (13 → back to 9) and full-scroll heavy-settle frame p95 (10.0 → 8.4 ms) are already gone; the chat scenario feeds ~1.4 KB slices (below the burst threshold), so its initial LCP is unchanged by design.
+
 Diagnostic Studio rows are not comparable across versions: 1.0 runs them in the plain
 `markdown` render mode, 2.0 in the enhanced `stream-diffs` code surface.
 
