@@ -49,34 +49,34 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 
 Vue / Nuxt:
 ```txt
-pnpm add markstream-vue@next
+pnpm add markstream-vue
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 ```
 
 React / Next.js:
 ```txt
-pnpm add markstream-react@next
+pnpm add markstream-react
 import MarkdownRender from 'markstream-react'
 import 'markstream-react/index.css'
 ```
 
 Octane:
 ```txt
-pnpm add markstream-octane@next octane
+pnpm add markstream-octane octane
 import { NodeRenderer } from 'markstream-octane'
 import 'markstream-octane/index.css'
 ```
 
 Svelte 5:
 ```txt
-pnpm add markstream-svelte@next svelte@^5
+pnpm add markstream-svelte svelte@^5
 import 'markstream-svelte/index.css'
 ```
 
 Angular:
 ```txt
-pnpm add markstream-angular@next
+pnpm add markstream-angular
 ```
 
 ## 不要混淆
