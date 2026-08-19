@@ -68,6 +68,12 @@ jobs:
           node-version: '24'
           cache: pnpm
           registry-url: https://registry.npmjs.org
+        # npm authentication: setup-node writes the registry auth token to
+        # ~/.npmrc only when NODE_AUTH_TOKEN is visible. Keep this env here —
+        # without it every first-time publish fails with a 404 from the
+        # registry (npm's unauthenticated PUT response).
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
 
       - name: Resolve and validate package manifest
         id: package
@@ -139,6 +145,7 @@ jobs:
           PACKAGE_NAME: ${{ steps.meta.outputs.pkg }}
           PACKAGE_VERSION: ${{ steps.meta.outputs.version }}
           PACKAGE_DIR: ${{ steps.package.outputs.package_dir }}
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
