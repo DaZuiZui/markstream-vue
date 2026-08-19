@@ -1,3 +1,12 @@
+## [2.0.1-beta.0](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0...markstream-vue@2.0.1-beta.0) (2026-08-19)
+
+### What's Changed
+
+- fix(code-block)：流式 pre 回退与最终高亮面视觉对齐（[#694](https://github.com/Simon-He95/markstream-vue/pull/694)）：
+  - 去掉双栏 diff 之间带色的 1px 分隔线，中间改为与高亮面一致的 2ch 白色间隙（同时移除已死的 divider 宽度偏移规则与 `--markstream-diff-pane-divider` 变量）
+  - 折叠的 "N unmodified lines" pill 跨双栏读作一个连续 pill：左半延伸至栏边、右半贴齐自身栏边、接缝处直角收口，不再被分隔线切成两半
+  - 隐藏右栏折叠行重复的 chevron 图标，只保留原侧 widget，与高亮面表现一致
+
 ## [2.0.0](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0-beta.3...markstream-vue@2.0.0) (2026-08-19)
 
 ### 🎉 Stable release
