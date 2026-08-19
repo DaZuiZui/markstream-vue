@@ -39,9 +39,11 @@ function toNonNegativeFiniteNumber(value: unknown, fallback: number) {
     : fallback
 }
 
-/** Default minimum pending chars before `burstInitialContent` reveals
+/**
+ * Default minimum pending chars before `burstInitialContent` reveals
  * everything fence-safely in one commit (~2 KB of source, well above typical
- * streaming chunk sizes). */
+ * streaming chunk sizes).
+ */
 const BURST_REVEAL_THRESHOLD_CHARS = 2048
 
 function now() {
