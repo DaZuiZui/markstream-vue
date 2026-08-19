@@ -91,24 +91,56 @@ This builds the playground, runs the scenarios through `vite preview`, and write
 
 ## 2.0 measured results
 
-Run the same command on the `2.0.0` line and compare against the checked-in 1.0.x reports under `benchmark/` on the same machine. The table below records the comparable scenarios from a 2.0.0-beta.3 run (Apple M1 Pro, Chrome 151, viewport 1600×1200) against the `1.0.6-beta.3` report from the same machine. Diagnostic Studio rows are **not** directly comparable: 1.0 ran them in the plain `markdown` render mode, 2.0 runs the enhanced `stream-diffs` code surface, which mounts more DOM and does more work by design.
+Same-machine, same-day comparison: the benchmark was run twice in alternating order
+(`1.0.6` → `2.0.0-beta.3`, then `2.0.0-beta.3` → `1.0.6`) on an Apple M1 Pro with
+Chrome 151 (viewport 1600×1200), using each version's own checked-in playground and
+benchmark script. Rows below are the median of the two rounds. Metrics whose two
+rounds disagree by more than ±10 points are flagged as high-variance and should not
+be cited in release notes.
 
 ### Main playground chat (reverse-flex)
 
-| Metric | 1.0.6-beta.3 | 2.0.0-beta.3 | Change |
-| --- | ---: | ---: | --- |
-| initial LCP (ms) | 276 | 360 | +30% (2.0 default surfaces) |
-| initial settle (ms) | 588 | 653 | +11% |
-| initial frame p95 (ms) | 10.2 | 8.8 | **−14%** |
-| initial long task total (ms) | 139 | 181 | +30% |
-| stream replay settle (ms) | 442 | 445 | ~flat |
-| replay frame p95 (ms) | 9.5 | 9.0 | **−5%** |
-| replay page DOM nodes | 331 | 309 | **−7%** |
-| replay heap before unmount (MB) | 14.9 | 13.5 | **−10%** |
-| full-scroll heavy settle frame p95 (ms) | 10.1 | 8.4 | **−17%** |
-| full-scroll parse total (ms) | 1.7 | 1.1 | **−35%** |
+| Metric | 1.0.6 | 2.0.0-beta.3 | Median change | Round 1 / Round 2 |
+| --- | ---: | ---: | ---: | --- |
+| initial LCP (ms) | 346 | 384 | ↑11% (high variance) | +23.5% / −1.1% |
+| initial settle (ms) | 628 | 649 | ↑3% | +7.4% / −0.8% |
+| initial JS heap (MB) | 12.2 | 13.6 | **↑11%** | +11.6% / +11.0% |
+| full-scroll heavy-settle frame p95 (ms) | 9.0 | 10.0 | **↑8%** | +8.9% / +7.5% |
+| full-scroll JS heap (MB) | 12.9 | 13.5 | ↑5% | +5.8% / +3.7% |
+| replay settle (ms) | 372 | 451 | ↑26% (high variance) | +49.9% / +1.7% |
+| replay renderer DOM nodes | 9 | 13 | **↑44%** | both rounds identical |
+| replay JS heap before unmount (MB) | 14.5 | 13.6 | **↓6%** | −4.4% / −7.8% |
+| memory after unmount (MB) | 8.8 | 9.1 | ↑4% | +4.5% / +3.6% |
 
-The 2.0 regression behind the initial-phase increases is the **streaming code-fence atomicity** added in markstream-core 1.1: reveal pauses at unclosed ``` fences and each fence (marker, info line, body) commits as one atomic unit. Large initial documents with several fences are therefore revealed as more, smaller fence-aligned commits (parse tails 1 → 12 in the run above), each costing one parse + layout pass, before the fence closes. It is a streaming-correctness feature (1.x could expose half-open fences to the renderer), not a code-block-surface cost — and it only affects the initial paced reveal: interactive scrolling and streaming replay are strictly better. Re-run locally before quoting any single number.
+Stable findings:
+
+- **2.0 mounts a few extra renderer DOM nodes (replay: 9 → 13)** and its resident state costs about **+11% initial JS heap** — the price of the virtual-scroll protocol, the height model, and async-node bookkeeping that did not exist in 1.x.
+- **Streaming replay memory is strictly better (−6% heap before unmount)** — the incremental render-item and dirty-start height work pays off once the initial paced reveal settles.
+- Initial LCP/replay-settle movement is real but **high-variance** (fence-atomic smooth commits add per-fence parse+layout passes; the exact cost depends on how many fences the document contains and browser scheduling).
+
+The initial-phase and replay increases are dominated by the **streaming code-fence atomicity** added in markstream-core 1.1: reveal pauses at unclosed ``` fences and each fence (marker, info line, body) commits as one atomic unit, so documents with several fences are revealed as more, smaller fence-aligned commits, each costing one parse + layout pass. This is a streaming-correctness feature (1.x could expose half-open fences to the renderer), not a code-block-surface cost.
+
+Diagnostic Studio rows are not comparable across versions: 1.0 runs them in the plain
+`markdown` render mode, 2.0 in the enhanced `stream-diffs` code surface.
+
+### Parser throughput (same machine, same-day)
+
+`scripts/benchmark-parser-performance.mjs` run against both parser builds with the
+official corpus (prose-code-math and headings-lists, scales 1x/2x/4x):
+
+| Case | 1.0.6 commit median | 2.0.0-beta.3 commit median | Change |
+| --- | ---: | ---: | ---: |
+| prose-code-math 1x | 0.417 ms | 0.376 ms | **−9.8%** |
+| prose-code-math 2x | 0.437 ms | 0.329 ms | **−24.7%** |
+| prose-code-math 4x | 0.592 ms | 0.336 ms | **−43.2%** |
+| headings-lists 1x | 0.507 ms | 0.466 ms | **−8.1%** |
+| headings-lists 2x | 0.591 ms | 0.426 ms | **−27.9%** |
+| headings-lists 4x | 0.833 ms | 0.470 ms | **−43.6%** |
+
+The 2.0 parser is faster across the board (stream-token reuse, dirty-tail node
+reuse, and the incremental height/rendering work behind these numbers are the
+same optimizations benchmarked in the hot-path table below). The gap widens with
+document size, so large streaming answers benefit the most.
 
 ### Bundle size vs 1.0.6
 
