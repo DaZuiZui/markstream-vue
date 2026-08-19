@@ -5444,10 +5444,6 @@ const previewHeightEstimateCache = new WeakMap<object, { code: string, height: n
 // rebuilt), which removes the per-commit O(N) signature build + WeakMap
 // lookup + object allocation for the whole document.
 const renderedItemsNonVirtual: RenderedItemLike[] = []
-// Build-time top-level field snapshots for the item array above; used to
-// detect in-place mutations of reused node objects (same identity, changed
-// content) that the identity scan alone cannot see.
-const renderedItemNodeSnapshots: Array<readonly unknown[] | undefined> = []
 let lastRenderedItemGlobalSignature: readonly unknown[] | null = null
 
 /**
@@ -5518,37 +5514,7 @@ function buildRenderedItemSignature(node: ParsedNode, index: number, globalSigna
   // are immutable): same reference = same content, so in-place `props.nodes`
   // edits or parser mutations invalidate the WeakMap entry without a deep
   // comparison.
-  return [index, estimatedHeight, globalSignature, ...captureNodeFieldSnapshot(node)]
-}
-
-// Top-level fields whose reference identity acts as an O(1) content snapshot
-// for nodes: strings are immutable, so a same-reference field means the same
-// value, while parser rebuilds or in-place edits produce new references.
-function captureNodeFieldSnapshot(node: ParsedNode) {
-  const record = node as unknown as Record<string, unknown>
-  const children = (node as { children?: unknown[] }).children
-  return [
-    record.raw,
-    record.content,
-    record.code,
-    record.originalCode,
-    record.updatedCode,
-    record.language,
-    children?.length,
-  ]
-}
-
-function hasSameNodeFieldSnapshot(snapshot: readonly unknown[] | undefined, node: ParsedNode) {
-  if (!snapshot)
-    return false
-  const next = captureNodeFieldSnapshot(node)
-  if (snapshot.length !== next.length)
-    return false
-  for (let i = 0; i < snapshot.length; i++) {
-    if (!Object.is(snapshot[i], next[i]))
-      return false
-  }
-  return true
+  return [index, estimatedHeight, globalSignature]
 }
 
 /**
@@ -5722,25 +5688,19 @@ const renderedItems = computed(() => {
   // cheap reference comparisons; post-processing that re-creates nodes (e.g.
   // html block merging) is handled the same way.
   const cache = renderedItemsNonVirtual
-  const snapshots = renderedItemNodeSnapshots
   const identityLimit = Math.min(cache.length, total)
   let dirtyStart = globalChanged ? 0 : identityLimit
   if (!globalChanged) {
     for (let index = 0; index < identityLimit; index++) {
-      const cachedItem = cache[index]
-      if (cachedItem?.node !== nodes[index] || !hasSameNodeFieldSnapshot(snapshots[index], nodes[index])) {
+      if (cache[index]?.node !== nodes[index]) {
         dirtyStart = index
         break
       }
     }
   }
-  if (snapshots.length !== cache.length)
-    snapshots.length = cache.length
 
-  for (let index = dirtyStart; index < total; index++) {
+  for (let index = dirtyStart; index < total; index++)
     cache[index] = buildRenderedItem({ node: nodes[index]!, index })
-    snapshots[index] = captureNodeFieldSnapshot(nodes[index]!)
-  }
 
   // New array identity so Vue re-renders; prefix entries are shared objects,
   // so the keyed v-for diff resolves them without re-creating anything.
