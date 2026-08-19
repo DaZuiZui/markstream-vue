@@ -39,6 +39,15 @@ function toNonNegativeFiniteNumber(value: unknown, fallback: number) {
     : fallback
 }
 
+/** Default minimum pending chars before `burstInitialContent` reveals
+ * everything fence-safely in one commit (~2 KB of source, well above typical
+ * streaming chunk sizes). */
+const BURST_REVEAL_THRESHOLD_CHARS = 2048
+
+function now() {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now()
+}
+
 class SmoothMarkdownStreamControllerImpl {
   source: string = ''
   visible: string = ''
@@ -54,6 +63,8 @@ class SmoothMarkdownStreamControllerImpl {
   private readonly maxCommitFps: number
   private readonly maxCharsPerCommit: number
   private readonly flushOnFinish: boolean
+  private readonly burstInitialContent: boolean
+  private readonly burstRevealThresholdChars: number
   private readonly segmenter: GraphemeSegmenter | null
   private readonly listeners = new Set<SmoothStreamNotify>()
 
@@ -91,6 +102,8 @@ class SmoothMarkdownStreamControllerImpl {
       startDelayMs: rawStartDelayMs = 80,
       maxCharsPerCommit: rawMaxChars = 80,
       flushOnFinish = false,
+      burstInitialContent = false,
+      burstRevealThresholdChars = BURST_REVEAL_THRESHOLD_CHARS,
     } = options
 
     this.minCharsPerSecond = toPositiveFiniteNumber(rawMinCps, 40, 1)
@@ -105,6 +118,11 @@ class SmoothMarkdownStreamControllerImpl {
     this.maxCommitFps = Math.trunc(toPositiveFiniteNumber(rawMaxFps, 30, 1))
     this.maxCharsPerCommit = Math.trunc(toPositiveFiniteNumber(rawMaxChars, 80, 1))
     this.flushOnFinish = flushOnFinish
+    this.burstInitialContent = burstInitialContent === true
+    this.burstRevealThresholdChars = Math.max(
+      1,
+      Math.trunc(toPositiveFiniteNumber(burstRevealThresholdChars, BURST_REVEAL_THRESHOLD_CHARS, 1)),
+    )
     this.segmenter = createGraphemeSegmenter()
     if (notify)
       this.listeners.add(notify)
@@ -519,6 +537,24 @@ class SmoothMarkdownStreamControllerImpl {
       return
     }
 
+    // One-shot large content (initial document, fully buffered response) does
+    // not benefit from per-character pacing: reveal up to the fence-safe
+    // boundary in a single commit. Unclosed fences are still withheld, so
+    // streaming correctness is preserved; the next chunk that closes the
+    // fence re-enters this branch via the pending threshold.
+    const burstPending = this.pendingChars
+    if (this.burstInitialContent && burstPending >= this.burstRevealThresholdChars) {
+      const revealableEnd = this.getRevealableEnd()
+      if (this.visible.length < revealableEnd) {
+        this.visible = this.source.slice(0, revealableEnd)
+        this.charBudget = 0
+        this.currentCps = this.minCharsPerSecond
+        this.emit()
+      }
+      this.ensureLoop()
+      return
+    }
+
     const minFrameMs = 1000 / Math.max(1, this.maxCommitFps)
     const dt = Math.min(100, Math.max(0, timestamp - this.lastTick))
 
@@ -665,10 +701,6 @@ function takeGraphemes(
 
     windowLength = Math.min(pendingLength, windowLength * 2)
   }
-}
-
-function now() {
-  return typeof performance !== 'undefined' ? performance.now() : Date.now()
 }
 
 function clamp(value: number, min: number, max: number) {

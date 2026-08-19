@@ -37,6 +37,9 @@ export function useSmoothStreamingBridge(
   const smoothStream = useSmoothMarkdownStream({
     ...DEFAULT_RENDERER_SMOOTH_STREAMING_OPTIONS,
     ...props.smoothStreamingOptions,
+    // One-shot large content reveals fence-safely in one commit instead of
+    // pacing per character; typewriter mode keeps the paced reveal.
+    burstInitialContent: !isTypewriterEnabled(props.typewriter),
   })
 
   const smoothStreamingEligible = computed(() => {

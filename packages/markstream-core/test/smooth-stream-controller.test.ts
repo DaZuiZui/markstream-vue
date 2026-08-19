@@ -600,4 +600,78 @@ describe('smoothMarkdownStreamController', () => {
       controller.destroy()
     })
   })
+
+  describe('burst initial content', () => {
+    const BURST_OPTIONS: SmoothMarkdownStreamOptions = {
+      minCharsPerSecond: 100,
+      maxCharsPerSecond: 100,
+      maxCharsPerCommit: 10,
+      maxCommitFps: 60,
+      startDelayMs: 0,
+      burstInitialContent: true,
+    }
+
+    it('reveals a large one-shot block in a single commit', () => {
+      const raf = createRafHarness()
+      const controller = createController(BURST_OPTIONS)
+      const text = 'x'.repeat(5000)
+
+      controller.enqueue(text)
+      expect(controller.getSnapshot().visible).toBe('')
+      raf.step(performance.now() + 20)
+
+      // Whole 5000 chars revealed in one tick despite maxCharsPerCommit=10
+      expect(controller.getSnapshot().visible).toBe(text)
+      expect(controller.getSnapshot().caughtUp).toBe(true)
+      controller.destroy()
+    })
+
+    it('withholds an incomplete fence opening line even during burst', () => {
+      const raf = createRafHarness()
+      const controller = createController(BURST_OPTIONS)
+
+      // The opening marker line never ends: the burst reveals everything up
+      // to the fence line but not the marker itself.
+      controller.enqueue(`${'a'.repeat(3000)}\n\`\`\`ts`)
+      raf.step(performance.now() + 20)
+
+      const snapshot = controller.getSnapshot()
+      // The newline belongs to the withheld fence line; the marker is not revealed.
+      expect(snapshot.visible).toBe(`${'a'.repeat(3000)}\n`)
+      expect(snapshot.visible).not.toContain('```')
+      expect(snapshot.caughtUp).toBe(false)
+      controller.destroy()
+    })
+
+    it('reveals the opening line atomically once its line ending arrives', () => {
+      const raf = createRafHarness()
+      const controller = createController(BURST_OPTIONS)
+
+      controller.enqueue(`${'a'.repeat(3000)}\n\`\`\`ts`)
+      raf.step(performance.now() + 20)
+      expect(controller.getSnapshot().visible).toBe(`${'a'.repeat(3000)}\n`)
+
+      controller.enqueue('\nbody')
+      raf.step(performance.now() + 40)
+
+      const snapshot = controller.getSnapshot()
+      // Opening line is committed atomically with burst; remaining body
+      // continues pacing below the threshold.
+      expect(snapshot.visible.startsWith(`${'a'.repeat(3000)}\n\`\`\`ts`)).toBe(true)
+      expect(snapshot.visible.length).toBeLessThan(snapshot.source.length)
+      controller.destroy()
+    })
+
+    it('still paces below the burst threshold', () => {
+      const raf = createRafHarness()
+      const controller = createController(BURST_OPTIONS)
+      const text = 'x'.repeat(1000)
+
+      controller.enqueue(text)
+      raf.step(performance.now() + 20)
+      // 1000 chars is below the 2048 default threshold: paced reveal applies.
+      expect(controller.getSnapshot().visible.length).toBeLessThan(text.length)
+      controller.destroy()
+    })
+  })
 })
