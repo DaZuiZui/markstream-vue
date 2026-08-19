@@ -21,9 +21,9 @@ import path from 'node:path'
 import process from 'node:process'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
-const DRY = !process.argv.includes('--apply')
-const APPLY = process.argv.includes('--apply')
 const PUBLISH = process.argv.includes('--publish')
+const APPLY = process.argv.includes('--apply') || PUBLISH
+const DRY = !APPLY
 const SKIP_VERIFY = process.argv.includes('--skip-verify')
 
 function run(cmd, args, opts = {}) {
