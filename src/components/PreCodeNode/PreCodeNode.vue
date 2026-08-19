@@ -558,39 +558,51 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
 }
 
 .markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-pane--modified {
-  --markstream-pre-diff-pane-divider-width: 1px;
   --markstream-pre-diff-line-number-gap-to-code: var(--markstream-pre-diff-code-gap);
   --markstream-pre-diff-line-number-left: 0px;
-  box-shadow: inset 1px 0 var(--markstream-diff-pane-divider, hsl(var(--ms-border)));
-}
-
-.markstream-vue pre.markstream-pre--diff-preview:not(.markstream-pre--diff-inline) .markstream-pre__diff-pane--modified {
-  --markstream-pre-diff-line-number-left: calc(
-    0px
-    + var(--markstream-pre-diff-pane-divider-width)
-  );
-}
-
-.markstream-vue pre.markstream-pre--diff-preview:not(.markstream-pre--diff-inline) .markstream-pre__diff-pane--modified .markstream-pre__diff-rail {
-  left: var(--markstream-pre-diff-pane-divider-width);
-}
-
-.markstream-vue pre.markstream-pre--diff-preview:not(.markstream-pre--diff-inline) .markstream-pre__diff-pane--modified .markstream-pre__diff-line {
-  padding-left: calc(
-    var(--markstream-pre-diff-code-left)
-    + var(--markstream-pre-diff-pane-divider-width)
-  );
-}
-
-.markstream-vue pre.markstream-pre--diff-preview:not(.markstream-pre--diff-inline) .markstream-pre__diff-pane--modified .markstream-pre__diff-line::before {
-  left: calc(
-    var(--markstream-pre-diff-code-fill-left)
-    + var(--markstream-pre-diff-pane-divider-width)
-  );
-}
-
-.markstream-vue pre.markstream-pre--diff-preview.markstream-pre--diff-inline .markstream-pre__diff-pane--modified {
+  /* The finalized highlight surface separates its split columns with a clean
+     background gap (pierre's 1ch line paddings plus background-colored column
+     borders), not a colored 1px divider line. Keep the pre fallback visually
+     identical: drop the divider so the middle between the two columns reads
+     as a 2ch white gap. */
   box-shadow: none;
+}
+
+/* Match the finalized highlight surface's 2ch white split divider: pierre's
+   split lines carry 1ch inline padding on each side of the code content. The
+   left pane mirrors the text's 1ch right padding toward the seam; the right
+   pane already spaces its text 1ch past the line-number gutter
+   (`--markstream-pre-diff-line-number-gap-to-code`), so no extra left padding
+   is added there — adding one would push the right column's content one `ch`
+   away from the line numbers compared with the highlight surface. */
+.markstream-vue pre.markstream-pre--diff-preview:not(.markstream-pre--diff-inline) .markstream-pre__diff-pane--original .markstream-pre__diff-line:not(.markstream-pre__diff-line--collapsed) .markstream-pre__diff-content {
+  padding-right: 1ch;
+}
+
+/* Split view: the collapsed "N unmodified lines" pill must read as ONE
+   continuous pill spanning both columns (pierre's split separators meet at the
+   middle divider). The left pane extends its pill flush to its right edge and
+   the right pane starts flush at its own left edge, so the two halves abut
+   exactly at the column seam; the inner corners are squared so there is no
+   notch where they meet. */
+.markstream-vue pre.markstream-pre--diff-preview:not(.markstream-pre--diff-inline) .markstream-pre__diff-pane--original .markstream-pre__diff-line--collapsed::before {
+  right: 0px;
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+}
+
+.markstream-vue pre.markstream-pre--diff-preview:not(.markstream-pre--diff-inline) .markstream-pre__diff-pane--modified .markstream-pre__diff-line--collapsed::before {
+  left: 0px;
+  border-top-left-radius: 0px;
+  border-bottom-left-radius: 0px;
+}
+
+/* The modified (right) pane's collapsed row is only the empty half of the
+   continuous pill — the finalized surface renders the "N unmodified lines"
+   widget once on the original side. Hide the duplicated chevron/icon so the
+   right half stays clean (matches the highlight surface). */
+.markstream-vue pre.markstream-pre--diff-preview:not(.markstream-pre--diff-inline) .markstream-pre__diff-pane--modified .markstream-pre__diff-line--collapsed > .markstream-pre__diff-collapsed-icon {
+  display: none;
 }
 
 .markstream-vue pre.markstream-pre--diff-preview .markstream-pre__diff-line {

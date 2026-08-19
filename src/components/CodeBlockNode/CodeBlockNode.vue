@@ -3968,7 +3968,6 @@ onUnmounted(() => {
   --markstream-diff-panel-bg-soft: var(--code-bg);
   --markstream-diff-panel-bg-strong: var(--code-bg);
   --markstream-diff-panel-border: hsl(var(--ms-border) / 0.3);
-  --markstream-diff-pane-divider: hsl(var(--ms-border) / 0.42);
   --markstream-diff-gutter-bg: transparent;
   --markstream-diff-gutter-guide: hsl(var(--ms-border) / 0.72);
   --markstream-diff-gutter-gap: 8px;
@@ -4023,7 +4022,6 @@ onUnmounted(() => {
   --markstream-diff-panel-bg-soft: #121212;
   --markstream-diff-panel-bg-strong: #121212;
   --markstream-diff-panel-border: hsl(var(--ms-border) / 0.3);
-  --markstream-diff-pane-divider: hsl(var(--ms-border) / 0.34);
   --markstream-diff-gutter-bg: linear-gradient(
     180deg,
     hsl(0 0% 7% / 0.94) 0%,
