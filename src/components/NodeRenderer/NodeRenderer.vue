@@ -1201,14 +1201,12 @@ interface PendingAsyncNodeRecord {
 const pendingAsyncNodeCounts = new Map<string, number>()
 const pendingAsyncNodeRecords = new Map<string, PendingAsyncNodeRecord>()
 const pendingAsyncNodeVersion = ref(0)
+// O(1) counter kept in sync by the increment/decrement/prune/clear paths;
+// the version ref still drives the computed's re-evaluation semantics.
+let pendingAsyncNodeTotal = 0
 const pendingAsyncNodeCount = computed(() => {
   void pendingAsyncNodeVersion.value
-
-  let total = 0
-  for (const count of pendingAsyncNodeCounts.values())
-    total += Math.max(0, count)
-
-  return total
+  return pendingAsyncNodeTotal
 })
 let heightMeasurementRaf: number | null = null
 
@@ -2024,12 +2022,14 @@ function incrementPendingAsyncNodeKey(key: string, index: number) {
       key,
       Math.max(0, pendingAsyncNodeCounts.get(key) ?? 0) + 1,
     )
+    pendingAsyncNodeTotal += 1
     bumpAsyncNodeVersion()
     scheduleVirtualMetricsEmit('async-node')
     return
   }
 
   pendingAsyncNodeCounts.set(key, 1)
+  pendingAsyncNodeTotal += 1
   pendingAsyncNodeRecords.set(key, getPendingAsyncNodeRecord(index))
   bumpAsyncNodeVersion()
 
@@ -2043,6 +2043,7 @@ function pruneStalePendingAsyncNodeKeys(reason: MarkstreamVirtualReason = 'async
     if (isUsablePendingAsyncNodeRecord(record))
       continue
 
+    pendingAsyncNodeTotal -= Math.max(0, pendingAsyncNodeCounts.get(key) ?? 0)
     pendingAsyncNodeRecords.delete(key)
     pendingAsyncNodeCounts.delete(key)
     changed = true
@@ -2067,6 +2068,7 @@ function decrementPendingAsyncNodeKey(key: string) {
   else {
     pendingAsyncNodeCounts.set(key, previous - 1)
   }
+  pendingAsyncNodeTotal = Math.max(0, pendingAsyncNodeTotal - 1)
   bumpAsyncNodeVersion()
 
   if (previous === 1) {
@@ -2087,6 +2089,7 @@ function clearPendingAsyncNodeKeysForIndex(index: number) {
       || key.startsWith(`${nodeKey}-`)
 
     if (belongsToIndex) {
+      pendingAsyncNodeTotal -= Math.max(0, pendingAsyncNodeCounts.get(key) ?? 0)
       pendingAsyncNodeCounts.delete(key)
       pendingAsyncNodeRecords.delete(key)
       changed = true
@@ -2103,6 +2106,7 @@ function clearAllPendingAsyncNodeKeys(reason: MarkstreamVirtualReason = 'async-n
   if (!pendingAsyncNodeCounts.size && !pendingAsyncNodeRecords.size)
     return
 
+  pendingAsyncNodeTotal = 0
   pendingAsyncNodeCounts.clear()
   pendingAsyncNodeRecords.clear()
   bumpAsyncNodeVersion()
@@ -2331,7 +2335,7 @@ function getVirtualMetrics(
     topSpacerHeight: summary.topSpacerHeight,
     bottomSpacerHeight: summary.bottomSpacerHeight,
     visibleDomHeight: getVisibleDomHeight(),
-    totalHeight: getRendererLogicalHeight(),
+    totalHeight: getRendererLogicalHeight(summary),
     width: summary.width,
     final: effectiveFinal.value === true,
     stable: isLayoutSettled(),
@@ -2368,7 +2372,7 @@ function getScrollBox() {
   }
 }
 
-function getRendererLogicalHeight() {
+function getRendererLogicalHeight(summary?: VirtualHeightSummary) {
   const total = parsedNodes.value.length
   const modelHeight = Math.max(0, estimateHeightRange(0, total))
   const offsetHeight = readLayout('getRendererLogicalHeight.offsetHeight', () => containerRef.value?.offsetHeight ?? 0)
@@ -2398,7 +2402,10 @@ function getRendererLogicalHeight() {
   if (virtualScrollEnabled.value) {
     const hasModelHeight = modelHeight > 0
       || heightStats.count > 0
-      || getEstimatedNodeHeightCount() > 0
+      // Reuse the estimated count that buildVirtualHeightSummary already
+      // computed for this metrics emission; calling the O(N) scan again here
+      // would double the full estimates walk on every virtual-scroll frame.
+      || (summary?.estimatedCount ?? getEstimatedNodeHeightCount()) > 0
 
     if (!hasModelHeight)
       return Math.ceil(domHeight)
@@ -5432,34 +5439,21 @@ interface RenderedItemCacheEntry {
 const renderedItemCache = new WeakMap<object, RenderedItemCacheEntry>()
 const previewHeightEstimateCache = new WeakMap<object, { code: string, height: number }>()
 
-function getMemoizedPreviewHeight(
-  node: ParsedNode,
-  estimate: (code: string) => number,
-) {
-  const code = String((node as RuntimeCodeBlockNode)?.code ?? '')
-  const cached = previewHeightEstimateCache.get(node)
-  if (cached && cached.code === code)
-    return cached.height
-  const height = estimate(code)
-  previewHeightEstimateCache.set(node, { code, height })
-  return height
-}
+// Non-virtualized render items, kept aligned with `parsedNodes`. Stable
+// prefix entries are reused across streaming commits (only the dirty tail is
+// rebuilt), which removes the per-commit O(N) signature build + WeakMap
+// lookup + object allocation for the whole document.
+const renderedItemsNonVirtual: RenderedItemLike[] = []
+let lastRenderedItemGlobalSignature: readonly unknown[] | null = null
 
-function hasSameRenderedItemSignature(previous: unknown[], next: unknown[]) {
-  if (previous.length !== next.length)
-    return false
-  for (let i = 0; i < previous.length; i++) {
-    if (!Object.is(previous[i], next[i]))
-      return false
-  }
-  return true
-}
-
-function buildRenderedItemSignature(index: number) {
-  const estimatedHeight = heightEstimationActive.value ? estimatedNodeHeights.value[index] : null
-  return [
-    index,
-    estimatedHeight,
+/**
+ * Signature of all renderer-level (node-independent) inputs a rendered item
+ * derives from. Shared by every item; when it changes, the whole item list
+ * must be rebuilt. Returns a stable array instance while the inputs are
+ * unchanged so per-item comparisons collapse to a reference check.
+ */
+function getRenderedItemGlobalSignature(): readonly unknown[] {
+  const values = [
     resolvedRenderCodeBlocksAsPre.value,
     customComponentsMap.value,
     effectiveCustomHtmlTagsSet.value,
@@ -5479,151 +5473,234 @@ function buildRenderedItemSignature(index: number) {
     listBindings.value,
     blockquoteBindings.value,
     tableBindings.value,
+    // Height-estimation configuration leaks into every item's
+    // `estimatedHeight`; fold it in so estimation changes rebuild all items.
+    heightEstimationActive.value,
+    heightEstimationExperimentRevision.value,
+    experimentContainerWidth.value,
   ]
+  if (lastRenderedItemGlobalSignature && hasSameRenderedItemSignature(lastRenderedItemGlobalSignature, values))
+    return lastRenderedItemGlobalSignature
+  lastRenderedItemGlobalSignature = values
+  return values
+}
+
+function getMemoizedPreviewHeight(
+  node: ParsedNode,
+  estimate: (code: string) => number,
+) {
+  const code = String((node as RuntimeCodeBlockNode)?.code ?? '')
+  const cached = previewHeightEstimateCache.get(node)
+  if (cached && cached.code === code)
+    return cached.height
+  const height = estimate(code)
+  previewHeightEstimateCache.set(node, { code, height })
+  return height
+}
+
+function hasSameRenderedItemSignature(previous: readonly unknown[], next: readonly unknown[]) {
+  if (previous.length !== next.length)
+    return false
+  for (let i = 0; i < previous.length; i++) {
+    if (!Object.is(previous[i], next[i]))
+      return false
+  }
+  return true
+}
+
+function buildRenderedItemSignature(node: ParsedNode, index: number, globalSignature: readonly unknown[]) {
+  const estimatedHeight = heightEstimationActive.value ? estimatedNodeHeights.value[index] : null
+  return [index, estimatedHeight, globalSignature]
+}
+
+/**
+ * Build (or reuse from the WeakMap cache) the render item for one node.
+ * The per-node signature is [index, estimatedHeight, globalSignature] so
+ * unchanged nodes skip all per-node derivation work.
+ */
+function buildRenderedItem(item: { node: ParsedNode, index: number }) {
+  const cacheSignature = buildRenderedItemSignature(item.node, item.index, getRenderedItemGlobalSignature())
+  const cachedItem = renderedItemCache.get(item.node)
+  if (cachedItem && hasSameRenderedItemSignature(cachedItem.signature, cacheSignature))
+    return cachedItem.item
+
+  // Reuse the previous shallow clone for code blocks unless the visible
+  // payload changed, so parent recomputations do not churn stream-diffs props.
+  let node = getCodeBlockRenderNode(item.node)
+  const language = getCodeBlockLanguage(node)
+  let component = getNodeComponent(node, language)
+
+  // When an html_block or html_inline node resolved to its default
+  // component, check whether the node's tag matches a registered custom
+  // component AND is listed in customHtmlTags.  This handles pre-parsed
+  // nodes (via the `nodes` prop) that were not parsed with
+  // `customHtmlTags`, so their type is still `html_block`/`html_inline`
+  // but the tag references a known custom component.
+  if (
+    (node.type === 'html_block' || node.type === 'html_inline')
+    && component === nodeComponents[node.type]
+  ) {
+    const htmlNode = node as RuntimeHtmlNode
+    const tag = String(htmlNode.tag ?? '').trim().toLowerCase()
+      || getHtmlTagFromContent(htmlNode.content)
+    if (tag) {
+      const customComponents = customComponentsMap.value
+      const customForTag = customComponents[tag]
+
+      // Check if tag is whitelisted in customHtmlTags
+      if (effectiveCustomHtmlTagsSet.value.has(tag) && customForTag) {
+        component = customForTag
+        node = {
+          ...htmlNode,
+          type: tag,
+          tag,
+          content: stripCustomHtmlWrapper(htmlNode.content, tag),
+        } as ParsedNode
+      }
+      else if (shouldRenderUnknownHtmlTagAsText(htmlNode.content ?? htmlNode.raw, tag)) {
+        const rawContent = String(htmlNode.content ?? htmlNode.raw ?? '')
+
+        if (node.type === 'html_inline') {
+          component = TextNode
+          node = {
+            type: 'text',
+            content: rawContent,
+            raw: rawContent,
+          } as ParsedNode
+        }
+        else {
+          component = ParagraphNode
+          node = {
+            type: 'paragraph',
+            children: [{ type: 'text', content: rawContent, raw: rawContent }],
+            raw: rawContent,
+          } as ParsedNode
+        }
+      }
+    }
+  }
+
+  const usesPreCodeBindings = node.type === 'code_block'
+    && resolvedRenderCodeBlocksAsPre.value
+    && component === PreCodeBlockAsync
+    && !getCustomCodeLanguageComponent(customComponentsMap.value, language)
+  let bindings = { ...getBindingsFor(node, language, component) } as Record<string, unknown>
+  const estimatedHeight = heightEstimationActive.value ? estimatedNodeHeights.value[item.index] : null
+  if (node.type === 'code_block' && estimatedHeight?.kind === 'code-block') {
+    if (usesPreCodeBindings) {
+      bindings = {
+        ...bindings,
+        reservedHeightPx: estimatedHeight.contentHeight,
+      }
+    }
+    else {
+      bindings = {
+        ...bindings,
+        estimatedHeightPx: estimatedHeight.height,
+        estimatedContentHeightPx: estimatedHeight.contentHeight,
+        estimatedDiffInline: estimatedHeight.diffInline,
+      }
+    }
+  }
+  if (
+    !usesPreCodeBindings
+    && node.type === 'code_block'
+    && language === 'mermaid'
+    && parsePositiveNumber(bindings.estimatedPreviewHeightPx) == null
+  ) {
+    bindings = {
+      ...bindings,
+      estimatedPreviewHeightPx: clampMermaidPreviewHeight(
+        getMemoizedPreviewHeight(node, estimateMermaidPreviewHeight),
+      ),
+    }
+  }
+  if (
+    !usesPreCodeBindings
+    && node.type === 'code_block'
+    && language === 'infographic'
+    && parsePositiveNumber(bindings.estimatedPreviewHeightPx) == null
+  ) {
+    bindings = {
+      ...bindings,
+      estimatedPreviewHeightPx: clampInfographicPreviewHeight(
+        getMemoizedPreviewHeight(node, estimateInfographicPreviewHeight),
+      ),
+    }
+  }
+  if (node.type === 'math_block') {
+    bindings = {
+      ...bindings,
+      cacheScope: mathBlockCacheScope,
+    }
+  }
+
+  const rendersCustomNode = isCustomTagComponent(node, component)
+  const customAttrs = rendersCustomNode
+    ? getCustomNodeAttrs(node as any, resolvedHtmlPolicy.value)
+    : undefined
+
+  const renderedItem: RenderedItemLike = {
+    node,
+    index: item.index,
+    component,
+    bindings,
+    customBindings: {
+      ...(customAttrs ?? {}),
+      ...bindings,
+    },
+    rendersCustomNode,
+    hasSlotChildren: hasSlotChildren(node),
+    slotContent: String((node as any).content ?? ''),
+    isCodeBlock: node.type === 'code_block',
+    indexKey: `${indexPrefix.value}-${item.index}`,
+    vnodeKey: `${rendererSessionIdentity.value}\u0000${item.index}\u0000${node.type}`,
+  }
+  renderedItemCache.set(item.node, { signature: cacheSignature, item: renderedItem })
+  return renderedItem
 }
 
 const renderedItems = computed(() => {
-  return visibleNodes.value.map((item) => {
-    const cacheSignature = buildRenderedItemSignature(item.index)
-    const cachedItem = renderedItemCache.get(item.node)
-    if (cachedItem && hasSameRenderedItemSignature(cachedItem.signature, cacheSignature))
-      return cachedItem.item
+  if (virtualizationEnabled.value)
+    return visibleNodes.value.map(item => buildRenderedItem(item))
 
-    // Reuse the previous shallow clone for code blocks unless the visible
-    // payload changed, so parent recomputations do not churn stream-diffs props.
-    let node = getCodeBlockRenderNode(item.node)
-    const language = getCodeBlockLanguage(node)
-    let component = getNodeComponent(node, language)
+  const nodes = parsedNodes.value
+  const total = nodes.length
+  if (renderedItemsNonVirtual.length > total)
+    // eslint-disable-next-line vue/no-side-effects-in-computed-properties -- In-place truncation of the module-level incremental item cache; not a reactive side effect.
+    renderedItemsNonVirtual.length = total
 
-    // When an html_block or html_inline node resolved to its default
-    // component, check whether the node's tag matches a registered custom
-    // component AND is listed in customHtmlTags.  This handles pre-parsed
-    // nodes (via the `nodes` prop) that were not parsed with
-    // `customHtmlTags`, so their type is still `html_block`/`html_inline`
-    // but the tag references a known custom component.
-    if (
-      (node.type === 'html_block' || node.type === 'html_inline')
-      && component === nodeComponents[node.type]
-    ) {
-      const htmlNode = node as RuntimeHtmlNode
-      const tag = String(htmlNode.tag ?? '').trim().toLowerCase()
-        || getHtmlTagFromContent(htmlNode.content)
-      if (tag) {
-        const customComponents = customComponentsMap.value
-        const customForTag = customComponents[tag]
+  // Capture the previous signature BEFORE getRenderedItemGlobalSignature
+  // refreshes the module-level cache, otherwise the comparison below would
+  // always see the just-stored value and never detect global changes.
+  const previousGlobalSignature = lastRenderedItemGlobalSignature
+  const globalSignature = getRenderedItemGlobalSignature()
+  const globalChanged = previousGlobalSignature !== globalSignature
+  lastRenderedItemGlobalSignature = globalSignature
 
-        // Check if tag is whitelisted in customHtmlTags
-        if (effectiveCustomHtmlTagsSet.value.has(tag) && customForTag) {
-          component = customForTag
-          node = {
-            ...htmlNode,
-            type: tag,
-            tag,
-            content: stripCustomHtmlWrapper(htmlNode.content, tag),
-          } as ParsedNode
-        }
-        else if (shouldRenderUnknownHtmlTagAsText(htmlNode.content ?? htmlNode.raw, tag)) {
-          const rawContent = String(htmlNode.content ?? htmlNode.raw ?? '')
-
-          if (node.type === 'html_inline') {
-            component = TextNode
-            node = {
-              type: 'text',
-              content: rawContent,
-              raw: rawContent,
-            } as ParsedNode
-          }
-          else {
-            component = ParagraphNode
-            node = {
-              type: 'paragraph',
-              children: [{ type: 'text', content: rawContent, raw: rawContent }],
-              raw: rawContent,
-            } as ParsedNode
-          }
-        }
+  // Find the first index whose cached item no longer matches its parsed node
+  // by object identity. Stable-prefix nodes are reused by the parser across
+  // streaming commits, so the identity scan locates the dirty tail in O(N)
+  // cheap reference comparisons; post-processing that re-creates nodes (e.g.
+  // html block merging) is handled the same way.
+  const cache = renderedItemsNonVirtual
+  const identityLimit = Math.min(cache.length, total)
+  let dirtyStart = globalChanged ? 0 : identityLimit
+  if (!globalChanged) {
+    for (let index = 0; index < identityLimit; index++) {
+      if (cache[index]?.node !== nodes[index]) {
+        dirtyStart = index
+        break
       }
     }
+  }
 
-    const usesPreCodeBindings = node.type === 'code_block'
-      && resolvedRenderCodeBlocksAsPre.value
-      && component === PreCodeBlockAsync
-      && !getCustomCodeLanguageComponent(customComponentsMap.value, language)
-    let bindings = { ...getBindingsFor(node, language, component) } as Record<string, unknown>
-    const estimatedHeight = heightEstimationActive.value ? estimatedNodeHeights.value[item.index] : null
-    if (node.type === 'code_block' && estimatedHeight?.kind === 'code-block') {
-      if (usesPreCodeBindings) {
-        bindings = {
-          ...bindings,
-          reservedHeightPx: estimatedHeight.contentHeight,
-        }
-      }
-      else {
-        bindings = {
-          ...bindings,
-          estimatedHeightPx: estimatedHeight.height,
-          estimatedContentHeightPx: estimatedHeight.contentHeight,
-          estimatedDiffInline: estimatedHeight.diffInline,
-        }
-      }
-    }
-    if (
-      !usesPreCodeBindings
-      && node.type === 'code_block'
-      && language === 'mermaid'
-      && parsePositiveNumber(bindings.estimatedPreviewHeightPx) == null
-    ) {
-      bindings = {
-        ...bindings,
-        estimatedPreviewHeightPx: clampMermaidPreviewHeight(
-          getMemoizedPreviewHeight(node, estimateMermaidPreviewHeight),
-        ),
-      }
-    }
-    if (
-      !usesPreCodeBindings
-      && node.type === 'code_block'
-      && language === 'infographic'
-      && parsePositiveNumber(bindings.estimatedPreviewHeightPx) == null
-    ) {
-      bindings = {
-        ...bindings,
-        estimatedPreviewHeightPx: clampInfographicPreviewHeight(
-          getMemoizedPreviewHeight(node, estimateInfographicPreviewHeight),
-        ),
-      }
-    }
-    if (node.type === 'math_block') {
-      bindings = {
-        ...bindings,
-        cacheScope: mathBlockCacheScope,
-      }
-    }
+  for (let index = dirtyStart; index < total; index++)
+    cache[index] = buildRenderedItem({ node: nodes[index]!, index })
 
-    const rendersCustomNode = isCustomTagComponent(node, component)
-    const customAttrs = rendersCustomNode
-      ? getCustomNodeAttrs(node as any, resolvedHtmlPolicy.value)
-      : undefined
-
-    const renderedItem: RenderedItemLike = {
-      ...item,
-      node,
-      component,
-      bindings,
-      customBindings: {
-        ...(customAttrs ?? {}),
-        ...bindings,
-      },
-      rendersCustomNode,
-      hasSlotChildren: hasSlotChildren(node),
-      slotContent: String((node as any).content ?? ''),
-      isCodeBlock: node.type === 'code_block',
-      indexKey: `${indexPrefix.value}-${item.index}`,
-      vnodeKey: `${rendererSessionIdentity.value}\u0000${item.index}\u0000${node.type}`,
-    }
-    renderedItemCache.set(item.node, { signature: cacheSignature, item: renderedItem })
-    return renderedItem
-  })
+  // New array identity so Vue re-renders; prefix entries are shared objects,
+  // so the keyed v-for diff resolves them without re-creating anything.
+  return cache.slice()
 })
 
 function getCodeBlockLanguage(node: ParsedNode) {
