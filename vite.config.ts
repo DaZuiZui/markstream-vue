@@ -132,10 +132,8 @@ export default defineConfig(({ mode }) => {
             'katex/contrib/mhchem',
             'katex/dist/contrib/mhchem',
             'stream-diffs',
-            'stream-markdown',
             'stream-markdown-parser',
             'markstream-core',
-            'shiki',
           ].includes(id)
         },
         // Use Rollup output naming

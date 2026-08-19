@@ -58,13 +58,9 @@ export default defineConfig({
         'katex/contrib/mhchem',
         'katex/dist/contrib/mhchem',
         // Syntax-highlighting libraries that can emit many language/theme chunks.
-        'shiki',
         'stream-diffs',
-        'stream-markdown',
         'stream-markdown-parser',
         '@floating-ui/dom',
-        'vscode-textmate',
-        'vscode-oniguruma',
       ],
       output: {
         globals: {

@@ -37,12 +37,12 @@ function parseArgs(argv) {
     }
     else if (current === '--version') {
       args.version = argv[++i]
-      if (!args.version || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(args.version))
+      if (!args.version || !/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(args.version))
         throw new Error('[release] --version requires a semver, e.g. --version 2.0.1')
     }
     else if (current === '--parser-version') {
       args.parserVersion = argv[++i]
-      if (!args.parserVersion || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(args.parserVersion))
+      if (!args.parserVersion || !/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(args.parserVersion))
         throw new Error('[release] --parser-version requires a semver, e.g. --parser-version 1.2.9')
     }
     else {

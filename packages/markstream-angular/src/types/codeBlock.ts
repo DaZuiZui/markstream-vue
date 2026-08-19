@@ -30,7 +30,6 @@ export interface CodeBlockOptions {
   disableLineNumbers?: boolean
   overflow?: 'scroll' | 'wrap'
   disableVirtualizationBuffers?: boolean
-  preferredHighlighter?: 'shiki-js' | 'shiki-wasm'
   useCSSClasses?: boolean
   useTokenTransformer?: boolean
   tokenizeMaxLineLength?: number
