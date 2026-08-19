@@ -140,6 +140,18 @@ jobs:
           node scripts/check-workspace-deps-published.mjs --package-json "${PACKAGE_JSON}"
           node scripts/check-packed-workspace-deps.mjs --package-json "${PACKAGE_JSON}"
 
+      - name: Preserve legacy channel before new major
+        env:
+          PACKAGE_NAME: ${{ steps.meta.outputs.pkg }}
+          PACKAGE_VERSION: ${{ steps.meta.outputs.version }}
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          # resolve-dist-tag refuses to publish a new major until the current
+          # `latest` line is preserved on `legacy`; run that alias first so
+          # the release queue never deadlocks on a first-time 2.x publish.
+          node scripts/preserve-legacy-tag.mjs "${PACKAGE_NAME}" "${PACKAGE_VERSION}"
+
       - name: Publish package to npm
         env:
           PACKAGE_NAME: ${{ steps.meta.outputs.pkg }}
