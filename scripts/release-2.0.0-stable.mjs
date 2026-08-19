@@ -137,8 +137,33 @@ run('pnpm', ['run', 'check:peer-deps'])
 // ---------------------------------------------------------------------------
 // 6. Commit + tags
 // ---------------------------------------------------------------------------
+// Idempotent: when the release commit already exists (e.g. a previous
+// --apply run), the bump and docs regeneration produce no diff and the
+// commit/tag steps are skipped instead of failing.
+for (const pkg of manifests) {
+  const current = JSON.parse(readFileSync(pkg.jsonPath, 'utf8')).version
+  if (current !== pkg.version)
+    fail(`${pkg.name} is still ${current}, expected ${pkg.version}. Version bump did not materialize.`)
+  console.log(`[release] confirmed ${pkg.name}@${pkg.version}`)
+}
+
 run('git', ['add', 'package.json', 'pnpm-lock.yaml', 'packages', 'docs', 'CHANGELOG.md', 'README.md'])
-run('git', ['commit', '-m', 'chore: release v2.0.0'])
+
+let hasChanges = true
+try {
+  execFileSync('git', ['diff', '--cached', '--quiet'], { cwd: ROOT, stdio: 'ignore' })
+  hasChanges = false
+}
+catch {
+  hasChanges = true
+}
+
+if (hasChanges) {
+  run('git', ['commit', '-m', 'chore: release v2.0.0'])
+}
+else {
+  console.log('[release] no staged changes — release commit already exists, skipping commit.')
+}
 
 run('pnpm', ['run', 'tag:parser:push'])
 run('pnpm', ['run', 'tag:core:push'])
