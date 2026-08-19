@@ -2,7 +2,17 @@ import type { ParsedNode } from '../../types'
 import { VOID_HTML_TAGS } from '../../htmlTags'
 import { escapeTagForRegExp, findTagCloseIndexOutsideQuotes } from '../../htmlTagUtils'
 
+const NOT_WHITESPACE = /\S/
+
 export function parseStandaloneHtmlDocument(markdown: string): ParsedNode[] | null {
+  // Fast path: streaming markdown almost never starts like an HTML document.
+  // Skip the O(doc) `trim()` allocation unless the first non-whitespace
+  // character is `<`, which is a strict superset of the `trim` + regex check
+  // below (any document matching `startsLikeHtmlDocument` must start with `<`).
+  const firstNonWhitespace = markdown.search(NOT_WHITESPACE)
+  if (firstNonWhitespace === -1 || markdown.charCodeAt(firstNonWhitespace) !== 0x3C /* < */)
+    return null
+
   const trimmed = markdown.trim()
   if (!trimmed)
     return null

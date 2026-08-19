@@ -182,10 +182,41 @@ async function renderMath() {
     })
 }
 
+// Streaming inline math: coalesce token bursts into a single render and
+// deduplicate identical content (+markup+loading) so rapid appends do not
+// abort an in-flight worker request for every keystroke.
+let mathRenderCoalesceTimer: ReturnType<typeof setTimeout> | null = null
+let lastMathRenderRequestKey = `${normalizeKaTeXRenderInput(props.node.content)}\u0000${props.node.markup ?? ''}\u0000${props.node.loading ? '1' : '0'}`
+
+function scheduleMathRender() {
+  const content = normalizeKaTeXRenderInput(props.node.content)
+  const isStreaming = props.node.loading === true
+  const requestKey = `${content}\u0000${props.node.markup ?? ''}\u0000${isStreaming ? '1' : '0'}`
+  if (requestKey === lastMathRenderRequestKey)
+    return
+  lastMathRenderRequestKey = requestKey
+
+  if (!isStreaming) {
+    if (mathRenderCoalesceTimer != null) {
+      clearTimeout(mathRenderCoalesceTimer)
+      mathRenderCoalesceTimer = null
+    }
+    renderMath()
+    return
+  }
+
+  if (mathRenderCoalesceTimer != null)
+    return
+  mathRenderCoalesceTimer = setTimeout(() => {
+    mathRenderCoalesceTimer = null
+    renderMath()
+  }, 32)
+}
+
 watch(
   () => [props.node.content, props.node.loading, props.node.raw, props.node.markup],
   () => {
-    renderMath()
+    scheduleMathRender()
   },
 )
 
@@ -197,6 +228,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   isUnmounted = true
+  if (mathRenderCoalesceTimer != null) {
+    clearTimeout(mathRenderCoalesceTimer)
+    mathRenderCoalesceTimer = null
+  }
   if (currentAbortController) {
     currentAbortController.abort()
     currentAbortController = null

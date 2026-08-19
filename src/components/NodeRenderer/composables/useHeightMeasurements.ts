@@ -3,7 +3,7 @@ import type { MarkstreamInternalHeightCache } from '../../../types/node-renderer
 import { computed, reactive, ref } from 'vue'
 
 export interface HeightMeasurementsOptions {
-  onHeightRecorded?: () => void
+  onHeightRecorded?: (index?: number) => void
 }
 
 export interface HeightMeasurements {
@@ -265,7 +265,7 @@ export function useHeightMeasurements(
     }
 
     if (recordOptions.notify !== false)
-      options.onHeightRecorded?.()
+      options.onHeightRecorded?.(index)
 
     return true
   }
@@ -305,21 +305,26 @@ export function useHeightMeasurements(
   function removeNodeHeight(index: number, removeOptions: { notify?: boolean } = {}) {
     const changed = removeNodeHeightInternal(index)
     if (changed && removeOptions.notify !== false)
-      options.onHeightRecorded?.()
+      options.onHeightRecorded?.(index)
     return changed
   }
 
   function removeNodeHeights(indices: Iterable<number>, removeOptions: { notify?: boolean } = {}) {
     let removed = 0
+    let minRemovedIndex = Number.POSITIVE_INFINITY
 
     for (const rawIndex of indices) {
       const index = Number(rawIndex)
-      if (removeNodeHeightInternal(index))
+      if (removeNodeHeightInternal(index)) {
         removed++
+        if (index < minRemovedIndex)
+          minRemovedIndex = index
+      }
     }
 
-    if (removed > 0 && removeOptions.notify !== false)
-      options.onHeightRecorded?.()
+    if (removed > 0 && removeOptions.notify !== false) {
+      options.onHeightRecorded?.(Number.isFinite(minRemovedIndex) ? minRemovedIndex : undefined)
+    }
 
     return removed
   }

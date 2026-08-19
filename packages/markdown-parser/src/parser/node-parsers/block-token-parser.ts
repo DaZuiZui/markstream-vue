@@ -202,10 +202,39 @@ function stripWrapperNewlines(s: string) {
   return s.replace(/^\r?\n/, '').replace(/\r?\n$/, '')
 }
 
+// Custom-tag regexes are compiled once per tag name and reused across parses.
+// The `.openAny`/`.closeAny` variants are non-anchored so callers can reuse a
+// single compiled RegExp with `lastIndex` per candidate `<` position instead
+// of allocating a fresh RegExp and slicing the remaining source per site.
+const tagRegexEntryCache = new Map<string, TagRegexEntry>()
+
+interface TagRegexEntry {
+  strip: RegExp
+  search: RegExp
+  openAny: RegExp
+  closeAny: RegExp
+}
+
+function getTagRegexEntry(tag: string): TagRegexEntry {
+  let entry = tagRegexEntryCache.get(tag)
+  if (entry)
+    return entry
+
+  const escaped = escapeTagForRegExp(tag)
+  entry = {
+    strip: new RegExp(`[\\t ]*<\\s*\\/\\s*${escaped}[^>]*$`, 'i'),
+    search: new RegExp(`<\\s*${escaped}(?=\\s|>|/)`, 'gi'),
+    openAny: new RegExp(`<\\s*${escaped}(?=\\s|>|/)`, 'gi'),
+    closeAny: new RegExp(`<\\s*\\/\\s*${escaped}(?=\\s|>)`, 'gi'),
+  }
+  tagRegexEntryCache.set(tag, entry)
+  return entry
+}
+
 function stripTrailingPartialClosingTag(inner: string, tag: string) {
   if (!inner || !tag)
     return inner
-  const re = new RegExp(String.raw`[\t ]*<\s*\/\s*${tag}[^>]*$`, 'i')
+  const re = getTagRegexEntry(tag).strip
   return inner.replace(re, '')
 }
 
@@ -218,8 +247,7 @@ function findMatchingCloseTagRange(
     return null
 
   const lowerTag = tag.toLowerCase()
-  const openTagRe = new RegExp(String.raw`^<\s*${escapeTagForRegExp(lowerTag)}(?=\s|>|/)`, 'i')
-  const closeTagRe = new RegExp(String.raw`^<\s*\/\s*${escapeTagForRegExp(lowerTag)}(?=\s|>)`, 'i')
+  const { openAny, closeAny } = getTagRegexEntry(lowerTag)
 
   let depth = 0
   let index = Math.max(0, startIndex)
@@ -229,9 +257,10 @@ function findMatchingCloseTagRange(
     if (lt === -1)
       break
 
-    const slice = rawHtml.slice(lt)
-    if (closeTagRe.test(slice)) {
-      const endRel = findTagCloseIndexOutsideQuotes(slice)
+    closeAny.lastIndex = lt
+    const closeMatch = closeAny.exec(rawHtml)
+    if (closeMatch?.index === lt) {
+      const endRel = findTagCloseIndexOutsideQuotes(rawHtml.slice(lt))
       if (endRel === -1)
         return null
       if (depth === 0) {
@@ -245,11 +274,13 @@ function findMatchingCloseTagRange(
       continue
     }
 
-    if (openTagRe.test(slice)) {
-      const endRel = findTagCloseIndexOutsideQuotes(slice)
+    openAny.lastIndex = lt
+    const openMatch = openAny.exec(rawHtml)
+    if (openMatch?.index === lt) {
+      const endRel = findTagCloseIndexOutsideQuotes(rawHtml.slice(lt))
       if (endRel === -1)
         return null
-      const raw = slice.slice(0, endRel + 1)
+      const raw = rawHtml.slice(lt, lt + endRel + 1)
       if (!/\/\s*>$/.test(raw))
         depth++
       index = lt + endRel + 1
@@ -271,9 +302,9 @@ function findNextCustomHtmlBlockFromSource(
     return null
 
   const lowerTag = tag.toLowerCase()
-  const openRe = new RegExp(String.raw`<\s*${lowerTag}(?=\s|>|/)`, 'gi')
-  openRe.lastIndex = Math.max(0, startIndex || 0)
-  const openMatch = openRe.exec(source)
+  const { search, openAny, closeAny } = getTagRegexEntry(lowerTag)
+  search.lastIndex = Math.max(0, startIndex || 0)
+  const openMatch = search.exec(source)
   if (!openMatch || openMatch.index == null)
     return null
 
@@ -294,12 +325,12 @@ function findNextCustomHtmlBlockFromSource(
   let i = openEnd + 1
 
   const isOpenAt = (pos: number) => {
-    const s = source.slice(pos)
-    return new RegExp(String.raw`^<\s*${lowerTag}(?=\s|>|/)`, 'i').test(s)
+    openAny.lastIndex = pos
+    return openAny.exec(source)?.index === pos
   }
   const isCloseAt = (pos: number) => {
-    const s = source.slice(pos)
-    return new RegExp(String.raw`^<\s*\/\s*${lowerTag}(?=\s|>)`, 'i').test(s)
+    closeAny.lastIndex = pos
+    return closeAny.exec(source)?.index === pos
   }
 
   while (i < source.length) {

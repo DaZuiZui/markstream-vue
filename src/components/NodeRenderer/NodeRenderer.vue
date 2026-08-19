@@ -303,6 +303,10 @@ const headingProbeWrapperRefs = reactive<Record<number, HTMLElement | null>>({
 const viewportPriorityAutoDisabled = ref(false)
 const textStreamState = new Map<string, string>()
 const streamRenderVersion = ref(0)
+// The parsedNodes watch runs with `immediate` before useHeightModel
+// initializes; guard prefix invalidation until the model exists. The first
+// prefix build is full anyway, so dropping the early mark is safe.
+let heightModelReady = false
 const experimentContainerWidth = ref(0)
 const simpleTextProbeProfile = ref(createEmptySimpleTextProbeProfile())
 
@@ -681,6 +685,11 @@ watch(
     if (!contentStreamingTailActive.value)
       mathBlockMinHeightCache.clear()
     streamRenderVersion.value += 1
+    // Streaming commits only change the dirty tail; let the fallback height
+    // prefix rebuild incrementally from the parser's dirty start instead of
+    // forcing a full O(N) rebuild on every commit.
+    if (heightModelReady)
+      markFallbackHeightPrefixDirty(getParsedNodesDirtyStart(parsedNodes.value.length))
   },
   { immediate: true },
 )
@@ -888,7 +897,10 @@ const nodeContentResizeObserverTargets = new Map<number, HTMLElement>()
 const nodeContentResizeObserverIndexes = new WeakMap<Element, number>()
 let nodeContentResizeObserver: ResizeObserver | null = null
 const codeBlockRenderCache = new WeakMap<object, { signature: string, node: ParsedNode }>()
-const nodeHeightSignatures = new Map<number, string>()
+// Height signatures per node index, stored in a flat array so stale-range
+// scans can start at the parser's dirty start instead of walking the whole
+// measured set on every streaming commit. `undefined` = no signature yet.
+const nodeHeightSignatures: Array<string | undefined> = []
 const EMPTY_ESTIMATED_NODE_HEIGHTS: Array<EstimatedNodeHeight | null> = []
 let estimatedNodeHeightsCache: Array<EstimatedNodeHeight | null> = []
 let estimatedNodeHeightsContext: unknown[] = []
@@ -933,8 +945,8 @@ function consumeVirtualBottomProgrammaticScrollGuard(box: { scrollTop: number })
 
 let heightModel: ReturnType<typeof useHeightModel>
 
-function markFallbackHeightPrefixDirty() {
-  heightModel.markFallbackHeightPrefixDirty()
+function markFallbackHeightPrefixDirty(fromIndex?: number) {
+  heightModel.markFallbackHeightPrefixDirty(fromIndex)
 }
 
 function getFallbackNodeHeight(index: number) {
@@ -1002,8 +1014,8 @@ const {
   importHeightCache: importMeasuredHeightCache,
   fenwickRangeSum,
 } = useHeightMeasurements({
-  onHeightRecorded: () => {
-    markFallbackHeightPrefixDirty()
+  onHeightRecorded: (index) => {
+    markFallbackHeightPrefixDirty(index ?? 0)
     if (virtualScrollEnabled.value)
       resetVirtualSettleConfirmation()
     if (activeRestoreAnchor.value)
@@ -1051,19 +1063,21 @@ function resetEstimatedNodeHeightCache() {
 function resetHeightMeasurements() {
   resetEstimatedNodeHeightCache()
   runEstimatedHeightMutation(() => resetMeasuredHeightMeasurements())
-  nodeHeightSignatures.clear()
+  nodeHeightSignatures.length = 0
 }
 
 function rememberNodeHeightSignature(index: number) {
   if (!Number.isInteger(index) || index < 0 || index >= parsedNodes.value.length)
     return
 
-  nodeHeightSignatures.set(index, getNodeHeightCacheSignature(index))
+  nodeHeightSignatures[index] = getNodeHeightCacheSignature(index)
 }
 
 function forgetNodeHeightSignatures(indices: Iterable<number>) {
-  for (const index of indices)
-    nodeHeightSignatures.delete(index)
+  for (const index of indices) {
+    if (Number.isInteger(index) && index >= 0 && index < nodeHeightSignatures.length)
+      nodeHeightSignatures[index] = undefined
+  }
 }
 
 function recordNodeHeight(
@@ -1090,8 +1104,8 @@ function recordNodeHeightCore(
 
   if (after && after > 0)
     rememberNodeHeightSignature(index)
-  else if (before)
-    nodeHeightSignatures.delete(index)
+  else if (before && index < nodeHeightSignatures.length)
+    nodeHeightSignatures[index] = undefined
 
   return true
 }
@@ -1783,26 +1797,32 @@ heightModel = useHeightModel({
       ? ''
       : String(props.virtualScroll.measurementKey)
 
+    // Structural configuration only. Content/measurement changes invalidate
+    // via markFallbackHeightPrefixDirty(index) instead of this key, so
+    // streaming appends rebuild the prefix incrementally (O(dirty tail))
+    // rather than forcing a full O(N) rebuild on every commit.
     return [
-      parsedNodes.value.length,
-      heightStats.count,
-      Math.round(heightStats.total),
-      Math.round(averageNodeHeight.value * 100),
       measurementKey,
       widthBucket,
       heightEstimationActive.value ? 1 : 0,
       heightEstimationExperimentRevision.value,
-      streamRenderVersion.value,
       customComponentsMap.value.paragraph ? 1 : 0,
     ]
   },
   fenwickRangeSum,
 })
+heightModelReady = true
 
 watch(
   () => parsedNodes.value.length,
-  (length) => {
-    markFallbackHeightPrefixDirty()
+  (length, previousLength) => {
+    // Dataset shrinks and resets invalidate the whole prefix; streaming
+    // appends only need the dirty tail recomputed.
+    markFallbackHeightPrefixDirty(
+      previousLength != null && length >= previousLength
+        ? getParsedNodesDirtyStart(length)
+        : 0,
+    )
     if (length <= 0) {
       resetHeightMeasurements()
       return
@@ -3445,7 +3465,7 @@ function restoreVirtualState(
 }
 
 function seedCurrentNodeHeightSignatures() {
-  nodeHeightSignatures.clear()
+  nodeHeightSignatures.length = 0
   for (const rawIndex of Object.keys(nodeHeights)) {
     const index = Number(rawIndex)
     if (Number.isInteger(index) && index >= 0 && index < parsedNodes.value.length)
@@ -3461,34 +3481,39 @@ function invalidateChangedNodeHeights(reason: MarkstreamVirtualReason = 'content
   const total = parsedNodes.value.length
   const dirtyStartIndex = getParsedNodesDirtyStart(total)
 
-  for (const index of Array.from(nodeHeightSignatures.keys())) {
+  // Scan only the dirty range instead of the whole signature set: streaming
+  // appends never mutate stable-prefix nodes, so their signatures stay valid
+  // without re-hashing. Entries past `total` signify nodes that disappeared.
+  const lastSignedIndex = nodeHeightSignatures.length - 1
+  const scanEnd = Math.max(total - 1, lastSignedIndex)
+
+  for (let index = dirtyStartIndex; index <= scanEnd; index++) {
     if (index >= total) {
-      staleIndices.push(index)
+      if (index <= lastSignedIndex && nodeHeightSignatures[index] !== undefined)
+        staleIndices.push(index)
       continue
     }
 
-    if (index < dirtyStartIndex)
-      continue
-
     const signature = getNodeHeightCacheSignature(index)
-    const previousSignature = nodeHeightSignatures.get(index)
+    const previousSignature = nodeHeightSignatures[index]
 
     if (previousSignature != null && previousSignature !== signature)
       staleIndices.push(index)
 
-    nodeHeightSignatures.set(index, signature)
+    nodeHeightSignatures[index] = signature
   }
 
-  for (const index of Array.from(nodeHeightSignatures.keys())) {
-    if (index >= total)
-      nodeHeightSignatures.delete(index)
+  if (lastSignedIndex >= total) {
+    for (let index = total; index <= lastSignedIndex; index++)
+      nodeHeightSignatures[index] = undefined
+    nodeHeightSignatures.length = total
   }
 
   if (!staleIndices.length)
     return
 
   removeNodeHeights(staleIndices, { notify: false })
-  markFallbackHeightPrefixDirty()
+  markFallbackHeightPrefixDirty(dirtyStartIndex)
   resetVirtualSettleConfirmation()
 
   if (activeRestoreAnchor.value)
@@ -4696,7 +4721,7 @@ function resetVirtualSessionMeasurements() {
   clearPendingHeightMeasurements()
   resetHeightMeasurements()
   markFallbackHeightPrefixDirty()
-  nodeHeightSignatures.clear()
+  nodeHeightSignatures.length = 0
 
   const total = parsedNodes.value.length
   if (total > 0)
@@ -4727,7 +4752,7 @@ function resetVirtualLayoutMeasurements(reason: MarkstreamVirtualReason = 'resiz
   clearPendingHeightMeasurements()
   resetHeightMeasurements()
   markFallbackHeightPrefixDirty()
-  nodeHeightSignatures.clear()
+  nodeHeightSignatures.length = 0
 
   const total = parsedNodes.value.length
   if (total > 0)
@@ -5156,7 +5181,7 @@ onBeforeUnmount(() => {
   }
   nodeContentDeferredMeasureTimers.clear()
   nodeContentVersions.clear()
-  nodeHeightSignatures.clear()
+  nodeHeightSignatures.length = 0
   clearFinalHeightConvergenceTimers()
   clearPendingHeightMeasurements()
   cleanupExperimentResizeObserver()

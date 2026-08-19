@@ -380,11 +380,30 @@ export function estimateStaticNodeHeightFallback(node: ParsedNode | undefined, w
 
 export function useHeightModel(options: HeightModelOptions) {
   let fallbackHeightPrefixDirty = true
-  let fallbackHeightPrefixCache: number[] = [0]
+  // -1: no dirty range recorded yet; 0: everything stale; k>0: stale from k.
+  let fallbackHeightPrefixInvalidFrom = -1
+  const fallbackHeightPrefixCache: number[] = [0]
   let fallbackHeightPrefixCacheKey = ''
+  let fallbackHeightPrefixAverageNodeHeight = -1
 
-  function markFallbackHeightPrefixDirty() {
+  /**
+   * Mark the fallback height prefix stale from `fromIndex` onward.
+   *
+   * Streaming appends only change the dirty tail (and new nodes are appended
+   * at the end), so callers can pass the parser's dirty start or a measured
+   * node index to keep the prefix rebuild incremental (O(dirty tail)) instead
+   * of a full O(N) rebuild on every commit. Omitting the index (or passing 0)
+   * falls back to a full invalidation, which is required whenever the model's
+   * structural configuration changes.
+   */
+  function markFallbackHeightPrefixDirty(fromIndex = 0) {
     fallbackHeightPrefixDirty = true
+    if (fromIndex <= 0) {
+      fallbackHeightPrefixInvalidFrom = 0
+      return
+    }
+    if (fallbackHeightPrefixInvalidFrom < 0 || fromIndex < fallbackHeightPrefixInvalidFrom)
+      fallbackHeightPrefixInvalidFrom = fromIndex
   }
 
   function getFallbackNodeHeight(index: number) {
@@ -429,24 +448,58 @@ export function useHeightModel(options: HeightModelOptions) {
   function getFallbackHeightPrefix() {
     const total = options.parsedNodes.value.length
     const key = options.getPrefixCacheKeyParts().join(':')
+    const prefix = fallbackHeightPrefixCache
 
-    if (!fallbackHeightPrefixDirty && fallbackHeightPrefixCacheKey === key)
-      return fallbackHeightPrefixCache
+    // Structural configuration (width bucket, estimation mode, themes, custom
+    // paragraph component, ...) invalidates the whole prefix.
+    if (fallbackHeightPrefixCacheKey !== key) {
+      fallbackHeightPrefixCacheKey = key
+      markFallbackHeightPrefixDirty(0)
+    }
 
-    const prefix = new Array<number>(total + 1)
-    prefix[0] = 0
+    // The average height feeds fallback heights for nodes that have neither a
+    // measured nor an estimated height. Snapshot it so average drift (normally
+    // caused by new measurements) invalidates only when it actually moves.
+    const averageNodeHeight = options.averageNodeHeight.value
+    if (fallbackHeightPrefixAverageNodeHeight !== averageNodeHeight) {
+      fallbackHeightPrefixAverageNodeHeight = averageNodeHeight
+      markFallbackHeightPrefixDirty(0)
+    }
 
-    for (let i = 0; i < total; i++) {
+    // Shrinking the dataset: retained prefix sums stay valid, drop the tail.
+    if (prefix.length > total + 1) {
+      prefix.length = total + 1
+      if (fallbackHeightPrefixInvalidFrom >= 0 && fallbackHeightPrefixInvalidFrom >= prefix.length - 1)
+        fallbackHeightPrefixDirty = false
+    }
+
+    const cachedLength = prefix.length - 1
+    if (!fallbackHeightPrefixDirty) {
+      if (cachedLength === total)
+        return prefix
+      // Pure append with no explicit stale range: resume from the cached end.
+      // The retained prefix stays valid because appends never mutate earlier
+      // nodes and the parser's dirty-start notifications cover rewrites.
+      fallbackHeightPrefixInvalidFrom = cachedLength
+    }
+
+    // Never recompute entries that were never computed: the retained prefix
+    // [0, cachedLength) is always authoritative for its own range.
+    const startIndex = Math.min(fallbackHeightPrefixInvalidFrom, cachedLength)
+
+    if (prefix.length < total + 1)
+      prefix.length = total + 1
+
+    for (let i = startIndex; i < total; i++) {
       prefix[i + 1] = prefix[i] + (
         options.heightEstimationActive.value
           ? getFallbackNodeHeight(i)
-          : (options.nodeHeights[i] ?? options.averageNodeHeight.value)
+          : (options.nodeHeights[i] ?? averageNodeHeight)
       )
     }
 
-    fallbackHeightPrefixCache = prefix
-    fallbackHeightPrefixCacheKey = key
     fallbackHeightPrefixDirty = false
+    fallbackHeightPrefixInvalidFrom = total
 
     return prefix
   }
