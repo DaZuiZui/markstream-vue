@@ -108,7 +108,7 @@ Run the same command on the `2.0.0` line and compare against the checked-in 1.0.
 | full-scroll heavy settle frame p95 (ms) | 10.1 | 8.4 | **−17%** |
 | full-scroll parse total (ms) | 1.7 | 1.1 | **−35%** |
 
-The 2.0 regression behind the initial-phase increases is the default activation of extra surfaces (enhanced code-block runtime, viewport-priority plumbing); interactive scrolling and streaming replay are strictly better. Re-run locally before quoting any single number.
+The 2.0 regression behind the initial-phase increases is the **streaming code-fence atomicity** added in markstream-core 1.1: reveal pauses at unclosed ``` fences and each fence (marker, info line, body) commits as one atomic unit. Large initial documents with several fences are therefore revealed as more, smaller fence-aligned commits (parse tails 1 → 12 in the run above), each costing one parse + layout pass, before the fence closes. It is a streaming-correctness feature (1.x could expose half-open fences to the renderer), not a code-block-surface cost — and it only affects the initial paced reveal: interactive scrolling and streaming replay are strictly better. Re-run locally before quoting any single number.
 
 ### Bundle size vs 1.0.6
 
