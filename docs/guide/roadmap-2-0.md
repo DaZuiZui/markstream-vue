@@ -49,11 +49,11 @@ Get the breaking release through the normal release gates before publishing.
 
 ### Release-operator handoff
 
-These registry operations require npm maintainer credentials; the beta-phase steps are complete, and the stable-release dist-tag cutover is automated by `node scripts/release-2.0.0-stable.mjs --publish`:
+These registry operations require npm maintainer credentials; the beta-phase steps are complete, and the stable-release dist-tag cutover is automated by `node scripts/release-stable-family.mjs --publish`:
 
 - [x] Preserved the 1.x prerelease channel with `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next`.
 - [x] Published the coordinated beta family (`2.0.0-beta.1` … `2.0.0-beta.3`) from `release:family:preflight` + `publish:*:current` and verified real installs of the published packages.
-- [x] Stable cutover: `release-2.0.0-stable.mjs` moves each package's previous `latest` to `legacy` (asserted by `resolve-dist-tag` with the exact `npm dist-tag add` commands if run manually).
+- [x] Stable cutover: tags pushed by `release-stable-family.mjs` trigger the Release (Stable) workflow, which moves each package's previous `latest` to `legacy` via `resolve-dist-tag` (exact `npm dist-tag add` commands are printed on refusal).
 
 The registry-only `npm dist-tag add` command does not depend on a Git checkout. `release:family:preflight` and the `publish:*:current` scripts live on `main`; the preflight checks every candidate dist-tag before any package is published and fails with the required command if an alias is missing.
 

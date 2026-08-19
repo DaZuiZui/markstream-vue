@@ -48,11 +48,11 @@ keywords:
 
 ### 发布维护者交接
 
-以下 registry 操作需要 npm maintainer 权限；beta 阶段步骤已完成，stable 发布的 dist-tag 切换由 `node scripts/release-2.0.0-stable.mjs --publish` 自动执行：
+以下 registry 操作需要 npm maintainer 权限；beta 阶段步骤已完成，stable 发布的 dist-tag 切换由 `node scripts/release-stable-family.mjs --publish` 自动执行：
 
 - [x] 已运行 `npm dist-tag add markstream-vue@1.1.2-beta.3 legacy-next`，保留 1.x 预发布渠道。
 - [x] 已通过 `release:family:preflight` + `publish:*:current` 发布协调 beta 家族（`2.0.0-beta.1` … `2.0.0-beta.3`），并对已发布包完成真实安装验证。
-- [x] Stable 切换：`release-2.0.0-stable.mjs` 会把每个包之前的 `latest` 移到 `legacy`（手动执行时由 `resolve-dist-tag` 输出准确的 `npm dist-tag add` 命令并提供失败断言）。
+- [x] Stable 切换：`release-stable-family.mjs` 按依赖序推送的 tag 触发 Release (Stable) workflow，由其通过 `resolve-dist-tag` 把每个包之前的 `latest` 移到 `legacy`（拒绝时会打印准确的 `npm dist-tag add` 命令）。
 
 ## 目标 4：运行时视觉验证
 
