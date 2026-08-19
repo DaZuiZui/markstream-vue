@@ -1,3 +1,54 @@
+## [2.0.0](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0-beta.3...markstream-vue@2.0.0) (2026-08-19)
+
+### 🎉 Stable release
+
+Markstream 2.0 is the stable major for the streaming Markdown renderer family. It ships one code-block runtime across six frameworks, a reworked streaming core with incremental DOM render items, and a parser pipeline without per-append O(n) scans — benchmarked end to end against 1.x.
+
+### ⚠ Breaking changes
+
+The 2.0 major removes the Monaco and `stream-markdown` code-block runtimes. Enhanced code fences now always render through `stream-diffs` (plain `<pre><code>` fallback without the optional peer). See the full migration table in the [2.0.0-beta.1](#200-beta1) section:
+
+- Removed: `MarkdownCodeBlockNode`, `codeRenderer`, `markdownCodeRenderer`, `CodeBlockMonaco*`, `stream-monaco`, `stream-markdown` peers, top-level `langs` prop
+- Replaced: `codeBlockOptions` / `CodeBlockOptions`, `CodeBlockTheme` / `CodeBlockThemePair`, `resolveLanguageId`, `preloadCodeBlockRuntime`, `CodeBlockPreviewPayload`
+- Breaking `CodeBlockNode` / `MarkdownRender` preview handlers now receive `{ node, artifactType, artifactTitle, id }`
+- Migration guide: [docs/guide/migration-2-0.md](https://markstream.simonhe.me/guide/migration-2-0)
+
+### What's Changed since beta.3
+
+- perf(renderer): incremental non-virtualized render items — module-level item array aligned with parsed nodes, dirty-tail rebuild only, single-node signature 21 → 3 fields (benchmark: 5000 nodes + 200 appends **36.8×**, 170.67ms → 4.64ms)
+- perf(renderer): O(1) pending-async-node counter (Map sum → event-maintained counter) and metrics `estimatedCount` reuse (one fewer O(N) scan per metrics emit)
+- perf(renderer): fallback height prefix rebuilt only from the parser dirty start — 2000 nodes + 200 appends **4.57×** (prefix benchmark)
+- perf(renderer): height-signature invalidation scans only `[dirtyStart, tail]` — **32×** on a 5000-node signed tail
+- perf(parser): custom-tag regex cached per tag and tag-set reuse — −6.7% across a 60-commit custom-html streaming session; `parseStandaloneHtmlDocument` trim fast path
+- perf: MathBlock / MathInline KaTeX render coalescing (32ms trailing window + content dedupe) — 4 rapid appends collapse into 1 render
+- feat(core): `burstInitialContent` for fence-safe one-shot burst reveals (default 2048-char threshold, enabled by the renderer for non-typewriter streams). A 4589-char document: 38 reveals / ~1.9s → **2 reveals / ~87ms**, while unclosed fence opening lines stay withheld
+- perf(core): LCS matches reused incrementally across streaming frames — 2000-line diff, 50 changes, 20 frames **7.9×** (184.3ms → 23.4ms)
+- refactor(core): `buildDiffPreviewPanes` is the single diff-preview implementation; Vue 3 `PreCodeNode` inline copy deleted
+- code-block: collapsed "unmodified lines" pill fully aligned with the final highlight surface (fixed row height/width jumps during streaming highlight handoff)
+- parser: streaming pipeline no longer does O(n) scans per append; streaming fence prefix jitter fixed; split-opener details stitching + cache
+- parser: CJK-safe tilde/`sub`/`sup`/`mark`/`ins` pairing (no cross-CJK mis-pairing); preserves tildes in Chinese number ranges
+- mermaid: oversized diagrams auto-fit the preview area (CSS max-height scaling, `resetZoom` restores 100%), worker timeout falls back to main-thread parsing
+- Metrics emit re-measure throttled to 120ms; settle-phase scan rate reduced ~75%
+- Framework adapters (React / Octane / Svelte / Angular / Vue 2) aligned on the same `stream-diffs` handoff, `preCodeVisual` theming, and plain fallback behavior as Vue 3
+
+### Benchmark evidence (Playwright web-vitals, 2.0 vs 1.0.6)
+
+- Scroll DOM nodes 5062 → 3494 (**−31%**), scroll interaction latency 7529 → 2297ms (**−69.5%**)
+- Initial LCP / settle on par with 1.x (356ms / 634ms vs 352ms / 633ms) while keeping streaming correctness (fence-atomic commits, burst reveal)
+
+### Coordinated stable versions
+
+- `stream-markdown-parser@1.2.8`
+- `markstream-core@2.0.0`
+- `markstream-vue@2.0.0`
+- `markstream-react@2.0.0`
+- `markstream-octane@2.0.0`
+- `markstream-svelte@2.0.0`
+- `markstream-angular@2.0.0`
+- `markstream-vue2@2.0.0`
+
+After the cutover, 2.x publishes on `latest` / `next`; 1.x and 0.x stable lines are preserved on `legacy` / `legacy-next`.
+
 ## [2.0.0-beta.3](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0-beta.2...markstream-vue@2.0.0-beta.3) (2026-08-18)
 
 ### What's Changed

@@ -14,43 +14,43 @@ keywords:
 
 ## Install
 
-The live documentation may be deployed before the beta reaches npm. Check the `next` tag first, and run the beta install only when it returns `2.0.0-beta.1`. After the stable release, `@2` selects the maintained 2.x line:
+Markstream 2.0 is published as stable: `markstream-vue` on `latest` and `markstream-vue@2` both select the maintained 2.x line. The 1.x line stays available through `legacy` / `legacy-next` (`markstream-vue@1`).
 
 ```bash
-# Continue only when this prints 2.0.0-beta.1
-npm view markstream-vue@next version
+# 2.0 stable (latest); stream-diffs is the enhanced code-block runtime
+pnpm add markstream-vue stream-diffs
 
-# 2.0 beta validation, after the check above passes
-pnpm add markstream-vue@next stream-diffs
-
-# after 2.0 stable is published
+# explicit 2.x line
 pnpm add markstream-vue@2 stream-diffs
+
+# 1.x maintenance line
+pnpm add markstream-vue@1
 ```
 
 Without `stream-diffs`, code fences render as a plain `<pre><code>` fallback. You can request that path explicitly with `render-code-blocks-as-pre`.
 
-### Coordinated beta family
+### Coordinated 2.0 family
 
-The same code-block migration applies to every framework adapter in the coordinated beta. The packages publish independently, so checking `markstream-vue@next` does not prove that another adapter is ready. Before running a row below, query that row's package and confirm that it exactly matches the listed beta version:
+The same code-block migration applies to every framework adapter. The packages publish independently, so before using one of the rows below, confirm it is on the 2.0 line:
 
 ```bash
 # Replace this name with the package from the row you use.
 PACKAGE=markstream-react
-npm view "$PACKAGE@next" version
+npm view "$PACKAGE" version
 ```
 
-Install the adapter you use from `next`; install parser or core directly only when your application imports them itself.
+Install the adapter you use from `latest`; install parser or core directly only when your application imports them itself.
 
-| Framework or layer | Beta version | Beta install |
+| Framework or layer | 2.0 version | Install |
 | --- | --- | --- |
-| Vue 3 / Nuxt / VitePress | `markstream-vue@2.0.0-beta.1` | `pnpm add markstream-vue@next stream-diffs` |
-| React / Next.js | `markstream-react@0.1.0-beta.1` | `pnpm add markstream-react@next stream-diffs` |
-| Octane | `markstream-octane@0.1.0-beta.1` | `pnpm add markstream-octane@next octane@^0.1.21 stream-diffs` |
-| Svelte 5 | `markstream-svelte@0.1.0-beta.1` | `pnpm add markstream-svelte@next svelte@^5 stream-diffs` |
-| Angular | `markstream-angular@0.1.0-beta.1` | `pnpm add markstream-angular@next stream-diffs` |
-| Vue 2 | `markstream-vue2@0.1.0-beta.1` | `pnpm add markstream-vue2@next stream-diffs` |
-| Parser only | `stream-markdown-parser@1.2.5-beta.1` | `pnpm add stream-markdown-parser@next` |
-| Streaming core only | `markstream-core@1.1.0-beta.1` | `pnpm add markstream-core@next` |
+| Vue 3 / Nuxt / VitePress | `markstream-vue@2.0.0` | `pnpm add markstream-vue stream-diffs` |
+| React / Next.js | `markstream-react@2.0.0` | `pnpm add markstream-react stream-diffs` |
+| Octane | `markstream-octane@2.0.0` | `pnpm add markstream-octane octane@^0.1.21 stream-diffs` |
+| Svelte 5 | `markstream-svelte@2.0.0` | `pnpm add markstream-svelte svelte@^5 stream-diffs` |
+| Angular | `markstream-angular@2.0.0` | `pnpm add markstream-angular stream-diffs` |
+| Vue 2 | `markstream-vue2@2.0.0` | `pnpm add markstream-vue2 stream-diffs` |
+| Parser only | `stream-markdown-parser@1.2.8` | `pnpm add stream-markdown-parser` |
+| Streaming core only | `markstream-core@2.0.0` | `pnpm add markstream-core` |
 
 Keep existing framework peers compatible instead of upgrading only part of a framework. React requires both `react` and `react-dom` 18 or newer. Keep all Angular packages on one version line. Vue 2.6 users must also install and register `@vue/composition-api`; Vue 2.7 users must not install that plugin.
 
@@ -178,6 +178,8 @@ const parseOptions: ParseOptions = {
 ## 1.x maintenance and npm channels
 
 The `1.x` branch remains available for critical bug and security fixes. Fixes that apply to both lines land on the current line first and are cherry-picked to `1.x`; fixes tied to removed 1.x code stay on that branch. No 1.x end-of-life date is set here; it will be announced separately.
+
+The 2.x stable cutover is live: `markstream-vue` / `markstream-core` 2.x are on `latest`, 1.x stable is preserved on `legacy`, and `legacy-next` carries 1.x prereleases.
 
 | Release phase | `latest` | `next` | Maintained 1.x channels |
 | --- | --- | --- | --- |

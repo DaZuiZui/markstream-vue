@@ -32,16 +32,17 @@ Other packages:
 
 ## Install markstream-vue
 
-The stable line remains 1.x. The coordinated 2.0 beta will use `next`; first verify
-that `npm view markstream-vue@next version` reports `2.0.0-beta.1`, then follow
-the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0):
+Markstream 2.0 is stable: `pnpm add markstream-vue stream-diffs` installs the current
+2.x line; `markstream-vue@1` pins the maintained 1.x line. The 1.x stable line is
+preserved on the `legacy` npm tag, 1.x prereleases on `legacy-next`. See the
+[1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) for
+the stream-diffs code-block migration:
 
 ```bash
-pnpm add markstream-vue@next stream-diffs
+pnpm add markstream-vue stream-diffs
 ```
 
-During the beta, the untagged package remains on 1.x. Use `@1` when you want to
-pin the maintained 1.x line across the stable 2.0 cutover:
+For applications that must stay on the 1.x line across the 2.x cutover:
 
 ```bash
 pnpm add markstream-vue@1
@@ -666,8 +667,8 @@ If markstream-vue helps your work, you can support ongoing maintenance with one 
 
 - Latest: [Releases](https://github.com/Simon-He95/markstream-vue/releases) — see highlights and upgrade notes.
 - Full history: [CHANGELOG.md](./CHANGELOG.md)
-- 2.0 beta candidate:
-  - After `npm view markstream-vue@next version` reports `2.0.0-beta.1`, install `markstream-vue@next` with `stream-diffs`; stable 1.x remains available through `@1`.
+- 2.0 stable:
+  - Install `markstream-vue` (2.x on `latest`) with `stream-diffs`; the 1.x line stays available through `@1` / the `legacy` tag.
   - Monaco and `stream-markdown` runtimes and Monaco-named APIs are removed; supported code-block options move to `codeBlockOptions`.
   - Read [Migrating from 1.x to 2.0](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
 - 1.0 launch notes:
