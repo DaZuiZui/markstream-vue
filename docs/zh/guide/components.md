@@ -23,7 +23,7 @@ keywords:
 | 组件 | 推荐场景 | 关键 props / 事件 | 额外 CSS / 同伴依赖 | 排障提示 |
 | ---- | -------- | ---------------- | ------------------- | -------- |
 | `MarkdownRender` | 渲染完整 AST（默认导出） | Props：`content` / `nodes`、`custom-id`、`final`、`parse-options`、`custom-html-tags`、`is-dark`、`code-block-props`、`mermaid-props`、`d2-props`、`infographic-props`；事件：`copy-code` 用于代码复制文本、`copy`（已弃用的兼容别名）、`handleArtifactClick`、`click`、`mouseover`、`mouseout` | 在 reset 之后引入 `markstream-vue/index.css`（CSS 已被限定在内部 `.markstream-vue` 容器中），并放入受控 layer | 用 `setCustomComponents(customId, mapping)` + `custom-id` 限定覆盖范围；配合 [CSS 排查清单](/zh/guide/troubleshooting#css-looks-wrong-start-here) |
-| `CodeBlockNode` | 增强 File/FileDiff 代码块 | `node`、`stream`、`loading`；事件：`copy`、`previewCode`；插槽 `header-left` / `header-right`；主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 设置 | 安装 `stream-diffs`；不需要 worker plugin 或额外 CSS import | SSR 首包会先给 `<pre><code>` fallback；结束流式输出且进入视口后才挂载增强 surface |
+| `CodeBlockNode` | 增强 File/FileDiff 代码块 | `node`、`stream`、`loading`；事件：`copy`、`previewCode`；插槽 `header-left` / `header-right`；主题通过 `theme` / `darkTheme` / `lightTheme` / `themes` 设置 | 安装 `stream-diffs`；可选用 `@pierre/diffs` worker 池做离主线程高亮 | SSR 首包会先给 `<pre><code>` fallback；结束流式输出且进入视口后才挂载增强 surface |
 | `MermaidBlockNode` | 渐进式 Mermaid 图 | `node`、`isDark`、`isStrict`、`maxHeight`、`estimatedPreviewHeightPx`；事件 `copy`、`export`、`openModal`、`toggleMode` | `mermaid` >= 11；无需额外 CSS | SSR 首包先给可读 fallback；异步渲染问题详见 `/zh/guide/mermaid` |
 | `D2BlockNode` | 渐进式 D2 图 | `node`、`isDark`、`maxHeight`、`progressiveRender`、`progressiveIntervalMs`；工具栏开关 | `@terrastruct/d2`；无需额外 CSS | SSR 首包先给 fallback / 源码；缺少依赖时保持 fallback；详见 `/zh/guide/d2` |
 | `MathBlockNode` / `MathInlineNode` | KaTeX 公式 | `node` | 安装 `katex` 并引入 `katex/dist/katex.min.css` | 注册同步 KaTeX loader 后可直接 SSR 出 HTML；否则稳定回退为原文 |
@@ -212,6 +212,8 @@ setCustomComponents('docs', {
 - **常见问题**：增强 surface 会等待代码块结束流式输出并进入视口
 
 如果代码块本身就是产品体验的一部分，用它最合适。`stream-diffs` 与框架无关，Vue 的 mount/unmount 决策保留在 `CodeBlockNode`。受支持的 code/diff 行为通过直接或 renderer 顶层 `codeBlockOptions` 配置。
+
+大代码块场景下，`CodeBlockNode` 可通过 `setStreamDiffsWorkerPool(...)` 注入上游 `@pierre/diffs` 的 `WorkerPoolManager`，把 Shiki 分词移到 Web Worker；不注入时仍在主线程高亮。接入方式见 [Code Block Runtime](/zh/guide/code-block-runtime)。
 
 深入页面： [CodeBlockNode](/zh/guide/code-block-node)、[Code Block Runtime](/zh/guide/code-block-runtime)
 

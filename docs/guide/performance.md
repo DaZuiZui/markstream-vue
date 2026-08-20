@@ -190,6 +190,34 @@ Some AI or LLM sources send content in large bursts, which can feel like the pre
 
 These knobs keep DOM work under a predictable budget, so users perceive a calm, steady flow of content even when the backend sends data in erratic bursts.
 
+### Large code blocks: off-thread highlighting
+
+`stream-diffs` highlights with Shiki on the main thread by default. Rendering a code block with tens of thousands of lines blocks scrolling and every other interaction for the whole tokenization pass. To move Shiki tokenization into Web Workers, inject an upstream `@pierre/diffs` `WorkerPoolManager` through `setStreamDiffsWorkerPool(...)`:
+
+```ts
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
+import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
+import { setStreamDiffsWorkerPool } from 'markstream-vue'
+
+setStreamDiffsWorkerPool(getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    poolSize: 4,
+    workerFactory: () => new DiffsWorker(),
+  },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  },
+}))
+```
+
+Notes:
+
+- The host builds the pool with its own bundler (`?worker` in Vite) and must add `@pierre/diffs` as a direct dependency; markstream-vue only forwards it as the `workerManager` runtime option.
+- `poolSize` is the number of parallel highlight workers. Each worker loads Shiki core, grammars, themes, and the oniguruma wasm, so memory grows with pool size; `min(4, hardwareConcurrency)` is a reasonable default.
+- `CodeBlockNode` re-syncs the block's active theme to the pool via `setRenderOptions` on every theme change, so the pool theme above is only an initial value and never conflicts with `isDark`/`theme`/`themes`.
+- Without an injected pool (or when the pool reports itself unavailable), highlighting falls back to the main thread automatically. A broken pool can never block rendering.
+- The worker removes the tokenization cost from the main thread. DOM construction for very large blocks still runs on the main thread; for 100k+ line surfaces consider virtualized/windowed rendering.
+
 Try this — tune rendering performance by enabling `viewportPriority`:
 
 ```vue twoslash

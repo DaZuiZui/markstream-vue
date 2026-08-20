@@ -274,6 +274,7 @@ The `themes` prop accepts exactly a `[dark, light]` pair. A former Monaco JSON t
 ## Notes
 - The CodeBlock header API is documented in `docs/guide/codeblock-header.md` (examples for replacing header and custom loading placeholder).
 - `CodeBlockNode` and `MermaidBlockNode` intentionally use different `copy` event payloads: `CodeBlockNode` emits `copy(text: string)`, while `MermaidBlockNode` emits `copy(ev: MermaidBlockEvent<{ type: 'copy'; text: string }>)` (supports `preventDefault()`).
+- For large code blocks (tens of thousands of lines), Shiki tokenization runs on the main thread by default. To offload it to Web Workers, inject an upstream `@pierre/diffs` `WorkerPoolManager` via `setStreamDiffsWorkerPool(...)`; `CodeBlockNode` forwards it as the `workerManager` option and keeps the active theme in sync. Without an injected pool (or when the pool reports itself unavailable) the surface highlights on the main thread. See [Code Block Runtime](/guide/code-block-runtime) for the setup.
 
 Try this — simple snapshot example (inline usage):
 

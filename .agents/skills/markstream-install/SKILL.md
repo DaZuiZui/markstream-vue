@@ -71,6 +71,7 @@ Read [references/scenarios.md](references/scenarios.md) before making dependency
 - Do not widen HTML or Mermaid security defaults unless the user explicitly needs trusted legacy compatibility.
 - Enhanced code blocks in every Markstream package use `stream-diffs`; there is no `stream-monaco` or Shiki direct integration in current versions.
 - Direct `CodeBlockNode` and top-level renderer configuration use the same `codeBlockOptions` / `CodeBlockOptions` contract. Keep component chrome in `codeBlockProps`; do not nest runtime options there.
+- In Vue 3, large code blocks can be highlighted off the main thread by injecting an upstream `@pierre/diffs` `WorkerPoolManager` through `setStreamDiffsWorkerPool(...)`. The host builds the pool with its own bundler and adds `@pierre/diffs` as a direct dependency. This is a Vue 3-only enhancement; the other framework packages do not expose it.
 - If compatibility requires it, scope the opt-out to the trusted surface with `htmlPolicy` / `html-policy="trusted"` and `mermaidProps.isStrict = false` instead of changing app-wide defaults blindly.
 
 ## Useful Doc Targets

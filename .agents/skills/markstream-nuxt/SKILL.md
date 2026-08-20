@@ -37,6 +37,7 @@ Use this skill when the host app is Nuxt and SSR boundaries matter.
 - Smooth streaming is SSR-safe in `auto` mode (the default) because it gates on mount. Do not use `smooth-streaming="true"` for first-screen SSR content — it bypasses the mounted gate and can cause hydration mismatch or blank flash.
 - Avoid import-time access to browser globals from server code paths.
 - Treat the enhanced code runtime, Mermaid workers, and similar heavy peers as client-only unless the repo already has a proven SSR pattern.
+- For large code blocks, the optional off-thread highlight pool (`setStreamDiffsWorkerPool` from `markstream-vue`, backed by an upstream `@pierre/diffs` `WorkerPoolManager`) is also client-only: inject it in a client-only plugin/component, never in server code paths.
 - Enhanced code blocks in every Markstream package use `stream-diffs`; do not install `stream-monaco`.
 - Use top-level `code-block-options` for supported built-in code-surface configuration. Keep theme, code/language, streaming lifecycle, header, mounting, reveal, and disposal under Markstream's control.
 - Keep `html-policy="safe"` and Mermaid strict mode unless the task is preserving trusted legacy rendering.

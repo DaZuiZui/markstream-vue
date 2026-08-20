@@ -76,10 +76,19 @@ const MarkstreamVirtualTimeline = definePublicAsyncComponent<MarkstreamVirtualTi
   () => import('./components/MarkstreamVirtualTimeline'),
 )
 
+// Export centralized props interfaces so they appear in package d.ts
+export {
+  clearStreamDiffsWorkerPool,
+  getStreamDiffsWorkerPool,
+  setStreamDiffsWorkerPool,
+  syncStreamDiffsWorkerTheme,
+  terminateStreamDiffsWorkerPool,
+} from './components/CodeBlockNode/streamDiffsWorker'
+export type { StreamDiffsWorkerPoolLike } from './components/CodeBlockNode/streamDiffsWorker'
 export type { D2Loader } from './components/D2BlockNode/d2'
+
 export type { InfographicLoader } from './components/InfographicBlockNode/infographic'
 export type { KatexLoader } from './components/MathInlineNode/katex'
-
 export type { MermaidLoader } from './components/MermaidBlockNode/mermaid'
 export type {
   MarkstreamBottomAnchor,
@@ -145,7 +154,6 @@ export type {
   NodeRendererProps,
   NodeRendererTypewriter,
 } from './types/node-renderer-props'
-// Export centralized props interfaces so they appear in package d.ts
 export * from './utils'
 export { MARKSTREAM_NODE_LIFECYCLE_KEY, useMarkstreamNodeLifecycle } from './utils/nodeLifecycle'
 export * from './workers/katexCdnWorker'
