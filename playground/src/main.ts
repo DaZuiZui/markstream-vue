@@ -1,7 +1,36 @@
-import { setInfographicLoader } from 'markstream-vue'
+import { setInfographicLoader, setStreamDiffsWorkerPool, getStreamDiffsWorkerPool } from 'markstream-vue'
 import { createPinia } from 'pinia'
 import routes from 'virtual:generated-pages'
 import { createApp } from 'vue'
+// Off-thread Shiki highlighting for code blocks: the host builds the worker
+// pool with its own bundler (`?worker`) and markstream-vue forwards it to every
+// enhanced surface. poolSize = number of parallel highlight workers. The pool
+// theme is only the initial value — CodeBlockNode re-syncs the active theme on
+// every block via setRenderOptions.
+import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
+
+setStreamDiffsWorkerPool(getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    poolSize: Math.min(4, (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4),
+    workerFactory: () => new DiffsWorker(),
+  },
+  highlighterOptions: {
+    theme: 'vitesse-dark',
+  },
+}))
+
+// Dev-only diagnostic: confirm the pool initialized and is doing the
+// highlighting (instead of silently falling back to the main thread).
+// managerState should be 'initialized' and workersFailed should be false.
+setTimeout(() => {
+  const pool = getStreamDiffsWorkerPool() as any
+  console.log('[playground] worker pool status:', JSON.stringify({
+    working: pool?.isWorkingPool?.(),
+    initialized: pool?.isInitialized?.(),
+    stats: pool?.getStats?.(),
+  }))
+}, 2000)
 // import { setDefaultI18nMap } from '../../src/exports'
 // import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory } from 'vue-router'
