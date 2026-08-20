@@ -411,6 +411,8 @@ let infographicInstance: any | null = null
 let renderInFlight = false
 let rerenderQueued = false
 let rerenderForce = false
+let renderScheduled = false
+let renderScheduledForce = false
 let lastCompletedRenderSignature = ''
 let unmounted = false
 let renderGeneration = 0
@@ -433,45 +435,40 @@ async function renderInfographic(force = false) {
   if (!force && signature === lastCompletedRenderSignature && hasPreview.value)
     return
 
+  const source = baseCode.value
   const final = props.loading === false
   const generation = ++renderGeneration
   renderInFlight = true
   markLifecyclePending()
-  const previousHtml = infographicContainer.value.innerHTML
-  const previousHasPreview = hasPreview.value
-  const previousHasRenderError = hasRenderError.value
-  hasRenderError.value = false
+  let nextInfographicInstance: any | null = null
+  let previousChildren: ChildNode[] | null = null
 
   try {
     const InfographicClass = await getInfographic()
     if (!isCurrentRender(generation))
       return
-    if (!InfographicClass) {
-      console.warn('Infographic library failed to load.')
-      return
-    }
+    if (!InfographicClass)
+      throw new Error('Infographic library failed to load.')
     const container = infographicContainer.value
     if (!container)
       return
 
-    // Clear previous instance
-    if (infographicInstance) {
-      infographicInstance.destroy?.()
-      infographicInstance = null
-    }
+    const stillStreaming = props.loading === true
+    const canRender = signature === renderSignature.value
+      || (!final && stillStreaming && baseCode.value.startsWith(source))
+    if (!canRender)
+      return
 
-    // Clear container
-    container.innerHTML = ''
-
-    // Create new instance
-    infographicInstance = new InfographicClass({
+    previousChildren = Array.from(container.childNodes)
+    nextInfographicInstance = new InfographicClass({
       container,
       width: '100%',
       height: '100%',
     })
 
     let renderErrorMessage = ''
-    infographicInstance.on?.('error', (error: unknown) => {
+    let renderCompleted = false
+    nextInfographicInstance.on?.('error', (error: unknown) => {
       const errors = Array.isArray(error) ? error : [error]
       renderErrorMessage = errors
         .map((item) => {
@@ -486,13 +483,25 @@ async function renderInfographic(force = false) {
         .filter(Boolean)
         .join('; ')
     })
+    nextInfographicInstance.on?.('rendered', () => {
+      renderCompleted = true
+    })
 
     // Render the syntax
-    infographicInstance.render(baseCode.value)
+    nextInfographicInstance.render(source)
     if (renderErrorMessage)
       throw new Error(renderErrorMessage)
-    if (!container.childNodes.length)
+    const nextChildren = Array.from(container.childNodes)
+    const replacedChildren = nextChildren.length > 0 && (
+      nextChildren.length !== previousChildren.length
+      || nextChildren.some((child, index) => child !== previousChildren?.[index])
+    )
+    if (!renderCompleted && !replacedChildren)
       throw new Error('Infographic render returned empty output.')
+
+    infographicInstance?.destroy?.()
+    infographicInstance = nextInfographicInstance
+    nextInfographicInstance = null
     hasPreview.value = true
     hasRenderError.value = false
     lastCompletedRenderSignature = signature
@@ -506,8 +515,12 @@ async function renderInfographic(force = false) {
   catch (error) {
     if (!isCurrentRender(generation))
       return
+    nextInfographicInstance?.destroy?.()
+    nextInfographicInstance = null
     if (final && props.loading === false && signature === renderSignature.value) {
       console.error('Failed to render infographic:', error)
+      infographicInstance?.destroy?.()
+      infographicInstance = null
       hasPreview.value = false
       hasRenderError.value = true
       lastCompletedRenderSignature = ''
@@ -515,15 +528,12 @@ async function renderInfographic(force = false) {
         infographicContainer.value.innerHTML = `<div style="padding: var(--ms-inset-panel-body); color: hsl(var(--ms-destructive))">Failed to render infographic: ${error instanceof Error ? error.message : 'Unknown error'}</div>`
       }
     }
-    else {
-      hasPreview.value = previousHasPreview
-      hasRenderError.value = previousHasRenderError
-      if (previousHasPreview && infographicContainer.value) {
-        infographicContainer.value.innerHTML = previousHtml
-      }
+    else if (previousChildren && infographicContainer.value) {
+      infographicContainer.value.replaceChildren(...previousChildren)
     }
   }
   finally {
+    nextInfographicInstance?.destroy?.()
     renderInFlight = false
     if (isCurrentRender(generation)) {
       if (rerenderQueued) {
@@ -544,9 +554,16 @@ async function renderInfographic(force = false) {
 function queueInfographicRender(force = false) {
   if (unmounted || !viewportReady.value || showSource.value || isCollapsed.value)
     return
+  renderScheduledForce = renderScheduledForce || force
+  if (renderScheduled)
+    return
+  renderScheduled = true
   nextTick(() => {
+    renderScheduled = false
+    const forceNext = renderScheduledForce
+    renderScheduledForce = false
     if (!unmounted)
-      void renderInfographic(force)
+      void renderInfographic(forceNext)
   })
 }
 
@@ -621,6 +638,8 @@ onBeforeUnmount(() => {
   renderGeneration += 1
   rerenderQueued = false
   rerenderForce = false
+  renderScheduled = false
+  renderScheduledForce = false
   viewportHandle.value?.destroy()
   viewportHandle.value = null
   clearLifecyclePending()
