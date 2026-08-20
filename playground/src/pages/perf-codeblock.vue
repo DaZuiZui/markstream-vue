@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
 import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
-import { getStreamDiffsWorkerPool, setStreamDiffsWorkerPool } from '../../../src/exports'
+import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import MarkdownRender from '../../../src/components/NodeRenderer'
+import { getStreamDiffsWorkerPool, setStreamDiffsWorkerPool } from '../../../src/exports'
 
 // Same singleton the playground wires in main.ts; calling it again returns the
 // shared instance, so toggling here re-injects the same pool.

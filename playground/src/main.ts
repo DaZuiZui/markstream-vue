@@ -1,15 +1,24 @@
-import { setInfographicLoader, setStreamDiffsWorkerPool, getStreamDiffsWorkerPool } from 'markstream-vue'
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
+import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
+import { getStreamDiffsWorkerPool, setInfographicLoader, setStreamDiffsWorkerPool } from 'markstream-vue'
 import { createPinia } from 'pinia'
 import routes from 'virtual:generated-pages'
 import { createApp } from 'vue'
+// import { setDefaultI18nMap } from '../../src/exports'
+// import { createI18n } from 'vue-i18n'
+import { createRouter, createWebHistory } from 'vue-router'
+// import { setLanguageIconResolver } from '../../src/exports'
+import App from './App.vue'
+import { installPlaygroundSeo } from './seo'
+// import JsLocalIcon from './assets/javascript.svg?raw'
+import '@unocss/reset/tailwind.css'
+import './styles/main.css'
+
 // Off-thread Shiki highlighting for code blocks: the host builds the worker
 // pool with its own bundler (`?worker`) and markstream-vue forwards it to every
 // enhanced surface. poolSize = number of parallel highlight workers. The pool
 // theme is only the initial value — CodeBlockNode re-syncs the active theme on
 // every block via setRenderOptions.
-import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
-import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
-
 setStreamDiffsWorkerPool(getOrCreateWorkerPoolSingleton({
   poolOptions: {
     poolSize: Math.min(4, (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4),
@@ -31,15 +40,6 @@ setTimeout(() => {
     stats: pool?.getStats?.(),
   }))
 }, 2000)
-// import { setDefaultI18nMap } from '../../src/exports'
-// import { createI18n } from 'vue-i18n'
-import { createRouter, createWebHistory } from 'vue-router'
-// import { setLanguageIconResolver } from '../../src/exports'
-import App from './App.vue'
-import { installPlaygroundSeo } from './seo'
-// import JsLocalIcon from './assets/javascript.svg?raw'
-import '@unocss/reset/tailwind.css'
-import './styles/main.css'
 
 const app = createApp(App)
 setInfographicLoader(() => import('@antv/infographic'))

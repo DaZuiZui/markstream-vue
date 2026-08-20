@@ -86,9 +86,9 @@ void preloadCodeBlockRuntime()
 `markstream-vue` **不会**自己打包或创建 worker——worker 资产与打包器强相关，在跨打包器库内部实现很脆弱。正确做法是宿主应用用自己的打包器创建 worker 池，然后注入一次：
 
 ```ts
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
 // vite.config.ts / 任意在代码块渲染前执行一次的模块
 import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
-import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
 import { setStreamDiffsWorkerPool } from 'markstream-vue'
 
 const pool = getOrCreateWorkerPoolSingleton({
@@ -111,7 +111,7 @@ setStreamDiffsWorkerPool(pool)
 import { clearStreamDiffsWorkerPool, terminateStreamDiffsWorkerPool } from 'markstream-vue'
 
 terminateStreamDiffsWorkerPool() // 调用 pool.terminate()（如果可用）并清除
-clearStreamDiffsWorkerPool()     // 仅清除，不终止（宿主保留所有权）
+clearStreamDiffsWorkerPool() // 仅清除，不终止（宿主保留所有权）
 ```
 
 行为说明：

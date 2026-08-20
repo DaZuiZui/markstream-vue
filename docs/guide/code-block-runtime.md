@@ -86,9 +86,9 @@ This only warms the optional module. It does not create a surface, finalize a st
 `markstream-vue` deliberately does **not** bundle or spawn the worker itself — worker assets are bundler-specific and fragile inside a multi-bundler library. Instead, the host app creates the pool with its own bundler and injects it once:
 
 ```ts
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
 // vite.config.ts / any module evaluated once before code blocks render
 import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
-import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
 import { setStreamDiffsWorkerPool } from 'markstream-vue'
 
 const pool = getOrCreateWorkerPoolSingleton({
@@ -111,7 +111,7 @@ Use the equivalent worker import for your bundler (webpack 5, Rollup, etc.). The
 import { clearStreamDiffsWorkerPool, terminateStreamDiffsWorkerPool } from 'markstream-vue'
 
 terminateStreamDiffsWorkerPool() // calls pool.terminate() (if available) and clears it
-clearStreamDiffsWorkerPool()     // clears without terminating (host keeps ownership)
+clearStreamDiffsWorkerPool() // clears without terminating (host keeps ownership)
 ```
 
 Behavior notes:
