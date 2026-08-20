@@ -26,9 +26,8 @@ export interface StreamDiffsWorkerPoolLike {
    * Updates worker-side render options (theme). Called by markstream-vue on
    * theme changes so worker-generated tokens match the active theme.
    */
-  setRenderOptions?: (options: { theme?: unknown }) => Promise<void> | void
+  setRenderOptions?: (options: { theme?: string | { dark: string, light: string } }) => Promise<void> | void
   terminate?: () => void
-  [key: string]: unknown
 }
 
 let workerPool: StreamDiffsWorkerPoolLike | null = null
@@ -84,7 +83,9 @@ export function terminateStreamDiffsWorkerPool() {
  * the requested theme. No-op when no pool is injected. Failures are non-fatal:
  * tokens still render, and colors catch up on the next sync.
  */
-export async function syncStreamDiffsWorkerTheme(theme: unknown) {
+export async function syncStreamDiffsWorkerTheme(
+  theme: string | { dark: string, light: string },
+) {
   const pool = workerPool
   if (!pool || typeof pool.setRenderOptions !== 'function')
     return
