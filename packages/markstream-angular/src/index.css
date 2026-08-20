@@ -1505,7 +1505,15 @@ body > div[id^="dmermaid-"] {
 }
 
 .markstream-angular .infographic-render {
+  position: relative;
   width: 100%;
   min-height: 320px;
   overflow: auto;
+}
+
+.markstream-angular .infographic-pending-source {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  margin: 0;
 }

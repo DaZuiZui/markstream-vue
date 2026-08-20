@@ -50,6 +50,8 @@ const isModalOpen = ref(false)
 const modalContent = ref<HTMLElement>()
 const modalCloneWrapper = ref<HTMLElement | null>(null)
 const baseCode = computed(() => props.node.code)
+const hasPreview = ref(false)
+const hasRenderError = ref(false)
 const maxPreviewHeight = computed(() => {
   if (!props.maxHeight || props.maxHeight === 'none')
     return null
@@ -323,59 +325,161 @@ function stopDrag() {
 }
 
 let infographicInstance: any | null = null
+let renderInFlight = false
+let rerenderQueued = false
+let rerenderForce = false
+let renderScheduled = false
+let renderScheduledForce = false
+let lastCompletedRenderSignature = ''
+let unmounted = false
+let renderGeneration = 0
 
-async function renderInfographic() {
-  if (!infographicContainer.value)
+async function renderInfographic(force = false) {
+  if (unmounted || !infographicContainer.value)
     return
+  if (renderInFlight) {
+    rerenderQueued = true
+    rerenderForce = rerenderForce || force
+    return
+  }
+  const signature = baseCode.value
+  if (!force && signature === lastCompletedRenderSignature && hasPreview.value)
+    return
+
+  const source = baseCode.value
+  const final = props.loading === false
+  const generation = ++renderGeneration
+  renderInFlight = true
+  let nextInfographicInstance: any | null = null
+  let previousChildren: ChildNode[] | null = null
 
   try {
     const InfographicClass = await getInfographic()
-    if (!InfographicClass) {
-      console.warn('Infographic library failed to load.')
+    if (unmounted || generation !== renderGeneration)
       return
-    }
+    if (!InfographicClass)
+      throw new Error('Infographic library failed to load.')
+    const container = infographicContainer.value
+    if (!container)
+      return
 
-    // Clear previous instance
-    if (infographicInstance) {
-      infographicInstance.destroy?.()
-      infographicInstance = null
-    }
+    const stillStreaming = props.loading === true
+    const canRender = signature === baseCode.value
+      || (!final && stillStreaming && baseCode.value.startsWith(source))
+    if (!canRender)
+      return
 
-    // Clear container
-    infographicContainer.value.innerHTML = ''
-
-    // Create new instance
-    infographicInstance = new InfographicClass({
-      container: infographicContainer.value,
+    previousChildren = Array.from(container.childNodes)
+    nextInfographicInstance = new InfographicClass({
+      container,
       width: '100%',
       height: '100%',
     })
 
-    // Render the syntax
-    infographicInstance.render(baseCode.value)
+    let renderErrorMessage = ''
+    let renderCompleted = false
+    nextInfographicInstance.on?.('error', (error: unknown) => {
+      const errors = Array.isArray(error) ? error : [error]
+      renderErrorMessage = errors
+        .map((item) => {
+          if (item instanceof Error)
+            return item.message
+          if (typeof item === 'string')
+            return item
+          if (item && typeof item === 'object' && 'message' in item)
+            return String((item as { message?: unknown }).message ?? '')
+          return String(item ?? '')
+        })
+        .filter(Boolean)
+        .join('; ')
+    })
+    nextInfographicInstance.on?.('rendered', () => {
+      renderCompleted = true
+    })
+    nextInfographicInstance.render(source)
+    if (renderErrorMessage)
+      throw new Error(renderErrorMessage)
+    const nextChildren = Array.from(container.childNodes)
+    const replacedChildren = nextChildren.length > 0 && (
+      nextChildren.length !== previousChildren.length
+      || nextChildren.some((child, index) => child !== previousChildren?.[index])
+    )
+    if (!renderCompleted && !replacedChildren)
+      throw new Error('Infographic render returned empty output.')
 
-    // Update container height after render
+    infographicInstance?.destroy?.()
+    infographicInstance = nextInfographicInstance
+    nextInfographicInstance = null
+    hasPreview.value = true
+    hasRenderError.value = false
+    lastCompletedRenderSignature = signature
+
     nextTick(() => {
-      updateContainerHeight()
+      if (!unmounted && generation === renderGeneration)
+        updateContainerHeight()
     })
   }
   catch (error) {
-    console.error('Failed to render infographic:', error)
-    if (infographicContainer.value) {
-      infographicContainer.value.innerHTML = `<div class="text-red-500 p-4">Failed to render infographic: ${error instanceof Error ? error.message : 'Unknown error'}</div>`
+    if (unmounted || generation !== renderGeneration)
+      return
+    nextInfographicInstance?.destroy?.()
+    nextInfographicInstance = null
+    if (final && props.loading === false && signature === baseCode.value) {
+      console.error('Failed to render infographic:', error)
+      infographicInstance?.destroy?.()
+      infographicInstance = null
+      hasPreview.value = false
+      hasRenderError.value = true
+      lastCompletedRenderSignature = ''
+      if (infographicContainer.value) {
+        infographicContainer.value.innerHTML = `<div class="text-red-500 p-4">Failed to render infographic: ${error instanceof Error ? error.message : 'Unknown error'}</div>`
+      }
+    }
+    else if (previousChildren && infographicContainer.value) {
+      infographicContainer.value.replaceChildren(...previousChildren)
     }
   }
+  finally {
+    nextInfographicInstance?.destroy?.()
+    renderInFlight = false
+    if (!unmounted && generation === renderGeneration && rerenderQueued) {
+      const forceNext = rerenderForce
+      rerenderQueued = false
+      rerenderForce = false
+      queueInfographicRender(forceNext)
+    }
+  }
+}
+
+function queueInfographicRender(force = false) {
+  if (unmounted || showSource.value || isCollapsed.value)
+    return
+  renderScheduledForce = renderScheduledForce || force
+  if (renderScheduled)
+    return
+  renderScheduled = true
+  nextTick(() => {
+    renderScheduled = false
+    const forceNext = renderScheduledForce
+    renderScheduledForce = false
+    if (!unmounted)
+      void renderInfographic(forceNext)
+  })
 }
 
 // Watch for code changes
 watch(
   () => baseCode.value,
   () => {
-    if (!showSource.value && !isCollapsed.value) {
-      nextTick(() => {
-        renderInfographic()
-      })
-    }
+    queueInfographicRender(true)
+  },
+)
+
+watch(
+  () => props.loading,
+  (loading, prev) => {
+    if (prev && !loading)
+      queueInfographicRender(true)
   },
 )
 
@@ -383,11 +487,8 @@ watch(
 watch(
   () => showSource.value,
   (isSource) => {
-    if (!isSource && !isCollapsed.value) {
-      nextTick(() => {
-        renderInfographic()
-      })
-    }
+    if (!isSource)
+      queueInfographicRender(true)
   },
 )
 
@@ -395,34 +496,29 @@ watch(
 watch(
   () => isCollapsed.value,
   (collapsed) => {
-    if (!collapsed && !showSource.value) {
-      nextTick(() => {
-        renderInfographic()
-      })
-    }
+    if (!collapsed)
+      queueInfographicRender()
   },
 )
 
 watch(
   () => props.maxHeight,
   () => {
-    if (!showSource.value && !isCollapsed.value) {
-      nextTick(() => {
-        renderInfographic()
-      })
-    }
+    nextTick(updateContainerHeight)
   },
 )
 
 onMounted(() => {
-  if (!showSource.value && !isCollapsed.value) {
-    nextTick(() => {
-      renderInfographic()
-    })
-  }
+  queueInfographicRender()
 })
 
 onBeforeUnmount(() => {
+  unmounted = true
+  renderGeneration += 1
+  rerenderQueued = false
+  rerenderForce = false
+  renderScheduled = false
+  renderScheduledForce = false
   if (infographicInstance) {
     infographicInstance.destroy?.()
     infographicInstance = null
@@ -461,7 +557,7 @@ watch(
 <template>
   <div
     data-markstream-infographic="1"
-    :data-markstream-mode="showSource ? 'source' : infographicInstance ? 'preview' : 'pending'"
+    :data-markstream-mode="showSource ? 'source' : hasRenderError ? 'error' : hasPreview ? 'preview' : 'pending'"
     class="my-4 rounded-lg border overflow-hidden shadow-sm"
     :class="[
       props.isDark ? 'border-gray-700/30' : 'border-gray-200',
@@ -636,6 +732,10 @@ watch(
           @touchmove.passive="onDrag"
           @touchend.passive="stopDrag"
         >
+          <pre
+            v-if="!hasPreview && !hasRenderError"
+            class="absolute inset-0 overflow-auto p-4 text-left text-sm font-mono whitespace-pre-wrap"
+          >{{ baseCode }}</pre>
           <div
             class="absolute inset-0 cursor-grab"
             :class="{ 'cursor-grabbing': isDragging }"

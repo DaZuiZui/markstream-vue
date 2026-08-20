@@ -55,6 +55,8 @@
   let rendering = $state(false)
   let rerenderQueued = $state(false)
   let rerenderForce = $state(false)
+  let renderScheduled = $state(false)
+  let renderScheduledForce = $state(false)
   let hasPreview = $state(false)
   let copied = $state(false)
   let collapsed = $state(false)
@@ -111,7 +113,16 @@
   function queueInfographicRender(force = false) {
     if (!mounted || !renderHost || collapsed || showSource || !source.trim())
       return
-    void tick().then(() => renderInfographic(force))
+    renderScheduledForce = renderScheduledForce || force
+    if (renderScheduled)
+      return
+    renderScheduled = true
+    void tick().then(() => {
+      renderScheduled = false
+      const forceNext = renderScheduledForce
+      renderScheduledForce = false
+      return renderInfographic(forceNext)
+    })
   }
 
   async function renderInfographic(force = false) {
@@ -128,7 +139,9 @@
       return
     }
 
-    const signature = `${source}\n${resolvedIsDark}\n${final}\n${progressivePreview}`
+    const renderSource = source
+    const renderFinal = final
+    const signature = `${renderSource}\n${resolvedIsDark}\n${renderFinal}\n${progressivePreview}`
     if (!force && signature === lastCompletedRenderSignature && hasPreview)
       return
     if (!force && signature === lastSuppressedErrorSignature)
@@ -148,6 +161,8 @@
     rendering = true
     if (shouldShowError)
       renderError = ''
+    let nextInstance: any = null
+    let previousChildren: ChildNode[] | null = null
 
     try {
       const InfographicClass = await getInfographic()
@@ -155,17 +170,22 @@
         return
       if (!InfographicClass)
         throw new Error('Infographic renderer is not available.')
+      const currentSignature = `${source}\n${resolvedIsDark}\n${final}\n${progressivePreview}`
+      const canRender = signature === currentSignature
+        || (!renderFinal && resolvedLoading && source.startsWith(renderSource))
+      if (!canRender)
+        return
 
-      destroyInstance()
-      clearElement(renderHost)
-      instance = new InfographicClass({
+      previousChildren = Array.from(renderHost.childNodes)
+      nextInstance = new InfographicClass({
         container: renderHost,
         width: '100%',
         height: '100%',
       })
 
       let renderErrorMessage = ''
-      instance.on?.('error', (error: unknown) => {
+      let renderCompleted = false
+      nextInstance.on?.('error', (error: unknown) => {
         const errors = Array.isArray(error) ? error : [error]
         renderErrorMessage = errors
           .map((item) => {
@@ -180,15 +200,24 @@
           .filter(Boolean)
           .join('; ')
       })
+      nextInstance.on?.('rendered', () => {
+        renderCompleted = true
+      })
 
-      instance.render(source)
+      nextInstance.render(renderSource)
       if (renderErrorMessage)
         throw new Error(renderErrorMessage)
-      await tick()
-      if (!mounted || token !== renderToken || collapsed || showSource || !renderHost)
-        return
-      if (!renderHost.querySelector('svg') && !renderHost.childElementCount)
+      const nextChildren = Array.from(renderHost.childNodes)
+      const replacedChildren = nextChildren.length > 0 && (
+        nextChildren.length !== previousChildren.length
+        || nextChildren.some((child, index) => child !== previousChildren?.[index])
+      )
+      if (!renderCompleted && !replacedChildren)
         throw new Error('Infographic render returned empty output.')
+
+      instance?.destroy?.()
+      instance = nextInstance
+      nextInstance = null
       hasPreview = true
       renderError = ''
       lastCompletedRenderSignature = signature
@@ -196,8 +225,11 @@
     }
     catch (error) {
       if (token === renderToken) {
+        nextInstance?.destroy?.()
+        nextInstance = null
         lastCompletedRenderSignature = ''
-        if (shouldShowError) {
+        const currentSignature = `${source}\n${resolvedIsDark}\n${final}\n${progressivePreview}`
+        if (shouldShowError && signature === currentSignature) {
           lastSuppressedErrorSignature = ''
           destroyInstance()
           clearElement(renderHost)
@@ -205,11 +237,15 @@
           renderError = error instanceof Error ? error.message : String(error)
         }
         else {
-          lastSuppressedErrorSignature = signature
+          if (previousChildren && renderHost)
+            renderHost.replaceChildren(...previousChildren)
+          if (signature === currentSignature)
+            lastSuppressedErrorSignature = signature
         }
       }
     }
     finally {
+      nextInstance?.destroy?.()
       if (token === renderToken) {
         rendering = false
         activeRenderSignature = ''
@@ -239,6 +275,8 @@
     rendering = false
     rerenderQueued = false
     rerenderForce = false
+    renderScheduled = false
+    renderScheduledForce = false
     hasPreview = false
     renderError = ''
     activeRenderSignature = ''
@@ -417,6 +455,9 @@
             </div>
           {/if}
           <div class="infographic-render" style={previewStyle}>
+            {#if !hasPreview && !renderError}
+              <pre class="infographic-source-code infographic-pending-source"><code>{source}</code></pre>
+            {/if}
             <div bind:this={renderHost} style={transformStyle}></div>
             {#if renderError}
               <p class="d2-error">{renderError}</p>

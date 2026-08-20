@@ -166,9 +166,17 @@ describe('markstream-react heavy-node viewport priority', () => {
     const render = vi.fn()
     vi.doMock('../packages/markstream-react/src/components/InfographicBlockNode/infographic', () => ({
       getInfographic: vi.fn(async () => class FakeInfographic {
-        constructor(_options: any) {}
+        private container: HTMLElement
 
-        render = render
+        constructor(options: { container: HTMLElement }) {
+          this.container = options.container
+        }
+
+        render = (source: string) => {
+          render(source)
+          this.container.innerHTML = '<svg data-infographic="1"></svg>'
+        }
+
         destroy() {}
       }),
     }))
