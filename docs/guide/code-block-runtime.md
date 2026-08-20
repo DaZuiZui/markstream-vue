@@ -79,6 +79,48 @@ void preloadCodeBlockRuntime()
 
 This only warms the optional module. It does not create a surface, finalize a streaming block, or bypass the completion-and-visibility gate.
 
+## Worker pool (off-thread highlighting)
+
+`stream-diffs` highlights with Shiki on the main thread by default. Rendering a code block with tens of thousands of lines blocks the UI for the whole highlight pass. `@pierre/diffs` ships an experimental `WorkerPoolManager` that moves Shiki tokenization into Web Workers; `markstream-vue` forwards an injected pool to every enhanced surface as the `workerManager` runtime option.
+
+`markstream-vue` deliberately does **not** bundle or spawn the worker itself — worker assets are bundler-specific and fragile inside a multi-bundler library. Instead, the host app creates the pool with its own bundler and injects it once:
+
+```ts
+// vite.config.ts / any module evaluated once before code blocks render
+import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
+import { setStreamDiffsWorkerPool } from 'markstream-vue'
+
+const pool = getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    poolSize: 4,
+    workerFactory: () => new DiffsWorker(),
+  },
+  highlighterOptions: {
+    // Align with the theme(s) used by the code blocks.
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  },
+})
+
+setStreamDiffsWorkerPool(pool)
+```
+
+Use the equivalent worker import for your bundler (webpack 5, Rollup, etc.). The same manager is shared across all code blocks. Lifecycle and termination stay under application control:
+
+```ts
+import { clearStreamDiffsWorkerPool, terminateStreamDiffsWorkerPool } from 'markstream-vue'
+
+terminateStreamDiffsWorkerPool() // calls pool.terminate() (if available) and clears it
+clearStreamDiffsWorkerPool()     // clears without terminating (host keeps ownership)
+```
+
+Behavior notes:
+
+- **No pool injected** — highlighting stays on the main thread, exactly as before. This is the default.
+- **Theme sync** — `CodeBlockNode` forwards the active theme to the pool via `setRenderOptions` on every theme change, so worker-generated tokens match the requested theme. No host wiring needed.
+- **Per-block override** — a `codeBlockOptions.workerManager` passed to an individual block wins over the shared injected pool.
+- **Fallback is automatic** — if the pool reports itself unavailable (`isWorkingPool() === false`), `@pierre/diffs` falls back to main-thread highlighting. A broken or terminated pool never blocks rendering.
+
 ## Diff interactions
 
 Diff blocks keep the same adapter boundary. The enhanced diff surface uses `stream-diffs` defaults unless the corresponding `codeBlockOptions` fields are supplied. For example, `diffStyle`, `expandUnchanged`, `collapsedContextThreshold`, `hunkSeparators`, `lineDiffType`, and `parseDiffOptions` configure layout and folding.

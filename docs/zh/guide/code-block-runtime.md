@@ -79,6 +79,48 @@ void preloadCodeBlockRuntime()
 
 这个调用只预热可选 module；不会创建 surface、不会完成仍在流式输出的代码块，也不会绕过结束态和可见性 gate。
 
+## Worker 池（离主线程高亮）
+
+默认情况下 `stream-diffs` 在主线程用 Shiki 高亮。渲染数万行代码时，整个高亮过程会阻塞 UI。`@pierre/diffs` 提供了实验性的 `WorkerPoolManager`，可以把 Shiki 分词移到 Web Worker；`markstream-vue` 会把注入的 worker 池作为 `workerManager` runtime 选项转发给每一个增强 surface。
+
+`markstream-vue` **不会**自己打包或创建 worker——worker 资产与打包器强相关，在跨打包器库内部实现很脆弱。正确做法是宿主应用用自己的打包器创建 worker 池，然后注入一次：
+
+```ts
+// vite.config.ts / 任意在代码块渲染前执行一次的模块
+import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
+import { setStreamDiffsWorkerPool } from 'markstream-vue'
+
+const pool = getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    poolSize: 4,
+    workerFactory: () => new DiffsWorker(),
+  },
+  highlighterOptions: {
+    // 与代码块使用的主题保持一致
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  },
+})
+
+setStreamDiffsWorkerPool(pool)
+```
+
+请使用与你的打包器对应的 worker 导入方式（webpack 5、Rollup 等）。同一个 manager 会在所有代码块之间共享；生命周期与终止仍由应用控制：
+
+```ts
+import { clearStreamDiffsWorkerPool, terminateStreamDiffsWorkerPool } from 'markstream-vue'
+
+terminateStreamDiffsWorkerPool() // 调用 pool.terminate()（如果可用）并清除
+clearStreamDiffsWorkerPool()     // 仅清除，不终止（宿主保留所有权）
+```
+
+行为说明：
+
+- **未注入 pool** — 高亮保持主线程，与之前完全一致。这是默认行为。
+- **主题同步** — `CodeBlockNode` 会在每次主题变化时通过 `setRenderOptions` 把当前主题同步给 pool，保证 worker 生成的 token 与请求主题一致，宿主无需额外接线。
+- **按块覆盖** — 单个块传入 `codeBlockOptions.workerManager` 时，优先于全局注入的 pool。
+- **自动回退** — 如果 pool 报告自己不可用（`isWorkingPool() === false`），`@pierre/diffs` 会自动回退到主线程高亮。损坏或已终止的 pool 永远不会阻塞渲染。
+
 ## Diff 交互
 
 diff block 使用相同的适配边界。未提供对应 `codeBlockOptions` 时，增强 diff surface 使用 `stream-diffs` 默认值；可通过 `diffStyle`、`expandUnchanged`、`collapsedContextThreshold`、`hunkSeparators`、`lineDiffType` 与 `parseDiffOptions` 配置布局和折叠。
