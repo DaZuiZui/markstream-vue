@@ -25,7 +25,7 @@ If you are still deciding where to customize the pipeline, start with:
 | Component | Best for | Key props/events | Extra CSS / peers | Troubleshooting hooks |
 | --------- | -------- | ---------------- | ----------------- | --------------------- |
 | `MarkdownRender` | Rendering full AST trees (default export) | Props: `content` / `nodes`, `custom-id`, `final`, `parse-options`, `custom-html-tags`, `is-dark`, `code-block-props`, `mermaid-props`, `d2-props`, `infographic-props`; events: `copy-code` for code copy text, `copy` (deprecated compatibility alias), `handleArtifactClick`, `click`, `mouseover`, `mouseout` | Import `markstream-vue/index.css` inside a reset-aware layer (CSS is scoped under an internal `.markstream-vue` container) | Use `setCustomComponents(customId, mapping)` + `custom-id` to scope overrides; see [CSS checklist](/guide/troubleshooting#css-looks-wrong-start-here) |
-| `CodeBlockNode` | Enhanced File/FileDiff code blocks | `node`, `stream`, `loading`; events: `copy`, `previewCode`; slots `header-left` / `header-right`; theming via `theme` / `darkTheme` / `lightTheme` / `themes` | Install `stream-diffs`; no worker plugin or extra CSS import | SSR sends a `<pre><code>` fallback first; enhanced surface mounts after completion and visibility |
+| `CodeBlockNode` | Enhanced File/FileDiff code blocks | `node`, `stream`, `loading`; events: `copy`, `previewCode`; slots `header-left` / `header-right`; theming via `theme` / `darkTheme` / `lightTheme` / `themes` | Install `stream-diffs`; optional `@pierre/diffs` worker pool for off-thread highlighting | SSR sends a `<pre><code>` fallback first; enhanced surface mounts after completion and visibility |
 | `MermaidBlockNode` | Progressive Mermaid diagrams | `node`, `isDark`, `isStrict`, `maxHeight`, `estimatedPreviewHeightPx`; emits `copy`, `export`, `openModal`, `toggleMode` | Peer `mermaid` >= 11; no extra CSS required | SSR sends readable fallback markup first; for async errors see `/guide/mermaid` |
 | `D2BlockNode` | Progressive D2 diagrams | `node`, `isDark`, `maxHeight`, `progressiveRender`, `progressiveIntervalMs`; toolbar toggles | Peer `@terrastruct/d2`; no extra CSS | SSR sends fallback/source first; missing peer stays on fallback; see `/guide/d2` |
 | `MathBlockNode` / `MathInlineNode` | KaTeX rendering | `node` | Install `katex` and import `katex/dist/katex.min.css` | SSR can emit KaTeX HTML when you register a sync loader; otherwise it falls back to raw text |
@@ -214,6 +214,8 @@ setCustomComponents('docs', {
 - **Common gotcha**: the enhanced surface waits for the block to finish streaming and enter the viewport
 
 Reach for this when the code block itself is part of the product experience. `stream-diffs` is framework-agnostic; Vue mount and unmount decisions stay in `CodeBlockNode`. Configure supported code and diff behavior through direct or renderer-level `codeBlockOptions`.
+
+For large code blocks, `CodeBlockNode` can offload Shiki tokenization to Web Workers by injecting an upstream `@pierre/diffs` `WorkerPoolManager` via `setStreamDiffsWorkerPool(...)`; without it the surface highlights on the main thread. See [Code Block Runtime](/guide/code-block-runtime) for the worker-pool setup.
 
 Deep dive: [CodeBlockNode](/guide/code-block-node), [Code Block Runtime](/guide/code-block-runtime)
 

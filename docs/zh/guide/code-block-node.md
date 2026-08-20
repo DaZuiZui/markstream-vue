@@ -281,6 +281,7 @@ const themes = [
 
 - CodeBlock 头部 API 在 [codeblock-header](/zh/guide/codeblock-header) 中有文档说明（包含替换头部和自定义加载占位符的示例）。
 - `CodeBlockNode` 和 `MermaidBlockNode` 的 `copy` 事件 payload 不同：`CodeBlockNode` 触发 `copy(text: string)`，而 `MermaidBlockNode` 触发 `copy(ev: MermaidBlockEvent<{ type: 'copy'; text: string }>)`（支持 `preventDefault()`）。
+- 大代码块（数万行）默认在主线程做 Shiki 分词。要移到 Web Worker，可通过 `setStreamDiffsWorkerPool(...)` 注入上游 `@pierre/diffs` 的 `WorkerPoolManager`；`CodeBlockNode` 会把它作为 `workerManager` 选项转发，并保持主题同步。未注入 pool（或 pool 报告不可用）时自动回退主线程高亮。接入方式见 [Code Block Runtime](/zh/guide/code-block-runtime)。
 
 快速尝试 — 简单的行内用法示例：
 

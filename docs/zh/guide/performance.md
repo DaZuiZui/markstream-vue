@@ -130,6 +130,34 @@ Diagnostic Studio 场景跨版本不可比：1.0 用普通 `markdown` 渲染模�
 
 这些组合可以把 DOM 工作量稳定在可控范围，哪怕服务端一次发送很多文本，用户也会感知为持续、丝滑的逐步输出。
 
+### 大代码块：离主线程高亮
+
+`stream-diffs` 默认在主线程用 Shiki 高亮。渲染数万行代码时，整个分词过程会阻塞滚动和其他交互。要把它移到 Web Worker，注入一个上游 `@pierre/diffs` 的 `WorkerPoolManager`：
+
+```ts
+import { getOrCreateWorkerPoolSingleton } from '@pierre/diffs/worker'
+import DiffsWorker from '@pierre/diffs/worker/worker.js?worker'
+import { setStreamDiffsWorkerPool } from 'markstream-vue'
+
+setStreamDiffsWorkerPool(getOrCreateWorkerPoolSingleton({
+  poolOptions: {
+    poolSize: 4,
+    workerFactory: () => new DiffsWorker(),
+  },
+  highlighterOptions: {
+    theme: { dark: 'pierre-dark', light: 'pierre-light' },
+  },
+}))
+```
+
+说明：
+
+- worker 池由宿主用自己的打包器创建（Vite 里是 `?worker`），并且需要把 `@pierre/diffs` 加为直接依赖；markstream-vue 只负责把它作为 `workerManager` runtime 选项转发。
+- `poolSize` 是并行高亮 worker 数量。每个 worker 都要加载 Shiki core、语法、主题和 oniguruma wasm，内存随数量线性增长；`min(4, hardwareConcurrency)` 是合理默认。
+- `CodeBlockNode` 会在每次主题变化时通过 `setRenderOptions` 把当前主题同步给 pool，所以上面 pool 的主题只是初始值，不会与 `isDark`/`theme`/`themes` 冲突。
+- 未注入 pool（或 pool 报告自己不可用）时，会自动回退到主线程高亮；坏掉的 pool 永远不会阻塞渲染。
+- worker 只移除了主线程上的分词成本。超大代码块的 DOM 构建仍在主线程；10 万行以上的场景建议配合虚拟化/窗口化渲染。
+
 ## 虚拟化与 DOM 窗口
 
 `MarkdownRender` 会维护一个滑动窗口，只让一部分节点常驻 DOM，从而在极长的对话或文档中保持流畅：
