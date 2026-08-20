@@ -26,6 +26,10 @@ import HtmlPreviewFrame from './HtmlPreviewFrame.vue'
 import {
   getStreamDiffsRuntime,
 } from './streamDiffs'
+import {
+  getStreamDiffsWorkerPool,
+  syncStreamDiffsWorkerTheme,
+} from './streamDiffsWorker'
 
 const props = withDefaults(
   defineProps<CodeBlockNodeProps & {
@@ -3274,12 +3278,27 @@ async function themeUpdate(options: { appearanceOnly?: boolean } = {}) {
   }
 
   try {
+    // Keep worker-generated tokens in sync with the requested theme before the
+    // surface re-renders. No-op unless a worker pool was injected.
+    await syncStreamDiffsWorkerTheme(resolveWorkerPoolTheme())
     await setTheme(themeToSet)
     syncPresentation()
   }
   catch (error) {
     warnCodeBlockDev('Failed to apply code-block theme', error)
   }
+}
+
+/**
+ * Resolves the theme value forwarded to the injected worker pool. Mirrors the
+ * runtime's `resolveTheme`: a paired `themes` prop maps to a `{ dark, light }`
+ * object, otherwise the single resolved theme name.
+ */
+function resolveWorkerPoolTheme() {
+  const themes = props.themes
+  if (themes && typeof themes[0] === 'string' && typeof themes[1] === 'string')
+    return { dark: themes[0], light: themes[1] }
+  return resolveRequestedTheme()
 }
 
 function themeLooksDark(theme: CodeBlockTheme | null | undefined) {
@@ -3332,6 +3351,12 @@ function buildStreamDiffsRuntimeOptions() {
     // CodeBlockShell owns the file header for every enhanced code block.
     // Pierre's header would otherwise duplicate that chrome for File surfaces.
     disableFileHeader: true,
+    // A host-injected WorkerPoolManager moves Shiki tokenization off the main
+    // thread. A per-block `codeBlockOptions.workerManager` (if any) wins over
+    // the shared injected pool; when neither exists we stay on the main thread.
+    workerManager: (resolvedEditorOptions.value as Record<string, unknown> | undefined)?.workerManager
+      ?? getStreamDiffsWorkerPool()
+      ?? undefined,
     onThemeChange() {
       syncEditorCssVars()
     },
