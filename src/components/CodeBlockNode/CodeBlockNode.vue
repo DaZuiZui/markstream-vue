@@ -102,6 +102,7 @@ const editorRuntimeCreated = ref(false)
 const editorMounted = ref(false)
 const runtimeReady = ref(false)
 let isUnmounted = false
+let pendingThemeUpdate = false
 let expandRafId: number | null = null
 let deferredHeightSyncRafId: number | null = null
 let deferredHeightSyncFollowUpRafId: number | null = null
@@ -2903,6 +2904,7 @@ async function runEditorCreation(el: HTMLElement) {
   if (!createEditor || isUnmounted)
     return
 
+  pendingThemeUpdate = false
   const creationKind = desiredEditorKind.value
   diffEditorCreatedWhileStreaming = false
   editorCreationFailed.value = false
@@ -2977,6 +2979,13 @@ async function runEditorCreation(el: HTMLElement) {
   }
 
   syncFallbackFontMetricsFromEditor()
+
+  if (pendingThemeUpdate) {
+    pendingThemeUpdate = false
+    await themeUpdate()
+    if (isUnmounted)
+      return
+  }
 
   if (!isExpanded.value && !isCollapsed.value)
     syncEditorHostHeight(false)
@@ -3557,10 +3566,17 @@ watch(
 
 watch(
   () => [resolveRequestedTheme(), effectiveDiffAppearance.value, runtimeReady.value, editorCreated.value, viewportReady.value] as const,
-  ([theme], previous) => {
-    if (!runtimeReady.value || !editorMounted.value || !viewportReady.value)
+  ([theme, appearance], previous) => {
+    if (!runtimeReady.value || !viewportReady.value)
       return
     const sameRequestedTheme = previous != null && isSameRequestedTheme(theme, previous[0])
+    const appearanceChanged = previous != null && appearance !== previous[1]
+    if (!editorMounted.value) {
+      if (!sameRequestedTheme || appearanceChanged)
+        pendingThemeUpdate = true
+      return
+    }
+    pendingThemeUpdate = false
     void themeUpdate({ appearanceOnly: sameRequestedTheme })
   },
   { flush: 'post' },

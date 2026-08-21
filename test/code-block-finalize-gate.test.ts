@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent, h, nextTick } from 'vue'
 import CodeBlockNode from '../src/components/CodeBlockNode/CodeBlockNode.vue'
 import { resetCodeBlockRuntimeReadyForTest } from '../src/components/CodeBlockNode/runtime'
+import { clearStreamDiffsWorkerPool, setStreamDiffsWorkerPool } from '../src/components/CodeBlockNode/streamDiffsWorker'
 import { provideOffscreenHeavyNodeDeferral, provideViewportPriority } from '../src/composables/viewportPriority'
 
 interface VisibilityObserver {
@@ -133,9 +134,11 @@ describe('codeBlockNode final Diffs gate', () => {
     observers.length = 0
     vi.stubGlobal('IntersectionObserver', IntersectionObserverStub)
     resetHelpers()
+    clearStreamDiffsWorkerPool()
   })
 
   afterEach(() => {
+    clearStreamDiffsWorkerPool()
     vi.unstubAllGlobals()
   })
 
@@ -757,6 +760,40 @@ describe('codeBlockNode final Diffs gate', () => {
     await vi.waitFor(() => {
       expect(runtime.setTheme).toHaveBeenCalledWith('initial-surface-light')
     })
+    expect(runtime.createEditor).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it('applies a theme change queued while the worker prepares the initial surface', async () => {
+    let resolveWorkerTheme!: () => void
+    const workerThemePending = new Promise<void>((resolve) => {
+      resolveWorkerTheme = resolve
+    })
+    const setRenderOptions = vi.fn(() => workerThemePending)
+    setStreamDiffsWorkerPool({ setRenderOptions })
+    const runtime = helpers()
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const ready = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        isDark: true,
+        darkTheme: 'queued-surface-dark',
+        lightTheme: 'queued-surface-light',
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(setRenderOptions).toHaveBeenCalledTimes(1))
+    expect(runtime.createEditor).not.toHaveBeenCalled()
+
+    await wrapper.setProps({ isDark: false })
+    resolveWorkerTheme()
+
+    await vi.waitFor(() => expect(runtime.setTheme).toHaveBeenCalledWith('queued-surface-light'))
     expect(runtime.createEditor).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
