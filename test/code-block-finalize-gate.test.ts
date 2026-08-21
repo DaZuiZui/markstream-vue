@@ -731,7 +731,7 @@ describe('codeBlockNode final Diffs gate', () => {
     wrapper.unmount()
   })
 
-  it('applies the active theme after a visible File surface mounts', async () => {
+  it('passes the active theme when creating a visible File surface', async () => {
     const runtime = helpers()
     const wrapper = mount(DeferredCodeBlockNode, {
       props: {
@@ -748,11 +748,11 @@ describe('codeBlockNode final Diffs gate', () => {
     await flush()
     observers.at(-1)?.emit()
     await vi.waitFor(() => {
+      expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.theme).toBe('initial-surface-dark')
       expect(runtime.createEditor).toHaveBeenCalledTimes(1)
-      expect(runtime.setTheme).toHaveBeenCalledWith('initial-surface-dark')
     })
+    expect(runtime.setTheme).not.toHaveBeenCalled()
 
-    runtime.setTheme.mockClear()
     await wrapper.setProps({ isDark: false })
     await vi.waitFor(() => {
       expect(runtime.setTheme).toHaveBeenCalledWith('initial-surface-light')
@@ -889,6 +889,7 @@ describe('codeBlockNode final Diffs gate', () => {
     await flush()
     observers.at(-1)?.emit()
     await vi.waitFor(() => expect(runtime.createDiffEditor).toHaveBeenCalledTimes(1))
+    expect(runtime.setTheme).not.toHaveBeenCalled()
     runtime.safeClean.mockClear()
     runtime.createDiffEditor.mockClear()
     runtime.setTheme.mockClear()

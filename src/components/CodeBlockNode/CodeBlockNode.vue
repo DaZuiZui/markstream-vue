@@ -2921,6 +2921,7 @@ async function runEditorCreation(el: HTMLElement) {
   clearInlineFoldProxies()
   resetEditorHost(el)
   syncStreamDiffsRuntimeOptions()
+  await syncStreamDiffsWorkerTheme(resolveWorkerPoolTheme())
   if (isUnmounted)
     return
 
@@ -2976,10 +2977,6 @@ async function runEditorCreation(el: HTMLElement) {
   }
 
   syncFallbackFontMetricsFromEditor()
-
-  // stream-diffs keeps its theme on each mounted surface. Apply the requested
-  // theme after this surface exists so the initial frame matches props.isDark.
-  await themeUpdate()
 
   if (!isExpanded.value && !isCollapsed.value)
     syncEditorHostHeight(false)
