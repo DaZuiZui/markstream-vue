@@ -19,7 +19,6 @@ import type {
   NodeRendererProps,
 } from '../../types/node-renderer-props'
 import type { VirtualHeightSummary } from './composables/useHeightModel'
-import { normalizeShikiLanguage } from 'markstream-core'
 import { computed, defineAsyncComponent, getCurrentInstance, inject, markRaw, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, triggerRef, watch, watchEffect } from 'vue'
 import AdmonitionNode from '../../components/AdmonitionNode'
 import BlockquoteNode from '../../components/BlockquoteNode'
@@ -62,10 +61,10 @@ import {
   registerHeightEstimationRendererController,
 } from '../../internal/heightEstimationExperiment'
 import { getCodeBlockExtraProps } from '../../utils/codeBlockExtraProps'
+import { getCustomCodeLanguageComponent } from '../../utils/customCodeLanguageComponent'
 import { isDevEnvironment } from '../../utils/devEnv'
 import { clampInfographicPreviewHeight, clampMermaidPreviewHeight, estimateInfographicPreviewHeight, estimateMermaidPreviewHeight, parsePositiveNumber } from '../../utils/diagramHeight'
 import { getCustomNodeAttrs, getHtmlTagFromContent, shouldRenderUnknownHtmlTagAsText, stripCustomHtmlWrapper } from '../../utils/htmlRenderer'
-import { normalizeLanguageIdentifier } from '../../utils/languageIcon'
 import { isReservedNodeComponentKey, useCustomNodeComponents } from '../../utils/nodeComponents'
 import { MARKSTREAM_NODE_LIFECYCLE_KEY } from '../../utils/nodeLifecycle'
 import { setNormalizedElementScrollTop } from '../../utils/normalizedScroll'
@@ -5751,23 +5750,6 @@ function getCodeBlockLanguage(node: ParsedNode) {
   return node?.type === 'code_block'
     ? String((node as RuntimeCodeBlockNode).language ?? '').trim().toLowerCase()
     : ''
-}
-
-function getCustomCodeLanguageComponent(
-  customComponents: Record<string, unknown>,
-  language: string,
-) {
-  const raw = language.trim().toLowerCase()
-  if (!raw)
-    return undefined
-
-  for (const key of [raw, normalizeLanguageIdentifier(raw), normalizeShikiLanguage(raw)]) {
-    const component = key && customComponents[key]
-    if (component)
-      return component
-  }
-
-  return undefined
 }
 
 function getPreviewBindingsFor(

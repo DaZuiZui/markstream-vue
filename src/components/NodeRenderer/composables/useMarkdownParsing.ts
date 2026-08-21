@@ -15,6 +15,7 @@ import {
   resolveCustomHtmlTags,
 } from 'stream-markdown-parser'
 import { computed, markRaw, onScopeDispose, ref, watch } from 'vue'
+import { getCustomCodeLanguageComponent } from '../../../utils/customCodeLanguageComponent'
 import { isReservedNodeComponentKey } from '../../../utils/nodeComponents'
 
 type RendererParseOptions = NonNullable<NodeRendererProps['parseOptions']>
@@ -66,6 +67,7 @@ interface ParsedNodeStabilizeResult {
 }
 
 interface ParsedNodeStabilizeOptions {
+  canReuseNode?: (node: ParsedNode) => boolean
   reuseDirtyTail?: boolean
   scanStartIndex?: number
 }
@@ -119,6 +121,49 @@ function getAutoCustomHtmlTags(mapping: Partial<CustomComponents>) {
         : ''
     })
     .filter(Boolean)
+}
+
+function getCustomComponentsReuseKey(mapping: Partial<CustomComponents>) {
+  return JSON.stringify(
+    Object.entries(mapping)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, component]) => [key, getIdentityKey(component)]),
+  )
+}
+
+function hasCustomComponentBoundary(
+  node: ParsedNode,
+  mapping: Partial<CustomComponents>,
+  cache: WeakMap<object, boolean>,
+): boolean {
+  const object = node as object
+  if (cache.has(object))
+    return cache.get(object)!
+
+  const type = String(node.type).trim().toLowerCase()
+  if (mapping[type]) {
+    cache.set(object, true)
+    return true
+  }
+
+  if (type === 'code_block') {
+    const language = String((node as ParsedNode & { language?: string }).language ?? '').trim().toLowerCase()
+    if (language && getCustomCodeLanguageComponent(mapping, language)) {
+      cache.set(object, true)
+      return true
+    }
+  }
+
+  const record = node as ParsedNode & Record<string, unknown>
+  cache.set(object, false)
+  const hasBoundary = Object.values(record).some((value) => {
+    if (Array.isArray(value)) {
+      return value.some(child => isParsedNodeLike(child) && hasCustomComponentBoundary(child, mapping, cache))
+    }
+    return isParsedNodeLike(value) && hasCustomComponentBoundary(value, mapping, cache)
+  })
+  cache.set(object, hasBoundary)
+  return hasBoundary
 }
 
 const DEFAULT_PARSE_COALESCE_MS = 80
@@ -811,16 +856,24 @@ function areTopLevelNodesStableWithMetrics(
   return isParsedNodeStableWithMetrics(previous, next, signatureTiming)
 }
 
-function findDirtyStartIndex(nextNodes: ParsedNode[], previousNodes: ParsedNode[], scanStartIndex = 0) {
+function findDirtyStartIndex(
+  nextNodes: ParsedNode[],
+  previousNodes: ParsedNode[],
+  options: ParsedNodeStabilizeOptions,
+) {
   const limit = Math.min(nextNodes.length, previousNodes.length)
-  const startIndex = Math.min(limit, Math.max(0, scanStartIndex))
+  const startIndex = Math.min(limit, Math.max(0, options.scanStartIndex ?? 0))
 
   for (let index = startIndex; index < limit; index++) {
     const previous = previousNodes[index]
     const next = nextNodes[index]
 
-    if (!areTopLevelNodesStable(previous, next))
+    if (
+      (options.canReuseNode && (!options.canReuseNode(previous) || !options.canReuseNode(next)))
+      || !areTopLevelNodesStable(previous, next)
+    ) {
       return index
+    }
   }
 
   return nextNodes.length === previousNodes.length ? -1 : limit
@@ -830,16 +883,19 @@ function findDirtyStartIndexWithMetrics(
   nextNodes: ParsedNode[],
   previousNodes: ParsedNode[],
   signatureTiming: ParsedNodeSignatureTimingMetrics,
-  scanStartIndex = 0,
+  options: ParsedNodeStabilizeOptions,
 ) {
   const limit = Math.min(nextNodes.length, previousNodes.length)
-  const startIndex = Math.min(limit, Math.max(0, scanStartIndex))
+  const startIndex = Math.min(limit, Math.max(0, options.scanStartIndex ?? 0))
 
   for (let index = startIndex; index < limit; index++) {
     const previous = previousNodes[index]
     const next = nextNodes[index]
 
-    if (!areTopLevelNodesStableWithMetrics(previous, next, signatureTiming)) {
+    if (
+      (options.canReuseNode && (!options.canReuseNode(previous) || !options.canReuseNode(next)))
+      || !areTopLevelNodesStableWithMetrics(previous, next, signatureTiming)
+    ) {
       return index
     }
   }
@@ -859,9 +915,8 @@ function stabilizeParsedNodes(
     }
   }
 
-  const scanStartIndex = options.scanStartIndex ?? 0
   const reuseDirtyTail = options.reuseDirtyTail !== false
-  const dirtyStartIndex = findDirtyStartIndex(nextNodes, previousNodes, scanStartIndex)
+  const dirtyStartIndex = findDirtyStartIndex(nextNodes, previousNodes, options)
 
   if (dirtyStartIndex < 0) {
     return {
@@ -886,7 +941,11 @@ function stabilizeParsedNodes(
       const previous = previousNodes[index]
       const next = nextNodes[index]
 
-      if (previous && isParsedNodeStable(previous, next)) {
+      if (
+        previous
+        && (!options.canReuseNode || (options.canReuseNode(previous) && options.canReuseNode(next)))
+        && isParsedNodeStable(previous, next)
+      ) {
         stableNodes[index] = previous
         reusedNodeCount += 1
       }
@@ -917,9 +976,8 @@ function stabilizeParsedNodesWithMetrics(
     }
   }
 
-  const scanStartIndex = options.scanStartIndex ?? 0
   const reuseDirtyTail = options.reuseDirtyTail !== false
-  const dirtyStartIndex = findDirtyStartIndexWithMetrics(nextNodes, previousNodes, signatureTiming, scanStartIndex)
+  const dirtyStartIndex = findDirtyStartIndexWithMetrics(nextNodes, previousNodes, signatureTiming, options)
 
   if (dirtyStartIndex < 0) {
     return {
@@ -944,7 +1002,11 @@ function stabilizeParsedNodesWithMetrics(
       const previous = previousNodes[index]
       const next = nextNodes[index]
 
-      if (previous && isParsedNodeStableWithMetrics(previous, next, signatureTiming)) {
+      if (
+        previous
+        && (!options.canReuseNode || (options.canReuseNode(previous) && options.canReuseNode(next)))
+        && isParsedNodeStableWithMetrics(previous, next, signatureTiming)
+      ) {
         stableNodes[index] = previous
         reusedNodeCount += 1
       }
@@ -1007,6 +1069,8 @@ export function useMarkdownParsing(
   let previousNodeReuseSemanticKey = ''
   let previousContent = ''
   let previousExternalNodeMutationBoundary = false
+  let previousCustomComponentsReuseKey = ''
+  let customComponentBoundaryCache = new WeakMap<object, boolean>()
   const scanGlobalReferenceAppend = createGlobalReferenceScanner()
   let parseCoalesceTimer: ReturnType<typeof setTimeout> | undefined
   let parseCommitCount = 0
@@ -1217,8 +1281,18 @@ export function useMarkdownParsing(
       previousContent = ''
     }
 
-    const hasExternalNodeMutationBoundary = Object.keys(options.customComponentsMap?.value ?? {}).length > 0
-      || typeof mergedParseOptions.value.postTransformNodes === 'function'
+    const customComponents = options.customComponentsMap?.value ?? {}
+    const customComponentsReuseKey = getCustomComponentsReuseKey(customComponents)
+    if (
+      previousCustomComponentsReuseKey
+      && customComponentsReuseKey !== previousCustomComponentsReuseKey
+    ) {
+      previousParsedNodes = []
+      previousContent = ''
+      customComponentBoundaryCache = new WeakMap<object, boolean>()
+    }
+    const hasCustomComponents = Object.keys(customComponents).length > 0
+    const hasExternalNodeMutationBoundary = typeof mergedParseOptions.value.postTransformNodes === 'function'
     if (hasExternalNodeMutationBoundary !== previousExternalNodeMutationBoundary) {
       previousParsedNodes = []
       previousContent = ''
@@ -1236,8 +1310,18 @@ export function useMarkdownParsing(
       ? {}
       : undefined
     const parserHasCustomExtensions = hasCustomParserExtensions(md)
+    const previousHasCustomComponentBoundary = hasCustomComponents
+      && previousParsedNodes.some(node => hasCustomComponentBoundary(
+        node,
+        customComponents,
+        customComponentBoundaryCache,
+      ))
     const reuseStableTopLevelNodes = !parserHasCustomExtensions
       && !hasExternalNodeMutationBoundary
+      && (
+        !hasCustomComponents
+        || (previousParsedNodes.length > 0 && !previousHasCustomComponentBoundary)
+      )
     const parseOptionsForCall = {
       ...mergedParseOptions.value,
       reuseStableTopLevelNodes,
@@ -1277,19 +1361,29 @@ export function useMarkdownParsing(
       const stabilizeStart = collectPerformanceMetrics
         ? getNow()
         : 0
-      const [scanStartIndex, scannedChars] = getStablePrefixScanStartIndex({
-        content,
-        previousContent,
-        previousDirtyStartIndex: parsedNodesDirtyStartIndexValue,
-        parseOptions: mergedParseOptions.value,
-        customMarkdownIt: props.customMarkdownIt,
-        md,
-        scanGlobalReferenceAppend,
-      })
+      const [scanStartIndex, scannedChars] = hasCustomComponents
+        ? [0, 0]
+        : getStablePrefixScanStartIndex({
+            content,
+            previousContent,
+            previousDirtyStartIndex: parsedNodesDirtyStartIndexValue,
+            parseOptions: mergedParseOptions.value,
+            customMarkdownIt: props.customMarkdownIt,
+            md,
+            scanGlobalReferenceAppend,
+          })
       referenceDefinitionScanChars = scannedChars
       const reuseDirtyTail = scanStartIndex <= 0
+      const canReuseNode = hasCustomComponents
+        ? (node: ParsedNode) => !hasCustomComponentBoundary(
+            node,
+            customComponents,
+            customComponentBoundaryCache,
+          )
+        : undefined
       if (signatureTiming) {
         const result = stabilizeParsedNodesWithMetrics(nextParsed, previousParsedNodes, signatureTiming, {
+          canReuseNode,
           reuseDirtyTail,
           scanStartIndex,
         })
@@ -1298,6 +1392,7 @@ export function useMarkdownParsing(
       }
       else {
         const result = stabilizeParsedNodes(nextParsed, previousParsedNodes, {
+          canReuseNode,
           reuseDirtyTail,
           scanStartIndex,
         })
@@ -1328,6 +1423,10 @@ export function useMarkdownParsing(
         primeParsedNodeSignatures(parsed, primeStartIndex)
     }
 
+    if (hasCustomComponents) {
+      for (const node of parsed)
+        hasCustomComponentBoundary(node, customComponents, customComponentBoundaryCache)
+    }
     const nodeReuseMs = collectPerformanceMetrics
       ? getNow() - reuseStart
       : 0
@@ -1336,6 +1435,7 @@ export function useMarkdownParsing(
     previousParserCacheSemanticKey = currentParserCacheSemanticKey
     previousNodeReuseSemanticKey = currentNodeReuseSemanticKey
     previousExternalNodeMutationBoundary = hasExternalNodeMutationBoundary
+    previousCustomComponentsReuseKey = customComponentsReuseKey
     previousParsedNodes = parsed
     commitParsedNodesDirtyStartIndex(stabilizeMetrics?.dirtyStartIndex ?? 0)
 

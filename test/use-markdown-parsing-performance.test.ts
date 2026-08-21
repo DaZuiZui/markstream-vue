@@ -784,6 +784,166 @@ describe('useMarkdownParsing performance behavior', () => {
     scope.stop()
   })
 
+  it('reuses settled built-in nodes alongside custom component mutation boundaries', () => {
+    const content = ref([
+      'Custom paragraph.',
+      '',
+      '```diff',
+      '- old',
+      '+ new',
+      '```',
+      '',
+      'Streaming tail',
+    ].join('\n'))
+    const customComponents = ref<Record<string, unknown>>({ paragraph: {} })
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'selective-custom-component-boundary',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => false),
+      customComponentsMap: computed(() => customComponents.value),
+      logPerf: vi.fn(),
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const firstParagraph = state.parsedNodes.value[0]
+    const firstCodeBlock = state.parsedNodes.value[1]
+    ;(firstParagraph as any).raw = 'caller mutation'
+    content.value += ' chunk'
+
+    expect(state.parsedNodes.value[0]).not.toBe(firstParagraph)
+    expect(state.parsedNodes.value[0]?.raw).toBe('Custom paragraph.')
+    expect(state.parsedNodes.value[1]).toBe(firstCodeBlock)
+
+    scope.stop()
+  })
+
+  it('retains a custom boundary after the renderer mutates the node type', () => {
+    const content = ref('Custom paragraph.\n\nStreaming tail')
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'mutated-custom-component-type',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => false),
+      customComponentsMap: computed(() => ({ paragraph: {} })),
+      logPerf: vi.fn(),
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const previous = state.parsedNodes.value[0] as any
+    previous.type = 'heading'
+    previous.raw = 'caller mutation'
+    content.value += ' chunk'
+
+    expect(state.parsedNodes.value[0]).not.toBe(previous)
+    expect(state.parsedNodes.value[0]?.type).toBe('paragraph')
+    expect(state.parsedNodes.value[0]?.raw).toBe('Custom paragraph.')
+
+    scope.stop()
+  })
+
+  it('keeps structured parser reuse for custom renderers absent from the document', () => {
+    const content = ref(`${buildParagraphs(200)}\n\n`)
+    const logPerf = vi.fn()
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'custom-component-without-boundary',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => true),
+      customComponentsMap: computed(() => ({ code_block: {} })),
+      logPerf,
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const previous = state.parsedNodes.value
+    content.value += 'Appended paragraph.\n\n'
+    void state.parsedNodes.value
+    content.value += 'Second appended paragraph.\n\n'
+    const next = state.parsedNodes.value
+
+    expect(next.slice(0, previous.length)).toEqual(previous)
+    expect(next.slice(0, previous.length).every((node, index) => node === previous[index])).toBe(true)
+    expect(logPerf.mock.calls.at(-1)?.[1]?.processTokensReusedTopLevelNodes).toBeGreaterThan(0)
+
+    scope.stop()
+  })
+
+  it('does not reuse aggregate nodes containing custom-rendered descendants', () => {
+    const content = ref([
+      '| Column |',
+      '| --- |',
+      '| Value |',
+      '',
+      'Streaming tail',
+    ].join('\n'))
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'nested-custom-component-boundary',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => false),
+      customComponentsMap: computed(() => ({ text: {} })),
+      logPerf: vi.fn(),
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const firstTable = state.parsedNodes.value[0] as any
+    firstTable.header.cells[0].children[0].content = 'caller mutation'
+    content.value += ' chunk'
+
+    expect(state.parsedNodes.value[0]).not.toBe(firstTable)
+    expect((state.parsedNodes.value[0] as any).header.cells[0].children[0].content).toBe('Column')
+
+    scope.stop()
+  })
+
+  it('treats a custom d2 renderer as the boundary for d2lang fences', () => {
+    const content = ref([
+      '```d2lang',
+      'a -> b',
+      '```',
+      '',
+      'Streaming tail',
+    ].join('\n'))
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'd2lang-custom-component-boundary',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => false),
+      customComponentsMap: computed(() => ({ d2: {} })),
+      logPerf: vi.fn(),
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const firstCodeBlock = state.parsedNodes.value[0] as any
+    firstCodeBlock.code = 'caller mutation'
+    content.value += ' chunk'
+
+    expect(state.parsedNodes.value[0]).not.toBe(firstCodeBlock)
+    expect((state.parsedNodes.value[0] as any).code).toBe('a -> b\n')
+
+    scope.stop()
+  })
+
   it('does not reuse a paragraph when children differ but raw is unchanged', () => {
     const content = ref('[x](https://example.com)')
     const { props, scope, state } = createParsingState(content)
