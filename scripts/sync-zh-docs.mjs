@@ -70,7 +70,7 @@ async function main() {
       + `\n`
       + `如果你愿意贡献中文翻译，请参考翻译指南并提交 PR：/guide/translation\n\n`
       + `---\n\n`
-      + `> 自动生成占位：将原文翻译并替换此文件的内容即可。`
+      + `> 自动生成占位：将原文翻译并替换此文件的内容即可。\n`
 
     await fs.writeFile(zhPath, placeholder, 'utf8')
     created.push(zhPath)
