@@ -5,7 +5,6 @@ import type {
 import type { ComputedRef } from 'vue'
 import type { CustomComponents } from '../../../types'
 import type { NodeRendererProps } from '../../../types/node-renderer-props'
-import { normalizeShikiLanguage } from 'markstream-core'
 import {
   BLOCKED_HTML_TAGS,
   EXTENDED_STANDARD_HTML_TAGS,
@@ -16,7 +15,7 @@ import {
   resolveCustomHtmlTags,
 } from 'stream-markdown-parser'
 import { computed, markRaw, onScopeDispose, ref, watch } from 'vue'
-import { normalizeLanguageIdentifier } from '../../../utils/languageIcon'
+import { getCustomCodeLanguageComponent } from '../../../utils/customCodeLanguageComponent'
 import { isReservedNodeComponentKey } from '../../../utils/nodeComponents'
 
 type RendererParseOptions = NonNullable<NodeRendererProps['parseOptions']>
@@ -132,45 +131,39 @@ function getCustomComponentsReuseKey(mapping: Partial<CustomComponents>) {
   )
 }
 
-const PARSED_NODE_CONTAINER_FIELDS = [
-  'children',
-  'items',
-  'header',
-  'rows',
-  'cells',
-  'term',
-  'definition',
-] as const
+function hasCustomComponentBoundary(
+  node: ParsedNode,
+  mapping: Partial<CustomComponents>,
+  cache: WeakMap<object, boolean>,
+): boolean {
+  const object = node as object
+  if (cache.has(object))
+    return cache.get(object)!
 
-function hasCustomComponentBoundary(node: ParsedNode, mapping: Partial<CustomComponents>): boolean {
   const type = String(node.type).trim().toLowerCase()
-  if (mapping[type])
+  if (mapping[type]) {
+    cache.set(object, true)
     return true
+  }
 
   if (type === 'code_block') {
     const language = String((node as ParsedNode & { language?: string }).language ?? '').trim().toLowerCase()
-    if (
-      language
-      && [
-        language,
-        normalizeLanguageIdentifier(language),
-        normalizeShikiLanguage(language),
-        language === 'd2lang' ? 'd2' : '',
-      ]
-        .some(key => Boolean(key && mapping[key]))
-    ) {
+    if (language && getCustomCodeLanguageComponent(mapping, language)) {
+      cache.set(object, true)
       return true
     }
   }
 
   const record = node as ParsedNode & Record<string, unknown>
-  return PARSED_NODE_CONTAINER_FIELDS.some((field) => {
-    const value = record[field]
+  cache.set(object, false)
+  const hasBoundary = Object.values(record).some((value) => {
     if (Array.isArray(value)) {
-      return value.some(child => isParsedNodeLike(child) && hasCustomComponentBoundary(child, mapping))
+      return value.some(child => isParsedNodeLike(child) && hasCustomComponentBoundary(child, mapping, cache))
     }
-    return isParsedNodeLike(value) && hasCustomComponentBoundary(value, mapping)
+    return isParsedNodeLike(value) && hasCustomComponentBoundary(value, mapping, cache)
   })
+  cache.set(object, hasBoundary)
+  return hasBoundary
 }
 
 const DEFAULT_PARSE_COALESCE_MS = 80
@@ -1077,6 +1070,7 @@ export function useMarkdownParsing(
   let previousContent = ''
   let previousExternalNodeMutationBoundary = false
   let previousCustomComponentsReuseKey = ''
+  let customComponentBoundaryCache = new WeakMap<object, boolean>()
   const scanGlobalReferenceAppend = createGlobalReferenceScanner()
   let parseCoalesceTimer: ReturnType<typeof setTimeout> | undefined
   let parseCommitCount = 0
@@ -1295,6 +1289,7 @@ export function useMarkdownParsing(
     ) {
       previousParsedNodes = []
       previousContent = ''
+      customComponentBoundaryCache = new WeakMap<object, boolean>()
     }
     const hasCustomComponents = Object.keys(customComponents).length > 0
     const hasExternalNodeMutationBoundary = typeof mergedParseOptions.value.postTransformNodes === 'function'
@@ -1315,9 +1310,18 @@ export function useMarkdownParsing(
       ? {}
       : undefined
     const parserHasCustomExtensions = hasCustomParserExtensions(md)
+    const previousHasCustomComponentBoundary = hasCustomComponents
+      && previousParsedNodes.some(node => hasCustomComponentBoundary(
+        node,
+        customComponents,
+        customComponentBoundaryCache,
+      ))
     const reuseStableTopLevelNodes = !parserHasCustomExtensions
       && !hasExternalNodeMutationBoundary
-      && !hasCustomComponents
+      && (
+        !hasCustomComponents
+        || (previousParsedNodes.length > 0 && !previousHasCustomComponentBoundary)
+      )
     const parseOptionsForCall = {
       ...mergedParseOptions.value,
       reuseStableTopLevelNodes,
@@ -1371,7 +1375,11 @@ export function useMarkdownParsing(
       referenceDefinitionScanChars = scannedChars
       const reuseDirtyTail = scanStartIndex <= 0
       const canReuseNode = hasCustomComponents
-        ? (node: ParsedNode) => !hasCustomComponentBoundary(node, customComponents)
+        ? (node: ParsedNode) => !hasCustomComponentBoundary(
+            node,
+            customComponents,
+            customComponentBoundaryCache,
+          )
         : undefined
       if (signatureTiming) {
         const result = stabilizeParsedNodesWithMetrics(nextParsed, previousParsedNodes, signatureTiming, {
@@ -1415,6 +1423,10 @@ export function useMarkdownParsing(
         primeParsedNodeSignatures(parsed, primeStartIndex)
     }
 
+    if (hasCustomComponents) {
+      for (const node of parsed)
+        hasCustomComponentBoundary(node, customComponents, customComponentBoundaryCache)
+    }
     const nodeReuseMs = collectPerformanceMetrics
       ? getNow() - reuseStart
       : 0

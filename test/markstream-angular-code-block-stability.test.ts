@@ -55,4 +55,48 @@ describe('angular code block stability', () => {
     expect(component.syncEditorState).toHaveBeenCalledTimes(2)
     expect(stringify).not.toHaveBeenCalled()
   })
+
+  it('resyncs for every editor and runtime input transition', () => {
+    const component = Object.create(CodeBlockNodeComponent.prototype) as any
+    Object.assign(component, {
+      codeBlockOptions: undefined,
+      context: undefined,
+      hasEditorInput: false,
+      lastCodeBlockOptions: undefined,
+      lastEditorIsDiff: false,
+      lastEditorLanguage: '',
+      lastEditorOriginalCode: '',
+      lastEditorResolvedCode: '',
+      lastEditorShowLoadingPlaceholder: false,
+      lastRuntimeHostKey: '',
+      node: {
+        type: 'code_block',
+        language: 'ts',
+        code: 'const value = 1',
+        originalCode: 'const value = 0',
+        diff: true,
+        loading: false,
+      },
+      props: {},
+      viewReady: true,
+    })
+    component.applyInitialFontSize = vi.fn()
+    component.disposeRuntimeHelpers = vi.fn()
+    component.syncEditorState = vi.fn()
+
+    component.ngOnChanges()
+    component.node = { ...component.node, language: 'js' }
+    component.ngOnChanges()
+    component.node = { ...component.node, diff: false }
+    component.ngOnChanges()
+    component.props = { loading: true, stream: false }
+    component.ngOnChanges()
+    component.props = { ...component.props, isDark: true }
+    component.ngOnChanges()
+    component.codeBlockOptions = { fontSize: 14 }
+    component.ngOnChanges()
+
+    expect(component.syncEditorState).toHaveBeenCalledTimes(6)
+    expect(component.disposeRuntimeHelpers).toHaveBeenCalledTimes(3)
+  })
 })

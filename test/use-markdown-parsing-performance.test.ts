@@ -822,6 +822,64 @@ describe('useMarkdownParsing performance behavior', () => {
     scope.stop()
   })
 
+  it('retains a custom boundary after the renderer mutates the node type', () => {
+    const content = ref('Custom paragraph.\n\nStreaming tail')
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'mutated-custom-component-type',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => false),
+      customComponentsMap: computed(() => ({ paragraph: {} })),
+      logPerf: vi.fn(),
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const previous = state.parsedNodes.value[0] as any
+    previous.type = 'heading'
+    previous.raw = 'caller mutation'
+    content.value += ' chunk'
+
+    expect(state.parsedNodes.value[0]).not.toBe(previous)
+    expect(state.parsedNodes.value[0]?.type).toBe('paragraph')
+    expect(state.parsedNodes.value[0]?.raw).toBe('Custom paragraph.')
+
+    scope.stop()
+  })
+
+  it('keeps structured parser reuse for custom renderers absent from the document', () => {
+    const content = ref(`${buildParagraphs(200)}\n\n`)
+    const logPerf = vi.fn()
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'custom-component-without-boundary',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => true),
+      customComponentsMap: computed(() => ({ code_block: {} })),
+      logPerf,
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const previous = state.parsedNodes.value
+    content.value += 'Appended paragraph.\n\n'
+    void state.parsedNodes.value
+    content.value += 'Second appended paragraph.\n\n'
+    const next = state.parsedNodes.value
+
+    expect(next.slice(0, previous.length)).toEqual(previous)
+    expect(next.slice(0, previous.length).every((node, index) => node === previous[index])).toBe(true)
+    expect(logPerf.mock.calls.at(-1)?.[1]?.processTokensReusedTopLevelNodes).toBeGreaterThan(0)
+
+    scope.stop()
+  })
+
   it('does not reuse aggregate nodes containing custom-rendered descendants', () => {
     const content = ref([
       '| Column |',
