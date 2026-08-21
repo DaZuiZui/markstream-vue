@@ -896,7 +896,7 @@ const nodeSlotElements = new Map<number, HTMLElement | null>()
 const nodeContentResizeObserverTargets = new Map<number, HTMLElement>()
 const nodeContentResizeObserverIndexes = new WeakMap<Element, number>()
 let nodeContentResizeObserver: ResizeObserver | null = null
-const codeBlockRenderCache = new WeakMap<object, { signature: string, node: ParsedNode }>()
+const codeBlockRenderCache = new Map<number, { signature: string, node: ParsedNode }>()
 // Height signatures per node index, stored in a flat array so stale-range
 // scans can start at the parser's dirty start instead of walking the whole
 // measured set on every streaming commit. `undefined` = no signature yet.
@@ -5403,7 +5403,7 @@ const tableBindings = computed(() => ({
   ...(typeof resolvedShowTooltips.value === 'boolean' ? { showTooltips: resolvedShowTooltips.value } : {}),
 }))
 
-function getCodeBlockRenderNode(node: ParsedNode) {
+function getCodeBlockRenderNode(node: ParsedNode, index: number) {
   if (node.type !== 'code_block')
     return node
 
@@ -5418,12 +5418,12 @@ function getCodeBlockRenderNode(node: ParsedNode) {
     String(codeBlockNode.raw ?? ''),
   ].join('\u0000')
 
-  const cached = codeBlockRenderCache.get(codeBlockNode)
+  const cached = codeBlockRenderCache.get(index)
   if (cached && cached.signature === signature)
     return cached.node
 
   const cloned = { ...codeBlockNode } as ParsedNode
-  codeBlockRenderCache.set(codeBlockNode, { signature, node: cloned })
+  codeBlockRenderCache.set(index, { signature, node: cloned })
   return cloned
 }
 
@@ -5555,7 +5555,7 @@ function buildRenderedItem(item: { node: ParsedNode, index: number }) {
 
   // Reuse the previous shallow clone for code blocks unless the visible
   // payload changed, so parent recomputations do not churn stream-diffs props.
-  let node = getCodeBlockRenderNode(item.node)
+  let node = getCodeBlockRenderNode(item.node, item.index)
   const language = getCodeBlockLanguage(node)
   let component = getNodeComponent(node, language)
 
