@@ -95,6 +95,72 @@ describe('infographicBlockNode streaming errors', () => {
     wrapper.unmount()
   })
 
+  it('keeps the last successful preview across intermediate failures and commits the final result', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined as any)
+    const previousPreviewVisibleDuringFailure = vi.fn()
+    let wrapper: ReturnType<typeof mount>
+
+    class StatefulInfographic {
+      private container: HTMLElement
+      private errorHandler?: (error: unknown) => void
+
+      constructor(options: { container: HTMLElement }) {
+        this.container = options.container
+      }
+
+      on(event: string, handler: (error: unknown) => void) {
+        if (event === 'error')
+          this.errorHandler = handler
+      }
+
+      render(source: string) {
+        if (source.includes('invalid')) {
+          previousPreviewVisibleDuringFailure(wrapper.find('svg[data-preview="second"]').exists())
+          this.errorHandler?.(new Error('Incomplete streaming options'))
+          return
+        }
+        const preview = source.includes('second') ? 'second' : 'first'
+        this.container.innerHTML = `<svg data-preview="${preview}"></svg>`
+      }
+
+      destroy() {}
+    }
+
+    setInfographicLoader(() => StatefulInfographic)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    wrapper = mount(InfographicBlockNode as any, {
+      props: {
+        node: createNode('first'),
+        loading: true,
+      },
+    })
+    await flushAll()
+    expect(wrapper.find('svg[data-preview="first"]').exists()).toBe(true)
+
+    await wrapper.setProps({ node: createNode('second') })
+    await flushAll()
+    expect(wrapper.find('svg[data-preview="second"]').exists()).toBe(true)
+
+    await wrapper.setProps({ node: createNode('invalid intermediate') })
+    await flushAll()
+    expect(previousPreviewVisibleDuringFailure).toHaveBeenLastCalledWith(true)
+    expect(wrapper.attributes('data-markstream-mode')).toBe('preview')
+    expect(wrapper.find('svg[data-preview="second"]').exists()).toBe(true)
+    expect(errorSpy).not.toHaveBeenCalled()
+
+    await wrapper.setProps({
+      node: createNode('invalid final'),
+      loading: false,
+    })
+    await flushAll()
+    expect(wrapper.attributes('data-markstream-mode')).toBe('error')
+    expect(wrapper.find('.infographic-preview svg').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Failed to render infographic: Incomplete streaming options')
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
   it('does not report an in-flight streaming failure after loading settles', async () => {
     vi.stubGlobal('IntersectionObserver', undefined as any)
 
@@ -214,9 +280,9 @@ describe('infographicBlockNode streaming errors', () => {
           this.errorHandler = handler
       }
 
-      render() {
+      render(source: string) {
         renderCount++
-        if (renderCount === 1) {
+        if (source === 'first') {
           this.errorHandler?.(new Error('Stale final source'))
           return
         }
@@ -241,7 +307,7 @@ describe('infographicBlockNode streaming errors', () => {
     resolveLoader?.(SourceRaceInfographic)
     await flushAll()
 
-    expect(renderCount).toBe(2)
+    expect(renderCount).toBe(1)
     expect(errorSpy).not.toHaveBeenCalled()
     expect(wrapper.text()).not.toContain('Failed to render infographic')
     expect(wrapper.find('svg[data-infographic="latest"]').exists()).toBe(true)

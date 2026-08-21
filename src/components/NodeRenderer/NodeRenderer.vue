@@ -5230,10 +5230,10 @@ const InfographicBlockNodeInnerAsync = defineAsyncComponent({
     }
     catch (e) {
       console.warn(
-        '[markstream-vue] Failed to load InfographicBlockNode. Falling back to preformatted code rendering. To enable Infographic rendering, install "@antv/infographic" and configure setInfographicLoader with a dynamic loader.',
+        '[markstream-vue] Failed to load InfographicBlockNode. Showing the Infographic source fallback. To enable Infographic rendering, install "@antv/infographic" and configure setInfographicLoader with a dynamic loader.',
         e,
       )
-      return PreCodeNode
+      return InfographicBlockNodeLoading
     }
   },
   loadingComponent: InfographicBlockNodeLoading,

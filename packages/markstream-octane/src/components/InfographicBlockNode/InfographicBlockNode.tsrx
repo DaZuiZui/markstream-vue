@@ -68,6 +68,7 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
   }, [baseCode, maxPreviewHeight, props.estimatedPreviewHeightPx])
   const [containerHeight, setContainerHeight] = useState(`${estimatedPreviewHeight}px`)
   const [hasPreview, setHasPreview] = useState(false)
+  const [hasRenderError, setHasRenderError] = useState(false)
 
   // Zoom
   const [zoom, setZoom] = useState(1)
@@ -81,6 +82,7 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
   const modalCloneWrapperRef = useRef<HTMLElement | null>(null)
   const dragStartRef = useRef({ x: 0, y: 0 })
   const instanceRef = useRef<any>(null)
+  const renderGenerationRef = useRef(0)
   const registerViewport = useViewportPriority()
 
   const resolveContainerHeight = useCallback((actualHeight: number) => {
@@ -131,29 +133,61 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
     if (!containerRef.current)
       return
     const el = containerRef.current
+    const source = baseCode
+    const final = props.loading === false
+    const generation = ++renderGenerationRef.current
+    let nextInstance: any = null
+    let previousChildren: ChildNode[] | null = null
 
     try {
       const InfographicClass = await getInfographic()
-      if (!InfographicClass) {
-        console.warn('Infographic library failed to load.')
+      if (generation !== renderGenerationRef.current || el !== containerRef.current)
         return
-      }
+      if (!InfographicClass)
+        throw new Error('Infographic library failed to load.')
 
-      if (instanceRef.current) {
-        instanceRef.current.destroy?.()
-        instanceRef.current = null
-      }
-
-      el.innerHTML = ''
-
-      const instance = new InfographicClass({
+      previousChildren = Array.from(el.childNodes)
+      nextInstance = new InfographicClass({
         container: el,
         width: '100%',
         height: '100%',
       })
-      instanceRef.current = instance
-      instance.render(baseCode)
+      let renderErrorMessage = ''
+      let renderCompleted = false
+      nextInstance.on?.('error', (error: unknown) => {
+        const errors = Array.isArray(error) ? error : [error]
+        renderErrorMessage = errors
+          .map((item) => {
+            if (item instanceof Error)
+              return item.message
+            if (typeof item === 'string')
+              return item
+            if (item && typeof item === 'object' && 'message' in item)
+              return String((item as { message?: unknown }).message ?? '')
+            return String(item ?? '')
+          })
+          .filter(Boolean)
+          .join('; ')
+      })
+      nextInstance.on?.('rendered', () => {
+        renderCompleted = true
+      })
+      nextInstance.render(source)
+      if (renderErrorMessage)
+        throw new Error(renderErrorMessage)
+      const nextChildren = Array.from(el.childNodes)
+      const replacedChildren = nextChildren.length > 0 && (
+        nextChildren.length !== previousChildren.length
+        || nextChildren.some((child, index) => child !== previousChildren?.[index])
+      )
+      if (!renderCompleted && !replacedChildren)
+        throw new Error('Infographic render returned empty output.')
+
+      instanceRef.current?.destroy?.()
+      instanceRef.current = nextInstance
+      nextInstance = null
       setHasPreview(true)
+      setHasRenderError(false)
 
       // Update height
       setTimeout(() => {
@@ -161,11 +195,26 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
       }, 0)
     }
     catch (error) {
-      console.error('Failed to render infographic:', error)
-      setHasPreview(false)
-      el.innerHTML = `<div class="text-red-500 p-4">Failed to render infographic: ${error instanceof Error ? error.message : 'Unknown error'}</div>`
+      if (generation !== renderGenerationRef.current || el !== containerRef.current)
+        return
+      nextInstance?.destroy?.()
+      nextInstance = null
+      if (final && props.loading === false && source === baseCode) {
+        console.error('Failed to render infographic:', error)
+        instanceRef.current?.destroy?.()
+        instanceRef.current = null
+        setHasPreview(false)
+        setHasRenderError(true)
+        el.innerHTML = `<div class="text-red-500 p-4">Failed to render infographic: ${error instanceof Error ? error.message : 'Unknown error'}</div>`
+      }
+      else if (previousChildren) {
+        el.replaceChildren(...previousChildren)
+      }
     }
-  }, [baseCode, updateContainerHeight, viewportReady])
+    finally {
+      nextInstance?.destroy?.()
+    }
+  }, [baseCode, props.loading, updateContainerHeight, viewportReady])
 
   useEffect(() => {
     const el = viewportTargetRef.current
@@ -191,6 +240,7 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
 
   useEffect(() => {
     return () => {
+      renderGenerationRef.current += 1
       if (instanceRef.current) {
         instanceRef.current.destroy?.()
         instanceRef.current = null
@@ -312,7 +362,7 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
       <div
         ref={viewportTargetRef}
         data-markstream-infographic="1"
-        data-markstream-mode={showSource ? 'source' : hasPreview ? 'preview' : 'pending'}
+        data-markstream-mode={showSource ? 'source' : hasRenderError ? 'error' : hasPreview ? 'preview' : 'pending'}
         className={clsx('my-4 rounded-lg border overflow-hidden shadow-sm', props.isDark ? 'border-gray-700/30' : 'border-gray-200', { 'is-rendering': props.loading })}
       >
         {props.showHeader && (
@@ -470,6 +520,9 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
                       onTouchMove={onMouseMove}
                       onTouchEnd={stopDrag}
                     >
+                      {!hasPreview && !hasRenderError && (
+                        <pre className={clsx('absolute inset-0 overflow-auto p-4 text-left text-sm font-mono whitespace-pre-wrap', props.isDark ? 'text-gray-300' : 'text-gray-700')}>{baseCode}</pre>
+                      )}
                       <div className={clsx('absolute inset-0 cursor-grab', isDragging && 'cursor-grabbing')} style={{ transform: `translate(${translate.x}px, ${translate.y}px) scale(${zoom})` }}>
                         <div ref={containerRef} className="w-full text-center flex items-center justify-center min-h-full" />
                       </div>

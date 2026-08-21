@@ -118,7 +118,9 @@ import {
           #previewHost
           class="infographic-render"
           [style.minHeight]="resolvedContainerMinHeight"
-        ></div>
+        >
+          <pre *ngIf="!svgMarkup && !error" class="markstream-angular-enhanced-block__source infographic-pending-source"><code translate="no">{{ code }}</code></pre>
+        </div>
 
         <pre *ngIf="showSource" class="markstream-angular-enhanced-block__source"><code translate="no">{{ code }}</code></pre>
 
@@ -177,6 +179,7 @@ export class InfographicBlockNodeComponent implements AfterViewInit, OnChanges, 
   private viewReady = false
   private destroyed = false
   private renderToken = 0
+  private renderScheduled = false
   private copyTimer: number | null = null
   private infographicInstance: any = null
 
@@ -282,19 +285,20 @@ export class InfographicBlockNodeComponent implements AfterViewInit, OnChanges, 
 
   ngAfterViewInit() {
     this.viewReady = true
-    queueMicrotask(() => void this.renderInfographic())
+    this.scheduleInfographicRender()
   }
 
   ngOnChanges() {
     if (!this.viewReady)
       return
     this.containerMinHeight = ''
-    queueMicrotask(() => void this.renderInfographic())
+    this.scheduleInfographicRender()
   }
 
   ngOnDestroy() {
     this.destroyed = true
     this.renderToken += 1
+    this.renderScheduled = false
     if (this.copyTimer != null && typeof window !== 'undefined')
       window.clearTimeout(this.copyTimer)
     this.destroyInfographic()
@@ -361,7 +365,7 @@ export class InfographicBlockNodeComponent implements AfterViewInit, OnChanges, 
   toggleCollapsed() {
     this.collapsed = !this.collapsed
     if (!this.collapsed)
-      queueMicrotask(() => void this.renderInfographic())
+      this.scheduleInfographicRender()
     this.cdr.markForCheck()
   }
 
@@ -373,6 +377,17 @@ export class InfographicBlockNodeComponent implements AfterViewInit, OnChanges, 
   resetZoom() {
     this.zoom = 1
     this.cdr.markForCheck()
+  }
+
+  private scheduleInfographicRender() {
+    if (this.destroyed || this.renderScheduled)
+      return
+    this.renderScheduled = true
+    queueMicrotask(() => {
+      this.renderScheduled = false
+      if (!this.destroyed)
+        void this.renderInfographic()
+    })
   }
 
   private async renderInfographic() {
@@ -395,16 +410,17 @@ export class InfographicBlockNodeComponent implements AfterViewInit, OnChanges, 
       this.renderToken += 1
       this.rendering = true
       this.error = ''
-      this.svgMarkup = ''
-      clearElement(host)
       this.cdr.markForCheck()
       return
     }
 
+    const final = !this.resolvedLoading
     const token = ++this.renderToken
     this.rendering = true
     this.error = ''
     this.cdr.markForCheck()
+    let nextInstance: any = null
+    let previousChildren: ChildNode[] | null = null
 
     try {
       const InfographicClass = await getInfographic()
@@ -413,19 +429,49 @@ export class InfographicBlockNodeComponent implements AfterViewInit, OnChanges, 
       if (this.destroyed || token !== this.renderToken)
         return
 
-      this.destroyInfographic()
-      clearElement(host)
-      const instance = new InfographicClass({
+      previousChildren = Array.from(host.childNodes)
+      nextInstance = new InfographicClass({
         container: host,
         width: '100%',
         height: '100%',
       })
-      this.infographicInstance = instance
-      instance.render(source)
+      let renderErrorMessage = ''
+      let renderCompleted = false
+      nextInstance.on?.('error', (error: unknown) => {
+        const errors = Array.isArray(error) ? error : [error]
+        renderErrorMessage = errors
+          .map((item) => {
+            if (item instanceof Error)
+              return item.message
+            if (typeof item === 'string')
+              return item
+            if (item && typeof item === 'object' && 'message' in item)
+              return String((item as { message?: unknown }).message ?? '')
+            return String(item ?? '')
+          })
+          .filter(Boolean)
+          .join('; ')
+      })
+      nextInstance.on?.('rendered', () => {
+        renderCompleted = true
+      })
+      nextInstance.render(source)
+      if (renderErrorMessage)
+        throw new Error(renderErrorMessage)
+      const nextChildren = Array.from(host.childNodes)
+      const replacedChildren = nextChildren.length > 0 && (
+        nextChildren.length !== previousChildren.length
+        || nextChildren.some((child, index) => child !== previousChildren?.[index])
+      )
+      if (!renderCompleted && !replacedChildren)
+        throw new Error('Infographic render returned empty output.')
 
       if (this.destroyed || token !== this.renderToken)
         return
 
+      this.infographicInstance?.destroy?.()
+      this.infographicInstance = nextInstance
+      nextInstance = null
       const svg = host.querySelector('svg')
       this.svgMarkup = svg ? svg.outerHTML : ''
       const measuredHeight = host.scrollHeight
@@ -436,13 +482,21 @@ export class InfographicBlockNodeComponent implements AfterViewInit, OnChanges, 
     catch (error) {
       if (this.destroyed || token !== this.renderToken)
         return
-      this.destroyInfographic()
-      this.svgMarkup = ''
-      this.showSource = true
-      this.error = error instanceof Error ? error.message : 'Failed to render infographic.'
-      clearElement(host)
+      nextInstance?.destroy?.()
+      nextInstance = null
+      if (final && !this.resolvedLoading && source === this.code.trim()) {
+        this.destroyInfographic()
+        this.svgMarkup = ''
+        this.showSource = true
+        this.error = error instanceof Error ? error.message : 'Failed to render infographic.'
+        clearElement(host)
+      }
+      else if (previousChildren) {
+        host.replaceChildren(...previousChildren)
+      }
     }
     finally {
+      nextInstance?.destroy?.()
       if (token === this.renderToken) {
         this.rendering = false
         this.cdr.markForCheck()
