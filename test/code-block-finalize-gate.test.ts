@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent, h, nextTick } from 'vue'
 import CodeBlockNode from '../src/components/CodeBlockNode/CodeBlockNode.vue'
 import { resetCodeBlockRuntimeReadyForTest } from '../src/components/CodeBlockNode/runtime'
+import { clearStreamDiffsWorkerPool, setStreamDiffsWorkerPool } from '../src/components/CodeBlockNode/streamDiffsWorker'
 import { provideOffscreenHeavyNodeDeferral, provideViewportPriority } from '../src/composables/viewportPriority'
 
 interface VisibilityObserver {
@@ -133,9 +134,11 @@ describe('codeBlockNode final Diffs gate', () => {
     observers.length = 0
     vi.stubGlobal('IntersectionObserver', IntersectionObserverStub)
     resetHelpers()
+    clearStreamDiffsWorkerPool()
   })
 
   afterEach(() => {
+    clearStreamDiffsWorkerPool()
     vi.unstubAllGlobals()
   })
 
@@ -731,7 +734,7 @@ describe('codeBlockNode final Diffs gate', () => {
     wrapper.unmount()
   })
 
-  it('applies the active theme after a visible File surface mounts', async () => {
+  it('passes the active theme when creating a visible File surface', async () => {
     const runtime = helpers()
     const wrapper = mount(DeferredCodeBlockNode, {
       props: {
@@ -748,15 +751,87 @@ describe('codeBlockNode final Diffs gate', () => {
     await flush()
     observers.at(-1)?.emit()
     await vi.waitFor(() => {
+      expect(runtime.createCodeBlockRuntime.mock.calls[0]?.[0]?.theme).toBe('initial-surface-dark')
       expect(runtime.createEditor).toHaveBeenCalledTimes(1)
-      expect(runtime.setTheme).toHaveBeenCalledWith('initial-surface-dark')
     })
+    expect(runtime.setTheme).not.toHaveBeenCalled()
 
-    runtime.setTheme.mockClear()
     await wrapper.setProps({ isDark: false })
     await vi.waitFor(() => {
       expect(runtime.setTheme).toHaveBeenCalledWith('initial-surface-light')
     })
+    expect(runtime.createEditor).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it('applies a theme change queued while the worker prepares the initial surface', async () => {
+    let resolveWorkerTheme!: () => void
+    const workerThemePending = new Promise<void>((resolve) => {
+      resolveWorkerTheme = resolve
+    })
+    const setRenderOptions = vi.fn(() => workerThemePending)
+    setStreamDiffsWorkerPool({ setRenderOptions })
+    const runtime = helpers()
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const ready = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        isDark: true,
+        darkTheme: 'queued-surface-dark',
+        lightTheme: 'queued-surface-light',
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(setRenderOptions).toHaveBeenCalledTimes(1))
+    expect(runtime.createEditor).not.toHaveBeenCalled()
+
+    await wrapper.setProps({ isDark: false })
+    resolveWorkerTheme()
+
+    await vi.waitFor(() => expect(runtime.setTheme).toHaveBeenCalledWith('queued-surface-light'))
+    expect(runtime.createEditor).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it('applies the latest theme when it changes again during queued theme sync', async () => {
+    const workerThemeResolvers: Array<() => void> = []
+    const setRenderOptions = vi.fn(() => new Promise<void>((resolve) => {
+      workerThemeResolvers.push(resolve)
+    }))
+    setStreamDiffsWorkerPool({ setRenderOptions })
+    const runtime = helpers()
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const ready = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        isDark: true,
+        darkTheme: 'queued-surface-dark',
+        lightTheme: 'queued-surface-light',
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(setRenderOptions).toHaveBeenCalledTimes(1))
+
+    await wrapper.setProps({ isDark: false })
+    workerThemeResolvers[0]!()
+    await vi.waitFor(() => expect(setRenderOptions).toHaveBeenCalledTimes(2))
+
+    await wrapper.setProps({ isDark: true })
+    workerThemeResolvers[1]!()
+    await vi.waitFor(() => expect(setRenderOptions).toHaveBeenCalledTimes(3))
+    workerThemeResolvers[2]!()
+
+    await vi.waitFor(() => expect(runtime.setTheme).toHaveBeenLastCalledWith('queued-surface-dark'))
     expect(runtime.createEditor).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
@@ -889,6 +964,7 @@ describe('codeBlockNode final Diffs gate', () => {
     await flush()
     observers.at(-1)?.emit()
     await vi.waitFor(() => expect(runtime.createDiffEditor).toHaveBeenCalledTimes(1))
+    expect(runtime.setTheme).not.toHaveBeenCalled()
     runtime.safeClean.mockClear()
     runtime.createDiffEditor.mockClear()
     runtime.setTheme.mockClear()
