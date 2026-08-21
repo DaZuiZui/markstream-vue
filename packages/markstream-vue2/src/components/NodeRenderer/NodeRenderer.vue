@@ -517,7 +517,7 @@ const nodeVisibilityState = reactive<Record<number, boolean>>({})
 const nodeVisibilityHandles = new Map<number, VisibilityHandle>()
 const nodeVisibilityFallbackTimers = new Map<number, number>()
 const nodeSlotElements = new Map<number, HTMLElement | null>()
-const codeBlockRenderCache = new WeakMap<object, { signature: string, node: ParsedNode }>()
+const codeBlockRenderCache = new Map<number, { signature: string, node: ParsedNode }>()
 const nodeSlotVersion = ref(0)
 const sortedNodeSlots = computed(() => {
   // Track a manual version so we only rebuild when slots change.
@@ -2023,7 +2023,7 @@ const legacyStructuredContentMode = computed(() => {
 })
 const renderedItems = computed(() => {
   return visibleNodes.value.map((item) => {
-    let node = getCodeBlockRenderNode(item.node)
+    let node = getCodeBlockRenderNode(item.node, item.index)
     const language = getCodeBlockLanguage(node)
     let component = getNodeComponent(node, language)
 
@@ -2084,7 +2084,7 @@ const renderedItems = computed(() => {
   })
 })
 
-function getCodeBlockRenderNode(node: ParsedNode) {
+function getCodeBlockRenderNode(node: ParsedNode, index: number) {
   if (node.type !== 'code_block')
     return node
 
@@ -2099,12 +2099,12 @@ function getCodeBlockRenderNode(node: ParsedNode) {
     String(codeBlockNode.raw ?? ''),
   ].join('\u0000')
 
-  const cached = codeBlockRenderCache.get(codeBlockNode)
+  const cached = codeBlockRenderCache.get(index)
   if (cached && cached.signature === signature)
     return cached.node
 
   const cloned = { ...codeBlockNode } as ParsedNode
-  codeBlockRenderCache.set(codeBlockNode, { signature, node: cloned })
+  codeBlockRenderCache.set(index, { signature, node: cloned })
   return cloned
 }
 
