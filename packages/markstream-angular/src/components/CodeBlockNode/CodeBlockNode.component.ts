@@ -309,6 +309,7 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
   private copyTimer: number | null = null
   private deferredHeightSyncRaf: number | null = null
   private lastCodeBlockOptions?: CodeBlockOptions
+  private lastEditorInputSignature = ''
   private lastRuntimeHostKey = ''
 
   get t() {
@@ -579,13 +580,23 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
       themes[1],
       this.resolvedShowLineNumbers ? 'lines' : 'no-lines',
     ].join('\u0000')
-    if (nextOptions !== this.lastCodeBlockOptions || runtimeHostKey !== this.lastRuntimeHostKey) {
+    const runtimeChanged = nextOptions !== this.lastCodeBlockOptions || runtimeHostKey !== this.lastRuntimeHostKey
+    if (runtimeChanged) {
       this.lastCodeBlockOptions = nextOptions
       this.lastRuntimeHostKey = runtimeHostKey
       this.disposeRuntimeHelpers()
     }
+    const editorInputSignature = JSON.stringify([
+      this.isDiff,
+      this.originalCode,
+      this.resolvedCode,
+      this.language,
+      this.showLoadingPlaceholder,
+    ])
+    const editorInputChanged = editorInputSignature !== this.lastEditorInputSignature
+    this.lastEditorInputSignature = editorInputSignature
     this.applyInitialFontSize()
-    if (!this.viewReady)
+    if (!this.viewReady || (!runtimeChanged && !editorInputChanged))
       return
     void this.syncEditorState()
   }
