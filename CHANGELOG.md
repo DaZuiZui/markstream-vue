@@ -1,3 +1,31 @@
+## [2.0.1](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0...markstream-vue@2.0.1) (2026-08-21)
+
+### What's Changed
+
+- feat(code-block)：支持宿主注入的 worker pool，代码高亮在后台线程执行（[#695](https://github.com/Simon-He95/markstream-vue/pull/695)）：
+  - 新增 `setStreamDiffsWorkerPool()` 注入 API（沿用 katex/mermaid 的 worker 注入模式），宿主可用自己的打包器构建 `@pierre/diffs` 的 WorkerPoolManager，并通过 `workerManager` 运行时选项传入
+  - `CodeBlockNode` 将注入的 pool 作为 `workerManager` 转发（`codeBlockOptions.workerManager` 优先），并在每次主题切换时把活动主题同步到 pool，保证 worker token 与 `isDark`/`theme` 一致
+  - 未注入 pool 时保持原有主线程高亮行为不变
+- fix(code-block)：流式 pre 回退与最终高亮面视觉对齐（[#694](https://github.com/Simon-He95/markstream-vue/pull/694)）：
+  - 去掉双栏 diff 之间带色的 1px 分隔线，中间改为与高亮面一致的 2ch 白色间隙
+  - 折叠的 "N unmodified lines" pill 跨双栏读作一个连续 pill，不再被分隔线切成两半
+  - 隐藏右栏折叠行重复的 chevron 图标，只保留原侧 widget
+- fix(infographic)：流式加载与出错回退稳定化（[#696](https://github.com/Simon-He95/markstream-vue/pull/696)）：
+  - chunk 失败时保留 infographic 外壳，避免预览闪没
+  - 流式出错期间保持 infographic 预览不消失
+  - 对齐各框架（Vue / React / Octane / Svelte / Angular / Vue 2）的流式回退行为
+
+### Coordinated stable versions
+
+- `stream-markdown-parser@1.2.9`
+- `markstream-core@2.0.1`
+- `markstream-vue@2.0.1`
+- `markstream-react@2.0.1`
+- `markstream-octane@2.0.1`
+- `markstream-svelte@2.0.1`
+- `markstream-angular@2.0.1`
+- `markstream-vue2@2.0.1`
+
 ## [2.0.1-beta.0](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0...markstream-vue@2.0.1-beta.0) (2026-08-19)
 
 ### What's Changed
