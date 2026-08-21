@@ -799,6 +799,44 @@ describe('codeBlockNode final Diffs gate', () => {
     wrapper.unmount()
   })
 
+  it('applies the latest theme when it changes again during queued theme sync', async () => {
+    const workerThemeResolvers: Array<() => void> = []
+    const setRenderOptions = vi.fn(() => new Promise<void>((resolve) => {
+      workerThemeResolvers.push(resolve)
+    }))
+    setStreamDiffsWorkerPool({ setRenderOptions })
+    const runtime = helpers()
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: makeNode('const ready = true', false),
+        loading: false,
+        stream: true,
+        showHeader: false,
+        isDark: true,
+        darkTheme: 'queued-surface-dark',
+        lightTheme: 'queued-surface-light',
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(setRenderOptions).toHaveBeenCalledTimes(1))
+
+    await wrapper.setProps({ isDark: false })
+    workerThemeResolvers[0]!()
+    await vi.waitFor(() => expect(setRenderOptions).toHaveBeenCalledTimes(2))
+
+    await wrapper.setProps({ isDark: true })
+    workerThemeResolvers[1]!()
+    await vi.waitFor(() => expect(setRenderOptions).toHaveBeenCalledTimes(3))
+    workerThemeResolvers[2]!()
+
+    await vi.waitFor(() => expect(runtime.setTheme).toHaveBeenLastCalledWith('queued-surface-dark'))
+    expect(runtime.createEditor).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
   it('creates one FileDiff surface only after a visible diff completes', async () => {
     const runtime = helpers()
     const diffNode = {

@@ -105,6 +105,8 @@ type RuntimeCodeBlockNode = ParsedNode & {
   originalCode?: string
   updatedCode?: string
   raw?: string
+  startLine?: number
+  endLine?: number
 }
 type RuntimeHtmlNode = ParsedNode & {
   type: 'html_block' | 'html_inline'
@@ -896,7 +898,14 @@ const nodeSlotElements = new Map<number, HTMLElement | null>()
 const nodeContentResizeObserverTargets = new Map<number, HTMLElement>()
 const nodeContentResizeObserverIndexes = new WeakMap<Element, number>()
 let nodeContentResizeObserver: ResizeObserver | null = null
-const codeBlockRenderCache = new Map<number, { signature: string, node: ParsedNode }>()
+const codeBlockRenderCache: Array<{ signature: readonly unknown[], node: ParsedNode } | undefined> = []
+watch(
+  () => parsedNodes.value.length,
+  (length) => {
+    if (codeBlockRenderCache.length > length)
+      codeBlockRenderCache.length = length
+  },
+)
 // Height signatures per node index, stored in a flat array so stale-range
 // scans can start at the parser's dirty start instead of walking the whole
 // measured set on every streaming commit. `undefined` = no signature yet.
@@ -5404,26 +5413,30 @@ const tableBindings = computed(() => ({
 }))
 
 function getCodeBlockRenderNode(node: ParsedNode, index: number) {
-  if (node.type !== 'code_block')
+  if (node.type !== 'code_block') {
+    codeBlockRenderCache[index] = undefined
     return node
+  }
 
   const codeBlockNode = node as RuntimeCodeBlockNode
   const signature = [
-    String(codeBlockNode.language ?? ''),
-    String(codeBlockNode.loading ?? ''),
-    String(codeBlockNode.diff ?? ''),
-    String(codeBlockNode.code ?? ''),
-    String(codeBlockNode.originalCode ?? ''),
-    String(codeBlockNode.updatedCode ?? ''),
-    String(codeBlockNode.raw ?? ''),
-  ].join('\u0000')
+    codeBlockNode.language,
+    codeBlockNode.loading,
+    codeBlockNode.diff,
+    codeBlockNode.code,
+    codeBlockNode.originalCode,
+    codeBlockNode.updatedCode,
+    codeBlockNode.raw,
+    codeBlockNode.startLine,
+    codeBlockNode.endLine,
+  ] as const
 
-  const cached = codeBlockRenderCache.get(index)
-  if (cached && cached.signature === signature)
+  const cached = codeBlockRenderCache[index]
+  if (cached && signature.every((value, signatureIndex) => value === cached.signature[signatureIndex]))
     return cached.node
 
   const cloned = { ...codeBlockNode } as ParsedNode
-  codeBlockRenderCache.set(index, { signature, node: cloned })
+  codeBlockRenderCache[index] = { signature, node: cloned }
   return cloned
 }
 

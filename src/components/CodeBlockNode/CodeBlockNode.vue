@@ -2980,7 +2980,7 @@ async function runEditorCreation(el: HTMLElement) {
 
   syncFallbackFontMetricsFromEditor()
 
-  if (pendingThemeUpdate) {
+  while (pendingThemeUpdate) {
     pendingThemeUpdate = false
     await themeUpdate()
     if (isUnmounted)

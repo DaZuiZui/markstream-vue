@@ -29,11 +29,12 @@ describe('code block streaming stability', () => {
         return () => h('div', {
           'class': 'code-block-probe',
           'data-code': String((props.node as any).code ?? ''),
+          'data-start-line': String((props.node as any).startLine ?? ''),
         })
       },
     })
 
-    const makeCodeBlock = (updatedCode = 'const value = 2') => ({
+    const makeCodeBlock = (updatedCode = 'const value = 2', startLine = 1) => ({
       type: 'code_block',
       language: 'diff',
       code: `-const value = 1\n+${updatedCode}`,
@@ -42,6 +43,8 @@ describe('code block streaming stability', () => {
       originalCode: 'const value = 1',
       updatedCode,
       loading: false,
+      startLine,
+      endLine: startLine + 3,
     })
     const makeParagraph = (content: string) => ({
       type: 'paragraph',
@@ -75,12 +78,73 @@ describe('code block streaming stability', () => {
       expect(unmountCount).toBe(0)
 
       await wrapper.setProps({
-        nodes: [makeCodeBlock('const value = 3'), makeParagraph('tail continues streaming')],
+        nodes: [makeCodeBlock('const value = 2', 10), makeParagraph('tail continues streaming')],
       })
       await flushAll()
 
       expect(nodeChangeCount).toBe(1)
+      expect(wrapper.get('.code-block-probe').attributes('data-start-line')).toBe('10')
+
+      await wrapper.setProps({
+        nodes: [makeCodeBlock('const value = 3', 10), makeParagraph('tail continues streaming')],
+      })
+      await flushAll()
+
+      expect(nodeChangeCount).toBe(2)
       expect(wrapper.get('.code-block-probe').attributes('data-code')).toContain('const value = 3')
+    }
+    finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('drops cached code blocks after the node list shrinks', async () => {
+    const mountedNodes: object[] = []
+    const CodeBlockProbe = defineComponent({
+      props: {
+        node: { type: Object, required: true },
+      },
+      setup(props) {
+        onMounted(() => mountedNodes.push(props.node))
+        return () => h('div', { class: 'code-block-probe' })
+      },
+    })
+    const codeBlock = {
+      type: 'code_block',
+      language: 'typescript',
+      code: 'const value = 1',
+      raw: '```typescript\nconst value = 1\n```',
+      loading: false,
+    }
+    const paragraph = {
+      type: 'paragraph',
+      children: [{ type: 'text', content: 'before', raw: 'before' }],
+      raw: 'before',
+    }
+
+    setCustomComponents(customId, { code_block: CodeBlockProbe as any })
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        customId,
+        nodes: [paragraph, codeBlock],
+        batchRendering: false,
+        deferNodesUntilVisible: false,
+        maxLiveNodes: 0,
+        viewportPriority: false,
+      },
+    })
+
+    try {
+      await flushAll()
+      const firstNode = mountedNodes[0]
+
+      await wrapper.setProps({ nodes: [paragraph] })
+      await flushAll()
+      await wrapper.setProps({ nodes: [paragraph, { ...codeBlock }] })
+      await flushAll()
+
+      expect(mountedNodes).toHaveLength(2)
+      expect(mountedNodes[1]).not.toBe(firstNode)
     }
     finally {
       wrapper.unmount()
