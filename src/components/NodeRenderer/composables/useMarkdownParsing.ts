@@ -5,6 +5,7 @@ import type {
 import type { ComputedRef } from 'vue'
 import type { CustomComponents } from '../../../types'
 import type { NodeRendererProps } from '../../../types/node-renderer-props'
+import { normalizeShikiLanguage } from 'markstream-core'
 import {
   BLOCKED_HTML_TAGS,
   EXTENDED_STANDARD_HTML_TAGS,
@@ -15,6 +16,7 @@ import {
   resolveCustomHtmlTags,
 } from 'stream-markdown-parser'
 import { computed, markRaw, onScopeDispose, ref, watch } from 'vue'
+import { normalizeLanguageIdentifier } from '../../../utils/languageIcon'
 import { isReservedNodeComponentKey } from '../../../utils/nodeComponents'
 
 type RendererParseOptions = NonNullable<NodeRendererProps['parseOptions']>
@@ -66,6 +68,7 @@ interface ParsedNodeStabilizeResult {
 }
 
 interface ParsedNodeStabilizeOptions {
+  canReuseNode?: (node: ParsedNode) => boolean
   reuseDirtyTail?: boolean
   scanStartIndex?: number
 }
@@ -119,6 +122,35 @@ function getAutoCustomHtmlTags(mapping: Partial<CustomComponents>) {
         : ''
     })
     .filter(Boolean)
+}
+
+function getCustomComponentsReuseKey(mapping: Partial<CustomComponents>) {
+  return JSON.stringify(
+    Object.entries(mapping)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, component]) => [key, getIdentityKey(component)]),
+  )
+}
+
+function hasCustomComponentBoundary(node: ParsedNode, mapping: Partial<CustomComponents>): boolean {
+  const type = String(node.type).trim().toLowerCase()
+  if (mapping[type])
+    return true
+
+  if (type === 'code_block') {
+    const language = String((node as ParsedNode & { language?: string }).language ?? '').trim().toLowerCase()
+    if (
+      language
+      && [language, normalizeLanguageIdentifier(language), normalizeShikiLanguage(language)]
+        .some(key => Boolean(key && mapping[key]))
+    ) {
+      return true
+    }
+  }
+
+  const children = (node as ParsedNode & { children?: ParsedNode[] }).children
+  return Array.isArray(children)
+    && children.some(child => hasCustomComponentBoundary(child, mapping))
 }
 
 const DEFAULT_PARSE_COALESCE_MS = 80
@@ -811,16 +843,24 @@ function areTopLevelNodesStableWithMetrics(
   return isParsedNodeStableWithMetrics(previous, next, signatureTiming)
 }
 
-function findDirtyStartIndex(nextNodes: ParsedNode[], previousNodes: ParsedNode[], scanStartIndex = 0) {
+function findDirtyStartIndex(
+  nextNodes: ParsedNode[],
+  previousNodes: ParsedNode[],
+  options: ParsedNodeStabilizeOptions,
+) {
   const limit = Math.min(nextNodes.length, previousNodes.length)
-  const startIndex = Math.min(limit, Math.max(0, scanStartIndex))
+  const startIndex = Math.min(limit, Math.max(0, options.scanStartIndex ?? 0))
 
   for (let index = startIndex; index < limit; index++) {
     const previous = previousNodes[index]
     const next = nextNodes[index]
 
-    if (!areTopLevelNodesStable(previous, next))
+    if (
+      (options.canReuseNode && (!options.canReuseNode(previous) || !options.canReuseNode(next)))
+      || !areTopLevelNodesStable(previous, next)
+    ) {
       return index
+    }
   }
 
   return nextNodes.length === previousNodes.length ? -1 : limit
@@ -830,16 +870,19 @@ function findDirtyStartIndexWithMetrics(
   nextNodes: ParsedNode[],
   previousNodes: ParsedNode[],
   signatureTiming: ParsedNodeSignatureTimingMetrics,
-  scanStartIndex = 0,
+  options: ParsedNodeStabilizeOptions,
 ) {
   const limit = Math.min(nextNodes.length, previousNodes.length)
-  const startIndex = Math.min(limit, Math.max(0, scanStartIndex))
+  const startIndex = Math.min(limit, Math.max(0, options.scanStartIndex ?? 0))
 
   for (let index = startIndex; index < limit; index++) {
     const previous = previousNodes[index]
     const next = nextNodes[index]
 
-    if (!areTopLevelNodesStableWithMetrics(previous, next, signatureTiming)) {
+    if (
+      (options.canReuseNode && (!options.canReuseNode(previous) || !options.canReuseNode(next)))
+      || !areTopLevelNodesStableWithMetrics(previous, next, signatureTiming)
+    ) {
       return index
     }
   }
@@ -859,9 +902,8 @@ function stabilizeParsedNodes(
     }
   }
 
-  const scanStartIndex = options.scanStartIndex ?? 0
   const reuseDirtyTail = options.reuseDirtyTail !== false
-  const dirtyStartIndex = findDirtyStartIndex(nextNodes, previousNodes, scanStartIndex)
+  const dirtyStartIndex = findDirtyStartIndex(nextNodes, previousNodes, options)
 
   if (dirtyStartIndex < 0) {
     return {
@@ -886,7 +928,11 @@ function stabilizeParsedNodes(
       const previous = previousNodes[index]
       const next = nextNodes[index]
 
-      if (previous && isParsedNodeStable(previous, next)) {
+      if (
+        previous
+        && (!options.canReuseNode || (options.canReuseNode(previous) && options.canReuseNode(next)))
+        && isParsedNodeStable(previous, next)
+      ) {
         stableNodes[index] = previous
         reusedNodeCount += 1
       }
@@ -917,9 +963,8 @@ function stabilizeParsedNodesWithMetrics(
     }
   }
 
-  const scanStartIndex = options.scanStartIndex ?? 0
   const reuseDirtyTail = options.reuseDirtyTail !== false
-  const dirtyStartIndex = findDirtyStartIndexWithMetrics(nextNodes, previousNodes, signatureTiming, scanStartIndex)
+  const dirtyStartIndex = findDirtyStartIndexWithMetrics(nextNodes, previousNodes, signatureTiming, options)
 
   if (dirtyStartIndex < 0) {
     return {
@@ -944,7 +989,11 @@ function stabilizeParsedNodesWithMetrics(
       const previous = previousNodes[index]
       const next = nextNodes[index]
 
-      if (previous && isParsedNodeStableWithMetrics(previous, next, signatureTiming)) {
+      if (
+        previous
+        && (!options.canReuseNode || (options.canReuseNode(previous) && options.canReuseNode(next)))
+        && isParsedNodeStableWithMetrics(previous, next, signatureTiming)
+      ) {
         stableNodes[index] = previous
         reusedNodeCount += 1
       }
@@ -1007,6 +1056,7 @@ export function useMarkdownParsing(
   let previousNodeReuseSemanticKey = ''
   let previousContent = ''
   let previousExternalNodeMutationBoundary = false
+  let previousCustomComponentsReuseKey = ''
   const scanGlobalReferenceAppend = createGlobalReferenceScanner()
   let parseCoalesceTimer: ReturnType<typeof setTimeout> | undefined
   let parseCommitCount = 0
@@ -1217,8 +1267,17 @@ export function useMarkdownParsing(
       previousContent = ''
     }
 
-    const hasExternalNodeMutationBoundary = Object.keys(options.customComponentsMap?.value ?? {}).length > 0
-      || typeof mergedParseOptions.value.postTransformNodes === 'function'
+    const customComponents = options.customComponentsMap?.value ?? {}
+    const customComponentsReuseKey = getCustomComponentsReuseKey(customComponents)
+    if (
+      previousCustomComponentsReuseKey
+      && customComponentsReuseKey !== previousCustomComponentsReuseKey
+    ) {
+      previousParsedNodes = []
+      previousContent = ''
+    }
+    const hasCustomComponents = Object.keys(customComponents).length > 0
+    const hasExternalNodeMutationBoundary = typeof mergedParseOptions.value.postTransformNodes === 'function'
     if (hasExternalNodeMutationBoundary !== previousExternalNodeMutationBoundary) {
       previousParsedNodes = []
       previousContent = ''
@@ -1238,6 +1297,7 @@ export function useMarkdownParsing(
     const parserHasCustomExtensions = hasCustomParserExtensions(md)
     const reuseStableTopLevelNodes = !parserHasCustomExtensions
       && !hasExternalNodeMutationBoundary
+      && !hasCustomComponents
     const parseOptionsForCall = {
       ...mergedParseOptions.value,
       reuseStableTopLevelNodes,
@@ -1277,19 +1337,25 @@ export function useMarkdownParsing(
       const stabilizeStart = collectPerformanceMetrics
         ? getNow()
         : 0
-      const [scanStartIndex, scannedChars] = getStablePrefixScanStartIndex({
-        content,
-        previousContent,
-        previousDirtyStartIndex: parsedNodesDirtyStartIndexValue,
-        parseOptions: mergedParseOptions.value,
-        customMarkdownIt: props.customMarkdownIt,
-        md,
-        scanGlobalReferenceAppend,
-      })
+      const [scanStartIndex, scannedChars] = hasCustomComponents
+        ? [0, 0]
+        : getStablePrefixScanStartIndex({
+            content,
+            previousContent,
+            previousDirtyStartIndex: parsedNodesDirtyStartIndexValue,
+            parseOptions: mergedParseOptions.value,
+            customMarkdownIt: props.customMarkdownIt,
+            md,
+            scanGlobalReferenceAppend,
+          })
       referenceDefinitionScanChars = scannedChars
       const reuseDirtyTail = scanStartIndex <= 0
+      const canReuseNode = hasCustomComponents
+        ? (node: ParsedNode) => !hasCustomComponentBoundary(node, customComponents)
+        : undefined
       if (signatureTiming) {
         const result = stabilizeParsedNodesWithMetrics(nextParsed, previousParsedNodes, signatureTiming, {
+          canReuseNode,
           reuseDirtyTail,
           scanStartIndex,
         })
@@ -1298,6 +1364,7 @@ export function useMarkdownParsing(
       }
       else {
         const result = stabilizeParsedNodes(nextParsed, previousParsedNodes, {
+          canReuseNode,
           reuseDirtyTail,
           scanStartIndex,
         })
@@ -1336,6 +1403,7 @@ export function useMarkdownParsing(
     previousParserCacheSemanticKey = currentParserCacheSemanticKey
     previousNodeReuseSemanticKey = currentNodeReuseSemanticKey
     previousExternalNodeMutationBoundary = hasExternalNodeMutationBoundary
+    previousCustomComponentsReuseKey = customComponentsReuseKey
     previousParsedNodes = parsed
     commitParsedNodesDirtyStartIndex(stabilizeMetrics?.dirtyStartIndex ?? 0)
 

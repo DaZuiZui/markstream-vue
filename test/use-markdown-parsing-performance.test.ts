@@ -784,6 +784,44 @@ describe('useMarkdownParsing performance behavior', () => {
     scope.stop()
   })
 
+  it('reuses settled built-in nodes alongside custom component mutation boundaries', () => {
+    const content = ref([
+      'Custom paragraph.',
+      '',
+      '```diff',
+      '- old',
+      '+ new',
+      '```',
+      '',
+      'Streaming tail',
+    ].join('\n'))
+    const customComponents = ref<Record<string, unknown>>({ paragraph: {} })
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'selective-custom-component-boundary',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => false),
+      customComponentsMap: computed(() => customComponents.value),
+      logPerf: vi.fn(),
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const firstParagraph = state.parsedNodes.value[0]
+    const firstCodeBlock = state.parsedNodes.value[1]
+    ;(firstParagraph as any).raw = 'caller mutation'
+    content.value += ' chunk'
+
+    expect(state.parsedNodes.value[0]).not.toBe(firstParagraph)
+    expect(state.parsedNodes.value[0]?.raw).toBe('Custom paragraph.')
+    expect(state.parsedNodes.value[1]).toBe(firstCodeBlock)
+
+    scope.stop()
+  })
+
   it('does not reuse a paragraph when children differ but raw is unchanged', () => {
     const content = ref('[x](https://example.com)')
     const { props, scope, state } = createParsingState(content)
