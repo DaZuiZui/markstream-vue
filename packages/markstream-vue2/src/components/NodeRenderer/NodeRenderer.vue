@@ -1962,7 +1962,8 @@ const listBindings = computed(() => ({
   ...(typeof props.showTooltips === 'boolean' ? { showTooltips: props.showTooltips } : {}),
 }))
 const legacyRenderedItems = computed(() => {
-  return legacyNodeItems.value.map((node, index) => {
+  return legacyNodeItems.value.map((item, index) => {
+    const node = getCodeBlockRenderNode(item, index)
     const language = getCodeBlockLanguage(node)
     let resolvedNode = node
     let component = getNodeComponent(node, language)
@@ -2108,6 +2109,8 @@ function getCodeBlockRenderNode(node: ParsedNode, index: number) {
     codeBlockNode.raw,
     codeBlockNode.startLine,
     codeBlockNode.endLine,
+    codeBlockNode.sourceMap?.startLine,
+    codeBlockNode.sourceMap?.endLine,
   ] as const
 
   const cached = codeBlockRenderCache[index]

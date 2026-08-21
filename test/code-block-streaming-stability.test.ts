@@ -150,4 +150,56 @@ describe('code block streaming stability', () => {
       wrapper.unmount()
     }
   })
+
+  it('refreshes an externally supplied code block when its source map changes', async () => {
+    const CodeBlockProbe = defineComponent({
+      props: {
+        node: { type: Object, required: true },
+      },
+      setup(props) {
+        return () => h('div', {
+          'class': 'code-block-probe',
+          'data-source-line': String((props.node as any).sourceMap?.startLine ?? ''),
+        })
+      },
+    })
+    const codeBlock = {
+      type: 'code_block',
+      language: 'typescript',
+      code: 'const value = 1',
+      raw: '```typescript\nconst value = 1\n```',
+      loading: false,
+      sourceMap: { startLine: 1, endLine: 4 },
+    }
+
+    setCustomComponents(customId, { code_block: CodeBlockProbe as any })
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        customId,
+        nodes: [codeBlock],
+        batchRendering: false,
+        deferNodesUntilVisible: false,
+        maxLiveNodes: 0,
+        viewportPriority: false,
+      },
+    })
+
+    try {
+      await flushAll()
+      expect(wrapper.get('.code-block-probe').attributes('data-source-line')).toBe('1')
+
+      await wrapper.setProps({
+        nodes: [{
+          ...codeBlock,
+          sourceMap: { startLine: 10, endLine: 13 },
+        }],
+      })
+      await flushAll()
+
+      expect(wrapper.get('.code-block-probe').attributes('data-source-line')).toBe('10')
+    }
+    finally {
+      wrapper.unmount()
+    }
+  })
 })

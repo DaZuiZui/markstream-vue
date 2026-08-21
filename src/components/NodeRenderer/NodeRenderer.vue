@@ -5429,6 +5429,8 @@ function getCodeBlockRenderNode(node: ParsedNode, index: number) {
     codeBlockNode.raw,
     codeBlockNode.startLine,
     codeBlockNode.endLine,
+    codeBlockNode.sourceMap?.startLine,
+    codeBlockNode.sourceMap?.endLine,
   ] as const
 
   const cached = codeBlockRenderCache[index]
