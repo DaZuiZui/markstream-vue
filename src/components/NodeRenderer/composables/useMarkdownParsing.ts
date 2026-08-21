@@ -132,6 +132,16 @@ function getCustomComponentsReuseKey(mapping: Partial<CustomComponents>) {
   )
 }
 
+const PARSED_NODE_CONTAINER_FIELDS = [
+  'children',
+  'items',
+  'header',
+  'rows',
+  'cells',
+  'term',
+  'definition',
+] as const
+
 function hasCustomComponentBoundary(node: ParsedNode, mapping: Partial<CustomComponents>): boolean {
   const type = String(node.type).trim().toLowerCase()
   if (mapping[type])
@@ -141,16 +151,26 @@ function hasCustomComponentBoundary(node: ParsedNode, mapping: Partial<CustomCom
     const language = String((node as ParsedNode & { language?: string }).language ?? '').trim().toLowerCase()
     if (
       language
-      && [language, normalizeLanguageIdentifier(language), normalizeShikiLanguage(language)]
+      && [
+        language,
+        normalizeLanguageIdentifier(language),
+        normalizeShikiLanguage(language),
+        language === 'd2lang' ? 'd2' : '',
+      ]
         .some(key => Boolean(key && mapping[key]))
     ) {
       return true
     }
   }
 
-  const children = (node as ParsedNode & { children?: ParsedNode[] }).children
-  return Array.isArray(children)
-    && children.some(child => hasCustomComponentBoundary(child, mapping))
+  const record = node as ParsedNode & Record<string, unknown>
+  return PARSED_NODE_CONTAINER_FIELDS.some((field) => {
+    const value = record[field]
+    if (Array.isArray(value)) {
+      return value.some(child => isParsedNodeLike(child) && hasCustomComponentBoundary(child, mapping))
+    }
+    return isParsedNodeLike(value) && hasCustomComponentBoundary(value, mapping)
+  })
 }
 
 const DEFAULT_PARSE_COALESCE_MS = 80

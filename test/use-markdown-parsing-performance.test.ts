@@ -822,6 +822,70 @@ describe('useMarkdownParsing performance behavior', () => {
     scope.stop()
   })
 
+  it('does not reuse aggregate nodes containing custom-rendered descendants', () => {
+    const content = ref([
+      '| Column |',
+      '| --- |',
+      '| Value |',
+      '',
+      'Streaming tail',
+    ].join('\n'))
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'nested-custom-component-boundary',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => false),
+      customComponentsMap: computed(() => ({ text: {} })),
+      logPerf: vi.fn(),
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const firstTable = state.parsedNodes.value[0] as any
+    firstTable.header.cells[0].children[0].content = 'caller mutation'
+    content.value += ' chunk'
+
+    expect(state.parsedNodes.value[0]).not.toBe(firstTable)
+    expect((state.parsedNodes.value[0] as any).header.cells[0].children[0].content).toBe('Column')
+
+    scope.stop()
+  })
+
+  it('treats a custom d2 renderer as the boundary for d2lang fences', () => {
+    const content = ref([
+      '```d2lang',
+      'a -> b',
+      '```',
+      '',
+      'Streaming tail',
+    ].join('\n'))
+    const props = reactive({} as NodeRendererProps)
+    const scope = effectScope()
+    const state = scope.run(() => useMarkdownParsing(props, {
+      instanceMsgId: 'd2lang-custom-component-boundary',
+      renderContent: computed(() => content.value),
+      effectiveFinal: computed(() => false),
+      debugPerformanceEnabled: computed(() => false),
+      customComponentsMap: computed(() => ({ d2: {} })),
+      logPerf: vi.fn(),
+    }))
+
+    if (!state)
+      throw new Error('failed to create parsing state')
+
+    const firstCodeBlock = state.parsedNodes.value[0] as any
+    firstCodeBlock.code = 'caller mutation'
+    content.value += ' chunk'
+
+    expect(state.parsedNodes.value[0]).not.toBe(firstCodeBlock)
+    expect((state.parsedNodes.value[0] as any).code).toBe('a -> b\n')
+
+    scope.stop()
+  })
+
   it('does not reuse a paragraph when children differ but raw is unchanged', () => {
     const content = ref('[x](https://example.com)')
     const { props, scope, state } = createParsingState(content)
