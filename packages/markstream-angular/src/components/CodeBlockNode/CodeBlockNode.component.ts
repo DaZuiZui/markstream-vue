@@ -309,7 +309,12 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
   private copyTimer: number | null = null
   private deferredHeightSyncRaf: number | null = null
   private lastCodeBlockOptions?: CodeBlockOptions
-  private lastEditorInputSignature = ''
+  private hasEditorInput = false
+  private lastEditorIsDiff = false
+  private lastEditorOriginalCode = ''
+  private lastEditorResolvedCode = ''
+  private lastEditorLanguage = ''
+  private lastEditorShowLoadingPlaceholder = false
   private lastRuntimeHostKey = ''
 
   get t() {
@@ -586,15 +591,23 @@ export class CodeBlockNodeComponent implements AfterViewInit, OnChanges, OnDestr
       this.lastRuntimeHostKey = runtimeHostKey
       this.disposeRuntimeHelpers()
     }
-    const editorInputSignature = JSON.stringify([
-      this.isDiff,
-      this.originalCode,
-      this.resolvedCode,
-      this.language,
-      this.showLoadingPlaceholder,
-    ])
-    const editorInputChanged = editorInputSignature !== this.lastEditorInputSignature
-    this.lastEditorInputSignature = editorInputSignature
+    const isDiff = this.isDiff
+    const originalCode = this.originalCode
+    const resolvedCode = this.resolvedCode
+    const language = this.language
+    const showLoadingPlaceholder = this.showLoadingPlaceholder
+    const editorInputChanged = !this.hasEditorInput
+      || isDiff !== this.lastEditorIsDiff
+      || originalCode !== this.lastEditorOriginalCode
+      || resolvedCode !== this.lastEditorResolvedCode
+      || language !== this.lastEditorLanguage
+      || showLoadingPlaceholder !== this.lastEditorShowLoadingPlaceholder
+    this.hasEditorInput = true
+    this.lastEditorIsDiff = isDiff
+    this.lastEditorOriginalCode = originalCode
+    this.lastEditorResolvedCode = resolvedCode
+    this.lastEditorLanguage = language
+    this.lastEditorShowLoadingPlaceholder = showLoadingPlaceholder
     this.applyInitialFontSize()
     if (!this.viewReady || (!runtimeChanged && !editorInputChanged))
       return

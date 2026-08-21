@@ -18,8 +18,13 @@ describe('angular code block stability', () => {
     Object.assign(component, {
       codeBlockOptions: undefined,
       context: undefined,
+      hasEditorInput: false,
       lastCodeBlockOptions: undefined,
-      lastEditorInputSignature: '',
+      lastEditorIsDiff: false,
+      lastEditorLanguage: '',
+      lastEditorOriginalCode: '',
+      lastEditorResolvedCode: '',
+      lastEditorShowLoadingPlaceholder: false,
       lastRuntimeHostKey: '',
       node: {
         type: 'code_block',
@@ -36,6 +41,8 @@ describe('angular code block stability', () => {
     component.disposeRuntimeHelpers = vi.fn()
     component.syncEditorState = vi.fn()
 
+    const stringify = vi.spyOn(JSON, 'stringify')
+
     component.ngOnChanges()
     component.node = { ...component.node }
     component.ngOnChanges()
@@ -46,5 +53,6 @@ describe('angular code block stability', () => {
     component.ngOnChanges()
 
     expect(component.syncEditorState).toHaveBeenCalledTimes(2)
+    expect(stringify).not.toHaveBeenCalled()
   })
 })
