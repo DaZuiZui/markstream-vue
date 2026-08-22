@@ -49,7 +49,7 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 
 Vue / Nuxt:
 ```txt
-pnpm add markstream-vue@next
+pnpm add markstream-vue
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 ```
