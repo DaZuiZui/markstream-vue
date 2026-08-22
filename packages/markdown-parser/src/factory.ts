@@ -188,17 +188,25 @@ export function factory(opts: FactoryOptions = {}): MarkdownItInstance {
     ? Boolean(markdownItOptions.stream)
     : true
   const hasCustomValidateLink = Object.prototype.hasOwnProperty.call(markdownItOptions, 'validateLink')
+  const experimentalOptions = {
+    stream,
+    ...experimental,
+  }
 
   const md = new MarkdownIt({
     html: true,
     linkify: true,
     typographer: true,
     ...markdownItOptions,
-    experimental: {
-      stream,
-      ...experimental,
-    },
+    experimental: experimentalOptions,
   }) as unknown as MarkdownItInstance
+
+  const tailLocalOption = 'streamTailLocalPostBlockRules'
+  const hasTailLocalSetting = Object.prototype.hasOwnProperty.call(markdownItOptions, tailLocalOption)
+    || Object.prototype.hasOwnProperty.call(experimental, tailLocalOption)
+  if (!hasTailLocalSetting && Object.prototype.hasOwnProperty.call(md.options, tailLocalOption)) {
+    (md.options as Record<string, unknown>)[tailLocalOption] = true
+  }
 
   if (!hasCustomValidateLink) {
     const validateLink = (url: string) => !isUnsafeHtmlUrl(url, { tagName: 'a', attrName: 'href' })
