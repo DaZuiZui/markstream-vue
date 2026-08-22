@@ -188,17 +188,18 @@ export function factory(opts: FactoryOptions = {}): MarkdownItInstance {
     ? Boolean(markdownItOptions.stream)
     : true
   const hasCustomValidateLink = Object.prototype.hasOwnProperty.call(markdownItOptions, 'validateLink')
+  const experimentalOptions = {
+    stream,
+    streamTailLocalPostBlockRules: true,
+    ...experimental,
+  }
 
   const md = new MarkdownIt({
     html: true,
     linkify: true,
     typographer: true,
     ...markdownItOptions,
-    experimental: {
-      stream,
-      streamTailLocalPostBlockRules: true,
-      ...experimental,
-    },
+    experimental: experimentalOptions,
   }) as unknown as MarkdownItInstance
 
   if (!hasCustomValidateLink) {
