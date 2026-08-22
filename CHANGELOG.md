@@ -1,3 +1,25 @@
+## [2.0.2](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.1...markstream-vue@2.0.2) (2026-08-23)
+
+### What's Changed
+
+- fix(parser)：修复长文档流式追加时 Mermaid、Infographic 等 fenced block 的内容偶发泄漏到组件外部（[#699](https://github.com/Simon-He95/markstream-vue/pull/699)，上游 [markdown-it-ts#28](https://github.com/Simon-He95/markdown-it-ts/pull/28)）：
+  - `markdown-it-ts` 升级到 `1.1.0`，从缓存的最终 block 边界检测未闭合 fence，不再依赖任意长度的尾部扫描窗口
+  - 内置 post-block rules 启用有界 tail reuse，并保留消费方的显式配置覆盖
+- fix(code-block)：流式尾部继续追加时复用已稳定的 diff/code block 渲染节点，避免重复 patch、移动端闪烁与异步创建期间的主题竞争（[#697](https://github.com/Simon-He95/markstream-vue/pull/697)）
+- perf(parser)：存在自定义 renderer 时仅隔离实际受影响的节点与聚合子树，其余等价内置节点继续复用；Angular 同时跳过等价 code block 的重复同步（[#698](https://github.com/Simon-He95/markstream-vue/pull/698)）
+- fix(docs)：恢复 showcase 页面的 SEO frontmatter，修复文档一致性检查
+
+### Coordinated stable versions
+
+- `stream-markdown-parser@1.2.10`
+- `markstream-core@2.0.2`
+- `markstream-vue@2.0.2`
+- `markstream-react@2.0.2`
+- `markstream-octane@2.0.2`
+- `markstream-svelte@2.0.2`
+- `markstream-angular@2.0.2`
+- `markstream-vue2@2.0.2`
+
 ## [2.0.1](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.0...markstream-vue@2.0.1) (2026-08-21)
 
 ### What's Changed
