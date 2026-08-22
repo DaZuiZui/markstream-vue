@@ -36,6 +36,15 @@ function paragraphChildren(node: ParsedNode | undefined) {
 }
 
 describe('parser runtime lifecycle characterization', () => {
+  it('marks factory post-block rules as tail-local by default', () => {
+    expect((factory() as any).options.streamTailLocalPostBlockRules).toBe(true)
+    expect((factory({
+      markdownItOptions: {
+        experimental: { streamTailLocalPostBlockRules: false },
+      },
+    }) as any).options.streamTailLocalPostBlockRules).toBe(false)
+  })
+
   it('keeps same-source replay idempotent and append-only prefix identity eligible', () => {
     const md = getMarkdown('parser-runtime-replay-append')
     const base = 'alpha\n\nbeta\n\n'

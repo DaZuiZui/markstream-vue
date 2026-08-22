@@ -196,6 +196,7 @@ export function factory(opts: FactoryOptions = {}): MarkdownItInstance {
     ...markdownItOptions,
     experimental: {
       stream,
+      streamTailLocalPostBlockRules: true,
       ...experimental,
     },
   }) as unknown as MarkdownItInstance
