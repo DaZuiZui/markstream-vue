@@ -20,7 +20,7 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 
 ### markstream-react
 - 包名：markstream-react
-- 版本：2.0.2
+- 版本：2.0.3
 - 成熟度标签：beta
 - 框架/运行时：React 18/19、Next.js App Router、Next.js Pages Router、Remix
 - 描述：React/Next.js streaming Markdown renderer for AI chat, LLM token streams, SSE/WebSocket output, incomplete Markdown, long documents, Mermaid, KaTeX, stream-diffs powered code blocks, and custom React components.
