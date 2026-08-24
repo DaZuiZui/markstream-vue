@@ -1,3 +1,24 @@
+## [2.0.4](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.2...markstream-vue@2.0.4) (2026-08-24)
+
+### What's Changed
+
+- fix(virtual-adapter)：行卸载时释放逐项 DOM 引用与 `ResizeObserver`，并补充断连节点的自清理，避免虚拟列表或 KeepAlive 场景长期持有已卸载子树（[#705](https://github.com/Simon-He95/markstream-vue/pull/705)）
+- fix(code-block)：流式 diff 回退的行号分隔线使用解析后的编辑器背景，页面主题与代码主题不一致时也保持视觉对齐（[#706](https://github.com/Simon-He95/markstream-vue/pull/706)）
+- perf(streaming)：保留流式更新期间的文本选区，并仅在选区安全时合并已 settle 的文本节点；长会话的文本节点数量与内存占用保持有界（[#707](https://github.com/Simon-He95/markstream-vue/pull/707)）
+- perf(animation)：Vue 3 的 image / code skeleton shimmer 改用 compositor `transform`，移除不可见的 table shimmer 与常驻 `will-change`，在保持原渐变、节奏和位移的同时减少逐帧重绘（[#707](https://github.com/Simon-He95/markstream-vue/pull/707)）
+- perf(animation)：将同等的 transform shimmer、`will-change` 清理和 reduced-motion 处理同步到 React、Octane、Svelte、Angular 与 Vue 2（[#708](https://github.com/Simon-He95/markstream-vue/pull/708)）
+
+### Coordinated stable versions
+
+- `stream-markdown-parser@1.2.11`
+- `markstream-core@2.0.4`
+- `markstream-vue@2.0.4`
+- `markstream-react@2.0.4`
+- `markstream-octane@2.0.4`
+- `markstream-svelte@2.0.4`
+- `markstream-angular@2.0.4`
+- `markstream-vue2@2.0.4`
+
 ## [2.0.2](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.1...markstream-vue@2.0.2) (2026-08-23)
 
 ### What's Changed
