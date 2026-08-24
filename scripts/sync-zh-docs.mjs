@@ -30,11 +30,13 @@ async function main() {
     const zhPath = path.join(zhDir, toZhFilename(f))
     // decide whether to create or refresh placeholder
     let shouldWrite = false
+    let frontmatter = ''
     try {
       await fs.access(zhPath)
       const cur = await fs.readFile(zhPath, 'utf8')
       if (/中文占位|自动生成占位/.test(cur)) {
         shouldWrite = true // refresh old placeholder with improved template
+        frontmatter = cur.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/)?.[0] ?? ''
       }
       else {
         // translation exists; skip
@@ -49,6 +51,7 @@ async function main() {
     if (!shouldWrite)
       continue
     const enContent = await fs.readFile(enPath, 'utf8')
+    frontmatter ||= enContent.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/)?.[0] ?? ''
     // eslint-disable-next-line regexp/no-super-linear-backtracking
     const titleMatch = enContent.match(/^#\s+(.+)$/m)
     const title = titleMatch ? titleMatch[1].trim() : path.basename(f, '.md')
@@ -60,7 +63,7 @@ async function main() {
     const excerptRaw = enContent.slice(startIdx).trim().split('\n').slice(0, 6).join(' ')
     const excerpt = excerptRaw.substring(0, 300).trim()
 
-    const placeholder = `# ${title}（中文占位）\n\n`
+    const placeholder = `${frontmatter}${frontmatter ? '\n' : ''}# ${title}（中文占位）\n\n`
       + `> 原文节选（仅供翻译参考）：\n\n${
         excerpt ? `> ${excerpt.replace(/\n/g, '\n> ')}\n\n` : ''
       }## 说明\n\n此页面为中文占位，原文（English）：/guide/${f}。\n\n`
