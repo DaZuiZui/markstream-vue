@@ -32,8 +32,17 @@ if (!chrome) {
   process.exit(1)
 }
 
-const latinFont = resolve(distFontDir, 'inter-roman-latin.woff2')
-const latinExtFont = resolve(distFontDir, 'inter-roman-latin-ext.woff2')
+// Dist font files are hash-named (e.g. inter-roman-latin.Di8DUHzh.woff2),
+// so resolve them by prefix instead of an exact filename.
+const findFont = (prefix) => {
+  if (!existsSync(distFontDir))
+    return null
+  const name = readdirSync(distFontDir).find(file => file.startsWith(prefix) && file.endsWith('.woff2'))
+  return name ? resolve(distFontDir, name) : null
+}
+
+const latinFont = findFont('inter-roman-latin.')
+const latinExtFont = findFont('inter-roman-latin-ext.')
 
 const fontFace = [
   [latinExtFont, latinExtFont],

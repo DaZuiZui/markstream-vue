@@ -8,6 +8,7 @@ node_modules
 .history
 .DS_Store
 .tmp
+.tmp-og-render/
 .next
 .svelte-kit
 # vite press
