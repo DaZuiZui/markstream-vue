@@ -34,7 +34,7 @@ if (!chrome) {
 
 // Dist font files are hash-named (e.g. inter-roman-latin.Di8DUHzh.woff2),
 // so resolve them by prefix instead of an exact filename.
-const findFont = (prefix) => {
+function findFont(prefix) {
   if (!existsSync(distFontDir))
     return null
   const name = readdirSync(distFontDir).find(file => file.startsWith(prefix) && file.endsWith('.woff2'))
