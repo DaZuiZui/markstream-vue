@@ -19,7 +19,7 @@ import type {
   NodeRendererProps,
 } from '../../types/node-renderer-props'
 import type { VirtualHeightSummary } from './composables/useHeightModel'
-import { computed, defineAsyncComponent, getCurrentInstance, inject, markRaw, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, triggerRef, watch, watchEffect } from 'vue'
+import { computed, defineAsyncComponent, getCurrentInstance, inject, markRaw, mergeProps, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef, triggerRef, watch, watchEffect } from 'vue'
 import AdmonitionNode from '../../components/AdmonitionNode'
 import BlockquoteNode from '../../components/BlockquoteNode'
 import CheckboxNode from '../../components/CheckboxNode'
@@ -5468,6 +5468,8 @@ function hasSlotChildren(node: ParsedNode) {
 interface RenderedItemLike {
   index: number
   node: ParsedNode
+  /** Loading value captured from the source node when cached props were built. */
+  sourceLoading: unknown
   component: unknown
   bindings: Record<string, unknown>
   customBindings: Record<string, unknown>
@@ -5579,17 +5581,16 @@ function hasSameRenderedItemSignature(previous: readonly unknown[], next: readon
 
 function buildRenderedItemSignature(node: ParsedNode, index: number, globalSignature: readonly unknown[]) {
   const estimatedHeight = heightEstimationActive.value ? estimatedNodeHeights.value[index] : null
-  // Node top-level field references act as O(1) content snapshots (strings
-  // are immutable): same reference = same content, so in-place `props.nodes`
-  // edits or parser mutations invalidate the WeakMap entry without a deep
-  // comparison.
-  return [index, estimatedHeight, globalSignature]
+  // Loading may be updated in place on externally supplied or parser-reused
+  // nodes. Include the primitive snapshot so virtualized cache lookups rebuild
+  // the pre-merged props when that visible state changes.
+  return [index, (node as { loading?: unknown }).loading, estimatedHeight, globalSignature]
 }
 
 /**
  * Build (or reuse from the WeakMap cache) the render item for one node.
- * The per-node signature is [index, estimatedHeight, globalSignature] so
- * unchanged nodes skip all per-node derivation work.
+ * The per-node signature tracks index, loading, estimated height and the
+ * renderer-global signature so unchanged nodes skip all derivation work.
  */
 function buildRenderedItem(item: { node: ParsedNode, index: number }) {
   const cacheSignature = buildRenderedItemSignature(item.node, item.index, getRenderedItemGlobalSignature())
@@ -5714,64 +5715,51 @@ function buildRenderedItem(item: { node: ParsedNode, index: number }) {
     : undefined
   const loading = (node as unknown as { loading?: unknown }).loading
   const indexKey = `${indexPrefix.value}-${item.index}`
+  const baseNodeProps = {
+    node,
+    loading,
+    'index-key': indexKey,
+  }
+  const globalNodeProps = {
+    'custom-id': rendererProps.customId,
+    'is-dark': rendererProps.isDark,
+  }
   const copyEvents: { onCopy: typeof emitCodeCopy, onHandleArtifactClick: typeof handleArtifactClick } = {
     onCopy: emitCodeCopy,
     onHandleArtifactClick: handleArtifactClick,
   }
-  // Keys match what the compiled template previously emitted verbatim
-  // (kebab-case bindings like `:is-dark` keep their kebab name in the vnode
-  // props). This matters for both declared-prop matching and, critically, for
-  // fallthrough attrs read via useAttrs() (e.g. TextNode reads
-  // `attrs['index-key']`) and rendered DOM attribute names — a camelCase key
-  // would render as a lowercased attribute instead of the kebab name.
-  const nodeProps: Record<string, unknown> = {
-    node,
-    loading,
-    'index-key': indexKey,
-    ...bindings,
-    'custom-id': rendererProps.customId,
-    'is-dark': rendererProps.isDark,
-    ...copyEvents,
+  const fragmentEvents = {
+    onClick: handleContainerClick,
+    onMouseover: handleFragmentMouseover,
+    onMouseout: handleFragmentMouseout,
   }
-  const customNodeProps: Record<string, unknown> = {
+  const minimalEvents = {
+    onMouseover: emitMouseoverRaw,
+    onMouseout: emitMouseoutRaw,
+  }
+  const customBindings = {
     ...(customAttrs ?? {}),
     ...bindings,
-    node,
-    loading,
-    'index-key': indexKey,
-    'custom-id': rendererProps.customId,
-    'is-dark': rendererProps.isDark,
-    ...copyEvents,
   }
+  // Preserve the old template compiler's mergeProps semantics while caching
+  // the result: ordinary props keep source order, and colliding class/style or
+  // onX listeners are merged instead of overwritten by object spread. Kebab
+  // keys also preserve fallthrough attrs such as TextNode's `index-key`.
+  const nodeProps = mergeProps(baseNodeProps, bindings, globalNodeProps, copyEvents)
+  const customNodeProps = mergeProps(customBindings, baseNodeProps, globalNodeProps, copyEvents)
 
   const renderedItem: RenderedItemLike = {
     node,
+    sourceLoading: loading,
     index: item.index,
     component,
     bindings,
-    customBindings: {
-      ...(customAttrs ?? {}),
-      ...bindings,
-    },
+    customBindings,
     nodeProps,
     customNodeProps,
-    fragmentNodeProps: {
-      ...nodeProps,
-      onClick: handleContainerClick,
-      onMouseover: handleFragmentMouseover,
-      onMouseout: handleFragmentMouseout,
-    },
-    customFragmentNodeProps: {
-      ...customNodeProps,
-      onClick: handleContainerClick,
-      onMouseover: handleFragmentMouseover,
-      onMouseout: handleFragmentMouseout,
-    },
-    minimalNodeProps: {
-      ...nodeProps,
-      onMouseover: emitMouseoverRaw,
-      onMouseout: emitMouseoutRaw,
-    },
+    fragmentNodeProps: mergeProps(nodeProps, fragmentEvents),
+    customFragmentNodeProps: mergeProps(customNodeProps, fragmentEvents),
+    minimalNodeProps: mergeProps(nodeProps, minimalEvents),
     rendersCustomNode,
     hasSlotChildren: hasSlotChildren(node),
     slotContent: String((node as any).content ?? ''),
@@ -5802,16 +5790,19 @@ const renderedItems = computed(() => {
   lastRenderedItemGlobalSignature = globalSignature
 
   // Find the first index whose cached item no longer matches its parsed node
-  // by object identity. Stable-prefix nodes are reused by the parser across
-  // streaming commits, so the identity scan locates the dirty tail in O(N)
-  // cheap reference comparisons; post-processing that re-creates nodes (e.g.
-  // html block merging) is handled the same way.
+  // by identity or loading snapshot. Stable-prefix nodes are reused by the
+  // parser across streaming commits, while consumers may update loading in
+  // place; both checks stay O(N) primitive/reference comparisons.
   const cache = renderedItemsNonVirtual
   const identityLimit = Math.min(cache.length, total)
   let dirtyStart = globalChanged ? 0 : identityLimit
   if (!globalChanged) {
     for (let index = 0; index < identityLimit; index++) {
-      if (cache[index]?.node !== nodes[index]) {
+      const sourceNode = nodes[index]!
+      if (
+        cache[index]?.node !== sourceNode
+        || !Object.is(cache[index]?.sourceLoading, (sourceNode as { loading?: unknown }).loading)
+      ) {
         dirtyStart = index
         break
       }

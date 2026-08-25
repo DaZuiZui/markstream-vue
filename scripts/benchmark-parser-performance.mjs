@@ -244,15 +244,18 @@ function crossVersionInstrumentationOptions(metrics) {
   }
 }
 
-// Pure transform hook that only forces the token-clone path; it never mutates
-// tokens, so results stay byte-identical to the no-transform run and both
-// versions can be compared with the same corpus.
+// Pure, stable transform hook that only forces the token-clone path. Parser
+// runtimes compare hook identity across streaming commits, so recreating this
+// function per commit would reset incremental parser state and invalidate the
+// benchmark workload.
+const identityTokenTransform = tokens => tokens
+
 function withTransformOptions(options) {
   if (!transformMode)
     return options
   return {
     ...options,
-    preTransformTokens: tokens => tokens,
+    preTransformTokens: identityTokenTransform,
   }
 }
 
@@ -394,7 +397,7 @@ function environmentMetadata(heapExecution) {
 }
 
 function runHeapChild() {
-  const child = spawnSync(process.execPath, [
+  const childArgs = [
     '--jitless',
     '--expose-gc',
     scriptPath,
@@ -403,7 +406,11 @@ function runHeapChild() {
     `--rounds=${rounds}`,
     `--warmups=${warmups}`,
     `--parser-dist=${parserDistPath}`,
-  ], {
+  ]
+  if (transformMode)
+    childArgs.push('--transform')
+
+  const child = spawnSync(process.execPath, childArgs, {
     cwd: repoRoot,
     encoding: 'utf8',
     env: process.env,
@@ -428,7 +435,7 @@ function mergeHeapMeasurements(cases, heapReport) {
     throw new Error('Parser heap child returned mismatched benchmark or corpus identity.')
   if (heapReport.parser?.package !== packageJson.name || heapReport.parser?.version !== packageJson.version)
     throw new Error('Parser heap child returned mismatched parser identity.')
-  if (heapReport.config?.rounds !== rounds || heapReport.config?.warmups !== warmups || JSON.stringify(heapReport.config?.scaleFactors) !== JSON.stringify(scaleFactors) || JSON.stringify(heapReport.config?.chunkPlan) !== JSON.stringify({ id: 'fixed-size-cycle-v1', sizes: chunkSizes }))
+  if (heapReport.config?.rounds !== rounds || heapReport.config?.warmups !== warmups || heapReport.config?.transformMode !== transformMode || JSON.stringify(heapReport.config?.scaleFactors) !== JSON.stringify(scaleFactors) || JSON.stringify(heapReport.config?.chunkPlan) !== JSON.stringify({ id: 'fixed-size-cycle-v1', sizes: chunkSizes }))
     throw new Error('Parser heap child returned mismatched benchmark config.')
   if (JSON.stringify(heapReport.cases.map(testCase => testCase.id)) !== JSON.stringify(cases.map(testCase => testCase.id)))
     throw new Error('Parser heap child returned a mismatched case set.')
@@ -478,6 +485,7 @@ if (heapChildMode) {
     config: {
       rounds,
       warmups,
+      transformMode,
       scaleFactors,
       chunkPlan: {
         id: 'fixed-size-cycle-v1',

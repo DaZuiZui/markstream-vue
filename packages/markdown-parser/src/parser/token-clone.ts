@@ -126,26 +126,42 @@ function safeCloneTokenField<T>(value: T, seen = new WeakMap<object, unknown>())
   return cloned as T
 }
 
+function canCloneMarkdownTokenFast(token: Token, enumerableKeys: string[]) {
+  for (let index = 0; index < enumerableKeys.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(token, enumerableKeys[index]!)
+    if (
+      enumerableKeys[index] === '__proto__'
+      || !descriptor
+      || !('value' in descriptor)
+      || descriptor.writable !== true
+      || descriptor.configurable !== true
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 function cloneMarkdownToken(token: Token, cloneObjectFields = true): Token {
   if (!cloneObjectFields)
     return cloneTokenWithMutableChildren(token as unknown as MarkdownToken) as unknown as Token
 
-  // Fast path: markdown-it Token instances store their data as own enumerable
-  // string-keyed data properties; methods live on the prototype. Copy those
-  // with plain assignment (much cheaper than defineProperty-per-key) with the
-  // specialized deep copies for attrs/map/children, then restore the
-  // prototype in one call. Tokens carrying non-enumerable or symbol keys
-  // (plugins may attach state that way) fall back to the reflective clone so
-  // those fields are preserved exactly.
+  // Fast path: markdown-it Token instances store their data as configurable,
+  // writable, own enumerable string-keyed data properties; methods live on
+  // the prototype. Copy those with plain assignment (much cheaper than
+  // defineProperty-per-key), then restore the prototype in one call. Plugins
+  // may attach symbols, hidden fields, accessors or constrained data fields;
+  // route those tokens through the reflective clone to preserve descriptors.
   const allKeys = Reflect.ownKeys(token as unknown as object)
   const enumerableKeys = Object.keys(token)
-  if (allKeys.length === enumerableKeys.length) {
+  if (
+    allKeys.length === enumerableKeys.length
+    && canCloneMarkdownTokenFast(token, enumerableKeys)
+  ) {
     try {
       return cloneMarkdownTokenFast(token, enumerableKeys, cloneObjectFields)
     }
     catch {
-      // Exotic property (getter-returned value, non-writable data property
-      // assigned in strict mode, ...): fall back to the reflective clone.
       return cloneMarkdownTokenReflective(token, cloneObjectFields)
     }
   }

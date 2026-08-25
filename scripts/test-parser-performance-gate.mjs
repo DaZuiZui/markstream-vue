@@ -379,12 +379,24 @@ for (const testCase of zeroHeapBaseline.cases) {
 const zeroHeapCheck = run(checkPath, [`--input=${zeroHeapReportPath}`, `--baseline=${zeroHeapBaselinePath}`])
 assert.equal(zeroHeapCheck.status, 0, zeroHeapCheck.stderr)
 
-const actualHeapBenchmarkArgs = ['--profile=deep', '--rounds=3', '--warmups=1']
+const actualHeapBenchmarkArgs = ['--profile=deep', '--rounds=3', '--warmups=1', '--transform']
 const actualHeapBaseBenchmark = run(benchmarkPath, actualHeapBenchmarkArgs, {
   ...process.env,
   MARKSTREAM_PARSER_PERF_OUTPUT_DIR: actualHeapBaseDir,
 }, ['--expose-gc'])
 assert.equal(actualHeapBaseBenchmark.status, 0, actualHeapBaseBenchmark.stderr)
+const actualHeapBaseReport = JSON.parse(readFileSync(path.join(actualHeapBaseDir, 'latest.json'), 'utf8'))
+assert.equal(actualHeapBaseReport.config.transformMode, true)
+for (const testCase of actualHeapBaseReport.cases) {
+  for (const scale of testCase.scales) {
+    for (const sample of scale.samples) {
+      const incrementalHits = Number(sample.streamStats?.cacheHits || 0)
+        + Number(sample.streamStats?.appendHits || 0)
+        + Number(sample.streamStats?.tailHits || 0)
+      assert.ok(incrementalHits > 0, 'stable transform hook did not preserve incremental parser hits')
+    }
+  }
+}
 const actualHeapRegressionBenchmark = run(benchmarkPath, actualHeapBenchmarkArgs, {
   ...process.env,
   MARKSTREAM_PARSER_PERF_INJECT_HEAP_RETENTION_BYTES: String(4 * 1024 * 1024),
