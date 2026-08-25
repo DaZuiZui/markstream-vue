@@ -71,9 +71,64 @@ const DynamicRenderer = defineComponent({
 })
 
 const htmlRef = ref<HTMLElement | null>(null)
-const shouldRender = ref(typeof window === 'undefined')
+function isStreamingHtml(loading: boolean | undefined, raw: unknown, content: unknown, tag: unknown) {
+  // The parser synthesizes a closing tag in `content` while an HTML block is
+  // still open. That distinction lets streamed blocks render immediately,
+  // while preserving viewport deferral for complete history/restored nodes
+  // that merely carry a loading flag.
+  if (loading !== true)
+    return false
+  const rawText = String(raw ?? '')
+  if (!rawText)
+    return false
+  if (rawText !== String(content ?? ''))
+    return true
+  const tagName = String(tag ?? '').trim()
+  return !!tagName && rawText.toLowerCase().includes(`</${tagName.toLowerCase()}`) === false
+}
+const streamingObserved = ref(isStreamingHtml(props.node.loading, props.node.raw, props.node.content, props.node.tag))
+const shouldRender = ref(typeof window === 'undefined' || streamingObserved.value)
 const renderContent = ref(props.node.content)
-const structuredChildren = computed(() => Array.isArray(props.node.children) ? props.node.children : [])
+// A streaming HTML block can be parsed as structured children while it is
+// incomplete, then lose that field when the closing tag arrives. Switching
+// from the structured renderer to v-html in that transition replaces the
+// entire subtree for one frame and can make a pinned scroll container observe
+// a real height regression. Keep the last structured children for the lifetime
+// of that streamed block so its root DOM stays mounted.
+const lastStructuredChildren = shallowRef<any[] | null>(
+  Array.isArray(props.node.children) && props.node.children.length > 0
+    ? props.node.children
+    : null,
+)
+const previousRaw = ref(String(props.node.raw ?? ''))
+const structuredChildren = computed(() => {
+  if (Array.isArray(props.node.children) && props.node.children.length > 0)
+    return props.node.children
+  return streamingObserved.value ? (lastStructuredChildren.value ?? []) : []
+})
+
+watch(
+  () => [props.node.loading, props.node.children, props.node.raw, props.node.content, props.node.tag] as const,
+  ([loading, children, raw, content, tag]) => {
+    const nextRaw = String(raw ?? '')
+    const appendOnly = !previousRaw.value || nextRaw.startsWith(previousRaw.value)
+    const streaming = isStreamingHtml(loading, raw, content, tag)
+    if (!appendOnly) {
+      streamingObserved.value = streaming
+      lastStructuredChildren.value = null
+    }
+    else if (streaming) {
+      streamingObserved.value = true
+    }
+    if (streaming)
+      shouldRender.value = true
+
+    if (Array.isArray(children) && children.length > 0)
+      lastStructuredChildren.value = children
+    previousRaw.value = nextRaw
+  },
+  { flush: 'sync' },
+)
 const structuredTag = computed(() => String(props.node.tag || 'div'))
 const detailsSummaryNode = computed(() => {
   if (structuredTag.value.trim().toLowerCase() !== 'details')
@@ -128,8 +183,10 @@ const renderMode = computed(() => {
 
   // Streaming HTML blocks are expensive to re-render via `innerHTML` because it
   // replaces the whole subtree on every tick. Prefer the VNode parser while
-  // the node is still in a loading mid-state to keep DOM stable.
-  if (props.node.loading) {
+  // the node is still in a loading mid-state to keep DOM stable. Once a block
+  // has streamed, keep this path after loading settles as well; otherwise the
+  // transition to v-html can briefly remove the complete HTML subtree.
+  if (streamingObserved.value || props.node.loading) {
     const nodes = parseHtmlToVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
     if (nodes === null)
       return { mode: 'text', content: props.node.raw ?? content }
@@ -170,7 +227,10 @@ if (typeof window !== 'undefined') {
         return
       }
       if (!el) {
-        shouldRender.value = false
+        // A streamed block must not flash back to its placeholder while its
+        // root element is being reattached during incremental parsing.
+        if (!streamingObserved.value)
+          shouldRender.value = false
         return
       }
       let active = true

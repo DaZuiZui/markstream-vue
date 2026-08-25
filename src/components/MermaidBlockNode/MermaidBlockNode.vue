@@ -302,6 +302,16 @@ function resolveInitialContainerHeight() {
   return `${resolveEstimatedPreviewHeight()}px`
 }
 
+// Keep a streamed diagram's reserved preview geometry even if an async
+// render temporarily falls back to the source panel. Without this floor the
+// source text is much shorter than the pending preview estimate and a pinned
+// scroll container observes a real height regression for one render tick.
+const streamingSourceMinHeight = computed(() => {
+  if (props.loading === false)
+    return undefined
+  return resolveInitialContainerHeight()
+})
+
 const lastSvgSnapshot = ref<string | null>(null)
 
 function hasPreviewSvg() {
@@ -2427,7 +2437,7 @@ const computedButtonStyle = 'mermaid-action-btn p-[var(--ms-action-btn-padding)]
 
     <!-- 内容区域（带高度过渡的容器） -->
     <div v-show="!isCollapsed" ref="modeContainerRef">
-      <div v-if="showSource" class="mermaid-source-panel">
+      <div v-if="showSource" class="mermaid-source-panel" :style="{ minHeight: streamingSourceMinHeight }">
         <pre class="mermaid-source-code text-sm font-mono whitespace-pre-wrap">{{ baseFixedCode }}</pre>
       </div>
       <div v-else class="relative">

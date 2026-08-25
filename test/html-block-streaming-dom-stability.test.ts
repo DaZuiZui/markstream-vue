@@ -38,4 +38,29 @@ describe('htmlBlockNode streaming DOM stability', () => {
     const second = wrapper.find('table').element
     expect(second).toBe(first)
   })
+
+  it('keeps the streamed HTML subtree mounted when loading settles', async () => {
+    const loadingNode = {
+      type: 'html_block',
+      tag: 'div',
+      raw: '<div><table><tr><td>1</td></tr>',
+      content: '<div><table><tr><td>1</td></tr>',
+      loading: true,
+    } as const
+    const wrapper = mount(HtmlBlockNode, { props: { node: loadingNode as any } })
+    await nextTick()
+    const first = wrapper.find('table').element
+
+    await wrapper.setProps({
+      node: {
+        ...loadingNode,
+        raw: '<div><table><tr><td>1</td></tr></table></div>',
+        content: '<div><table><tr><td>1</td></tr></table></div>',
+        loading: false,
+      } as any,
+    })
+    await nextTick()
+
+    expect(wrapper.find('table').element).toBe(first)
+  })
 })
