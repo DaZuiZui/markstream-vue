@@ -172,6 +172,30 @@ describe('smoothMarkdownStreamController', () => {
     controller.destroy()
   })
 
+  it('does not split a CRLF pair while streaming', async () => {
+    vi.useFakeTimers()
+    const controller = createController({
+      minCharsPerSecond: 1000,
+      maxCharsPerSecond: 1000,
+      maxCharsPerCommit: 1,
+      maxCommitFps: 60,
+      startDelayMs: 0,
+    })
+
+    controller.enqueue('a\r\nb')
+    const seen = new Set<string>()
+    // One commit per frame (~16.7ms); collect every intermediate reveal state.
+    for (let frame = 0; frame < 20; frame++) {
+      await vi.advanceTimersByTimeAsync(20)
+      seen.add(controller.getSnapshot().visible)
+    }
+
+    // CRLF (U+000D U+000A) is a single grapheme: the lone `\r` must never leak.
+    expect(seen.has('a\r')).toBe(false)
+    expect(controller.getSnapshot().visible).toBe('a\r\nb')
+    controller.destroy()
+  })
+
   it('segments a bounded prefix instead of the entire pending source', async () => {
     vi.useFakeTimers()
     const segmentInputLengths: number[] = []

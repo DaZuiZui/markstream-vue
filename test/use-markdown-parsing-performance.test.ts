@@ -362,6 +362,61 @@ describe('useMarkdownParsing performance behavior', () => {
     scope.stop()
   })
 
+  it('flushes immediately on a Setext heading underline', async () => {
+    vi.useFakeTimers()
+    const initial = 'hello '.repeat(18).trim()
+    const content = ref(initial)
+    const smooth = ref(true)
+    const { scope, state } = createParsingState(content, smooth, { parseCoalesceMs: 1000 })
+
+    expect(state.parsedNodes.value[0]?.raw).toBe(initial)
+
+    // A Setext underline is a structural boundary: the previous line is
+    // re-rendered as a heading immediately, without waiting for the coalesce
+    // window (unlike a bare trailing newline).
+    content.value = `${initial}\n===`
+    expect(state.parsedNodes.value[0]?.type).toBe('heading')
+    expect(state.parsedNodes.value[0]?.level).toBe(1)
+
+    scope.stop()
+  })
+
+  it('flushes immediately on a thematic break line', async () => {
+    vi.useFakeTimers()
+    const initial = 'hello '.repeat(18).trim()
+    const content = ref(initial)
+    const smooth = ref(true)
+    const { scope, state } = createParsingState(content, smooth, { parseCoalesceMs: 1000 })
+
+    content.value = `${initial}\n\n---`
+    expect(state.parsedNodes.value[0]?.type).toBe('paragraph')
+    expect(state.parsedNodes.value[1]?.type).toBe('thematic_break')
+
+    scope.stop()
+  })
+
+  it('coalesces a plain hard line break until the parse interval elapses', async () => {
+    vi.useFakeTimers()
+    const initial = 'hello '.repeat(18).trim()
+    const content = ref(initial)
+    const smooth = ref(true)
+    const { scope, state } = createParsingState(content, smooth, { parseCoalesceMs: 1000 })
+
+    // A bare trailing newline (soft break inside a paragraph) is NOT an
+    // immediate-flush trigger: the parse waits for the coalesce window. This
+    // is the accepted performance trade-off — final rendering is unaffected.
+    content.value = `${initial}\nworld`
+    expect(state.parsedNodes.value[0]?.raw).toBe(initial)
+
+    await vi.advanceTimersByTimeAsync(999)
+    expect(state.parsedNodes.value[0]?.raw).toBe(initial)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(state.parsedNodes.value[0]?.raw).toBe(`${initial}\nworld`)
+
+    scope.stop()
+  })
+
   it('reuses unchanged ParsedNode references after append parses', () => {
     const content = ref('alpha\n\nbeta')
     const { scope, state } = createParsingState(content)

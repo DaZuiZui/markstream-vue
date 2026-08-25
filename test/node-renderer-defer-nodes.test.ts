@@ -1034,6 +1034,54 @@ describe('markdownRender deferNodesUntilVisible', () => {
     }
   })
 
+  it('re-registers deferred node shells when viewportPriorityOptions.rootMargin changes at runtime', async () => {
+    const OriginalIO = globalThis.IntersectionObserver
+    const benchmarkWindow = window as any
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver as any)
+    benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__ = true
+
+    let wrapper: ReturnType<typeof mount> | null = null
+    try {
+      const MarkdownRender = (await import('../src/components/NodeRenderer')).default
+      const markdown = Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 1}`).join('\n\n')
+
+      wrapper = mount(MarkdownRender, {
+        props: {
+          content: markdown,
+          deferNodesUntilVisible: true,
+          viewportPriority: true,
+          viewportPriorityOptions: {
+            rootMargin: '123px',
+          },
+          initialRenderBatchSize: 40,
+        },
+      })
+
+      await flushAll()
+
+      const slot = wrapper.find('[data-node-index="45"]')
+      expect(slot.exists()).toBe(true)
+      const firstObserver = FakeIntersectionObserver.instances.find(instance => instance.elements.has(slot.element))
+      expect(firstObserver?.options.rootMargin).toBe('123px')
+
+      // Changing rootMargin at runtime must re-register deferred shells under
+      // the new margin instead of leaving them on the stale observer.
+      await wrapper.setProps({ viewportPriorityOptions: { rootMargin: '456px' } })
+      await flushAll()
+
+      const slotAfter = wrapper.find('[data-node-index="45"]')
+      const updatedObserver = FakeIntersectionObserver.instances.find(instance => instance.elements.has(slotAfter.element))
+      expect(updatedObserver).toBeTruthy()
+      expect(updatedObserver?.options.rootMargin).toBe('456px')
+      expect(firstObserver?.elements.has(slotAfter.element)).toBe(false)
+    }
+    finally {
+      wrapper?.unmount()
+      delete benchmarkWindow.__MARKSTREAM_DISABLE_VIEWPORT_PRIORITY_IDLE_DRAIN__
+      vi.stubGlobal('IntersectionObserver', OriginalIO as any)
+    }
+  })
+
   it('uses viewportPriorityOptions.maxTargets when auto-disabling node deferral', async () => {
     const OriginalIO = globalThis.IntersectionObserver
     vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver as any)
