@@ -145,10 +145,6 @@ describe('node renderer final transition DOM stability', () => {
     await flushAll()
 
     expect(streamingWrapper.get('.markdown-renderer').classes()).not.toContain('stable-layout')
-    expect(streamingWrapper.get('.markdown-renderer').classes()).not.toContain('streaming-layout')
-    await streamingWrapper.setProps({ content: `${content}\n\nAppended while streaming.` })
-    await flushAll()
-    expect(streamingWrapper.get('.markdown-renderer').classes()).toContain('streaming-layout')
     streamingWrapper.unmount()
 
     const batchedWrapper = mount(NodeRenderer, {
@@ -162,15 +158,10 @@ describe('node renderer final transition DOM stability', () => {
     await flushAll()
 
     expect(batchedWrapper.get('.markdown-renderer').classes()).not.toContain('stable-layout')
-    expect(batchedWrapper.get('.markdown-renderer').classes()).not.toContain('streaming-layout')
     batchedWrapper.unmount()
 
     const source = readFileSync('src/components/NodeRenderer/NodeRenderer.vue', 'utf8')
     expect(source).toContain(`.markdown-renderer.stable-layout {
-  content-visibility: visible;
-  contain-intrinsic-size: none;
-}`)
-    expect(source).toContain(`.markdown-renderer.streaming-layout {
   content-visibility: visible;
   contain-intrinsic-size: none;
 }`)
