@@ -310,6 +310,49 @@ function isPlainBracketMathLike(content: string) {
   return true
 }
 
+// `mathInline` is tried by markdown-it at every inline position of a
+// paragraph, and it rebuilds the O(src) code-span/image ranges on every call.
+// Without a cache, a plain long paragraph (no math) turns into O(src^2) work.
+// The ranges only depend on `src` (and for images, the loading flag), so
+// caching them per source string makes the repeated invocations of one
+// paragraph build them once. Capped so long sessions do not grow unbounded
+// memory; re-scanned paragraphs are always consecutive.
+const codeSpanRangeCache = new Map<string, Array<[number, number]>>()
+const imageRangeCache = new Map<string, Array<[number, number]>>()
+const finalImageRangeCache = new Map<string, Array<[number, number]>>()
+const INLINE_RANGE_CACHE_MAX = 16
+
+function getCachedCodeSpanRanges(src: string): Array<[number, number]> {
+  let ranges = codeSpanRangeCache.get(src)
+  if (ranges)
+    return ranges
+
+  ranges = buildCodeSpanRanges(src)
+  if (codeSpanRangeCache.size >= INLINE_RANGE_CACHE_MAX) {
+    const oldest = codeSpanRangeCache.keys().next().value
+    if (oldest != null)
+      codeSpanRangeCache.delete(oldest)
+  }
+  codeSpanRangeCache.set(src, ranges)
+  return ranges
+}
+
+function getCachedImageRanges(src: string, allowLoading: boolean): Array<[number, number]> {
+  const cache = allowLoading ? imageRangeCache : finalImageRangeCache
+  let ranges = cache.get(src)
+  if (ranges)
+    return ranges
+
+  ranges = buildImageRanges(src, allowLoading)
+  if (cache.size >= INLINE_RANGE_CACHE_MAX) {
+    const oldest = cache.keys().next().value
+    if (oldest != null)
+      cache.delete(oldest)
+  }
+  cache.set(src, ranges)
+  return ranges
+}
+
 function buildCodeSpanRanges(src: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = []
   let i = 0
@@ -921,6 +964,15 @@ export function applyMath(md: MarkdownIt, mathOpts?: MathOptions) {
       return false
     }
 
+    // Fast path: this rule is tried by markdown-it at every inline position.
+    // When the source contains none of the math openers, there is nothing to
+    // scan. Returning early avoids the O(src) range builders below running
+    // once per position, which would turn a plain long paragraph into O(src^2)
+    // work.
+    if (s.src.search(/[$\\]/) === -1) {
+      return false
+    }
+
     if (s.src[s.pos] === '$') {
       let dollarRunEnd = s.pos + 1
       while (s.src[dollarRunEnd] === '$')
@@ -957,12 +1009,14 @@ export function applyMath(md: MarkdownIt, mathOpts?: MathOptions) {
     // inline segment even after $ handling advances the cursor. Starting
     // from absolute 0 can duplicate already-emitted text after hardbreaks.
     const initialPos = currentStart
+    // We'll scan the entire inline source and tokenize all occurrences.
+    // Hoisted out of the delimiter loop: the ranges only depend on `src` and
+    // the loading flag, so they must not be rebuilt once per delimiter.
+    const src = s.src
+    const codeSpanRanges = getCachedCodeSpanRanges(src)
+    const imageRanges = getCachedImageRanges(src, allowLoading)
     // use findMatchingClose from util
     for (const [open, close] of delimiters) {
-      // We'll scan the entire inline source and tokenize all occurrences
-      const src = s.src
-      const codeSpanRanges = buildCodeSpanRanges(src)
-      const imageRanges = buildImageRanges(src, allowLoading)
       let foundAny = false
       // Reset searchPos for $$ to allow it to scan the full content
       // even after $ rule has processed some text
