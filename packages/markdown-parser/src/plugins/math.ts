@@ -311,46 +311,56 @@ function isPlainBracketMathLike(content: string) {
 }
 
 // `mathInline` is tried by markdown-it at every inline position of a
-// paragraph, and it rebuilds the O(src) code-span/image ranges on every call.
-// Without a cache, a plain long paragraph (no math) turns into O(src^2) work.
-// The ranges only depend on `src` (and for images, the loading flag), so
-// caching them per source string makes the repeated invocations of one
-// paragraph build them once. Capped so long sessions do not grow unbounded
-// memory; re-scanned paragraphs are always consecutive.
-const codeSpanRangeCache = new Map<string, Array<[number, number]>>()
-const imageRangeCache = new Map<string, Array<[number, number]>>()
-const finalImageRangeCache = new Map<string, Array<[number, number]>>()
-const INLINE_RANGE_CACHE_MAX = 16
-
-function getCachedCodeSpanRanges(src: string): Array<[number, number]> {
-  let ranges = codeSpanRangeCache.get(src)
-  if (ranges)
-    return ranges
-
-  ranges = buildCodeSpanRanges(src)
-  if (codeSpanRangeCache.size >= INLINE_RANGE_CACHE_MAX) {
-    const oldest = codeSpanRangeCache.keys().next().value
-    if (oldest != null)
-      codeSpanRangeCache.delete(oldest)
-  }
-  codeSpanRangeCache.set(src, ranges)
-  return ranges
+// paragraph, and it rescans the whole inline source each time. The expensive
+// inputs (code-span/image ranges and the math-opener positions) are pure
+// functions of the source, so they are computed ONCE per inline state and
+// reused across the rule's repeated invocations within that single parse.
+//
+// Keying the cache on the state object (WeakMap) scopes it to one inline
+// parse: the entry is released with the state after parsing, so full
+// paragraph sources are never retained across parses or parser instances.
+interface InlineScanState {
+  codeSpanRanges: Array<[number, number]>
+  imageRanges: Array<[number, number]>
+  /** Sorted indices of characters that can start a math opener (`$` or `\`). */
+  mathOpenerPositions: number[]
 }
 
-function getCachedImageRanges(src: string, allowLoading: boolean): Array<[number, number]> {
-  const cache = allowLoading ? imageRangeCache : finalImageRangeCache
-  let ranges = cache.get(src)
-  if (ranges)
-    return ranges
+const inlineScanStateCache = new WeakMap<MathInlineState, InlineScanState>()
 
-  ranges = buildImageRanges(src, allowLoading)
-  if (cache.size >= INLINE_RANGE_CACHE_MAX) {
-    const oldest = cache.keys().next().value
-    if (oldest != null)
-      cache.delete(oldest)
+function getInlineScanState(s: MathInlineState): InlineScanState {
+  let entry = inlineScanStateCache.get(s)
+  if (entry)
+    return entry
+
+  const src = s.src
+  const allowLoading = s.env?.__markstreamFinal !== true
+  const mathOpenerPositions: number[] = []
+  for (let index = 0; index < src.length; index++) {
+    const char = src[index]
+    if (char === '$' || char === '\\')
+      mathOpenerPositions.push(index)
   }
-  cache.set(src, ranges)
-  return ranges
+  entry = {
+    codeSpanRanges: buildCodeSpanRanges(src),
+    imageRanges: buildImageRanges(src, allowLoading),
+    mathOpenerPositions,
+  }
+  inlineScanStateCache.set(s, entry)
+  return entry
+}
+
+function hasMathOpenerAtOrAfter(mathOpenerPositions: number[], pos: number): boolean {
+  let low = 0
+  let high = mathOpenerPositions.length
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if (mathOpenerPositions[mid]! < pos)
+      low = mid + 1
+    else
+      high = mid
+  }
+  return low < mathOpenerPositions.length
 }
 
 function buildCodeSpanRanges(src: string): Array<[number, number]> {
@@ -964,12 +974,14 @@ export function applyMath(md: MarkdownIt, mathOpts?: MathOptions) {
       return false
     }
 
-    // Fast path: this rule is tried by markdown-it at every inline position.
-    // When the source contains none of the math openers, there is nothing to
-    // scan. Returning early avoids the O(src) range builders below running
-    // once per position, which would turn a plain long paragraph into O(src^2)
-    // work.
-    if (s.src.search(/[$\\]/) === -1) {
+    const pending = String(s.pending ?? '')
+    const currentStart = Math.max(0, s.pos - pending.length)
+    // Fast path: the opener decision (and the code-span/image ranges) is
+    // computed once per inline state. When there is no math opener at or
+    // after the scan start, this rule returns false immediately instead of
+    // re-scanning the whole source at every inline position.
+    const scan = getInlineScanState(s)
+    if (!hasMathOpenerAtOrAfter(scan.mathOpenerPositions, currentStart)) {
       return false
     }
 
@@ -1001,8 +1013,6 @@ export function applyMath(md: MarkdownIt, mathOpts?: MathOptions) {
       // regular text like "(0 <= t < S-1)", causing false math detection.
     ]
 
-    const pending = String(s.pending ?? '')
-    const currentStart = Math.max(0, s.pos - pending.length)
     let searchPos = currentStart
     let preMathPos = currentStart
     // Save the initial unconsumed position so $$ can rescan the current
@@ -1013,8 +1023,7 @@ export function applyMath(md: MarkdownIt, mathOpts?: MathOptions) {
     // Hoisted out of the delimiter loop: the ranges only depend on `src` and
     // the loading flag, so they must not be rebuilt once per delimiter.
     const src = s.src
-    const codeSpanRanges = getCachedCodeSpanRanges(src)
-    const imageRanges = getCachedImageRanges(src, allowLoading)
+    const { codeSpanRanges, imageRanges } = scan
     // use findMatchingClose from util
     for (const [open, close] of delimiters) {
       let foundAny = false
