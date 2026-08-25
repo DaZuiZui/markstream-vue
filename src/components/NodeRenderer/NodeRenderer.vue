@@ -1224,6 +1224,7 @@ function getNodeSlotRegistrationKey() {
     virtualizationEnabled.value,
     viewportPriorityAutoDisabled.value,
     viewportPriorityMaxTargets.value,
+    viewportPriorityRootMargin.value,
     resolvedInitialBatch.value,
     Boolean(registerNodeVisibility),
   ].join('|')
@@ -4182,7 +4183,12 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
     destroyNodeHandle(index)
     // No visibility registration is needed in this state (stable per config),
     // so record it and let the same-element guard skip future re-invocations.
-    nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
+    // Only record for a live element; unmounts (el === null) must not leave a
+    // stale key behind for an index that no longer has a slot.
+    if (el)
+      nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
+    else
+      nodeSlotRegistrationKeys.delete(index)
     if (el && deferNodes.value)
       markNodeVisible(index, true)
     return

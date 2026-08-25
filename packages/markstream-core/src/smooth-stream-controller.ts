@@ -688,9 +688,19 @@ function takeGraphemes(
   while (asciiCursor < fastEnd && input.charCodeAt(asciiCursor) <= 0x7F)
     asciiCursor++
   if (asciiCursor === fastEnd && (fastEnd >= normalizedEnd || input.charCodeAt(fastEnd) <= 0x7F)) {
-    return {
-      text: input.slice(start, fastEnd),
-      graphemeCount: fastEnd - start,
+    // CRLF (U+000D U+000A) is a single grapheme per UAX #29; taking exactly
+    // `count` code units here would split the pair and leak a lone `\r` to
+    // consumers. Fall through to the segmenter when the boundary lands between
+    // the two code units.
+    const splitsCrLf = fastEnd < normalizedEnd
+      && fastEnd > start
+      && input.charCodeAt(fastEnd - 1) === 0x0D
+      && input.charCodeAt(fastEnd) === 0x0A
+    if (!splitsCrLf) {
+      return {
+        text: input.slice(start, fastEnd),
+        graphemeCount: fastEnd - start,
+      }
     }
   }
 
