@@ -288,21 +288,18 @@ function shouldFlushParseImmediately(previous: string, next: string) {
     return true
   }
 
-  return appended.endsWith('\n')
-    && !endsWithPendingTableRow(next)
+  // A bare trailing newline is intentionally NOT an immediate-flush trigger:
+  // streaming chunks frequently end with a newline, and flushing here runs the
+  // full parse synchronously inside the stream tick on every commit. Block
+  // structure is still parsed promptly via the delimiter rules above and the
+  // parse-coalesce timer (DEFAULT_PARSE_COALESCE_MS), and the visible reveal is
+  // paced independently by the smooth stream, so block-boundary render latency
+  // stays well within the existing coalescing tolerance.
+  return false
 }
 
 function endsWithTableDelimiterLine(value: string) {
   return isTableDelimiterLine(getTrailingContentLine(value))
-}
-
-function endsWithPendingTableRow(value: string) {
-  const line = getTrailingContentLine(value)
-  if (isTableDelimiterLine(line))
-    return false
-
-  const cells = getTableLineCells(line)
-  return cells.length >= 2 && cells.some(cell => cell.trim())
 }
 
 function getTrailingContentLine(value: string) {
@@ -397,7 +394,6 @@ function stableValueSignature(
     const keys = Object.keys(record).sort()
     const sampledKeys = keys.slice(0, MAX_SIGNATURE_KEYS)
     return `o:${keys.length}:${sampledKeys
-      .sort()
       .map(key => `${key}:${stableValueSignature(record[key], seen, depth + 1)}`)
       .join(';')}`
   }

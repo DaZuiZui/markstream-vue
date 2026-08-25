@@ -737,7 +737,12 @@ describe('node renderer measurement performance', () => {
     const state = setupState(wrapper)
     const element = wrapper.get('.node-slot[data-node-index="0"] .node-content').element as HTMLElement
 
+    // Re-registering the same element + same parsed node is a no-op (the
+    // renderer guards identical registrations to avoid re-measuring every
+    // rendered node on every streaming commit), so simulate a real remount
+    // with a null pass to force the measurement/observer re-registration.
     platform.heights.set(element, 40)
+    state.setNodeContentRef(0, null)
     state.setNodeContentRef(0, element)
     await Promise.resolve()
     platform.flushFrames()

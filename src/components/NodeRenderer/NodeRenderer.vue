@@ -909,6 +909,16 @@ const codeBlockEstimationEnabled = computed(() => {
     && heightExperimentConfig.value?.codeBlockEstimation !== false
 })
 const nodeSlotElements = new Map<number, HTMLElement | null>()
+/**
+ * Snapshot of the visibility-registration inputs an element was last
+ * registered under. `setNodeSlotElement` re-runs for every rendered node on
+ * every streaming commit (Vue 3.5 re-invokes function refs on every patch);
+ * when the element is unchanged AND every input that drives registration is
+ * unchanged, the existing registration (observer handle / watch / fallback
+ * timer / visible state) is still valid and the per-commit re-registration
+ * churn can be skipped.
+ */
+const nodeSlotRegistrationKeys = new Map<number, string>()
 const nodeContentResizeObserverTargets = new Map<number, HTMLElement>()
 const nodeContentResizeObserverIndexes = new WeakMap<Element, number>()
 let nodeContentResizeObserver: ResizeObserver | null = null
@@ -1200,6 +1210,24 @@ const stableLayoutDomEnabled = computed(() => {
     && !incrementalRenderingConfigured.value
 })
 const shouldObserveSlots = computed(() => !!registerNodeVisibility && deferNodes.value)
+
+/**
+ * Serialized snapshot of every input that drives the slot visibility
+ * registration. When it is unchanged for a given element, the existing
+ * registration (observer handle / watch / fallback timer / visible state)
+ * remains valid and `setNodeSlotElement` can skip re-registration.
+ */
+function getNodeSlotRegistrationKey() {
+  return [
+    shouldObserveSlots.value,
+    deferNodes.value,
+    virtualizationEnabled.value,
+    viewportPriorityAutoDisabled.value,
+    viewportPriorityMaxTargets.value,
+    resolvedInitialBatch.value,
+    Boolean(registerNodeVisibility),
+  ].join('|')
+}
 const scrollListenerEnabled = computed(() => virtualizationEnabled.value || virtualScrollEnabled.value)
 const {
   focusIndex,
@@ -1214,6 +1242,15 @@ const {
 })
 const nodeContentElements = new Map<number, HTMLElement | null>()
 const nodeContentVersions = new Map<number, number>()
+/**
+ * Snapshot of the parsed node an element was last registered with. Function
+ * refs are re-invoked on every patch in Vue 3.5 (even with a stable callback),
+ * so `setNodeContentRef` runs once per rendered node per streaming commit.
+ * When both the element and the parsed node reference (plus its in-place
+ * `loading` snapshot) are unchanged, the node content is byte-identical and
+ * the measurement/observer re-registration can be skipped entirely.
+ */
+const nodeContentRegistration = new Map<number, { el: HTMLElement, node: ParsedNode | undefined, loading: unknown }>()
 const nodeContentDeferredMeasureTimers = new Map<number, number[]>()
 const finalHeightConvergenceTimers: number[] = []
 const pendingHeightMeasurements = new Map<number, { height: number, allowShrink: boolean, version: number, el: HTMLElement }>()
@@ -4122,6 +4159,13 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
   let slotsChanged = false
   if (el) {
     const prev = nodeSlotElements.get(index)
+    if (prev === el && nodeSlotRegistrationKeys.get(index) === getNodeSlotRegistrationKey()) {
+      // Same element re-passed on a re-render with unchanged registration
+      // inputs: the existing visibility registration (observer handle, watch,
+      // fallback timer, visible state) is still valid, so skip the per-commit
+      // re-registration work entirely.
+      return
+    }
     nodeSlotElements.set(index, el)
     if (prev !== el)
       slotsChanged = true
@@ -4136,6 +4180,9 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
 
   if (!shouldObserveSlots.value || !registerNodeVisibility) {
     destroyNodeHandle(index)
+    // No visibility registration is needed in this state (stable per config),
+    // so record it and let the same-element guard skip future re-invocations.
+    nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
     if (el && deferNodes.value)
       markNodeVisible(index, true)
     return
@@ -4150,6 +4197,7 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
     autoDisableViewportPriority('too-many-targets')
     if (!shouldObserveSlots.value || !registerNodeVisibility) {
       destroyNodeHandle(index)
+      nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
       if (el)
         markNodeVisible(index, true)
       return
@@ -4158,26 +4206,32 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
 
   if (index < resolvedInitialBatch.value && !virtualizationEnabled.value) {
     destroyNodeHandle(index)
+    nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
     markNodeVisible(index, true)
     return
   }
 
   if (visibleNodeIndices.value.has(index)) {
     destroyNodeHandle(index)
+    nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
     markNodeVisible(index, true)
     return
   }
 
   if (!el) {
     destroyNodeHandle(index)
+    nodeSlotRegistrationKeys.delete(index)
     return
   }
 
   destroyNodeHandle(index)
   const handle = registerNodeVisibility(el, { rootMargin: viewportPriorityRootMargin.value })
-  if (!handle)
+  if (!handle) {
+    nodeSlotRegistrationKeys.delete(index)
     return
+  }
   nodeVisibilityHandles.set(index, handle)
+  nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
   markNodeVisible(index, handle.isVisible.value)
   if (deferNodes.value)
     scheduleVisibilityFallback(index)
@@ -4353,6 +4407,24 @@ function scheduleFinalHeightConvergence() {
 }
 
 function setNodeContentRef(index: number, el: HTMLElement | null) {
+  if (el) {
+    const node = parsedNodes.value[index]
+    const registered = nodeContentRegistration.get(index)
+    if (
+      registered
+      && registered.el === el
+      && registered.node === node
+      && registered.loading === (node as { loading?: unknown } | undefined)?.loading
+    ) {
+      // Same element + same parsed node re-passed on a re-render. Vue re-invokes
+      // function refs on every patch, so without this guard each streaming
+      // commit would re-run the measurement/observer registration for every
+      // rendered node (deleting pending measurements, bumping versions,
+      // unobserving/re-observing, and forcing an offsetHeight read).
+      return
+    }
+  }
+
   if (!el)
     clearPendingAsyncNodeKeysForIndex(index)
 
@@ -4368,9 +4440,15 @@ function setNodeContentRef(index: number, el: HTMLElement | null) {
   if (!el || !shouldMeasureNodeHeights.value) {
     nodeContentElements.delete(index)
     nodeContentVersions.delete(index)
+    nodeContentRegistration.delete(index)
     return
   }
   nodeContentElements.set(index, el)
+  nodeContentRegistration.set(index, {
+    el,
+    node: parsedNodes.value[index],
+    loading: (parsedNodes.value[index] as { loading?: unknown } | undefined)?.loading,
+  })
   const measure = () => {
     measureNodeHeight(index, el)
   }
@@ -4402,8 +4480,13 @@ function setNodeContentRef(index: number, el: HTMLElement | null) {
 watch(
   () => shouldMeasureNodeHeights.value,
   (enabled) => {
-    if (enabled)
+    if (enabled) {
+      // Re-enabling measurement needs a fresh registration pass: existing
+      // snapshots were taken while measurement was off and their elements were
+      // never observed by the (new) resize observer.
+      nodeContentRegistration.clear()
       return
+    }
     disconnectNodeContentResizeObserver()
     for (const timers of nodeContentDeferredMeasureTimers.values()) {
       for (const id of timers)

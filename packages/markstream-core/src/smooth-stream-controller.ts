@@ -243,7 +243,8 @@ class SmoothMarkdownStreamControllerImpl {
       this.source = initialMarkdown
       this.scanAppendedSource()
     }
-    this.visible = this.source.slice(0, this.getRevealableEnd())
+    const revealableEnd = this.getRevealableEnd()
+    this.visible = revealableEnd >= this.source.length ? this.source : this.source.slice(0, revealableEnd)
     this.discardConsumedAtomicRanges()
     this.done = false
     this.paused = false
@@ -548,7 +549,9 @@ class SmoothMarkdownStreamControllerImpl {
     if (this.burstInitialContent && burstPending >= this.burstRevealThresholdChars) {
       const revealableEnd = this.getRevealableEnd()
       if (this.visible.length < revealableEnd) {
-        this.visible = this.source.slice(0, revealableEnd)
+        // Reference the source string directly when the full content is
+        // revealable, avoiding an O(n) copy of the whole document per commit.
+        this.visible = revealableEnd >= this.source.length ? this.source : this.source.slice(0, revealableEnd)
         this.charBudget = 0
         this.currentCps = this.minCharsPerSecond
         this.emit()
@@ -671,6 +674,23 @@ function takeGraphemes(
     return {
       text: input.slice(start, end),
       graphemeCount: used,
+    }
+  }
+
+  // Fast path: if the requested window is pure ASCII AND the next code unit is
+  // also ASCII (so no combining mark can attach across the boundary), then each
+  // code unit is exactly one grapheme and Intl.Segmenter (plus its per-commit
+  // window slicing + ICU iteration) is unnecessary. The scan is bounded by
+  // `count` code units, so mixed content pays only a cheap charCodeAt pass over
+  // the ASCII head before falling through to the segmenter.
+  const fastEnd = Math.min(normalizedEnd, start + count)
+  let asciiCursor = start
+  while (asciiCursor < fastEnd && input.charCodeAt(asciiCursor) <= 0x7F)
+    asciiCursor++
+  if (asciiCursor === fastEnd && (fastEnd >= normalizedEnd || input.charCodeAt(fastEnd) <= 0x7F)) {
+    return {
+      text: input.slice(start, fastEnd),
+      graphemeCount: fastEnd - start,
     }
   }
 
