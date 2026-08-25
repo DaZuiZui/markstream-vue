@@ -161,6 +161,21 @@ function emitCodeCopy(payload: unknown) {
   emit('copy', payload as string)
 }
 
+// Stable per-setup handlers shared by every pre-merged item props object.
+// Building them once here (instead of inline arrow functions in the template)
+// keeps the cached vnode props free of per-render closures.
+function handleArtifactClick(payload: CodeBlockPreviewPayload) {
+  emit('handleArtifactClick', payload)
+}
+
+function emitMouseoverRaw(event: MouseEvent) {
+  emit('mouseover', event)
+}
+
+function emitMouseoutRaw(event: MouseEvent) {
+  emit('mouseout', event)
+}
+
 const instance = getCurrentInstance()
 const inheritedNestedRendererProps = inject<{ value?: Partial<NodeRendererProps> } | undefined>('markstreamNestedRendererProps', undefined)
 
@@ -5456,6 +5471,16 @@ interface RenderedItemLike {
   component: unknown
   bindings: Record<string, unknown>
   customBindings: Record<string, unknown>
+  /** Pre-merged props for the standard (non-custom) component in full DOM mode. */
+  nodeProps: Record<string, unknown>
+  /** Pre-merged props for a custom node component in full DOM mode. */
+  customNodeProps: Record<string, unknown>
+  /** Pre-merged props for the render-as-fragment branch (adds click/mouse delegation handlers). */
+  fragmentNodeProps: Record<string, unknown>
+  /** Pre-merged props for a custom node component in render-as-fragment mode. */
+  customFragmentNodeProps: Record<string, unknown>
+  /** Pre-merged props for minimal DOM mode (adds raw mouseover/mouseout emitters). */
+  minimalNodeProps: Record<string, unknown>
   rendersCustomNode: boolean
   hasSlotChildren: boolean
   slotContent: string
@@ -5501,6 +5526,11 @@ function getRenderedItemGlobalSignature(): readonly unknown[] {
     indexPrefix.value,
     mathBlockCacheScope,
     codeBlockComponent.value,
+    // Item props are pre-merged (frozen) at build time, so inputs that used to
+    // be read live in the template must invalidate the per-item cache when
+    // they change.
+    rendererProps.customId,
+    rendererProps.isDark,
     preCodeBlockBindings.value,
     codeBlockBindings.value,
     customCodeBlockBindings.value,
@@ -5682,6 +5712,37 @@ function buildRenderedItem(item: { node: ParsedNode, index: number }) {
   const customAttrs = rendersCustomNode
     ? getCustomNodeAttrs(node as any, resolvedHtmlPolicy.value)
     : undefined
+  const loading = (node as unknown as { loading?: unknown }).loading
+  const indexKey = `${indexPrefix.value}-${item.index}`
+  const copyEvents: { onCopy: typeof emitCodeCopy, onHandleArtifactClick: typeof handleArtifactClick } = {
+    onCopy: emitCodeCopy,
+    onHandleArtifactClick: handleArtifactClick,
+  }
+  // Keys match what the compiled template previously emitted verbatim
+  // (kebab-case bindings like `:is-dark` keep their kebab name in the vnode
+  // props). This matters for both declared-prop matching and, critically, for
+  // fallthrough attrs read via useAttrs() (e.g. TextNode reads
+  // `attrs['index-key']`) and rendered DOM attribute names — a camelCase key
+  // would render as a lowercased attribute instead of the kebab name.
+  const nodeProps: Record<string, unknown> = {
+    node,
+    loading,
+    'index-key': indexKey,
+    ...bindings,
+    'custom-id': rendererProps.customId,
+    'is-dark': rendererProps.isDark,
+    ...copyEvents,
+  }
+  const customNodeProps: Record<string, unknown> = {
+    ...(customAttrs ?? {}),
+    ...bindings,
+    node,
+    loading,
+    'index-key': indexKey,
+    'custom-id': rendererProps.customId,
+    'is-dark': rendererProps.isDark,
+    ...copyEvents,
+  }
 
   const renderedItem: RenderedItemLike = {
     node,
@@ -5692,11 +5753,30 @@ function buildRenderedItem(item: { node: ParsedNode, index: number }) {
       ...(customAttrs ?? {}),
       ...bindings,
     },
+    nodeProps,
+    customNodeProps,
+    fragmentNodeProps: {
+      ...nodeProps,
+      onClick: handleContainerClick,
+      onMouseover: handleFragmentMouseover,
+      onMouseout: handleFragmentMouseout,
+    },
+    customFragmentNodeProps: {
+      ...customNodeProps,
+      onClick: handleContainerClick,
+      onMouseover: handleFragmentMouseover,
+      onMouseout: handleFragmentMouseout,
+    },
+    minimalNodeProps: {
+      ...nodeProps,
+      onMouseover: emitMouseoverRaw,
+      onMouseout: emitMouseoutRaw,
+    },
     rendersCustomNode,
     hasSlotChildren: hasSlotChildren(node),
     slotContent: String((node as any).content ?? ''),
     isCodeBlock: node.type === 'code_block',
-    indexKey: `${indexPrefix.value}-${item.index}`,
+    indexKey,
     vnodeKey: `${rendererSessionIdentity.value}\u0000${item.index}\u0000${node.type}`,
   }
   renderedItemCache.set(item.node, { signature: cacheSignature, item: renderedItem })
@@ -6346,17 +6426,7 @@ onBeforeUnmount(() => {
       <component
         :is="item.component"
         v-if="item.rendersCustomNode"
-        v-bind="item.customBindings"
-        :node="item.node"
-        :loading="item.node.loading"
-        :index-key="item.indexKey"
-        :custom-id="rendererProps.customId"
-        :is-dark="rendererProps.isDark"
-        @click="handleContainerClick"
-        @mouseover="handleFragmentMouseover"
-        @mouseout="handleFragmentMouseout"
-        @copy="emitCodeCopy($event)"
-        @handle-artifact-click="emit('handleArtifactClick', $event)"
+        v-bind="item.customFragmentNodeProps"
       >
         <NodeRenderer
           v-if="item.hasSlotChildren"
@@ -6382,17 +6452,7 @@ onBeforeUnmount(() => {
       <component
         :is="item.component"
         v-else
-        :node="item.node"
-        :loading="item.node.loading"
-        :index-key="item.indexKey"
-        v-bind="item.bindings"
-        :custom-id="rendererProps.customId"
-        :is-dark="rendererProps.isDark"
-        @click="handleContainerClick"
-        @mouseover="handleFragmentMouseover"
-        @mouseout="handleFragmentMouseout"
-        @copy="emitCodeCopy($event)"
-        @handle-artifact-click="emit('handleArtifactClick', $event)"
+        v-bind="item.fragmentNodeProps"
       />
     </template>
   </template>
@@ -6438,16 +6498,7 @@ onBeforeUnmount(() => {
         <component
           :is="item.component"
           v-if="shouldRenderNode(item.index)"
-          :node="item.node"
-          :loading="item.node.loading"
-          :index-key="item.indexKey"
-          v-bind="item.bindings"
-          :custom-id="rendererProps.customId"
-          :is-dark="rendererProps.isDark"
-          @mouseover="emit('mouseover', $event)"
-          @mouseout="emit('mouseout', $event)"
-          @copy="emitCodeCopy($event)"
-          @handle-artifact-click="emit('handleArtifactClick', $event)"
+          v-bind="item.minimalNodeProps"
         />
       </template>
     </template>
@@ -6474,14 +6525,7 @@ onBeforeUnmount(() => {
               <component
                 :is="item.component"
                 v-if="item.rendersCustomNode"
-                v-bind="item.customBindings"
-                :node="item.node"
-                :loading="item.node.loading"
-                :index-key="item.indexKey"
-                :custom-id="rendererProps.customId"
-                :is-dark="rendererProps.isDark"
-                @copy="emitCodeCopy($event)"
-                @handle-artifact-click="emit('handleArtifactClick', $event)"
+                v-bind="item.customNodeProps"
               >
                 <NodeRenderer
                   v-if="item.hasSlotChildren"
@@ -6507,28 +6551,14 @@ onBeforeUnmount(() => {
               <component
                 :is="item.component"
                 v-else
-                :node="item.node"
-                :loading="item.node.loading"
-                :index-key="item.indexKey"
-                v-bind="item.bindings"
-                :custom-id="rendererProps.customId"
-                :is-dark="rendererProps.isDark"
-                @copy="emitCodeCopy($event)"
-                @handle-artifact-click="emit('handleArtifactClick', $event)"
+                v-bind="item.nodeProps"
               />
             </transition>
 
             <component
               :is="item.component"
               v-else-if="item.rendersCustomNode"
-              v-bind="item.customBindings"
-              :node="item.node"
-              :loading="item.node.loading"
-              :index-key="item.indexKey"
-              :custom-id="rendererProps.customId"
-              :is-dark="rendererProps.isDark"
-              @copy="emitCodeCopy($event)"
-              @handle-artifact-click="emit('handleArtifactClick', $event)"
+              v-bind="item.customNodeProps"
             >
               <NodeRenderer
                 v-if="item.hasSlotChildren"
@@ -6554,14 +6584,7 @@ onBeforeUnmount(() => {
             <component
               :is="item.component"
               v-else
-              :node="item.node"
-              :loading="item.node.loading"
-              :index-key="item.indexKey"
-              v-bind="item.bindings"
-              :custom-id="rendererProps.customId"
-              :is-dark="rendererProps.isDark"
-              @copy="emitCodeCopy($event)"
-              @handle-artifact-click="emit('handleArtifactClick', $event)"
+              v-bind="item.nodeProps"
             />
           </div>
           <div
