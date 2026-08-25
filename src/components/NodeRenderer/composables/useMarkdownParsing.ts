@@ -282,6 +282,13 @@ function shouldFlushParseImmediately(previous: string, next: string) {
   if (endsWithTableDelimiterLine(next))
     return true
 
+  // Setext heading underlines (`===`) and thematic break lines (`---`) are
+  // structural boundaries: flushing here lets the previous line be re-rendered
+  // as a heading (or the break appear) promptly, without reintroducing the
+  // per-newline flush that bare trailing newlines would cause.
+  if (endsWithSetextOrThematicBreakLine(next))
+    return true
+
   if (appended.includes('\n\n')
     || /(?:^|\n)(?:#{1,6}\s|[-+*]\s+|\d+[.)]\s+|>\s*|`{3,}|~{3,})/.test(appended)
   ) {
@@ -292,10 +299,20 @@ function shouldFlushParseImmediately(previous: string, next: string) {
   // streaming chunks frequently end with a newline, and flushing here runs the
   // full parse synchronously inside the stream tick on every commit. Block
   // structure is still parsed promptly via the delimiter rules above and the
-  // parse-coalesce timer (DEFAULT_PARSE_COALESCE_MS), and the visible reveal is
-  // paced independently by the smooth stream, so block-boundary render latency
-  // stays well within the existing coalescing tolerance.
+  // parse-coalesce timer (DEFAULT_PARSE_COALESCE_MS). Plain hard line breaks
+  // (soft breaks inside a paragraph) therefore coalesce into the parse window
+  // and can lag block rendering by up to parseCoalesceMs — an accepted
+  // performance trade-off; the visible reveal is paced independently by the
+  // smooth stream and the final DOM is unaffected.
   return false
+}
+
+function endsWithSetextOrThematicBreakLine(value: string) {
+  return isSetextOrThematicBreakLine(getTrailingContentLine(value))
+}
+
+function isSetextOrThematicBreakLine(line: string) {
+  return /^={3,}$/.test(line) || /^-{3,}$/.test(line)
 }
 
 function endsWithTableDelimiterLine(value: string) {
