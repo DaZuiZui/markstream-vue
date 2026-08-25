@@ -6399,8 +6399,20 @@ watch(
     // the per-commit work below (recursive node text length traversal, cursor
     // element updates) is needed. Skip it entirely instead of running the
     // callback and bailing out mid-way.
-    if (!typewriterEnabled.value)
+    if (!typewriterEnabled.value) {
+      if (
+        showTypewriterCursor.value
+        || typewriterCursorTimeout
+        || typewriterCursorRaf != null
+        || simpleTypewriterCursorTarget.value
+        || typewriterCursorRef.value
+      ) {
+        showTypewriterCursor.value = false
+        clearTypewriterCursorTimeout()
+        hideTypewriterCursorElement()
+      }
       return
+    }
 
     // When the stream is final (and effective — smooth streaming has caught up),
     // hide the cursor immediately.

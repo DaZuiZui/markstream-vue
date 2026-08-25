@@ -183,6 +183,34 @@ describe('typewriter cursor position', () => {
     wrapper.unmount()
   })
 
+  it('does not restore a stale cursor when typewriter is re-enabled without new content', async () => {
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        content: '',
+        typewriter: 'simple',
+        smoothStreaming: false,
+        batchRendering: false,
+        viewportPriority: false,
+        deferNodesUntilVisible: false,
+      },
+    })
+
+    await flushAll()
+    await wrapper.setProps({ content: 'hello world' })
+    await flushAll()
+    expect(wrapper.classes()).toContain('typewriter-simple-cursor')
+
+    await wrapper.setProps({ typewriter: false })
+    await flushAll()
+    expect(wrapper.classes()).not.toContain('typewriter-simple-cursor')
+
+    await wrapper.setProps({ typewriter: 'simple' })
+    await flushAll()
+    expect(wrapper.classes()).not.toContain('typewriter-simple-cursor')
+
+    wrapper.unmount()
+  })
+
   it('clears simple cursor target when stream becomes final', async () => {
     const wrapper = mount(NodeRenderer, {
       props: {
