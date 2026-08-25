@@ -1217,18 +1217,23 @@ const shouldObserveSlots = computed(() => !!registerNodeVisibility && deferNodes
  * registration (observer handle / watch / fallback timer / visible state)
  * remains valid and `setNodeSlotElement` can skip re-registration.
  */
-function getNodeSlotRegistrationKey() {
-  return [
-    shouldObserveSlots.value,
-    deferNodes.value,
-    virtualizationEnabled.value,
-    viewportPriorityAutoDisabled.value,
-    viewportPriorityMaxTargets.value,
-    viewportPriorityRootMargin.value,
-    resolvedInitialBatch.value,
-    Boolean(registerNodeVisibility),
-  ].join('|')
-}
+// Serialized snapshot of every input that drives the slot visibility
+// registration. When it is unchanged for a given element, the existing
+// registration (observer handle / watch / fallback timer / visible state)
+// remains valid and `setNodeSlotElement` can skip re-registration. Cached as a
+// computed: the same inputs previously produced a fresh join('|') string per
+// slot per re-render (Vue 3.5 re-invokes function refs on every patch), which
+// was O(N) string allocations per streaming commit.
+const nodeSlotRegistrationKey = computed(() => [
+  shouldObserveSlots.value,
+  deferNodes.value,
+  virtualizationEnabled.value,
+  viewportPriorityAutoDisabled.value,
+  viewportPriorityMaxTargets.value,
+  viewportPriorityRootMargin.value,
+  resolvedInitialBatch.value,
+  Boolean(registerNodeVisibility),
+].join('|'))
 const scrollListenerEnabled = computed(() => virtualizationEnabled.value || virtualScrollEnabled.value)
 const {
   focusIndex,
@@ -1736,7 +1741,7 @@ function estimateNodeHeight(node: ParsedNode, index: number, width: number) {
       return estimatedText
   }
 
-  if (codeBlockEstimationEnabled.value && node.type === 'code_block') {
+  if (codeBlockEstimationEnabled.value && !hasMeasuredHeight && node.type === 'code_block') {
     const rendererKind = resolveCodeBlockRendererKind(node)
     if (rendererKind === 'stream-diffs' || rendererKind === 'pre') {
       return estimateCodeBlockHeight(node, {
@@ -4160,7 +4165,7 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
   let slotsChanged = false
   if (el) {
     const prev = nodeSlotElements.get(index)
-    if (prev === el && nodeSlotRegistrationKeys.get(index) === getNodeSlotRegistrationKey()) {
+    if (prev === el && nodeSlotRegistrationKeys.get(index) === nodeSlotRegistrationKey.value) {
       // Same element re-passed on a re-render with unchanged registration
       // inputs: the existing visibility registration (observer handle, watch,
       // fallback timer, visible state) is still valid, so skip the per-commit
@@ -4186,7 +4191,7 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
     // Only record for a live element; unmounts (el === null) must not leave a
     // stale key behind for an index that no longer has a slot.
     if (el)
-      nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
+      nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
     else
       nodeSlotRegistrationKeys.delete(index)
     if (el && deferNodes.value)
@@ -4203,7 +4208,7 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
     autoDisableViewportPriority('too-many-targets')
     if (!shouldObserveSlots.value || !registerNodeVisibility) {
       destroyNodeHandle(index)
-      nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
+      nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
       if (el)
         markNodeVisible(index, true)
       return
@@ -4212,14 +4217,14 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
 
   if (index < resolvedInitialBatch.value && !virtualizationEnabled.value) {
     destroyNodeHandle(index)
-    nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
+    nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
     markNodeVisible(index, true)
     return
   }
 
   if (visibleNodeIndices.value.has(index)) {
     destroyNodeHandle(index)
-    nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
+    nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
     markNodeVisible(index, true)
     return
   }
@@ -4237,7 +4242,7 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
     return
   }
   nodeVisibilityHandles.set(index, handle)
-  nodeSlotRegistrationKeys.set(index, getNodeSlotRegistrationKey())
+  nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
   markNodeVisible(index, handle.isVisible.value)
   if (deferNodes.value)
     scheduleVisibilityFallback(index)
@@ -5600,6 +5605,10 @@ const previewHeightEstimateCache = new WeakMap<object, { code: string, height: n
 // lookup + object allocation for the whole document.
 const renderedItemsNonVirtual: RenderedItemLike[] = []
 let lastRenderedItemGlobalSignature: readonly unknown[] | null = null
+// Array instance returned by the `renderedItems` computed on its last
+// evaluation. Reused verbatim on no-op commits so Vue skips the v-for re-render
+// instead of diffing a freshly sliced array of identical items.
+let lastRenderedItemsArray: RenderedItemLike[] = []
 
 /**
  * Signature of all renderer-level (node-independent) inputs a rendered item
@@ -5866,9 +5875,12 @@ const renderedItems = computed(() => {
 
   const nodes = parsedNodes.value
   const total = nodes.length
-  if (renderedItemsNonVirtual.length > total)
+  let truncated = false
+  if (renderedItemsNonVirtual.length > total) {
     // eslint-disable-next-line vue/no-side-effects-in-computed-properties -- In-place truncation of the module-level incremental item cache; not a reactive side effect.
     renderedItemsNonVirtual.length = total
+    truncated = true
+  }
 
   // Capture the previous signature BEFORE getRenderedItemGlobalSignature
   // refreshes the module-level cache, otherwise the comparison below would
@@ -5898,12 +5910,24 @@ const renderedItems = computed(() => {
     }
   }
 
+  // No-op commit: every parsed node still matches its cached rendered item by
+  // identity (the parser reused every node object) and the cache was not
+  // truncated, so the item list is byte-identical to the last returned one.
+  // Returning the exact array instance lets Vue skip the keyed v-for diff
+  // entirely instead of re-running it over a freshly sliced array of the same
+  // items (which also re-invokes every slot/content function ref in the
+  // template).
+  if (!truncated && dirtyStart === total)
+    return lastRenderedItemsArray
+
   for (let index = dirtyStart; index < total; index++)
     cache[index] = buildRenderedItem({ node: nodes[index]!, index })
 
   // New array identity so Vue re-renders; prefix entries are shared objects,
   // so the keyed v-for diff resolves them without re-creating anything.
-  return cache.slice()
+  const next = cache.slice()
+  lastRenderedItemsArray = next
+  return next
 })
 
 function getCodeBlockLanguage(node: ParsedNode) {
@@ -6369,6 +6393,13 @@ watch(
   [renderContent, () => props.content, () => props.nodes, () => rendererProps.typewriter, effectiveFinal],
   async () => {
     if (!isClient || renderAsFragment.value || !ownsTypewriterCursor.value)
+      return
+
+    // Typewriter is off (the default): the cursor is never shown, so none of
+    // the per-commit work below (recursive node text length traversal, cursor
+    // element updates) is needed. Skip it entirely instead of running the
+    // callback and bailing out mid-way.
+    if (!typewriterEnabled.value)
       return
 
     // When the stream is final (and effective — smooth streaming has caught up),

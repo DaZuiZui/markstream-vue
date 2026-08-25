@@ -131,6 +131,23 @@ function getCustomComponentsReuseKey(mapping: Partial<CustomComponents>) {
   )
 }
 
+// The reuse key is a pure function of the mapping's identity (component
+// references are stable); cache it per mapping object so the JSON.stringify +
+// sort + identity lookups don't rerun on every streaming commit. A new mapping
+// reference still recomputes, so a consumer passing a fresh object per render
+// simply misses the cache.
+const customComponentsReuseKeyCache = new WeakMap<object, string>()
+
+function getCachedCustomComponentsReuseKey(mapping: Partial<CustomComponents>) {
+  const object = mapping as object
+  const cached = customComponentsReuseKeyCache.get(object)
+  if (cached !== undefined)
+    return cached
+  const key = getCustomComponentsReuseKey(mapping)
+  customComponentsReuseKeyCache.set(object, key)
+  return key
+}
+
 function hasCustomComponentBoundary(
   node: ParsedNode,
   mapping: Partial<CustomComponents>,
@@ -1295,7 +1312,7 @@ export function useMarkdownParsing(
     }
 
     const customComponents = options.customComponentsMap?.value ?? {}
-    const customComponentsReuseKey = getCustomComponentsReuseKey(customComponents)
+    const customComponentsReuseKey = getCachedCustomComponentsReuseKey(customComponents)
     if (
       previousCustomComponentsReuseKey
       && customComponentsReuseKey !== previousCustomComponentsReuseKey
@@ -1437,8 +1454,15 @@ export function useMarkdownParsing(
     }
 
     if (hasCustomComponents) {
-      for (const node of parsed)
-        hasCustomComponentBoundary(node, customComponents, customComponentBoundaryCache)
+      // Only the dirty tail can contain nodes not yet in the boundary cache:
+      // reused prefix nodes were warmed in a previous commit, and a fully
+      // reused parse (dirtyStartIndex < 0) has nothing new either. Warming
+      // only the tail skips the O(prefix) WeakMap hits per streaming commit.
+      const warmStart = stabilizeMetrics?.dirtyStartIndex != null && stabilizeMetrics.dirtyStartIndex >= 0
+        ? stabilizeMetrics.dirtyStartIndex
+        : parsed.length
+      for (let index = warmStart; index < parsed.length; index++)
+        hasCustomComponentBoundary(parsed[index]!, customComponents, customComponentBoundaryCache)
     }
     const nodeReuseMs = collectPerformanceMetrics
       ? getNow() - reuseStart

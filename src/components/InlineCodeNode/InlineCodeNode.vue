@@ -52,22 +52,23 @@ function stopWatchingStreamVersion() {
 }
 
 function settleStreamedDelta() {
-  stopWatchingStreamVersion()
   if (!streamedDelta.value)
     return
   settledCode.value = getRenderedContent()
   streamedDelta.value = ''
 }
 
-function watchStreamVersionWhileDeltaActive() {
-  if (!streamedDelta.value || stopStreamVersionWatch || !inheritedStreamVersion)
+function ensureStreamVersionWatch() {
+  if (stopStreamVersionWatch || !inheritedStreamVersion)
     return
-
-  const activeVersion = inheritedStreamVersion.value
+  // One persistent watcher for the component's whole lifecycle instead of a
+  // create-per-delta + destroy-on-settle watcher (the old approach churned a
+  // new `flush: 'sync'` watcher on every streaming commit that appended a
+  // delta).
   stopStreamVersionWatch = watch(
     () => inheritedStreamVersion.value,
-    (version) => {
-      if (version !== activeVersion)
+    () => {
+      if (streamedDelta.value)
         settleStreamedDelta()
     },
     { flush: 'sync' },
@@ -90,7 +91,7 @@ watch(
     streamedDelta.value = result.streamedDelta
     if (result.appended) {
       streamFadeVersion.value += 1
-      watchStreamVersionWhileDeltaActive()
+      ensureStreamVersionWatch()
     }
     else if (!streamedDelta.value) {
       stopWatchingStreamVersion()

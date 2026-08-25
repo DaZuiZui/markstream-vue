@@ -151,6 +151,31 @@ function getChildProps(child: NodeChild, index: number) {
   }
 }
 
+// Content signature for an inline child. The stream parser re-creates every
+// inline child object of the tail paragraph on each commit, so identity-based
+// memoization cannot work on the raw children; instead the signature captures
+// everything that affects a child's rendered output. Children whose signature
+// is unchanged keep their previous child object (stable `node` prop reference),
+// so Vue skips their component re-render entirely — only the growing tail text
+// node actually changes.
+function getChildRenderSignature(child: NodeChild) {
+  const record = child as Record<string, unknown>
+  const children = record.children
+  return [
+    record.type,
+    String(record.raw ?? ''),
+    String(record.content ?? ''),
+    Array.isArray(children) ? `c${children.length}` : 'c0',
+    String((record as { loading?: unknown }).loading ?? ''),
+  ].join('\u0001')
+}
+
+// Per-render child cache: index → { child, sig }. The parser hands us a new
+// object for every inline child on each streaming commit; handing components
+// the previous (content-identical) child object keeps their `node` prop
+// reference stable so the child component update is skipped.
+const previousChildCache = new Map<number, { child: NodeChild, sig: string }>()
+
 const nodeComponents = computed(() => ({
   inline_code: InlineCodeNode,
   image: ImageNode,
@@ -204,20 +229,35 @@ function processChild(child: NodeChild): { child: NodeChild, component: any, isC
   }
 }
 
-const processedChildren = computed(() => renderedChildren.value.map((child, index) => {
-  const processed = processChild(child)
-  return {
-    ...processed,
-    index,
-    key: `${props.indexKey || 'paragraph'}-${index}`,
-    customAttrs: processed.isCustomComponent
-      ? getCustomNodeAttrs(processed.child as any, resolvedHtmlPolicy.value)
-      : undefined,
-    hasSlotChildren: Array.isArray((processed.child as any).children) && (processed.child as any).children.length > 0,
-    slotContent: String((processed.child as any).content ?? ''),
-    originalChild: child,
+const processedChildren = computed(() => {
+  const children = renderedChildren.value
+  // Trim stale cache entries when the paragraph shrinks (indexes shift or a
+  // paragraph is re-parsed into fewer children).
+  if (previousChildCache.size > children.length) {
+    for (const key of previousChildCache.keys()) {
+      if (key >= children.length)
+        previousChildCache.delete(key)
+    }
   }
-}))
+  return children.map((child, index) => {
+    const sig = getChildRenderSignature(child)
+    const previous = previousChildCache.get(index)
+    const stableChild = previous && previous.sig === sig ? previous.child : child
+    previousChildCache.set(index, { child: stableChild, sig })
+    const processed = processChild(stableChild)
+    return {
+      ...processed,
+      index,
+      key: `${props.indexKey || 'paragraph'}-${index}`,
+      customAttrs: processed.isCustomComponent
+        ? getCustomNodeAttrs(processed.child as any, resolvedHtmlPolicy.value)
+        : undefined,
+      hasSlotChildren: Array.isArray((processed.child as any).children) && (processed.child as any).children.length > 0,
+      slotContent: String((processed.child as any).content ?? ''),
+      originalChild: stableChild,
+    }
+  })
+})
 </script>
 
 <template>
