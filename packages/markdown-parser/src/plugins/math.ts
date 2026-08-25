@@ -310,6 +310,59 @@ function isPlainBracketMathLike(content: string) {
   return true
 }
 
+// `mathInline` is tried by markdown-it at every inline position of a
+// paragraph, and it rescans the whole inline source each time. The expensive
+// inputs (code-span/image ranges and the math-opener positions) are pure
+// functions of the source, so they are computed ONCE per inline state and
+// reused across the rule's repeated invocations within that single parse.
+//
+// Keying the cache on the state object (WeakMap) scopes it to one inline
+// parse: the entry is released with the state after parsing, so full
+// paragraph sources are never retained across parses or parser instances.
+interface InlineScanState {
+  codeSpanRanges: Array<[number, number]>
+  imageRanges: Array<[number, number]>
+  /** Sorted indices of characters that can start a math opener (`$` or `\`). */
+  mathOpenerPositions: number[]
+}
+
+const inlineScanStateCache = new WeakMap<MathInlineState, InlineScanState>()
+
+function getInlineScanState(s: MathInlineState): InlineScanState {
+  let entry = inlineScanStateCache.get(s)
+  if (entry)
+    return entry
+
+  const src = s.src
+  const allowLoading = s.env?.__markstreamFinal !== true
+  const mathOpenerPositions: number[] = []
+  for (let index = 0; index < src.length; index++) {
+    const char = src[index]
+    if (char === '$' || char === '\\')
+      mathOpenerPositions.push(index)
+  }
+  entry = {
+    codeSpanRanges: buildCodeSpanRanges(src),
+    imageRanges: buildImageRanges(src, allowLoading),
+    mathOpenerPositions,
+  }
+  inlineScanStateCache.set(s, entry)
+  return entry
+}
+
+function hasMathOpenerAtOrAfter(mathOpenerPositions: number[], pos: number): boolean {
+  let low = 0
+  let high = mathOpenerPositions.length
+  while (low < high) {
+    const mid = (low + high) >> 1
+    if (mathOpenerPositions[mid]! < pos)
+      low = mid + 1
+    else
+      high = mid
+  }
+  return low < mathOpenerPositions.length
+}
+
 function buildCodeSpanRanges(src: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = []
   let i = 0
@@ -921,6 +974,17 @@ export function applyMath(md: MarkdownIt, mathOpts?: MathOptions) {
       return false
     }
 
+    const pending = String(s.pending ?? '')
+    const currentStart = Math.max(0, s.pos - pending.length)
+    // Fast path: the opener decision (and the code-span/image ranges) is
+    // computed once per inline state. When there is no math opener at or
+    // after the scan start, this rule returns false immediately instead of
+    // re-scanning the whole source at every inline position.
+    const scan = getInlineScanState(s)
+    if (!hasMathOpenerAtOrAfter(scan.mathOpenerPositions, currentStart)) {
+      return false
+    }
+
     if (s.src[s.pos] === '$') {
       let dollarRunEnd = s.pos + 1
       while (s.src[dollarRunEnd] === '$')
@@ -949,20 +1013,19 @@ export function applyMath(md: MarkdownIt, mathOpts?: MathOptions) {
       // regular text like "(0 <= t < S-1)", causing false math detection.
     ]
 
-    const pending = String(s.pending ?? '')
-    const currentStart = Math.max(0, s.pos - pending.length)
     let searchPos = currentStart
     let preMathPos = currentStart
     // Save the initial unconsumed position so $$ can rescan the current
     // inline segment even after $ handling advances the cursor. Starting
     // from absolute 0 can duplicate already-emitted text after hardbreaks.
     const initialPos = currentStart
+    // We'll scan the entire inline source and tokenize all occurrences.
+    // Hoisted out of the delimiter loop: the ranges only depend on `src` and
+    // the loading flag, so they must not be rebuilt once per delimiter.
+    const src = s.src
+    const { codeSpanRanges, imageRanges } = scan
     // use findMatchingClose from util
     for (const [open, close] of delimiters) {
-      // We'll scan the entire inline source and tokenize all occurrences
-      const src = s.src
-      const codeSpanRanges = buildCodeSpanRanges(src)
-      const imageRanges = buildImageRanges(src, allowLoading)
       let foundAny = false
       // Reset searchPos for $$ to allow it to scan the full content
       // even after $ rule has processed some text
