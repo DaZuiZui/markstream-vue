@@ -162,6 +162,8 @@ export interface MermaidBlockNodeProps {
   maxHeight?: string | null
   estimatedPreviewHeightPx?: number
   loading?: boolean
+  /** Keep diagram geometry in normal layout while its parent response streams. */
+  streamingLayout?: boolean
   isDark?: boolean
   workerTimeoutMs?: number
   parseTimeoutMs?: number

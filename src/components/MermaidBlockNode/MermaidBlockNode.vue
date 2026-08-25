@@ -2488,6 +2488,7 @@ const computedButtonStyle = 'mermaid-action-btn p-[var(--ms-action-btn-padding)]
             <div
               ref="mermaidContent"
               class="_mermaid w-full text-center flex items-center justify-center min-h-full"
+              :class="{ 'is-streaming': props.loading !== false || props.streamingLayout === true }"
               :style="{ height: contentHeight }"
             />
           </div>
@@ -2665,6 +2666,15 @@ const computedButtonStyle = 'mermaid-action-btn p-[var(--ms-action-btn-padding)]
   content-visibility: auto;
   contain: content;
   contain-intrinsic-size: var(--ms-size-diagram-min-height) 240px;
+}
+
+/* Keep live diagrams in normal layout while their source is streaming. The
+   intrinsic placeholder can be far shorter than the eventual SVG and make a
+   scroll container observe a transient scrollHeight regression. */
+._mermaid.is-streaming {
+  content-visibility: visible;
+  contain: none;
+  contain-intrinsic-size: none;
 }
 
 ._mermaid :deep([data-mermaid-svg-layer]) {

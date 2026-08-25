@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
@@ -40,6 +41,32 @@ async function renderWithMaxHeight(maxHeight: string) {
 }
 
 describe('mermaid block max height', () => {
+  it('keeps the live diagram in normal layout while streaming', async () => {
+    const wrapper = mount(MermaidBlockNode as any, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'mermaid',
+          code: 'graph TD\nA-->B\n',
+          raw: '```mermaid\ngraph TD\nA-->B\n```',
+        },
+        loading: true,
+      },
+    })
+
+    ;(wrapper.vm as any).mermaidAvailable = true
+    ;(wrapper.vm as any).showSource = false
+    await nextTick()
+    expect(wrapper.get('div._mermaid').classes()).toContain('is-streaming')
+    await wrapper.setProps({ loading: false, streamingLayout: true })
+    await nextTick()
+    expect(wrapper.get('div._mermaid').classes()).toContain('is-streaming')
+    const source = readFileSync('src/components/MermaidBlockNode/MermaidBlockNode.vue', 'utf8')
+    expect(source).toContain('._mermaid.is-streaming {')
+    expect(source).toContain('content-visibility: visible;')
+    wrapper.unmount()
+  })
+
   it('caps preview height unless maxHeight is none', async () => {
     const capped = await renderWithMaxHeight('500px')
     expect(capped.container.style.height).toBe('500px')

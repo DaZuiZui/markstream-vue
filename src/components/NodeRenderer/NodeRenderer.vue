@@ -422,6 +422,11 @@ const stableLayoutInitiallyFinal = requestedFinal.value === true
 provide('markstreamSmoothStreaming', smoothStreamingEnabled)
 const contentStreamingTailActive = ref(false)
 const continuousStreamingObserved = ref(false)
+// Once a renderer has observed an append-only stream, keep its layout in the
+// real flow even after `final` flips. Async diagram/code work can still settle
+// after that transition, and re-enabling intrinsic placeholders would create
+// one last scrollHeight regression.
+const streamedLayoutObserved = ref(false)
 const hasObservedNonFinalContent = ref(false)
 let previousContentStreamValue = ''
 let hasSeenContentStreamValue = false
@@ -437,6 +442,7 @@ function clearContentStreamingTailIdleTimer() {
 function markContentStreamingTailActive() {
   contentStreamingTailActive.value = true
   continuousStreamingObserved.value = true
+  streamedLayoutObserved.value = true
   if (!isClient)
     return
 
@@ -461,6 +467,7 @@ watch(
   () => {
     clearContentStreamingTailActive()
     continuousStreamingObserved.value = false
+    streamedLayoutObserved.value = false
     hasObservedNonFinalContent.value = !props.nodes?.length
       && requestedFinal.value !== true
       && Boolean(props.content)
@@ -484,7 +491,16 @@ watch(
   ([content, nodes, finalRequested]) => {
     const nextContent = content ?? ''
 
-    if (nodes?.length || finalRequested === true) {
+    if (nodes?.length) {
+      clearContentStreamingTailActive()
+      continuousStreamingObserved.value = false
+      streamedLayoutObserved.value = false
+      previousContentStreamValue = nextContent
+      hasSeenContentStreamValue = true
+      return
+    }
+
+    if (finalRequested === true) {
       clearContentStreamingTailActive()
       continuousStreamingObserved.value = false
       previousContentStreamValue = nextContent
@@ -1198,6 +1214,10 @@ const stableLayoutDomEnabled = computed(() => {
     && !heightExperimentDomRequired.value
     && !deferNodes.value
     && !incrementalRenderingConfigured.value
+})
+const streamingLayoutDomEnabled = computed(() => {
+  return !renderAsFragment.value
+    && streamedLayoutObserved.value
 })
 const shouldObserveSlots = computed(() => !!registerNodeVisibility && deferNodes.value)
 const scrollListenerEnabled = computed(() => virtualizationEnabled.value || virtualScrollEnabled.value)
@@ -5841,7 +5861,10 @@ function getPreviewBindingsFor(
 }
 
 function getMermaidBindingsFor(node: ParsedNode) {
-  return getPreviewBindingsFor(mermaidBindings, node, estimateMermaidPreviewHeight, clampMermaidPreviewHeight)
+  return {
+    ...getPreviewBindingsFor(mermaidBindings, node, estimateMermaidPreviewHeight, clampMermaidPreviewHeight),
+    streamingLayout: streamedLayoutObserved.value,
+  }
 }
 
 function getInfographicBindingsFor(node: ParsedNode) {
@@ -6455,6 +6478,9 @@ onBeforeUnmount(() => {
       { dark: rendererProps.isDark },
       { virtualized: virtualizationEnabled },
       { 'virtual-scroll-coordinated': virtualScrollDomEnabled },
+      // Keep the live streaming tree in normal layout so intrinsic-size
+      // fallbacks cannot make a scroll container observe a height regression.
+      { 'streaming-layout': streamingLayoutDomEnabled },
       { 'stable-layout': stableLayoutDomEnabled },
       { 'typewriter-simple-cursor': showTypewriterCursor && resolvedTypewriterCursorMode === 'simple' },
     ]"
@@ -6619,6 +6645,11 @@ onBeforeUnmount(() => {
      already limits DOM cost, so keep it visible to avoid a blank first paint. */
   content-visibility: visible;
   contain-intrinsic-size: auto;
+}
+
+.markdown-renderer.streaming-layout {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
 }
 
 .markdown-renderer.stable-layout {

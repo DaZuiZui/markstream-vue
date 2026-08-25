@@ -19,6 +19,7 @@ export const MermaidBlockNodeLoading = defineComponent({
     node: { type: Object, required: true },
     showHeader: { type: Boolean, default: true },
     estimatedPreviewHeightPx: { type: Number, default: undefined },
+    streamingLayout: { type: Boolean, default: false },
   },
   setup(loadingProps) {
     const height = computed(() => clampMermaidPreviewHeight(
@@ -81,9 +82,12 @@ export const MermaidBlockNodeLoading = defineComponent({
           class: '_mermaid w-full text-center flex items-center justify-center min-h-full',
           style: {
             fontFamily: 'inherit',
-            contentVisibility: 'auto',
-            contain: 'content',
-            containIntrinsicSize: 'var(--ms-size-diagram-min-height) 240px',
+            // Loading shells are part of the live streaming scroll layout;
+            // intrinsic auto-visibility can make scrollHeight regress when a
+            // shell is promoted to the rendered diagram.
+            contentVisibility: 'visible',
+            contain: 'none',
+            containIntrinsicSize: 'none',
           },
         }),
       ]),
