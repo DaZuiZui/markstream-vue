@@ -15,6 +15,36 @@ afterEach(() => {
 })
 
 describe('mermaid static render performance', () => {
+  it('reserves the estimated height while a streamed source fallback is visible', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined as any)
+    vi.doMock('../src/workers/mermaidWorkerClient', () => ({
+      canParseOffthread: vi.fn(async () => false),
+      findPrefixOffthread: vi.fn(async () => null),
+      terminateWorker: vi.fn(),
+    }))
+    vi.doMock('../src/components/MermaidBlockNode/mermaid', () => ({
+      getMermaid: vi.fn(async () => ({ initialize: vi.fn(), render: vi.fn() })),
+      isMermaidEnabled: vi.fn(() => true),
+    }))
+
+    const MermaidBlockNode = (await import('../src/components/MermaidBlockNode/MermaidBlockNode.vue')).default
+    const wrapper = mount(MermaidBlockNode as any, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'mermaid',
+          code: 'flowchart TD\nA-->B\n',
+          raw: '```mermaid\nflowchart TD\nA',
+        },
+        loading: true,
+        estimatedPreviewHeightPx: 500,
+      },
+    })
+
+    expect((wrapper.get('.mermaid-source-panel').element as HTMLElement).style.minHeight).toBe('500px')
+    wrapper.unmount()
+  })
+
   it('promotes completed diagrams from SSR fallback to preview with a reserved height', async () => {
     vi.useFakeTimers()
     vi.stubGlobal('IntersectionObserver', undefined as any)
