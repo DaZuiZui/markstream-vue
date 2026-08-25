@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, h, inject } from 'vue'
+import { defineComponent, h, inject, nextTick, reactive } from 'vue'
 import MermaidBlockNode from '../src/components/MermaidBlockNode'
 import NodeRenderer from '../src/components/NodeRenderer'
 import { removeCustomComponents, setCustomComponents } from '../src/utils/nodeComponents'
@@ -259,6 +259,69 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
 
     expect(wrapper.emitted('copy-code')?.[0]).toEqual(['export const value = 1'])
     expect(wrapper.emitted('copy')?.[0]).toEqual(['export const value = 1'])
+  })
+
+  it('merges forwarded code-block listeners with renderer event handlers', async () => {
+    setCustomComponents(customId, {
+      code_block: CopyEmitterProbe,
+    })
+    const forwardedCopy = vi.fn()
+    const rendererCopy = vi.fn()
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        customId,
+        nodes: [
+          {
+            type: 'code_block',
+            language: 'ts',
+            code: 'export const value = 1',
+            raw: '```ts\nexport const value = 1\n```',
+          },
+        ],
+        codeBlockProps: {
+          onCopy: forwardedCopy,
+        },
+        onCopy: rendererCopy,
+      } as any,
+    })
+
+    await wrapper.get('.copy-emitter-probe').trigger('click')
+
+    expect(forwardedCopy).toHaveBeenCalledTimes(1)
+    expect(forwardedCopy).toHaveBeenCalledWith('export const value = 1')
+    expect(rendererCopy).toHaveBeenCalledTimes(1)
+    expect(rendererCopy).toHaveBeenCalledWith('export const value = 1')
+  })
+
+  it('merges fragment interaction listeners with forwarded code-block listeners', async () => {
+    setCustomComponents(customId, {
+      code_block: CopyEmitterProbe,
+    })
+    const forwardedClick = vi.fn()
+    const rendererClick = vi.fn()
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        customId,
+        renderAsFragment: true,
+        nodes: [
+          {
+            type: 'code_block',
+            language: 'ts',
+            code: 'export const value = 1',
+            raw: '```ts\nexport const value = 1\n```',
+          },
+        ],
+        codeBlockProps: {
+          onClick: forwardedClick,
+        },
+        onClick: rendererClick,
+      } as any,
+    })
+
+    await wrapper.get('.copy-emitter-probe').trigger('click')
+
+    expect(forwardedClick).toHaveBeenCalledTimes(1)
+    expect(rendererClick).toHaveBeenCalledTimes(1)
   })
 
   it('does not re-emit native copy events from math nodes', async () => {
@@ -809,6 +872,41 @@ describe('nodeRenderer heavy-node prop forwarding', () => {
     expect(wrapper.get('strong .mention').text()).toBe('Simon')
     expect(wrapper.get('em .mention').text()).toBe('Ada')
     expect(wrapper.get('h1 .mention').text()).toBe('Lin')
+  })
+
+  it('updates cached loading props when a source node changes in place', async () => {
+    setCustomComponents(customId, {
+      paragraph: InlinePropsProbe,
+    })
+    const node = reactive({
+      type: 'paragraph',
+      raw: 'Loading probe',
+      loading: true,
+      children: [],
+    }) as any
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        customId,
+        nodes: [node],
+        batchRendering: false,
+        deferNodesUntilVisible: false,
+        fade: false,
+        viewportPriority: false,
+      },
+    })
+
+    await flushAll()
+    expect(wrapper.get('.inline-props-probe').attributes('data-loading')).toBe('true')
+
+    node.loading = false
+    await nextTick()
+    await flushAll()
+    expect(wrapper.get('.inline-props-probe').attributes('data-loading')).toBe('false')
+
+    node.loading = true
+    await nextTick()
+    await flushAll()
+    expect(wrapper.get('.inline-props-probe').attributes('data-loading')).toBe('true')
   })
 
   it('forwards loading and isDark to inline custom tag components', async () => {

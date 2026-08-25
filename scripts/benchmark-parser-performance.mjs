@@ -25,6 +25,12 @@ const profile = readArg('--profile') ?? 'deep'
 const rounds = readPositiveIntegerArg('--rounds', profile === 'deterministic' ? 1 : 7)
 const warmups = readNonNegativeIntegerArg('--warmups', profile === 'deterministic' ? 0 : 2)
 const heapChildMode = process.argv.includes('--heap-child')
+// When enabled, every parse runs through a pure `preTransformTokens` hook,
+// which forces the token-clone path used by consumers that transform tokens
+// (e.g. custom HTML tag demos). This exercises the clone hot path in
+// before/after comparisons; it is off by default so continuous regression
+// baselines keep measuring the base streaming path.
+const transformMode = process.argv.includes('--transform')
 const injectProcessedTokenRegression = process.env.MARKSTREAM_PARSER_PERF_INJECT_PROCESSED_TOKEN_REGRESSION === '1'
 const injectedHeapRetentionBytes = readNonNegativeIntegerEnvironment('MARKSTREAM_PARSER_PERF_INJECT_HEAP_RETENTION_BYTES')
 const scaleFactors = [1, 2, 4]
@@ -238,6 +244,21 @@ function crossVersionInstrumentationOptions(metrics) {
   }
 }
 
+// Pure, stable transform hook that only forces the token-clone path. Parser
+// runtimes compare hook identity across streaming commits, so recreating this
+// function per commit would reset incremental parser state and invalidate the
+// benchmark workload.
+const identityTokenTransform = tokens => tokens
+
+function withTransformOptions(options) {
+  if (!transformMode)
+    return options
+  return {
+    ...options,
+    preTransformTokens: identityTokenTransform,
+  }
+}
+
 async function runSample(parser, definition, scale, sampleIndex) {
   const { getMarkdown, parseMarkdownToStructure } = parser
   const source = createSource(definition, scale)
@@ -258,11 +279,11 @@ async function runSample(parser, definition, scale, sampleIndex) {
     current += chunk
     const timing = {}
     const startedAt = performance.now()
-    const nodes = parseMarkdownToStructure(current, md, {
+    const nodes = parseMarkdownToStructure(current, md, withTransformOptions({
       final: false,
       streamParse: true,
       ...crossVersionInstrumentationOptions(timing),
-    })
+    }))
     commitDurations.push(performance.now() - startedAt)
     processedTokenCount += Number(timing.processTokensInputTokens || 0)
     reusedNodeCount += Number(timing.processTokensReusedTopLevelNodes || 0)
@@ -279,11 +300,11 @@ async function runSample(parser, definition, scale, sampleIndex) {
   }
   const finalTiming = {}
   const finalStartedAt = performance.now()
-  const finalNodes = parseMarkdownToStructure(source, md, {
+  const finalNodes = parseMarkdownToStructure(source, md, withTransformOptions({
     final: true,
     streamParse: true,
     ...crossVersionInstrumentationOptions(finalTiming),
-  })
+  }))
   const finalFlushMs = performance.now() - finalStartedAt
   const streamStats = md.stream?.stats?.() ?? null
   md.stream?.reset?.()
@@ -376,7 +397,7 @@ function environmentMetadata(heapExecution) {
 }
 
 function runHeapChild() {
-  const child = spawnSync(process.execPath, [
+  const childArgs = [
     '--jitless',
     '--expose-gc',
     scriptPath,
@@ -385,7 +406,11 @@ function runHeapChild() {
     `--rounds=${rounds}`,
     `--warmups=${warmups}`,
     `--parser-dist=${parserDistPath}`,
-  ], {
+  ]
+  if (transformMode)
+    childArgs.push('--transform')
+
+  const child = spawnSync(process.execPath, childArgs, {
     cwd: repoRoot,
     encoding: 'utf8',
     env: process.env,
@@ -410,7 +435,7 @@ function mergeHeapMeasurements(cases, heapReport) {
     throw new Error('Parser heap child returned mismatched benchmark or corpus identity.')
   if (heapReport.parser?.package !== packageJson.name || heapReport.parser?.version !== packageJson.version)
     throw new Error('Parser heap child returned mismatched parser identity.')
-  if (heapReport.config?.rounds !== rounds || heapReport.config?.warmups !== warmups || JSON.stringify(heapReport.config?.scaleFactors) !== JSON.stringify(scaleFactors) || JSON.stringify(heapReport.config?.chunkPlan) !== JSON.stringify({ id: 'fixed-size-cycle-v1', sizes: chunkSizes }))
+  if (heapReport.config?.rounds !== rounds || heapReport.config?.warmups !== warmups || heapReport.config?.transformMode !== transformMode || JSON.stringify(heapReport.config?.scaleFactors) !== JSON.stringify(scaleFactors) || JSON.stringify(heapReport.config?.chunkPlan) !== JSON.stringify({ id: 'fixed-size-cycle-v1', sizes: chunkSizes }))
     throw new Error('Parser heap child returned mismatched benchmark config.')
   if (JSON.stringify(heapReport.cases.map(testCase => testCase.id)) !== JSON.stringify(cases.map(testCase => testCase.id)))
     throw new Error('Parser heap child returned a mismatched case set.')
@@ -460,6 +485,7 @@ if (heapChildMode) {
     config: {
       rounds,
       warmups,
+      transformMode,
       scaleFactors,
       chunkPlan: {
         id: 'fixed-size-cycle-v1',
@@ -509,6 +535,7 @@ const report = {
       sizes: chunkSizes,
     },
     injectedProcessedTokenRegression: injectProcessedTokenRegression,
+    transformMode,
   },
   cases,
 }
