@@ -22,7 +22,6 @@ export const MermaidBlockNodeLoading = defineComponent({
     streamingLayout: { type: Boolean, default: false },
   },
   setup(loadingProps) {
-    const streamingLayout = computed(() => loadingProps.streamingLayout === true)
     const height = computed(() => clampMermaidPreviewHeight(
       parsePositiveNumber(loadingProps.estimatedPreviewHeightPx)
       ?? estimateMermaidPreviewHeight(String((loadingProps.node as RuntimeCodeBlockNode).code ?? '')),
@@ -86,11 +85,9 @@ export const MermaidBlockNodeLoading = defineComponent({
             // Loading shells are part of the live streaming scroll layout;
             // intrinsic auto-visibility can make scrollHeight regress when a
             // shell is promoted to the rendered diagram.
-            contentVisibility: streamingLayout.value ? 'visible' : 'auto',
-            contain: streamingLayout.value ? 'none' : 'content',
-            containIntrinsicSize: streamingLayout.value
-              ? 'none'
-              : 'var(--ms-size-diagram-min-height) 240px',
+            contentVisibility: 'visible',
+            contain: 'none',
+            containIntrinsicSize: 'none',
           },
         }),
       ]),
