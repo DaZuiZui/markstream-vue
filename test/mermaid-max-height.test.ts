@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import MermaidBlockNode from '../src/components/MermaidBlockNode/MermaidBlockNode.vue'
+import { MermaidBlockNodeLoading } from '../src/components/NodeRenderer/MermaidBlockNodeLoading'
 
 async function renderWithMaxHeight(maxHeight: string) {
   const wrapper = mount(MermaidBlockNode as any, {
@@ -41,6 +42,32 @@ async function renderWithMaxHeight(maxHeight: string) {
 }
 
 describe('mermaid block max height', () => {
+  it('keeps intrinsic loading layout optimization outside streaming mode', () => {
+    const baseProps = {
+      node: {
+        type: 'code_block',
+        language: 'mermaid',
+        code: 'graph TD\nA-->B\n',
+        raw: '```mermaid\ngraph TD\nA-->B\n```',
+      },
+    }
+    const optimized = mount(MermaidBlockNodeLoading, { props: baseProps })
+    const optimizedMermaid = optimized.get('div._mermaid').element as HTMLElement
+    expect(optimizedMermaid.style.contentVisibility).toBe('auto')
+    expect(optimizedMermaid.style.contain).toBe('content')
+    expect(optimizedMermaid.style.containIntrinsicSize).toBe('var(--ms-size-diagram-min-height) 240px')
+    optimized.unmount()
+
+    const streaming = mount(MermaidBlockNodeLoading, {
+      props: { ...baseProps, streamingLayout: true },
+    })
+    const streamingMermaid = streaming.get('div._mermaid').element as HTMLElement
+    expect(streamingMermaid.style.contentVisibility).toBe('visible')
+    expect(streamingMermaid.style.contain).toBe('none')
+    expect(streamingMermaid.style.containIntrinsicSize).toBe('none')
+    streaming.unmount()
+  })
+
   it('keeps the live diagram in normal layout while streaming', async () => {
     const wrapper = mount(MermaidBlockNode as any, {
       props: {
