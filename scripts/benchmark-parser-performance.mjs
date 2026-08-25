@@ -25,6 +25,12 @@ const profile = readArg('--profile') ?? 'deep'
 const rounds = readPositiveIntegerArg('--rounds', profile === 'deterministic' ? 1 : 7)
 const warmups = readNonNegativeIntegerArg('--warmups', profile === 'deterministic' ? 0 : 2)
 const heapChildMode = process.argv.includes('--heap-child')
+// When enabled, every parse runs through a pure `preTransformTokens` hook,
+// which forces the token-clone path used by consumers that transform tokens
+// (e.g. custom HTML tag demos). This exercises the clone hot path in
+// before/after comparisons; it is off by default so continuous regression
+// baselines keep measuring the base streaming path.
+const transformMode = process.argv.includes('--transform')
 const injectProcessedTokenRegression = process.env.MARKSTREAM_PARSER_PERF_INJECT_PROCESSED_TOKEN_REGRESSION === '1'
 const injectedHeapRetentionBytes = readNonNegativeIntegerEnvironment('MARKSTREAM_PARSER_PERF_INJECT_HEAP_RETENTION_BYTES')
 const scaleFactors = [1, 2, 4]
@@ -238,6 +244,18 @@ function crossVersionInstrumentationOptions(metrics) {
   }
 }
 
+// Pure transform hook that only forces the token-clone path; it never mutates
+// tokens, so results stay byte-identical to the no-transform run and both
+// versions can be compared with the same corpus.
+function withTransformOptions(options) {
+  if (!transformMode)
+    return options
+  return {
+    ...options,
+    preTransformTokens: tokens => tokens,
+  }
+}
+
 async function runSample(parser, definition, scale, sampleIndex) {
   const { getMarkdown, parseMarkdownToStructure } = parser
   const source = createSource(definition, scale)
@@ -258,11 +276,11 @@ async function runSample(parser, definition, scale, sampleIndex) {
     current += chunk
     const timing = {}
     const startedAt = performance.now()
-    const nodes = parseMarkdownToStructure(current, md, {
+    const nodes = parseMarkdownToStructure(current, md, withTransformOptions({
       final: false,
       streamParse: true,
       ...crossVersionInstrumentationOptions(timing),
-    })
+    }))
     commitDurations.push(performance.now() - startedAt)
     processedTokenCount += Number(timing.processTokensInputTokens || 0)
     reusedNodeCount += Number(timing.processTokensReusedTopLevelNodes || 0)
@@ -279,11 +297,11 @@ async function runSample(parser, definition, scale, sampleIndex) {
   }
   const finalTiming = {}
   const finalStartedAt = performance.now()
-  const finalNodes = parseMarkdownToStructure(source, md, {
+  const finalNodes = parseMarkdownToStructure(source, md, withTransformOptions({
     final: true,
     streamParse: true,
     ...crossVersionInstrumentationOptions(finalTiming),
-  })
+  }))
   const finalFlushMs = performance.now() - finalStartedAt
   const streamStats = md.stream?.stats?.() ?? null
   md.stream?.reset?.()
@@ -509,6 +527,7 @@ const report = {
       sizes: chunkSizes,
     },
     injectedProcessedTokenRegression: injectProcessedTokenRegression,
+    transformMode,
   },
   cases,
 }

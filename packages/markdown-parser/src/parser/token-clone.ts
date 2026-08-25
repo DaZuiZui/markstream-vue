@@ -130,6 +130,76 @@ function cloneMarkdownToken(token: Token, cloneObjectFields = true): Token {
   if (!cloneObjectFields)
     return cloneTokenWithMutableChildren(token as unknown as MarkdownToken) as unknown as Token
 
+  // Fast path: markdown-it Token instances store their data as own enumerable
+  // string-keyed data properties; methods live on the prototype. Copy those
+  // with plain assignment (much cheaper than defineProperty-per-key) with the
+  // specialized deep copies for attrs/map/children, then restore the
+  // prototype in one call. Tokens carrying non-enumerable or symbol keys
+  // (plugins may attach state that way) fall back to the reflective clone so
+  // those fields are preserved exactly.
+  const allKeys = Reflect.ownKeys(token as unknown as object)
+  const enumerableKeys = Object.keys(token)
+  if (allKeys.length === enumerableKeys.length) {
+    try {
+      return cloneMarkdownTokenFast(token, enumerableKeys, cloneObjectFields)
+    }
+    catch {
+      // Exotic property (getter-returned value, non-writable data property
+      // assigned in strict mode, ...): fall back to the reflective clone.
+      return cloneMarkdownTokenReflective(token, cloneObjectFields)
+    }
+  }
+
+  return cloneMarkdownTokenReflective(token, cloneObjectFields)
+}
+
+function cloneMarkdownTokenFast(
+  token: Token,
+  enumerableKeys: string[],
+  cloneObjectFields: boolean,
+): Token {
+  const prototype = Object.getPrototypeOf(token)
+  const cloned = {} as Record<PropertyKey, unknown>
+  const seen = new WeakMap<object, unknown>()
+  const children = token.children
+  const attrs = token.attrs
+  const map = token.map
+  const source = token as unknown as Record<string, unknown>
+
+  for (let keyIndex = 0; keyIndex < enumerableKeys.length; keyIndex++) {
+    const key = enumerableKeys[keyIndex]!
+    const value = source[key]
+
+    if (key === 'children' && Array.isArray(children)) {
+      const clonedChildren = new Array(children.length)
+      for (let index = 0; index < children.length; index++)
+        clonedChildren[index] = cloneMarkdownToken(children[index]!, cloneObjectFields)
+      cloned[key] = clonedChildren
+    }
+    else if (key === 'attrs' && Array.isArray(attrs)) {
+      const clonedAttrs: Array<[string, string]> = new Array(attrs.length)
+      for (let index = 0; index < attrs.length; index++) {
+        const attr = attrs[index]!
+        clonedAttrs[index] = [attr[0], attr[1]]
+      }
+      cloned[key] = clonedAttrs
+    }
+    else if (key === 'map' && Array.isArray(map)) {
+      cloned[key] = [map[0], map[1]]
+    }
+    else if (cloneObjectFields && value && typeof value === 'object') {
+      cloned[key] = safeCloneTokenField(value, seen)
+    }
+    else {
+      cloned[key] = value
+    }
+  }
+
+  Object.setPrototypeOf(cloned, prototype)
+  return cloned as unknown as Token
+}
+
+function cloneMarkdownTokenReflective(token: Token, cloneObjectFields = true): Token {
   const cloned = Object.create(Object.getPrototypeOf(token)) as Token
   const seen = new WeakMap<object, unknown>()
 
