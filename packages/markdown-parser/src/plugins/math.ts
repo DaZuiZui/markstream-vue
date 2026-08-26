@@ -631,40 +631,6 @@ function countLineBreaks(value: string) {
   return count
 }
 
-/**
- * Incremental line-count cache for the tolerant-math boundary window. Math
- * blocks can push documents past the tail window, in which case the window's
- * absolute line offset must be derived from the whole prefix; streaming commits
- * grow the source append-only, so the count is extended by scanning only the
- * appended tail instead of re-scanning the entire prefix on every commit.
- */
-export interface TolerantMathLineOffsetCache {
-  /** The source prefix the line count corresponds to. */
-  source: string
-  lineCount: number
-}
-
-/**
- * Extend (or rebuild) `cache` so its line count covers `source`. The cache is
- * mutated in place; callers keep the same object across streaming commits.
- */
-export function updateTolerantMathLineOffsetCache(
-  cache: TolerantMathLineOffsetCache,
-  source: string,
-) {
-  if (source.length >= cache.source.length && source.startsWith(cache.source)) {
-    for (let index = cache.source.length; index < source.length; index++) {
-      if (source.charCodeAt(index) === 10)
-        cache.lineCount += 1
-    }
-  }
-  else {
-    cache.lineCount = countLineBreaks(source)
-  }
-  cache.source = source
-  return cache
-}
-
 function isAsciiDigit(ch?: string) {
   if (!ch)
     return false
@@ -801,36 +767,28 @@ function hashTolerantBoundaryContent(content: string) {
   return hash.toString(36)
 }
 
-function getTolerantBoundaryScanWindow(source: string, lineCountCache?: TolerantMathLineOffsetCache) {
+function getTolerantBoundaryScanWindow(source: string) {
   if (source.length <= TOLERANT_BOUNDARY_SCAN_TAIL_CHARS)
     return { source, lineOffset: 0 }
 
   let start = source.length - TOLERANT_BOUNDARY_SCAN_TAIL_CHARS
   const nextLineBreak = source.indexOf('\n', start)
-  if (nextLineBreak === -1) {
-    // No newline in the tail window: the prefix line count equals the full
-    // count, and caching the prefix keeps the incremental counter consistent
-    // across commits (the cache source always ends at a window start).
-    if (lineCountCache)
-      updateTolerantMathLineOffsetCache(lineCountCache, source.slice(0, start))
-    return { source: '', lineOffset: lineCountCache?.lineCount ?? countLineBreaks(source.slice(0, start)) }
-  }
+  if (nextLineBreak === -1)
+    return { source: '', lineOffset: countLineBreaks(source) }
 
   start = nextLineBreak + 1
-  if (lineCountCache)
-    updateTolerantMathLineOffsetCache(lineCountCache, source.slice(0, start))
   return {
     source: source.slice(start),
-    lineOffset: lineCountCache?.lineCount ?? countLineBreaks(source.slice(0, start)),
+    lineOffset: countLineBreaks(source.slice(0, start)),
   }
 }
 
-export function mayContainTolerantMathBlockBoundaryOpener(markdown: string, lineCountCache?: TolerantMathLineOffsetCache) {
+export function mayContainTolerantMathBlockBoundaryOpener(markdown: string) {
   const fullSource = String(markdown ?? '')
   if (!fullSource || (!fullSource.includes('$$') && !fullSource.includes('\\[')))
     return false
 
-  const { source } = getTolerantBoundaryScanWindow(fullSource, lineCountCache)
+  const { source } = getTolerantBoundaryScanWindow(fullSource)
   if (!source)
     return false
 
@@ -855,12 +813,12 @@ export function mayContainTolerantMathBlockBoundaryOpener(markdown: string, line
   return false
 }
 
-export function getTolerantMathBlockBoundaryStreamKey(markdown: string, lineCountCache?: TolerantMathLineOffsetCache) {
+export function getTolerantMathBlockBoundaryStreamKey(markdown: string) {
   const fullSource = String(markdown ?? '')
   if (!fullSource || (!fullSource.includes('$$') && !fullSource.includes('\\[')))
     return null
 
-  const { source, lineOffset } = getTolerantBoundaryScanWindow(fullSource, lineCountCache)
+  const { source, lineOffset } = getTolerantBoundaryScanWindow(fullSource)
   if (!source)
     return null
 

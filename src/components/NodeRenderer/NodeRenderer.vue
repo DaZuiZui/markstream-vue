@@ -5706,8 +5706,8 @@ function buildRenderedItemSignature(node: ParsedNode, index: number, globalSigna
  * The per-node signature tracks index, loading, estimated height and the
  * renderer-global signature so unchanged nodes skip all derivation work.
  */
-function buildRenderedItem(item: { node: ParsedNode, index: number }, globalSignature?: readonly unknown[]) {
-  const cacheSignature = buildRenderedItemSignature(item.node, item.index, globalSignature ?? getRenderedItemGlobalSignature())
+function buildRenderedItem(item: { node: ParsedNode, index: number }, globalSignature: readonly unknown[]) {
+  const cacheSignature = buildRenderedItemSignature(item.node, item.index, globalSignature)
   const cachedItem = renderedItemCache.get(item.node)
   if (cachedItem && hasSameRenderedItemSignature(cachedItem.signature, cacheSignature))
     return cachedItem.item

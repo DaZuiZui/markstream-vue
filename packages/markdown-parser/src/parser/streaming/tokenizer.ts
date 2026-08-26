@@ -6,7 +6,6 @@ import {
   hasMarkstreamMathPlugin,
   mayContainTolerantMathBlockBoundaryOpener,
 } from '../../plugins/math'
-import { getParserRuntime } from '../runtime'
 import { cloneMarkdownTokens } from '../token-clone'
 import {
   shouldUseSyncParseForPendingTolerantMathBoundary,
@@ -129,10 +128,7 @@ function shouldFallbackDuplicateTolerantMathStreamTokens(
   tokens: Token[],
 ) {
   return hasMarkstreamMathPlugin(md)
-    && mayContainTolerantMathBlockBoundaryOpener(
-      source,
-      getParserRuntime(md).tolerantMathLineOffset ??= { source: '', lineCount: 0 },
-    )
+    && mayContainTolerantMathBlockBoundaryOpener(source)
     && hasAdjacentDuplicateParagraphTokenTriplet(tokens)
 }
 

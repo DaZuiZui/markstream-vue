@@ -1,5 +1,4 @@
 import type { MarkdownIt } from '../markdown-it-types'
-import type { TolerantMathLineOffsetCache } from '../plugins/math'
 import type { MarkdownToken, ParsedNode, ParseOptions } from '../types'
 
 export interface ExplicitBracketMathContext {
@@ -170,12 +169,6 @@ export class ParserRuntime {
   siblingHtmlChildren?: SiblingHtmlChildrenRuntimeState
   nodeSourceRanges = new WeakMap<object, { start: number, end: number }>()
   sourceLineOffsets?: SourceLineOffsetsRuntimeState
-  /**
-   * Incremental prefix line-count cache for the tolerant-math boundary window
-   * (see updateTolerantMathLineOffsetCache). Persists across streaming commits
-   * and is cleared with the other document caches on finalize/reset.
-   */
-  tolerantMathLineOffset?: TolerantMathLineOffsetCache
   private documentSource?: string
   private semantics?: ParserRuntimeSemantics
   private finalized = false
@@ -281,7 +274,6 @@ export class ParserRuntime {
     this.detailsStitchCache = new WeakMap()
     this.nodeSourceRanges = new WeakMap()
     this.sourceLineOffsets = undefined
-    this.tolerantMathLineOffset = undefined
   }
 }
 

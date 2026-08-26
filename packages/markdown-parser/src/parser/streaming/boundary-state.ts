@@ -52,10 +52,7 @@ function setTolerantMathBoundaryStreamCache(
     explicitBracketMath,
     source,
     key,
-    pendingCandidate: key === null && mayContainTolerantMathBlockBoundaryOpener(
-      source,
-      runtime.tolerantMathLineOffset ??= { source: '', lineCount: 0 },
-    ),
+    pendingCandidate: key === null && mayContainTolerantMathBlockBoundaryOpener(source),
   }
 }
 
@@ -771,10 +768,7 @@ export function syncTolerantMathBoundaryStreamCache(runtime: ParserRuntime, sour
     }
   }
 
-  const nextKey = getTolerantMathBlockBoundaryStreamKey(
-    source,
-    runtime.tolerantMathLineOffset ??= { source: '', lineCount: 0 },
-  )
+  const nextKey = getTolerantMathBlockBoundaryStreamKey(source)
   const sourceWasReplaced = previous ? !sourceExtendsPrevious : false
 
   if (previous && (sourceWasReplaced || previous.key !== nextKey || completesExplicitBracketMathClose))

@@ -292,19 +292,21 @@ class TimelineFenwickTree {
     values.forEach((value, index) => this.add(index, value))
   }
 
-  /**
-   * Extend the internal array with zero slots so new tail items can be added
-   * incrementally without rebuilding the tree from scratch. No-op when the
-   * tree already covers `count` items.
-   */
   resize(count: number) {
     const needed = count + 1
     if (needed <= this.tree.length)
       return
+
     const oldLength = this.tree.length
+    const oldCount = oldLength - 1
+    const oldTotal = this.total
     this.tree.length = needed
-    for (let i = oldLength; i < needed; i++)
-      this.tree[i] = 0
+    for (let cursor = oldLength; cursor < needed; cursor++) {
+      const rangeStart = cursor - (cursor & -cursor)
+      this.tree[cursor] = rangeStart < oldCount
+        ? oldTotal - this.prefixSum(rangeStart)
+        : 0
+    }
   }
 
   add(index: number, delta: number) {
@@ -411,6 +413,7 @@ let lastLayoutStructuralKey = ''
 // so consecutive updates that diverge at the same index still produce a
 // different watch token and re-trigger the rebuild.
 let layoutItemChangeEpoch = 0
+let detectedLayoutRebuildFrom = 0
 
 function getLayoutStructuralKey() {
   return [
@@ -448,8 +451,7 @@ function getHostEstimatedItemHeight(item: any, index: number) {
   if (typeof props.estimateItemHeight !== 'function')
     return undefined
 
-  const estimated = props.estimateItemHeight(item, index)
-  return Number.isFinite(estimated) && estimated > 0 ? Math.ceil(estimated) : undefined
+  return Math.ceil(estimateMarkstreamTimelineItemHeight(item, index, props))
 }
 
 function rebuildLayoutRecords(options: { forceFull?: boolean } = {}) {
@@ -473,18 +475,9 @@ function rebuildLayoutRecords(options: { forceFull?: boolean } = {}) {
     || prevCount === 0
     || total < prevCount
 
-  // Find the first divergent item. Prefix items are proven unchanged by item
-  // signature (key/kind/markdown/revision/content/component), so the scan is
-  // O(1) per prefix item and stops at the first change.
-  let rebuildFrom = 0
-  if (!fullRebuild) {
-    const shared = Math.min(prevCount, total)
-    while (rebuildFrom < shared) {
-      if (lastItemLayoutSignatures[rebuildFrom] !== getItemLayoutSignature(items[rebuildFrom]!, rebuildFrom))
-        break
-      rebuildFrom++
-    }
-  }
+  const rebuildFrom = fullRebuild
+    ? 0
+    : Math.min(detectedLayoutRebuildFrom, prevCount, total)
 
   const records = new Array<TimelineRecord>(total)
   const sizes = new Array<number>(total)
@@ -503,6 +496,13 @@ function rebuildLayoutRecords(options: { forceFull?: boolean } = {}) {
   if (fullRebuild) {
     layoutRecordByKey.clear()
   }
+  else {
+    for (let index = rebuildFrom; index < prevCount; index++) {
+      const record = previous[index]!
+      if (layoutRecordByKey.get(record.key) === record)
+        layoutRecordByKey.delete(record.key)
+    }
+  }
 
   for (let index = rebuildFrom; index < total; index++) {
     const item = items[index]
@@ -517,7 +517,6 @@ function rebuildLayoutRecords(options: { forceFull?: boolean } = {}) {
     let size = getCompatibleItemSize(recordBase)
     if (size == null) {
       size = layoutEstimateSnapshot[index]
-        ?? getHostEstimatedItemHeight(item, index)
         ?? estimateMarkstreamTimelineItemHeight(item, index, props)
     }
     const record = {
@@ -540,6 +539,7 @@ function rebuildLayoutRecords(options: { forceFull?: boolean } = {}) {
     }
     lastItemLayoutSignatures[index] = getItemLayoutSignature(item, index)
   }
+  lastItemLayoutSignatures.length = total
 
   if (fullRebuild) {
     for (const key of measureRecordElementHandles.keys()) {
@@ -793,6 +793,7 @@ function getLayoutRebuildSignature() {
   if (divergence === shared && total === lastItemLayoutSignatures.length)
     return 'stable'
 
+  detectedLayoutRebuildFrom = divergence
   layoutItemChangeEpoch += 1
   return `inc:${layoutItemChangeEpoch}:${divergence}:${total}`
 }

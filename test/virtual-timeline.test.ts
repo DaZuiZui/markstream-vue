@@ -831,6 +831,76 @@ describe('virtual timeline API', () => {
     wrapper.unmount()
   })
 
+  it('keeps offsets correct when appending across a Fenwick tree boundary', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(20)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+
+    const items = Array.from({ length: 3 }, (_, index) => ({
+      id: `item-${index}`,
+      kind: 'user-message',
+      text: `Item ${index}`,
+    }))
+    const wrapper = mount(MarkstreamVirtualTimeline, {
+      attachTo: document.body,
+      props: {
+        items,
+        threadKey: 'append-boundary',
+        stickToBottom: false,
+        overscan: 0,
+        overscanPx: 0,
+        estimateItemHeight: () => 100,
+      },
+    })
+    await flushAll()
+
+    await wrapper.setProps({
+      items: [...items, { id: 'item-3', kind: 'user-message', text: 'Item 3' }],
+    })
+    ;(wrapper.vm as any).scrollToOffset(150)
+    await nextTick()
+
+    expect((wrapper.vm as any).getVisibleRange().start).toBe(1)
+
+    wrapper.unmount()
+  })
+
+  it('drops the previous key when an incremental rebuild replaces an item', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(80)
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+
+    const wrapper = mount(MarkstreamVirtualTimeline, {
+      attachTo: document.body,
+      props: {
+        items: [{ id: 'old', kind: 'user-message', text: 'Old' }],
+        threadKey: 'replace-key',
+        stickToBottom: false,
+        overscan: 10,
+      },
+    })
+    await flushAll()
+    expect((wrapper.vm as any).getItemSize('old')).toBe(80)
+
+    await wrapper.setProps({
+      items: [{ id: 'new', kind: 'user-message', text: 'New' }],
+    })
+    await flushAll()
+
+    expect((wrapper.vm as any).getItemSize('old')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
   it('provides host scroll managed context to timeline children', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
