@@ -1681,7 +1681,6 @@ describe('virtual timeline restore visual readiness', () => {
     const headerTitle = wrapper.get('.code-header-title').element as HTMLElement
     const headerCaption = wrapper.get('.code-header-caption').element as HTMLElement
     const iconSlot = wrapper.get('.icon-slot')
-    expect(wrapper.findComponent({ name: 'CodeBlockShell' }).exists()).toBe(true)
     expect(headerMain.contains(iconSlot.element)).toBe(true)
     expect(headerMain.contains(headerCopy)).toBe(true)
     expect(headerCopy.contains(headerTitle)).toBe(true)

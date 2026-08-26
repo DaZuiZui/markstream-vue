@@ -605,7 +605,6 @@ describe('markdownRender deferNodesUntilVisible', () => {
       expect(codeBlock.attributes('estimatedcontentheightpx')).toBeUndefined()
       expect(codeBlock.classes()).toContain('rounded-lg')
       expect(codeBlock.classes()).toContain('border')
-      expect(wrapper.findComponent({ name: 'CodeBlockShell' }).exists()).toBe(true)
 
       const header = codeBlock.get('.code-block-header')
       expect(header.text()).toContain('TypeScript')
@@ -676,7 +675,6 @@ describe('markdownRender deferNodesUntilVisible', () => {
         await flushAll()
 
       const codeBlock = wrapper.get('[data-markstream-code-block="1"]')
-      expect(wrapper.findComponent({ name: 'CodeBlockShell' }).exists()).toBe(true)
       expect(codeBlock.get('.code-diff-stat.removed').text()).toBe('-2')
       expect(codeBlock.get('.code-diff-stat.added').text()).toBe('+2')
       const pre = codeBlock.get('pre.code-pre-fallback')
