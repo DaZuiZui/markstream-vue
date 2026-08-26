@@ -1,12 +1,16 @@
 import type { CodeBlockDiffHideUnchangedRegions, CodeBlockNodeProps } from '../../types/component-props'
-import { defineComponent, h } from 'vue'
-import { getLanguageIcon, languageMap, normalizeLanguageIdentifier } from '../../utils/languageIcon'
+import { defineComponent, h, inject } from 'vue'
+import { languageIconsRevision, languageMap, normalizeLanguageIdentifier } from '../../utils/languageIcon'
+import { MARKSTREAM_LANGUAGE_ICON_RESOLVER_KEY } from '../../utils/languageIconContext'
+import { resolveLanguageIcon } from '../../utils/resolveLanguageIcon'
 import {
+  estimateDiffStats,
   isDiffCodeBlock,
   resolveCodeBlockHeader,
   resolveDiffHideUnchangedRegionsOption,
   resolveDiffInlineLayout,
 } from '../CodeBlockNode/codeBlockHeader'
+import CodeBlockShell from '../CodeBlockNode/CodeBlockShell.vue'
 import PreCodeNode from '../PreCodeNode'
 import { resolvePreCodeThemePalette } from '../PreCodeNode/preCodeTheme'
 import { resolvePreCodeVisualOptions } from '../PreCodeNode/preCodeVisual'
@@ -50,7 +54,7 @@ export default defineComponent({
     'reservedHeightPx',
   ],
   emits: ['click', 'mouseover', 'mouseout', 'copy', 'previewCode', 'handleArtifactClick'],
-  setup(rawProps, { attrs }) {
+  setup(rawProps, { attrs, emit }) {
     const props = rawProps as CodeBlockFallbackProps & {
       diffHideUnchangedRegions?: CodeBlockDiffHideUnchangedRegions
       diffInline?: boolean
@@ -58,6 +62,7 @@ export default defineComponent({
       estimatedDiffInline?: boolean
       reservedHeightPx?: number
     }
+    const appLanguageIconResolver = inject(MARKSTREAM_LANGUAGE_ICON_RESOLVER_KEY, undefined)
 
     return () => {
       const sourceLanguage = String(props.node?.language ?? '').trim().toLowerCase()
@@ -65,6 +70,12 @@ export default defineComponent({
       const displayLanguage = languageMap[sourceLanguage] || languageMap[language]
         || (language ? language.charAt(0).toUpperCase() + language.slice(1) : languageMap[''])
       const isDiff = isDiffCodeBlock(props.node)
+      const diffStats = isDiff
+        ? estimateDiffStats(
+            String(props.node?.originalCode ?? ''),
+            String(props.node?.updatedCode ?? ''),
+          )
+        : null
       const header = resolveCodeBlockHeader(
         String(props.node?.raw ?? ''),
         displayLanguage,
@@ -86,6 +97,8 @@ export default defineComponent({
         ? Math.min(visualOptions.maxHeight, Math.ceil(reservedHeight))
         : visualOptions.maxHeight
       const showLineNumbers = props.showLineNumbers ?? (codeBlockOptions.disableLineNumbers !== true)
+      void languageIconsRevision.value
+      const languageIcon = resolveLanguageIcon(language, appLanguageIconResolver)
       const preStyle = {
         'fontSize': `${visualOptions.fontSize}px`,
         'lineHeight': `${visualOptions.lineHeight}px`,
@@ -127,40 +140,7 @@ export default defineComponent({
         'color': themePalette.foreground,
         'fontFamily': visualOptions.fontFamily,
       }
-      const actionPlaceholder = (kind: 'copy' | 'collapse' | 'more') => h('button', {
-        'class': 'code-action-btn inline-flex items-center justify-center p-[var(--ms-action-btn-padding)] rounded leading-none shrink-0',
-        'aria-hidden': 'true',
-        'disabled': true,
-        'tabindex': -1,
-        'type': 'button',
-      }, [kind === 'copy'
-        ? h('svg', {
-            class: 'action-icon',
-            height: '1em',
-            innerHTML: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>',
-            viewBox: '0 0 24 24',
-            width: '1em',
-          })
-        : kind === 'collapse'
-          ? h('svg', {
-              class: 'action-icon',
-              height: '1em',
-              innerHTML: '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6"/>',
-              style: { rotate: '90deg' },
-              viewBox: '0 0 24 24',
-              width: '1em',
-            })
-          : h('svg', {
-              class: 'action-icon',
-              height: '1em',
-              innerHTML: '<g fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></g>',
-              viewBox: '0 0 24 24',
-              width: '1em',
-            })])
       const isPreviewable = props.isShowPreview !== false && (language === 'html' || language === 'svg')
-      const showOverflowPlaceholder = (props.showFontSizeButtons !== false && props.enableFontSizeControl !== false)
-        || props.showExpandButton !== false
-        || (isPreviewable && props.showPreviewButton !== false)
       const formatSize = (value: unknown) => {
         if (value == null)
           return undefined
@@ -215,112 +195,64 @@ export default defineComponent({
         'data-markstream-enhanced': 'false',
         'data-markstream-code-block-state': props.loading ? 'streaming' : 'settled',
         'data-markstream-code-loading': '1',
-      }, [
-        props.showHeader === false
-          ? null
-          : h('div', {
-              class: 'code-block-header flex justify-between items-center border-b px-[var(--ms-inset-panel-x)] py-[var(--ms-inset-panel-y)] border-[var(--code-border)] bg-[var(--code-header-bg)] text-[var(--code-fg)]',
-            }, [
-              h('div', {
-                class: 'code-header-main',
-                style: {
-                  minWidth: 0,
-                  flex: '1 1 auto',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--ms-gap-header-main, 0.625rem)',
-                  overflow: 'hidden',
-                },
-              }, [
-                h('span', {
-                  'class': 'icon-slot h-4 w-4 flex-shrink-0',
-                  'aria-hidden': 'true',
-                  'innerHTML': getLanguageIcon(language),
-                  'style': {
-                    display: 'inline-flex',
-                    width: '1rem',
-                    height: '1rem',
-                    flex: '0 0 auto',
-                  },
-                }),
-                h('div', {
-                  class: 'code-header-copy',
-                  style: { minWidth: 0, display: 'grid', gap: '2px' },
-                }, [
-                  h('div', {
-                    class: 'code-header-title',
-                    style: {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      fontSize: 'var(--ms-text-label, 0.75rem)',
-                      fontWeight: '500',
-                      color: 'var(--code-action-fg)',
-                    },
-                  }, header.title),
-                  header.caption
-                    ? h('div', {
-                        class: 'code-header-caption',
-                        style: {
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          fontSize: '0.75rem',
-                          color: 'var(--code-line-number)',
-                        },
-                      }, header.caption)
-                    : null,
-                ]),
-              ]),
-              h('div', {
-                class: 'flex items-center gap-0.5',
-              }, [
-                isDiff
-                  ? h('div', { 'class': 'code-diff-stats', 'aria-hidden': 'true' }, [
-                      h('span', { class: 'code-diff-stat removed' }, '-0'),
-                      h('span', { class: 'code-diff-stat added' }, '+0'),
-                    ])
-                  : null,
-                props.showCopyButton === false ? null : actionPlaceholder('copy'),
-                props.showCollapseButton === false ? null : actionPlaceholder('collapse'),
-                showOverflowPlaceholder
-                  ? h('div', { class: 'relative' }, [actionPlaceholder('more')])
-                  : null,
-              ]),
-            ]),
-        h('div', {
-          class: 'code-block-shell-content',
-          style: props.stream !== false || props.loading === false ? undefined : { display: 'none' },
-        }, [
-          h(PreCodeNode, {
-            'node': props.node,
-            'loading': props.loading,
-            'showLineNumbers': showLineNumbers,
-            'reservedHeightPx': isDiff || reservedHeight == null
-              ? undefined
-              : Math.min(reservedHeight, visualOptions.maxHeight),
-            'diffInline': diffInline,
-            'diffHideUnchangedRegions': isDiff
-              ? props.diffHideUnchangedRegions ?? resolveDiffHideUnchangedRegionsOption(codeBlockOptions)
-              : undefined,
-            'class': ['code-pre-fallback', { 'is-wrap': visualOptions.overflow === 'wrap' }],
-            'style': preStyle,
-            'data-markstream-code-theme': themePalette.name,
-            'data-markstream-code-loading': '1',
+      }, [h(CodeBlockShell, {
+        showHeader: props.showHeader,
+        showCollapseButton: props.showCollapseButton,
+        showFontSizeButtons: props.showFontSizeButtons,
+        enableFontSizeControl: props.enableFontSizeControl,
+        showCopyButton: props.showCopyButton,
+        showExpandButton: props.showExpandButton,
+        showPreviewButton: props.showPreviewButton,
+        showTooltips: props.showTooltips,
+        isDark: props.isDark,
+        loading: props.loading,
+        stream: props.stream,
+        isPreviewable,
+        diffStats,
+        diffStatsAriaLabel: diffStats ? `-${diffStats.removed} +${diffStats.added}` : undefined,
+        onCopy: () => emit('copy', String(props.node?.code ?? '')),
+        onPreview: () => emit('previewCode', {
+          node: props.node,
+          artifactType: language === 'html' ? 'text/html' : 'image/svg+xml',
+          artifactTitle: language === 'html' ? 'HTML Preview' : 'SVG Preview',
+          id: `temp-${language}-${Date.now()}`,
+        }),
+      }, {
+        'header-left': () => h('div', { class: 'code-header-main' }, [
+          h('span', {
+            'class': 'icon-slot h-4 w-4 flex-shrink-0',
+            'aria-hidden': 'true',
+            'innerHTML': languageIcon,
           }),
-        ]),
-        h('div', {
-          class: 'code-loading-placeholder',
-          style: props.stream === false && props.loading !== false ? undefined : { display: 'none' },
-        }, [
-          h('div', { class: 'loading-skeleton' }, [
-            h('div', { class: 'skeleton-line' }),
-            h('div', { class: 'skeleton-line' }),
-            h('div', { class: 'skeleton-line short' }),
+          h('div', { class: 'code-header-copy' }, [
+            h('div', { class: 'code-header-title' }, header.title),
+            header.caption
+              ? h('div', { class: 'code-header-caption' }, header.caption)
+              : null,
           ]),
         ]),
-        h('span', { 'class': 'sr-only', 'aria-live': 'polite', 'role': 'status' }),
-      ])
+        'default': () => h(PreCodeNode, {
+          'node': props.node,
+          'loading': props.loading,
+          'showLineNumbers': showLineNumbers,
+          'reservedHeightPx': isDiff || reservedHeight == null
+            ? undefined
+            : Math.min(reservedHeight, visualOptions.maxHeight),
+          'diffInline': diffInline,
+          'diffHideUnchangedRegions': isDiff
+            ? props.diffHideUnchangedRegions ?? resolveDiffHideUnchangedRegionsOption(codeBlockOptions)
+            : undefined,
+          'class': ['code-pre-fallback', { 'is-wrap': visualOptions.overflow === 'wrap' }],
+          'style': preStyle,
+          'data-markstream-code-theme': themePalette.name,
+          'data-markstream-code-loading': '1',
+        }),
+        'loading': () => h('div', { class: 'loading-skeleton' }, [
+          h('div', { class: 'skeleton-line' }),
+          h('div', { class: 'skeleton-line' }),
+          h('div', { class: 'skeleton-line short' }),
+        ]),
+      })])
     }
   },
 })

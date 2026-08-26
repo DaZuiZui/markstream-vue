@@ -20,7 +20,7 @@ import {
   DEFAULT_PRE_CODE_LINE_HEIGHT,
   resolvePreCodeVisualOptions,
 } from '../PreCodeNode/preCodeVisual'
-import { isDiffCodeBlock, resolveCodeBlockHeader, resolveDiffHideUnchangedRegionsOption } from './codeBlockHeader'
+import { estimateDiffStats, isDiffCodeBlock, resolveCodeBlockHeader, resolveDiffHideUnchangedRegionsOption } from './codeBlockHeader'
 import CodeBlockShell from './CodeBlockShell.vue'
 import HtmlPreviewFrame from './HtmlPreviewFrame.vue'
 import {
@@ -1229,78 +1229,6 @@ function getVerticalPaddingSafe(): number {
     return Math.max(0, configuredPadding) * 2
 
   return isDiff.value ? 24 : 0
-}
-
-function splitCodeLines(source: string) {
-  // Match the displayed diff pair: a terminal line break is a delimiter, not
-  // an additional changed source line. Support all line-break forms because
-  // code blocks can be supplied directly without going through the parser.
-  const displaySource = getDisplayCode(source)
-  if (!displaySource)
-    return [] as string[]
-  return displaySource.split(/\r\n|\n|\r/)
-}
-
-function estimateDiffStats(originalSource: string, modifiedSource: string) {
-  const originalLines = splitCodeLines(originalSource)
-  const modifiedLines = splitCodeLines(modifiedSource)
-  let start = 0
-  let originalEnd = originalLines.length - 1
-  let modifiedEnd = modifiedLines.length - 1
-
-  while (
-    start <= originalEnd
-    && start <= modifiedEnd
-    && originalLines[start] === modifiedLines[start]
-  ) {
-    start++
-  }
-
-  while (
-    originalEnd >= start
-    && modifiedEnd >= start
-    && originalLines[originalEnd] === modifiedLines[modifiedEnd]
-  ) {
-    originalEnd--
-    modifiedEnd--
-  }
-
-  const originalMiddleLength = Math.max(0, originalEnd - start + 1)
-  const modifiedMiddleLength = Math.max(0, modifiedEnd - start + 1)
-  if (originalMiddleLength === 0 || modifiedMiddleLength === 0) {
-    return {
-      removed: originalMiddleLength,
-      added: modifiedMiddleLength,
-    }
-  }
-
-  const maxCells = 1_500_000
-  if ((originalMiddleLength + 1) * (modifiedMiddleLength + 1) <= maxCells) {
-    const columns = modifiedMiddleLength + 1
-    let next = new Uint32Array(columns)
-    let current = new Uint32Array(columns)
-    for (let i = originalMiddleLength - 1; i >= 0; i--) {
-      current[modifiedMiddleLength] = 0
-      for (let j = modifiedMiddleLength - 1; j >= 0; j--) {
-        current[j] = originalLines[start + i] === modifiedLines[start + j]
-          ? next[j + 1] + 1
-          : Math.max(next[j], current[j + 1])
-      }
-      const swap = next
-      next = current
-      current = swap
-    }
-    const commonMiddleLines = next[0]
-    return {
-      removed: originalMiddleLength - commonMiddleLines,
-      added: modifiedMiddleLength - commonMiddleLines,
-    }
-  }
-
-  return {
-    removed: originalMiddleLength,
-    added: modifiedMiddleLength,
-  }
 }
 
 function hasLanguageHighlightReady(root: HTMLElement | null | undefined) {

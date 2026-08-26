@@ -80,3 +80,70 @@ export function resolveCodeBlockHeader(raw: string, displayLanguage: string, isD
     caption: fileLabel ? (isDiff ? `Diff / ${displayLanguage}` : displayLanguage) : '',
   }
 }
+
+function splitCodeLines(source: string) {
+  const displaySource = String(source ?? '').replace(/\r\n$|\n$|\r$/, '')
+  return displaySource ? displaySource.split(/\r\n|\n|\r/) : []
+}
+
+export function estimateDiffStats(originalSource: string, modifiedSource: string) {
+  const originalLines = splitCodeLines(originalSource)
+  const modifiedLines = splitCodeLines(modifiedSource)
+  let start = 0
+  let originalEnd = originalLines.length - 1
+  let modifiedEnd = modifiedLines.length - 1
+
+  while (
+    start <= originalEnd
+    && start <= modifiedEnd
+    && originalLines[start] === modifiedLines[start]
+  ) {
+    start++
+  }
+
+  while (
+    originalEnd >= start
+    && modifiedEnd >= start
+    && originalLines[originalEnd] === modifiedLines[modifiedEnd]
+  ) {
+    originalEnd--
+    modifiedEnd--
+  }
+
+  const originalMiddleLength = Math.max(0, originalEnd - start + 1)
+  const modifiedMiddleLength = Math.max(0, modifiedEnd - start + 1)
+  if (originalMiddleLength === 0 || modifiedMiddleLength === 0) {
+    return {
+      removed: originalMiddleLength,
+      added: modifiedMiddleLength,
+    }
+  }
+
+  const maxCells = 1_500_000
+  if ((originalMiddleLength + 1) * (modifiedMiddleLength + 1) <= maxCells) {
+    const columns = modifiedMiddleLength + 1
+    let next = new Uint32Array(columns)
+    let current = new Uint32Array(columns)
+    for (let i = originalMiddleLength - 1; i >= 0; i--) {
+      current[modifiedMiddleLength] = 0
+      for (let j = modifiedMiddleLength - 1; j >= 0; j--) {
+        current[j] = originalLines[start + i] === modifiedLines[start + j]
+          ? next[j + 1] + 1
+          : Math.max(next[j], current[j + 1])
+      }
+      const swap = next
+      next = current
+      current = swap
+    }
+    const commonMiddleLines = next[0]
+    return {
+      removed: originalMiddleLength - commonMiddleLines,
+      added: modifiedMiddleLength - commonMiddleLines,
+    }
+  }
+
+  return {
+    removed: originalMiddleLength,
+    added: modifiedMiddleLength,
+  }
+}
