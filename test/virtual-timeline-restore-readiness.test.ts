@@ -1689,6 +1689,11 @@ describe('virtual timeline restore visual readiness', () => {
     expect(iconSlot.classes()).toContain('h-4')
     expect(iconSlot.classes()).toContain('w-4')
     expect(iconSlot.classes()).toContain('flex-shrink-0')
+    const headerActions = headerMain.parentElement?.lastElementChild as HTMLElement
+    expect(headerActions.classList).toContain('flex')
+    expect(headerActions.classList).toContain('items-center')
+    expect(headerActions.classList).toContain('gap-0.5')
+    expect(wrapper.get('.code-loading-action--more').element.parentElement?.classList).toContain('relative')
     for (const icon of wrapper.findAll('.code-action-btn .action-icon')) {
       expect(icon.attributes('width')).toBe('1em')
       expect(icon.attributes('height')).toBe('1em')
