@@ -34,7 +34,9 @@ function makeIdentityCounter(label: string) {
   const C = defineComponent({
     name: `IdentityCounter-${label}`,
     props: {
-      payload: { type: Object as PropType<unknown>, default: null },
+      // markdownProps (object), measureRef (function) and kind (string) are all
+      // passed through this prop; accept any so jsdom does not warn per render.
+      payload: { type: [Object, Function, String] as PropType<unknown>, default: null },
     },
     setup() {
       return () => {
@@ -57,7 +59,12 @@ function toolCallItem(key: string, text: string) {
 const VIRTUAL_TIMELINE_ITEMS = 9
 const TICKS = 60
 const WARMUP = 4
-const REPEATS = 3
+const REPEATS = 2
+// CI runs `vitest run` over test/benchmark too, on slower shared runners
+// (scenario B alone took ~3.3s per run on ubuntu-latest vs ~1.6s locally).
+// Give every benchmark a generous explicit timeout so a slow runner never
+// trips vitest's default 10s per-test limit.
+const BENCH_TIMEOUT = 60_000
 
 function scenarioHeader(name: string) {
   console.info(`\n[streaming-cpu] === ${name} ===`)
@@ -95,7 +102,7 @@ afterEach(() => {
 })
 
 describe('streaming CPU benchmark', () => {
-  it('a: timeline render churn — markdownProps / measureRef identity', async () => {
+  it('a: timeline render churn — markdownProps / measureRef identity', { timeout: BENCH_TIMEOUT }, async () => {
     scenarioHeader('A timeline render churn')
 
     const propsCounter = makeIdentityCounter('mdProps')
@@ -108,10 +115,10 @@ describe('streaming CPU benchmark', () => {
         threadKey: 'bench-a',
       },
       slots: {
-        default: ({ itemKey, markdownProps, measureRef }: any) => [
+        default: ({ itemKey, markdownProps, measureRef }: any) => h('div', [
           h(propsCounter.C, { key: `${itemKey}-p`, payload: markdownProps as MarkstreamVirtualMarkdownProps }),
           h(refCounter.C, { key: `${itemKey}-r`, payload: measureRef }),
-        ],
+        ]),
       },
     })
     await nextTick()
@@ -145,7 +152,7 @@ describe('streaming CPU benchmark', () => {
     wrapper.unmount()
   })
 
-  it('b: timeline default slot end-to-end (full MarkdownRender)', async () => {
+  it('b: timeline default slot end-to-end (full MarkdownRender)', { timeout: BENCH_TIMEOUT }, async () => {
     scenarioHeader('B timeline default slot (full MarkdownRender)')
 
     const wrapper = mount(MarkstreamVirtualTimeline, {
@@ -175,14 +182,14 @@ describe('streaming CPU benchmark', () => {
       streaming += `streamed paragraph ${i} with several words.\n\n`
       items[2] = markdownItem('b2', streaming, false)
       await wrapper.setProps({ items: [...items] })
-    }, 2)
+    }, 1)
 
     console.info(`[streaming-cpu] B ticks=${TICKS} best=${best.toFixed(1)}ms avg=${averagePerTick(best, TICKS)}`)
 
     wrapper.unmount()
   })
 
-  it('c: non-markdown text items — layout signature per tick', async () => {
+  it('c: non-markdown text items — layout signature per tick', { timeout: BENCH_TIMEOUT }, async () => {
     scenarioHeader('C layout signature (hashTimelineString)')
 
     const quiet = makeIdentityCounter('quiet')
@@ -222,7 +229,7 @@ describe('streaming CPU benchmark', () => {
     wrapper.unmount()
   })
 
-  it('d: HtmlBlockNode / HtmlInlineNode custom-component parse per tick', async () => {
+  it('d: HtmlBlockNode / HtmlInlineNode custom-component parse per tick', { timeout: BENCH_TIMEOUT }, async () => {
     scenarioHeader('D HTML nodes custom-component single-pass tokenize')
 
     setCustomComponents('bench-d', {
