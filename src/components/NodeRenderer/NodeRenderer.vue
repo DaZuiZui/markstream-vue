@@ -4677,13 +4677,40 @@ watch(
 // Some scroll containers (e.g. `flex-direction: column-reverse` chat lists)
 // report `scrollTop=0` when visually at the bottom. To avoid a blank initial
 // viewport in virtualized mode, resync focus after the DOM has committed.
+//
+// Three watchers fire on every streaming commit (parsedNodes.length x2 and
+// renderedCount) and each called scheduleFocusSync({ immediate: true }),
+// which cancels any pending sync and runs syncFocusToScroll synchronously —
+// up to 3 synchronous layout reads per commit. Deduplicate them into a single
+// per-frame sync so a commit pays for one focus sync instead of three. The
+// focus target is computed from the same state, so the final scroll position
+// is identical.
+let pendingCommitFocusSync = false
+
+function scheduleCommitFocusSync() {
+  if (!virtualizationEnabled.value || !isClient || pendingCommitFocusSync)
+    return
+  pendingCommitFocusSync = true
+  if (requestFrame) {
+    requestFrame(() => {
+      pendingCommitFocusSync = false
+      scheduleFocusSync({ immediate: true })
+    })
+  }
+  else {
+    queueMicrotask(() => {
+      pendingCommitFocusSync = false
+      scheduleFocusSync({ immediate: true })
+    })
+  }
+}
+
 watch(
   [() => parsedNodes.value.length, () => virtualizationEnabled.value],
-  async ([length, enabled]) => {
+  ([length, enabled]) => {
     if (!enabled || !length || !isClient)
       return
-    await nextTick()
-    scheduleFocusSync({ immediate: true })
+    scheduleCommitFocusSync()
   },
   { flush: 'post' },
 )
@@ -4734,7 +4761,7 @@ watch(
   () => parsedNodes.value.length,
   () => {
     if (virtualizationEnabled.value)
-      scheduleFocusSync({ immediate: true })
+      scheduleCommitFocusSync()
   },
 )
 
@@ -4811,7 +4838,7 @@ watch(
   () => renderedCount.value,
   () => {
     if (virtualizationEnabled.value)
-      scheduleFocusSync({ immediate: true })
+      scheduleCommitFocusSync()
   },
 )
 
