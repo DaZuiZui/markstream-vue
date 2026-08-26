@@ -6691,7 +6691,7 @@ onBeforeUnmount(() => {
               v-if="!item.isCodeBlock"
               name="fade"
               :css="rendererProps.fade !== false"
-              :appear="rendererProps.fade !== false"
+              :appear="rendererProps.fade !== false && requestedFinal !== true"
             >
               <component
                 :is="item.component"

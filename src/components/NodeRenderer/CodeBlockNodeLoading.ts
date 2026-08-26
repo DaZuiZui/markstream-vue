@@ -1,6 +1,6 @@
-import type { CodeBlockNodeProps } from '../../types/component-props'
+import type { CodeBlockDiffHideUnchangedRegions, CodeBlockNodeProps } from '../../types/component-props'
 import { defineComponent, h } from 'vue'
-import { languageMap, normalizeLanguageIdentifier } from '../../utils'
+import { getLanguageIcon, languageMap, normalizeLanguageIdentifier } from '../../utils/languageIcon'
 import {
   isDiffCodeBlock,
   resolveCodeBlockHeader,
@@ -41,20 +41,28 @@ export default defineComponent({
     'htmlPreviewAllowScripts',
     'htmlPreviewSandbox',
     'customId',
+    'indexKey',
     'estimatedHeightPx',
     'estimatedContentHeightPx',
     'estimatedDiffInline',
+    'diffInline',
+    'diffHideUnchangedRegions',
+    'reservedHeightPx',
   ],
-  emits: ['previewCode', 'copy'],
+  emits: ['click', 'mouseover', 'mouseout', 'copy', 'previewCode', 'handleArtifactClick'],
   setup(rawProps, { attrs }) {
     const props = rawProps as CodeBlockFallbackProps & {
+      diffHideUnchangedRegions?: CodeBlockDiffHideUnchangedRegions
+      diffInline?: boolean
       estimatedContentHeightPx?: number
       estimatedDiffInline?: boolean
+      reservedHeightPx?: number
     }
 
     return () => {
-      const language = normalizeLanguageIdentifier(String(props.node?.language ?? ''))
-      const displayLanguage = languageMap[language]
+      const sourceLanguage = String(props.node?.language ?? '').trim().toLowerCase()
+      const language = normalizeLanguageIdentifier(sourceLanguage)
+      const displayLanguage = languageMap[sourceLanguage] || languageMap[language]
         || (language ? language.charAt(0).toUpperCase() + language.slice(1) : languageMap[''])
       const isDiff = isDiffCodeBlock(props.node)
       const header = resolveCodeBlockHeader(
@@ -63,7 +71,7 @@ export default defineComponent({
         isDiff,
       )
       const codeBlockOptions = props.codeBlockOptions ?? {}
-      const diffInline = isDiff && (props.estimatedDiffInline
+      const diffInline = isDiff && (props.diffInline ?? props.estimatedDiffInline
         ?? resolveDiffInlineLayout(codeBlockOptions as unknown as Record<string, unknown>))
       const visualOptions = resolvePreCodeVisualOptions(codeBlockOptions)
       const themePalette = resolvePreCodeThemePalette({
@@ -73,8 +81,9 @@ export default defineComponent({
         theme: props.theme,
         themes: props.themes,
       })
-      const fallbackMaxHeight = !isDiff && typeof props.estimatedContentHeightPx === 'number' && Number.isFinite(props.estimatedContentHeightPx)
-        ? Math.min(visualOptions.maxHeight, Math.ceil(props.estimatedContentHeightPx))
+      const reservedHeight = props.estimatedContentHeightPx ?? props.reservedHeightPx
+      const fallbackMaxHeight = !isDiff && typeof reservedHeight === 'number' && Number.isFinite(reservedHeight)
+        ? Math.min(visualOptions.maxHeight, Math.ceil(reservedHeight))
         : visualOptions.maxHeight
       const showLineNumbers = props.showLineNumbers ?? (codeBlockOptions.disableLineNumbers !== true)
       const preStyle = {
@@ -90,6 +99,9 @@ export default defineComponent({
         'whiteSpace': visualOptions.overflow === 'scroll' ? 'pre' : 'pre-wrap',
         'overflowWrap': visualOptions.overflow === 'wrap' ? 'anywhere' : 'normal',
         'wordBreak': 'normal',
+        '--markstream-code-padding-x': `${visualOptions.padding}px`,
+        '--markstream-code-padding-y': `${visualOptions.padding}px`,
+        '--markstream-code-tab-size': visualOptions.tabSize,
         '--markstream-pre-line-number-top': `${visualOptions.padding}px`,
         ...(isDiff ? { '--markstream-pre-diff-line-height': `${visualOptions.lineHeight}px` } : {}),
         '--markstream-code-font-family': visualOptions.fontFamily,
@@ -115,13 +127,36 @@ export default defineComponent({
         'color': themePalette.foreground,
         'fontFamily': visualOptions.fontFamily,
       }
-      const actionPlaceholder = () => h('button', {
+      const actionPlaceholder = (kind: 'copy' | 'collapse' | 'more') => h('button', {
         'class': 'code-action-btn inline-flex items-center justify-center p-[var(--ms-action-btn-padding)] rounded leading-none shrink-0',
         'aria-hidden': 'true',
         'disabled': true,
         'tabindex': -1,
         'type': 'button',
-      }, [h('svg', { class: 'action-icon', width: '14', height: '14' })])
+      }, [kind === 'copy'
+        ? h('svg', {
+            class: 'action-icon',
+            height: '1em',
+            innerHTML: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></g>',
+            viewBox: '0 0 24 24',
+            width: '1em',
+          })
+        : kind === 'collapse'
+          ? h('svg', {
+              class: 'action-icon',
+              height: '1em',
+              innerHTML: '<path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6"/>',
+              style: { rotate: '90deg' },
+              viewBox: '0 0 24 24',
+              width: '1em',
+            })
+          : h('svg', {
+              class: 'action-icon',
+              height: '1em',
+              innerHTML: '<g fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></g>',
+              viewBox: '0 0 24 24',
+              width: '1em',
+            })])
       const isPreviewable = props.isShowPreview !== false && (language === 'html' || language === 'svg')
       const showOverflowPlaceholder = (props.showFontSizeButtons !== false && props.enableFontSizeControl !== false)
         || props.showExpandButton !== false
@@ -132,6 +167,9 @@ export default defineComponent({
         return typeof value === 'number' ? `${value}px` : String(value)
       }
       const containerStyle = {
+        '--code-bg': themePalette.background,
+        '--code-fg': themePalette.foreground,
+        '--code-line-number': themePalette.lineNumber,
         '--markstream-code-layout-character-width': '1ch',
         '--markstream-code-fallback-bg': themePalette.background,
         '--markstream-code-fallback-fg': themePalette.foreground,
@@ -197,6 +235,7 @@ export default defineComponent({
                 h('span', {
                   'class': 'icon-slot h-4 w-4 flex-shrink-0',
                   'aria-hidden': 'true',
+                  'innerHTML': getLanguageIcon(language),
                   'style': {
                     display: 'inline-flex',
                     width: '1rem',
@@ -235,7 +274,6 @@ export default defineComponent({
               ]),
               h('div', {
                 class: 'flex items-center gap-0.5',
-                style: { visibility: 'hidden' },
               }, [
                 isDiff
                   ? h('div', { 'class': 'code-diff-stats', 'aria-hidden': 'true' }, [
@@ -243,10 +281,10 @@ export default defineComponent({
                       h('span', { class: 'code-diff-stat added' }, '+0'),
                     ])
                   : null,
-                props.showCopyButton === false ? null : actionPlaceholder(),
-                props.showCollapseButton === false ? null : actionPlaceholder(),
+                props.showCopyButton === false ? null : actionPlaceholder('copy'),
+                props.showCollapseButton === false ? null : actionPlaceholder('collapse'),
                 showOverflowPlaceholder
-                  ? h('div', { class: 'relative' }, [actionPlaceholder()])
+                  ? h('div', { class: 'relative' }, [actionPlaceholder('more')])
                   : null,
               ]),
             ]),
@@ -258,12 +296,12 @@ export default defineComponent({
             'node': props.node,
             'loading': props.loading,
             'showLineNumbers': showLineNumbers,
-            'reservedHeightPx': isDiff || props.estimatedContentHeightPx == null
+            'reservedHeightPx': isDiff || reservedHeight == null
               ? undefined
-              : Math.min(props.estimatedContentHeightPx, visualOptions.maxHeight),
+              : Math.min(reservedHeight, visualOptions.maxHeight),
             'diffInline': diffInline,
             'diffHideUnchangedRegions': isDiff
-              ? resolveDiffHideUnchangedRegionsOption(codeBlockOptions)
+              ? props.diffHideUnchangedRegions ?? resolveDiffHideUnchangedRegionsOption(codeBlockOptions)
               : undefined,
             'class': ['code-pre-fallback', { 'is-wrap': visualOptions.overflow === 'wrap' }],
             'style': preStyle,

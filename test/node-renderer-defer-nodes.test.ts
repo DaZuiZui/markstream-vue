@@ -603,6 +603,13 @@ describe('markdownRender deferNodesUntilVisible', () => {
       expect(codeBlock.attributes('showlinenumbers')).toBeUndefined()
       expect(codeBlock.attributes('index-key')).toBeUndefined()
       expect(codeBlock.attributes('estimatedcontentheightpx')).toBeUndefined()
+      expect(codeBlock.classes()).toContain('rounded-lg')
+      expect(codeBlock.classes()).toContain('border')
+
+      const header = codeBlock.get('.code-block-header')
+      expect(header.text()).toContain('TypeScript')
+      expect(header.get('.icon-slot svg').exists()).toBe(true)
+      expect(header.findAll('button')).toHaveLength(3)
 
       const pre = codeBlock.get('pre.code-pre-fallback')
       expect(codeBlock.element.style.getPropertyValue('--code-bg')).toBe('var(--markstream-code-theme-bg, #121212)')
