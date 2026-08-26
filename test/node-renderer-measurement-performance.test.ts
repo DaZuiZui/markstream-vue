@@ -214,6 +214,32 @@ describe('node renderer measurement performance', () => {
     wrapper.unmount()
   })
 
+  it('does not cache the container width without ResizeObserver', async () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    let width = 320
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
+
+    const NodeRenderer = (await import('../src/components/NodeRenderer')).default
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        content: Array.from({ length: 41 }, (_, index) => {
+          return `Paragraph ${index} ${'x'.repeat(240)}`
+        }).join('\n\n'),
+        final: true,
+        fade: false,
+      },
+    })
+
+    await flushAll()
+
+    const state = setupState(wrapper)
+    const narrowHeight = state.getFallbackNodeHeight(40)
+    width = 960
+
+    expect(state.getFallbackNodeHeight(40)).toBeLessThan(narrowHeight)
+    wrapper.unmount()
+  })
+
   it('reuses stable estimated height entries after unrelated measurements', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 640)
 

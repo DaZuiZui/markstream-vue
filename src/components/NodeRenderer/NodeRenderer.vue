@@ -1664,7 +1664,7 @@ function readSimpleTextProbeProfile() {
 }
 
 function updateMeasuredContainerWidth() {
-  if (!measuredContainerWidthActive.value) {
+  if (!measuredContainerWidthActive.value || typeof ResizeObserver === 'undefined') {
     measuredContainerWidth.value = 0
     return
   }
