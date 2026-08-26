@@ -323,7 +323,7 @@ const streamRenderVersion = ref(0)
 // initializes; guard prefix invalidation until the model exists. The first
 // prefix build is full anyway, so dropping the early mark is safe.
 let heightModelReady = false
-const experimentContainerWidth = ref(0)
+const measuredContainerWidth = ref(0)
 const simpleTextProbeProfile = ref(createEmptySimpleTextProbeProfile())
 
 function resolveViewportPriorityRootMargin(value: unknown, fallback: string) {
@@ -794,7 +794,9 @@ const textEstimationEnabled = computed(() => {
     && heightExperimentConfig.value?.textEstimation !== false
 })
 function getMeasuredContainerWidth() {
-  const width = experimentContainerWidth.value || readLayout(
+  if (measuredContainerWidth.value > 0)
+    return measuredContainerWidth.value
+  const width = readLayout(
     'getMeasuredContainerWidth.clientWidth',
     () => containerRef.value?.clientWidth || 0,
   )
@@ -909,6 +911,16 @@ const codeBlockEstimationEnabled = computed(() => {
     && heightExperimentConfig.value?.codeBlockEstimation !== false
 })
 const nodeSlotElements = new Map<number, HTMLElement | null>()
+/**
+ * Snapshot of the visibility-registration inputs an element was last
+ * registered under. `setNodeSlotElement` re-runs for every rendered node on
+ * every streaming commit (Vue 3.5 re-invokes function refs on every patch);
+ * when the element is unchanged AND every input that drives registration is
+ * unchanged, the existing registration (observer handle / watch / fallback
+ * timer / visible state) is still valid and the per-commit re-registration
+ * churn can be skipped.
+ */
+const nodeSlotRegistrationKeys = new Map<number, string>()
 const nodeContentResizeObserverTargets = new Map<number, HTMLElement>()
 const nodeContentResizeObserverIndexes = new WeakMap<Element, number>()
 let nodeContentResizeObserver: ResizeObserver | null = null
@@ -1183,6 +1195,11 @@ function pruneHeightMeasurements(size: number) {
 const deferNodes = computed(() => {
   return deferNodesDomRequired.value && viewportPriorityEnabled.value
 })
+const measuredContainerWidthActive = computed(() => {
+  return heightEstimationActive.value
+    || incrementalRenderingDomRequired.value
+    || (deferNodes.value && parsedNodes.value.length > resolvedInitialBatch.value)
+})
 const incrementalRenderingConfigured = computed(() => {
   return !renderAsFragment.value
     && rendererProps.batchRendering !== false
@@ -1200,6 +1217,30 @@ const stableLayoutDomEnabled = computed(() => {
     && !incrementalRenderingConfigured.value
 })
 const shouldObserveSlots = computed(() => !!registerNodeVisibility && deferNodes.value)
+
+/**
+ * Serialized snapshot of every input that drives the slot visibility
+ * registration. When it is unchanged for a given element, the existing
+ * registration (observer handle / watch / fallback timer / visible state)
+ * remains valid and `setNodeSlotElement` can skip re-registration.
+ */
+// Serialized snapshot of every input that drives the slot visibility
+// registration. When it is unchanged for a given element, the existing
+// registration (observer handle / watch / fallback timer / visible state)
+// remains valid and `setNodeSlotElement` can skip re-registration. Cached as a
+// computed: the same inputs previously produced a fresh join('|') string per
+// slot per re-render (Vue 3.5 re-invokes function refs on every patch), which
+// was O(N) string allocations per streaming commit.
+const nodeSlotRegistrationKey = computed(() => [
+  shouldObserveSlots.value,
+  deferNodes.value,
+  virtualizationEnabled.value,
+  viewportPriorityAutoDisabled.value,
+  viewportPriorityMaxTargets.value,
+  viewportPriorityRootMargin.value,
+  resolvedInitialBatch.value,
+  Boolean(registerNodeVisibility),
+].join('|'))
 const scrollListenerEnabled = computed(() => virtualizationEnabled.value || virtualScrollEnabled.value)
 const {
   focusIndex,
@@ -1214,6 +1255,15 @@ const {
 })
 const nodeContentElements = new Map<number, HTMLElement | null>()
 const nodeContentVersions = new Map<number, number>()
+/**
+ * Snapshot of the parsed node an element was last registered with. Function
+ * refs are re-invoked on every patch in Vue 3.5 (even with a stable callback),
+ * so `setNodeContentRef` runs once per rendered node per streaming commit.
+ * When both the element and the parsed node reference (plus its in-place
+ * `loading` snapshot) are unchanged, the node content is byte-identical and
+ * the measurement/observer re-registration can be skipped entirely.
+ */
+const nodeContentRegistration = new Map<number, { el: HTMLElement, node: ParsedNode | undefined, loading: unknown }>()
 const nodeContentDeferredMeasureTimers = new Map<number, number[]>()
 const finalHeightConvergenceTimers: number[] = []
 const pendingHeightMeasurements = new Map<number, { height: number, allowShrink: boolean, version: number, el: HTMLElement }>()
@@ -1613,35 +1663,37 @@ function readSimpleTextProbeProfile() {
   markFallbackHeightPrefixDirty()
 }
 
-function updateExperimentContainerWidth() {
-  if (!heightEstimationActive.value) {
-    experimentContainerWidth.value = 0
+function updateMeasuredContainerWidth() {
+  if (!measuredContainerWidthActive.value || typeof ResizeObserver === 'undefined') {
+    measuredContainerWidth.value = 0
     return
   }
-  const width = readLayout('updateExperimentContainerWidth.clientWidth', () => containerRef.value?.clientWidth ?? 0)
-  experimentContainerWidth.value = width > 0 ? width : 0
+  const width = readLayout('updateMeasuredContainerWidth.clientWidth', () => containerRef.value?.clientWidth ?? 0)
+  measuredContainerWidth.value = width > 0 ? width : 0
 }
 
-let experimentResizeObserver: ResizeObserver | null = null
+let containerResizeObserver: ResizeObserver | null = null
 
-function cleanupExperimentResizeObserver() {
-  experimentResizeObserver?.disconnect()
-  experimentResizeObserver = null
+function cleanupContainerResizeObserver() {
+  containerResizeObserver?.disconnect()
+  containerResizeObserver = null
 }
 
-function setupExperimentResizeObserver() {
-  cleanupExperimentResizeObserver()
-  if (!heightEstimationActive.value || !containerRef.value || typeof ResizeObserver === 'undefined')
+function setupContainerResizeObserver() {
+  cleanupContainerResizeObserver()
+  if (!measuredContainerWidthActive.value || !containerRef.value || typeof ResizeObserver === 'undefined')
     return
-  experimentResizeObserver = new ResizeObserver(() => {
-    updateExperimentContainerWidth()
+  containerResizeObserver = new ResizeObserver(() => {
+    updateMeasuredContainerWidth()
+    if (!heightEstimationActive.value)
+      return
     if (activeRestoreAnchor.value)
       scheduleRestoreReconcile()
     if (activeVirtualBottomAnchor.value)
       scheduleVirtualBottomRestoreReconcile()
     scheduleVirtualMetricsEmit('resize')
   })
-  experimentResizeObserver.observe(containerRef.value)
+  containerResizeObserver.observe(containerRef.value)
 }
 
 const codeBlockComponent = computed(() => {
@@ -1698,7 +1750,7 @@ function estimateNodeHeight(node: ParsedNode, index: number, width: number) {
       return estimatedText
   }
 
-  if (codeBlockEstimationEnabled.value && node.type === 'code_block') {
+  if (codeBlockEstimationEnabled.value && !hasMeasuredHeight && node.type === 'code_block') {
     const rendererKind = resolveCodeBlockRendererKind(node)
     if (rendererKind === 'stream-diffs' || rendererKind === 'pre') {
       return estimateCodeBlockHeight(node, {
@@ -1761,7 +1813,7 @@ watchEffect(() => {
     return
   }
 
-  const width = experimentContainerWidth.value || readLayout('estimatedNodeHeights.clientWidth', () => containerRef.value?.clientWidth || 0)
+  const width = measuredContainerWidth.value || readLayout('estimatedNodeHeights.clientWidth', () => containerRef.value?.clientWidth || 0)
   if (!Number.isFinite(width) || width <= 0) {
     estimatedNodeHeightsCache = []
     estimatedNodeHeightsContext = []
@@ -1810,9 +1862,10 @@ heightModel = useHeightModel({
   heightEstimationActive,
   estimatedNodeHeights,
   getContainerWidth: getMeasuredContainerWidth,
+  shouldCacheStaticFallbackHeight: () => !props.nodes?.length,
   hasCustomParagraphComponent: () => Boolean(customComponentsMap.value.paragraph),
   getPrefixCacheKeyParts: () => {
-    const width = experimentContainerWidth.value || readLayout('getFallbackHeightPrefix.clientWidth', () => containerRef.value?.clientWidth || 0)
+    const width = measuredContainerWidth.value || readLayout('getFallbackHeightPrefix.clientWidth', () => containerRef.value?.clientWidth || 0)
     const widthBucket = getHeightCacheWidthBucket(width)
     const measurementKey = props.virtualScroll?.measurementKey == null
       ? ''
@@ -4122,6 +4175,13 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
   let slotsChanged = false
   if (el) {
     const prev = nodeSlotElements.get(index)
+    if (prev === el && nodeSlotRegistrationKeys.get(index) === nodeSlotRegistrationKey.value) {
+      // Same element re-passed on a re-render with unchanged registration
+      // inputs: the existing visibility registration (observer handle, watch,
+      // fallback timer, visible state) is still valid, so skip the per-commit
+      // re-registration work entirely.
+      return
+    }
     nodeSlotElements.set(index, el)
     if (prev !== el)
       slotsChanged = true
@@ -4136,6 +4196,14 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
 
   if (!shouldObserveSlots.value || !registerNodeVisibility) {
     destroyNodeHandle(index)
+    // No visibility registration is needed in this state (stable per config),
+    // so record it and let the same-element guard skip future re-invocations.
+    // Only record for a live element; unmounts (el === null) must not leave a
+    // stale key behind for an index that no longer has a slot.
+    if (el)
+      nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
+    else
+      nodeSlotRegistrationKeys.delete(index)
     if (el && deferNodes.value)
       markNodeVisible(index, true)
     return
@@ -4150,6 +4218,7 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
     autoDisableViewportPriority('too-many-targets')
     if (!shouldObserveSlots.value || !registerNodeVisibility) {
       destroyNodeHandle(index)
+      nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
       if (el)
         markNodeVisible(index, true)
       return
@@ -4158,26 +4227,32 @@ function setNodeSlotElement(index: number, el: HTMLElement | null) {
 
   if (index < resolvedInitialBatch.value && !virtualizationEnabled.value) {
     destroyNodeHandle(index)
+    nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
     markNodeVisible(index, true)
     return
   }
 
   if (visibleNodeIndices.value.has(index)) {
     destroyNodeHandle(index)
+    nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
     markNodeVisible(index, true)
     return
   }
 
   if (!el) {
     destroyNodeHandle(index)
+    nodeSlotRegistrationKeys.delete(index)
     return
   }
 
   destroyNodeHandle(index)
   const handle = registerNodeVisibility(el, { rootMargin: viewportPriorityRootMargin.value })
-  if (!handle)
+  if (!handle) {
+    nodeSlotRegistrationKeys.delete(index)
     return
+  }
   nodeVisibilityHandles.set(index, handle)
+  nodeSlotRegistrationKeys.set(index, nodeSlotRegistrationKey.value)
   markNodeVisible(index, handle.isVisible.value)
   if (deferNodes.value)
     scheduleVisibilityFallback(index)
@@ -4353,6 +4428,24 @@ function scheduleFinalHeightConvergence() {
 }
 
 function setNodeContentRef(index: number, el: HTMLElement | null) {
+  if (el) {
+    const node = parsedNodes.value[index]
+    const registered = nodeContentRegistration.get(index)
+    if (
+      registered
+      && registered.el === el
+      && registered.node === node
+      && registered.loading === (node as { loading?: unknown } | undefined)?.loading
+    ) {
+      // Same element + same parsed node re-passed on a re-render. Vue re-invokes
+      // function refs on every patch, so without this guard each streaming
+      // commit would re-run the measurement/observer registration for every
+      // rendered node (deleting pending measurements, bumping versions,
+      // unobserving/re-observing, and forcing an offsetHeight read).
+      return
+    }
+  }
+
   if (!el)
     clearPendingAsyncNodeKeysForIndex(index)
 
@@ -4368,9 +4461,15 @@ function setNodeContentRef(index: number, el: HTMLElement | null) {
   if (!el || !shouldMeasureNodeHeights.value) {
     nodeContentElements.delete(index)
     nodeContentVersions.delete(index)
+    nodeContentRegistration.delete(index)
     return
   }
   nodeContentElements.set(index, el)
+  nodeContentRegistration.set(index, {
+    el,
+    node: parsedNodes.value[index],
+    loading: (parsedNodes.value[index] as { loading?: unknown } | undefined)?.loading,
+  })
   const measure = () => {
     measureNodeHeight(index, el)
   }
@@ -4402,8 +4501,13 @@ function setNodeContentRef(index: number, el: HTMLElement | null) {
 watch(
   () => shouldMeasureNodeHeights.value,
   (enabled) => {
-    if (enabled)
+    if (enabled) {
+      // Re-enabling measurement needs a fresh registration pass: existing
+      // snapshots were taken while measurement was off and their elements were
+      // never observed by the (new) resize observer.
+      nodeContentRegistration.clear()
       return
+    }
     disconnectNodeContentResizeObserver()
     for (const timers of nodeContentDeferredMeasureTimers.values()) {
       for (const id of timers)
@@ -4595,15 +4699,15 @@ watch(
 )
 
 watch(
-  [() => containerRef.value, heightEstimationActive],
+  [() => containerRef.value, measuredContainerWidthActive],
   () => {
-    if (!heightEstimationActive.value) {
-      cleanupExperimentResizeObserver()
-      experimentContainerWidth.value = 0
+    if (!measuredContainerWidthActive.value) {
+      cleanupContainerResizeObserver()
+      measuredContainerWidth.value = 0
       return
     }
-    updateExperimentContainerWidth()
-    setupExperimentResizeObserver()
+    updateMeasuredContainerWidth()
+    setupContainerResizeObserver()
   },
   { immediate: true },
 )
@@ -4635,7 +4739,7 @@ watch(
 )
 
 watch(
-  [heightEstimationActive, experimentContainerWidth],
+  [heightEstimationActive, measuredContainerWidth],
   () => {
     markFallbackHeightPrefixDirty()
     if (virtualizationEnabled.value)
@@ -4927,7 +5031,7 @@ watch(
     () => props.virtualScroll?.measurementKey,
     () => parsedNodes.value.length,
     () => getVirtualSessionKey(),
-    experimentContainerWidth,
+    measuredContainerWidth,
   ],
   () => {
     tryImportVirtualHeightCache()
@@ -4943,7 +5047,7 @@ watch(
     () => props.virtualScroll?.measurementKey,
     () => parsedNodes.value.length,
     () => getVirtualSessionKey(),
-    experimentContainerWidth,
+    measuredContainerWidth,
   ],
   async ([enabled, state]) => {
     if (!enabled || !state)
@@ -4961,7 +5065,7 @@ watch(
 )
 
 watch(
-  [virtualScrollEnabled, experimentContainerWidth, () => props.virtualScroll?.restoreState, () => props.virtualScroll?.measurementKey],
+  [virtualScrollEnabled, measuredContainerWidth, () => props.virtualScroll?.restoreState, () => props.virtualScroll?.measurementKey],
   ([enabled]) => {
     if (!enabled)
       return
@@ -4989,7 +5093,7 @@ watch(
     virtualScrollEnabled,
     () => parsedNodes.value.length,
     () => getVirtualSessionKey(),
-    experimentContainerWidth,
+    measuredContainerWidth,
   ],
   async ([enabled]) => {
     const state = pendingImperativeVirtualRestoreState
@@ -5214,7 +5318,7 @@ onBeforeUnmount(() => {
   nodeHeightSignatures.length = 0
   clearFinalHeightConvergenceTimers()
   clearPendingHeightMeasurements()
-  cleanupExperimentResizeObserver()
+  cleanupContainerResizeObserver()
   clearRestoreReconcile()
   clearActiveVirtualBottomAnchor()
   clearVirtualMetricsSchedule()
@@ -5511,6 +5615,10 @@ const previewHeightEstimateCache = new WeakMap<object, { code: string, height: n
 // lookup + object allocation for the whole document.
 const renderedItemsNonVirtual: RenderedItemLike[] = []
 let lastRenderedItemGlobalSignature: readonly unknown[] | null = null
+// Array instance returned by the `renderedItems` computed on its last
+// evaluation. Reused verbatim on no-op commits so Vue skips the v-for re-render
+// instead of diffing a freshly sliced array of identical items.
+let lastRenderedItemsArray: RenderedItemLike[] = []
 
 /**
  * Signature of all renderer-level (node-independent) inputs a rendered item
@@ -5548,7 +5656,7 @@ function getRenderedItemGlobalSignature(): readonly unknown[] {
     // `estimatedHeight`; fold it in so estimation changes rebuild all items.
     heightEstimationActive.value,
     heightEstimationExperimentRevision.value,
-    experimentContainerWidth.value,
+    measuredContainerWidth.value,
   ]
   if (lastRenderedItemGlobalSignature && hasSameRenderedItemSignature(lastRenderedItemGlobalSignature, values))
     return lastRenderedItemGlobalSignature
@@ -5777,9 +5885,12 @@ const renderedItems = computed(() => {
 
   const nodes = parsedNodes.value
   const total = nodes.length
-  if (renderedItemsNonVirtual.length > total)
+  let truncated = false
+  if (renderedItemsNonVirtual.length > total) {
     // eslint-disable-next-line vue/no-side-effects-in-computed-properties -- In-place truncation of the module-level incremental item cache; not a reactive side effect.
     renderedItemsNonVirtual.length = total
+    truncated = true
+  }
 
   // Capture the previous signature BEFORE getRenderedItemGlobalSignature
   // refreshes the module-level cache, otherwise the comparison below would
@@ -5809,12 +5920,24 @@ const renderedItems = computed(() => {
     }
   }
 
+  // No-op commit: every parsed node still matches its cached rendered item by
+  // identity (the parser reused every node object) and the cache was not
+  // truncated, so the item list is byte-identical to the last returned one.
+  // Returning the exact array instance lets Vue skip the keyed v-for diff
+  // entirely instead of re-running it over a freshly sliced array of the same
+  // items (which also re-invokes every slot/content function ref in the
+  // template).
+  if (!truncated && dirtyStart === total)
+    return lastRenderedItemsArray
+
   for (let index = dirtyStart; index < total; index++)
     cache[index] = buildRenderedItem({ node: nodes[index]!, index })
 
   // New array identity so Vue re-renders; prefix entries are shared objects,
   // so the keyed v-for diff resolves them without re-creating anything.
-  return cache.slice()
+  const next = cache.slice()
+  lastRenderedItemsArray = next
+  return next
 })
 
 function getCodeBlockLanguage(node: ParsedNode) {
@@ -6281,6 +6404,25 @@ watch(
   async () => {
     if (!isClient || renderAsFragment.value || !ownsTypewriterCursor.value)
       return
+
+    // Typewriter is off (the default): the cursor is never shown, so none of
+    // the per-commit work below (recursive node text length traversal, cursor
+    // element updates) is needed. Skip it entirely instead of running the
+    // callback and bailing out mid-way.
+    if (!typewriterEnabled.value) {
+      if (
+        showTypewriterCursor.value
+        || typewriterCursorTimeout
+        || typewriterCursorRaf != null
+        || simpleTypewriterCursorTarget.value
+        || typewriterCursorRef.value
+      ) {
+        showTypewriterCursor.value = false
+        clearTypewriterCursorTimeout()
+        hideTypewriterCursorElement()
+      }
+      return
+    }
 
     // When the stream is final (and effective — smooth streaming has caught up),
     // hide the cursor immediately.

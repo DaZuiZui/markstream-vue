@@ -182,6 +182,64 @@ describe('node renderer measurement performance', () => {
     wrapper.unmount()
   })
 
+  it('updates deferred fallback heights when the renderer container resizes', async () => {
+    const platform = installManualMeasurementPlatform()
+    let width = 320
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
+
+    const NodeRenderer = (await import('../src/components/NodeRenderer')).default
+    const content = Array.from({ length: 41 }, (_, index) => {
+      return `Paragraph ${index} ${'x'.repeat(240)}`
+    }).join('\n\n')
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        content,
+        final: true,
+        fade: false,
+      },
+    })
+
+    await flushAll()
+
+    const state = setupState(wrapper)
+    const narrowHeight = state.getFallbackNodeHeight(40)
+    const resize = platform.resizeCallbacks.get(wrapper.element)
+    expect(resize).toBeTypeOf('function')
+
+    width = 960
+    resize?.([], {} as ResizeObserver)
+    await nextTick()
+
+    expect(state.getFallbackNodeHeight(40)).toBeLessThan(narrowHeight)
+    wrapper.unmount()
+  })
+
+  it('does not cache the container width without ResizeObserver', async () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    let width = 320
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
+
+    const NodeRenderer = (await import('../src/components/NodeRenderer')).default
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        content: Array.from({ length: 41 }, (_, index) => {
+          return `Paragraph ${index} ${'x'.repeat(240)}`
+        }).join('\n\n'),
+        final: true,
+        fade: false,
+      },
+    })
+
+    await flushAll()
+
+    const state = setupState(wrapper)
+    const narrowHeight = state.getFallbackNodeHeight(40)
+    width = 960
+
+    expect(state.getFallbackNodeHeight(40)).toBeLessThan(narrowHeight)
+    wrapper.unmount()
+  })
+
   it('reuses stable estimated height entries after unrelated measurements', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 640)
 
@@ -737,7 +795,12 @@ describe('node renderer measurement performance', () => {
     const state = setupState(wrapper)
     const element = wrapper.get('.node-slot[data-node-index="0"] .node-content').element as HTMLElement
 
+    // Re-registering the same element + same parsed node is a no-op (the
+    // renderer guards identical registrations to avoid re-measuring every
+    // rendered node on every streaming commit), so simulate a real remount
+    // with a null pass to force the measurement/observer re-registration.
     platform.heights.set(element, 40)
+    state.setNodeContentRef(0, null)
     state.setNodeContentRef(0, element)
     await Promise.resolve()
     platform.flushFrames()

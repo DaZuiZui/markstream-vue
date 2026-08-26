@@ -28,6 +28,7 @@ function createModel(options: {
   active?: boolean
   estimates?: Array<EstimatedNodeHeight | null>
   hasCustomParagraphComponent?: boolean
+  shouldCacheStaticFallbackHeight?: boolean
   width?: number
 }) {
   const nodes = ref(options.nodes)
@@ -46,6 +47,7 @@ function createModel(options: {
     heightEstimationActive: computed(() => active.value),
     estimatedNodeHeights: computed(() => estimates.value),
     getContainerWidth: () => width.value,
+    shouldCacheStaticFallbackHeight: () => options.shouldCacheStaticFallbackHeight !== false,
     hasCustomParagraphComponent: () => Boolean(options.hasCustomParagraphComponent),
     getPrefixCacheKeyParts: () => [
       nodes.value.length,
@@ -111,6 +113,24 @@ describe('useHeightModel', () => {
     expect(mermaid).toBeGreaterThanOrEqual(360)
     expect(infographic).toBeGreaterThanOrEqual(360)
     expect(ordinaryCode).toBe(96)
+  })
+
+  it('re-estimates mutable consumer nodes when static caching is disabled', () => {
+    const node = {
+      type: 'code_block',
+      language: 'ts',
+      raw: 'consumer-managed source',
+      code: 'x',
+    } as ParsedNode
+    const { model } = createModel({
+      nodes: [node],
+      shouldCacheStaticFallbackHeight: false,
+      width: 320,
+    })
+
+    expect(model.getFallbackNodeHeight(0)).toBe(96)
+    ;(node as any).code = Array.from({ length: 100 }, () => 'line').join('\n')
+    expect(model.getFallbackNodeHeight(0)).toBeGreaterThan(1900)
   })
 
   it('uses visible text to estimate list and table fallback heights', () => {

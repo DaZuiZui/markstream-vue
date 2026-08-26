@@ -131,6 +131,23 @@ function getCustomComponentsReuseKey(mapping: Partial<CustomComponents>) {
   )
 }
 
+// The reuse key is a pure function of the mapping's identity (component
+// references are stable); cache it per mapping object so the JSON.stringify +
+// sort + identity lookups don't rerun on every streaming commit. A new mapping
+// reference still recomputes, so a consumer passing a fresh object per render
+// simply misses the cache.
+const customComponentsReuseKeyCache = new WeakMap<object, string>()
+
+function getCachedCustomComponentsReuseKey(mapping: Partial<CustomComponents>) {
+  const object = mapping as object
+  const cached = customComponentsReuseKeyCache.get(object)
+  if (cached !== undefined)
+    return cached
+  const key = getCustomComponentsReuseKey(mapping)
+  customComponentsReuseKeyCache.set(object, key)
+  return key
+}
+
 function hasCustomComponentBoundary(
   node: ParsedNode,
   mapping: Partial<CustomComponents>,
@@ -282,27 +299,41 @@ function shouldFlushParseImmediately(previous: string, next: string) {
   if (endsWithTableDelimiterLine(next))
     return true
 
+  // Setext heading underlines (`===`) and thematic break lines (`---`) are
+  // structural boundaries: flushing here lets the previous line be re-rendered
+  // as a heading (or the break appear) promptly, without reintroducing the
+  // per-newline flush that bare trailing newlines would cause.
+  if (endsWithSetextOrThematicBreakLine(next))
+    return true
+
   if (appended.includes('\n\n')
     || /(?:^|\n)(?:#{1,6}\s|[-+*]\s+|\d+[.)]\s+|>\s*|`{3,}|~{3,})/.test(appended)
   ) {
     return true
   }
 
-  return appended.endsWith('\n')
-    && !endsWithPendingTableRow(next)
+  // A bare trailing newline is intentionally NOT an immediate-flush trigger:
+  // streaming chunks frequently end with a newline, and flushing here runs the
+  // full parse synchronously inside the stream tick on every commit. Block
+  // structure is still parsed promptly via the delimiter rules above and the
+  // parse-coalesce timer (DEFAULT_PARSE_COALESCE_MS). Plain hard line breaks
+  // (soft breaks inside a paragraph) therefore coalesce into the parse window
+  // and can lag block rendering by up to parseCoalesceMs — an accepted
+  // performance trade-off; the visible reveal is paced independently by the
+  // smooth stream and the final DOM is unaffected.
+  return false
+}
+
+function endsWithSetextOrThematicBreakLine(value: string) {
+  return isSetextOrThematicBreakLine(getTrailingContentLine(value))
+}
+
+function isSetextOrThematicBreakLine(line: string) {
+  return /^={3,}$/.test(line) || /^-{3,}$/.test(line)
 }
 
 function endsWithTableDelimiterLine(value: string) {
   return isTableDelimiterLine(getTrailingContentLine(value))
-}
-
-function endsWithPendingTableRow(value: string) {
-  const line = getTrailingContentLine(value)
-  if (isTableDelimiterLine(line))
-    return false
-
-  const cells = getTableLineCells(line)
-  return cells.length >= 2 && cells.some(cell => cell.trim())
 }
 
 function getTrailingContentLine(value: string) {
@@ -397,7 +428,6 @@ function stableValueSignature(
     const keys = Object.keys(record).sort()
     const sampledKeys = keys.slice(0, MAX_SIGNATURE_KEYS)
     return `o:${keys.length}:${sampledKeys
-      .sort()
       .map(key => `${key}:${stableValueSignature(record[key], seen, depth + 1)}`)
       .join(';')}`
   }
@@ -1282,7 +1312,7 @@ export function useMarkdownParsing(
     }
 
     const customComponents = options.customComponentsMap?.value ?? {}
-    const customComponentsReuseKey = getCustomComponentsReuseKey(customComponents)
+    const customComponentsReuseKey = getCachedCustomComponentsReuseKey(customComponents)
     if (
       previousCustomComponentsReuseKey
       && customComponentsReuseKey !== previousCustomComponentsReuseKey
@@ -1424,8 +1454,15 @@ export function useMarkdownParsing(
     }
 
     if (hasCustomComponents) {
-      for (const node of parsed)
-        hasCustomComponentBoundary(node, customComponents, customComponentBoundaryCache)
+      // Only the dirty tail can contain nodes not yet in the boundary cache:
+      // reused prefix nodes were warmed in a previous commit, and a fully
+      // reused parse (dirtyStartIndex < 0) has nothing new either. Warming
+      // only the tail skips the O(prefix) WeakMap hits per streaming commit.
+      const warmStart = stabilizeMetrics?.dirtyStartIndex != null && stabilizeMetrics.dirtyStartIndex >= 0
+        ? stabilizeMetrics.dirtyStartIndex
+        : parsed.length
+      for (let index = warmStart; index < parsed.length; index++)
+        hasCustomComponentBoundary(parsed[index]!, customComponents, customComponentBoundaryCache)
     }
     const nodeReuseMs = collectPerformanceMetrics
       ? getNow() - reuseStart

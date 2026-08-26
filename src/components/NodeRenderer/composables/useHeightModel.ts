@@ -32,6 +32,7 @@ export interface HeightModelOptions {
   heightEstimationActive: ComputedRef<boolean>
   estimatedNodeHeights: ComputedRef<readonly (EstimatedNodeHeight | null)[]>
   getContainerWidth: () => number
+  shouldCacheStaticFallbackHeight?: () => boolean
   hasCustomParagraphComponent?: () => boolean
   getPrefixCacheKeyParts: () => readonly unknown[]
   fenwickRangeSum: (tree: number[], start: number, end: number) => number
@@ -386,6 +387,27 @@ export function useHeightModel(options: HeightModelOptions) {
   let fallbackHeightPrefixCacheKey = ''
   let fallbackHeightPrefixAverageNodeHeight = -1
 
+  // Static fallback estimation cache keyed by the parsed node object. The
+  // stream parser reuses the exact same objects for the stable prefix across
+  // streaming commits, so a cached estimation stays valid for the lifetime of
+  // that node reference. Consumer-supplied nodes can mutate in place, so the
+  // renderer disables this cache for that input mode.
+  const staticFallbackHeightCache = new WeakMap<object, { width: number, height: number }>()
+
+  function getStaticFallbackNodeHeight(node: ParsedNode | undefined, width: number) {
+    if (!node || typeof node !== 'object' || options.shouldCacheStaticFallbackHeight?.() === false)
+      return estimateStaticNodeHeightFallback(node, width)
+
+    const object = node as object
+    const cached = staticFallbackHeightCache.get(object)
+    if (cached && cached.width === width)
+      return cached.height
+
+    const height = estimateStaticNodeHeightFallback(node, width)
+    staticFallbackHeightCache.set(object, { width, height })
+    return height
+  }
+
   /**
    * Mark the fallback height prefix stale from `fromIndex` onward.
    *
@@ -424,7 +446,7 @@ export function useHeightModel(options: HeightModelOptions) {
       return estimated
     }
 
-    const staticHeight = estimateStaticNodeHeightFallback(
+    const staticHeight = getStaticFallbackNodeHeight(
       node,
       options.getContainerWidth() || 640,
     )

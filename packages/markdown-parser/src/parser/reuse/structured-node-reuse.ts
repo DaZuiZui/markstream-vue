@@ -270,6 +270,7 @@ function updateStructuredStreamCache(
   groups: ReusableTopLevelTokenGroups,
   nodes: ParsedNode[],
   options: ParseOptions,
+  previousSeed?: readonly string[],
 ) {
   const groupStarts = groups.starts
   if (groupStarts.length === 0 || nodes.length !== groupStarts.length) {
@@ -290,6 +291,16 @@ function updateStructuredStreamCache(
     ? Math.max(0, groupStarts.length - 1)
     : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1)
 
+  // On the incremental append path the prefix nodes (and their raws) are
+  // unchanged, so reuse the previous seed's prefix instead of re-slicing and
+  // re-stringifying every node's raw on each commit (O(nodes) per commit).
+  // The fallback path (full re-parse) must rebuild the seed in full.
+  const seed = previousSeed && previousSeed.length >= stableGroupCount
+    ? previousSeed.slice(0, stableGroupCount).concat(
+        nodes.slice(stableGroupCount).map(node => String((node as Record<string, unknown>).raw ?? '')),
+      )
+    : nodes.map(node => String((node as Record<string, unknown>).raw ?? ''))
+
   runtime.structuredStream = {
     groupBoundaries,
     groupStarts,
@@ -298,7 +309,7 @@ function updateStructuredStreamCache(
     mixed: groups.mixed,
     source,
     nodes,
-    seed: nodes.map(node => String((node as Record<string, unknown>).raw ?? '')),
+    seed,
     stableGroupCount,
     requireClosingStrong: options.requireClosingStrong,
     validateLink: options.validateLink,
@@ -437,7 +448,7 @@ export function processTopLevelTokensWithReuse(
       const result = previous.nodes.slice(0, stableGroupCount).concat(tailNodes)
       runtime.structuredReuseTailStart = stableGroupCount
       callbacks.recordReusedTopLevelNodes?.(stableGroupCount)
-      updateStructuredStreamCache(runtime, source, tokens, groups, result, options)
+      updateStructuredStreamCache(runtime, source, tokens, groups, result, options, previous.seed)
       return result
     }
   }
