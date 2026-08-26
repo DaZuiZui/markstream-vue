@@ -2375,9 +2375,24 @@ async function waitForSingleEditorVisualReady() {
   return false
 }
 
+// Settle-time dedupe: the diff-update watch and the loading->false watch both
+// run on settle and may call this with the same input pair (stream-diffs is
+// only fed after loading ends, so both watches observe the same final code).
+// updateDiffCode is a full diff hand-off; running it twice for an identical
+// pair is wasted work (double diff computation + surface update). Content is
+// unchanged, so skipping the duplicate is semantically identical.
+let lastSettledDiffPair = ''
+let lastSettledDiffApplied = true
+
 async function updateDiffCodeWithSettledResult(original: string, updated: string, language: string) {
+  const pairKey = `${original}\u0000${updated}\u0000${language}`
+  if (lastSettledDiffApplied && lastSettledDiffPair === pairKey)
+    return
+
   try {
     await updateDiffCode(original, updated, language)
+    lastSettledDiffPair = pairKey
+    lastSettledDiffApplied = true
     return
   }
   catch (error) {
@@ -2398,6 +2413,8 @@ async function updateDiffCodeWithSettledResult(original: string, updated: string
     if (!isPendingDiffResultError(error))
       throw error
   }
+  lastSettledDiffPair = pairKey
+  lastSettledDiffApplied = true
 }
 
 function getMaxHeightValue(): number {
