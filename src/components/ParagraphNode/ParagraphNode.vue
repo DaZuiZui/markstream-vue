@@ -151,6 +151,83 @@ function getChildProps(child: NodeChild, index: number) {
   }
 }
 
+// Content signature for built-in inline children. The stream parser re-creates
+// every inline child object of the tail paragraph on each commit, so unchanged
+// built-ins keep their previous `node` prop reference. Custom renderers are not
+// memoized because they may consume arbitrary node fields.
+function getChildrenRenderSignature(children: unknown) {
+  if (!Array.isArray(children))
+    return ''
+
+  const signatures: string[] = []
+  for (const child of children) {
+    if (!child || typeof child !== 'object')
+      return null
+    const signature = getChildRenderSignature(child as NodeChild)
+    if (signature == null)
+      return null
+    signatures.push(signature)
+  }
+  return signatures.join('\u0002')
+}
+
+function getChildRenderSignature(child: NodeChild): string | null {
+  const record = child as Record<string, unknown>
+  const type = String(record.type)
+
+  // Custom renderers can consume arbitrary node fields, so their nodes cannot
+  // be safely memoized with a fixed built-in signature.
+  if ((overrides.value as any)[type])
+    return null
+
+  const children = getChildrenRenderSignature(record.children)
+  if (children == null)
+    return null
+
+  const common = [type, record.loading, children]
+  switch (type) {
+    case 'text':
+      return [...common, record.content, record.center].join('\u0001')
+    case 'inline_code':
+      return [...common, record.code].join('\u0001')
+    case 'image':
+      return [...common, record.src, record.alt, record.title].join('\u0001')
+    case 'link':
+      return [...common, record.href, record.title, record.text, JSON.stringify(record.attrs ?? null)].join('\u0001')
+    case 'html_inline':
+    case 'html_block':
+      return [...common, record.tag, record.content, record.autoClosed, JSON.stringify(record.attrs ?? null)].join('\u0001')
+    case 'emoji':
+      return [...common, record.name, record.markup].join('\u0001')
+    case 'checkbox':
+    case 'checkbox_input':
+      return [...common, record.checked].join('\u0001')
+    case 'math_inline':
+      return [...common, record.content, record.markup].join('\u0001')
+    case 'reference':
+    case 'footnote_anchor':
+    case 'footnote_reference':
+      return [...common, record.id].join('\u0001')
+    case 'hardbreak':
+    case 'emphasis':
+    case 'strong':
+    case 'strikethrough':
+    case 'highlight':
+    case 'insert':
+    case 'subscript':
+    case 'superscript':
+      return common.join('\u0001')
+    default:
+      return null
+  }
+}
+
+// Per-render child cache: index → { child, sig }. The parser hands us a new
+// object for every inline child on each streaming commit; handing components
+// the previous (content-identical) child object keeps their `node` prop
+// reference stable so the child component update is skipped.
+const previousChildCache = new Map<number, { child: NodeChild, sig: string }>()
+
 const nodeComponents = computed(() => ({
   inline_code: InlineCodeNode,
   image: ImageNode,
@@ -204,20 +281,38 @@ function processChild(child: NodeChild): { child: NodeChild, component: any, isC
   }
 }
 
-const processedChildren = computed(() => renderedChildren.value.map((child, index) => {
-  const processed = processChild(child)
-  return {
-    ...processed,
-    index,
-    key: `${props.indexKey || 'paragraph'}-${index}`,
-    customAttrs: processed.isCustomComponent
-      ? getCustomNodeAttrs(processed.child as any, resolvedHtmlPolicy.value)
-      : undefined,
-    hasSlotChildren: Array.isArray((processed.child as any).children) && (processed.child as any).children.length > 0,
-    slotContent: String((processed.child as any).content ?? ''),
-    originalChild: child,
+const processedChildren = computed(() => {
+  const children = renderedChildren.value
+  // Trim stale cache entries when the paragraph shrinks (indexes shift or a
+  // paragraph is re-parsed into fewer children).
+  if (previousChildCache.size > children.length) {
+    for (const key of previousChildCache.keys()) {
+      if (key >= children.length)
+        previousChildCache.delete(key)
+    }
   }
-}))
+  return children.map((child, index) => {
+    const sig = getChildRenderSignature(child)
+    const previous = previousChildCache.get(index)
+    const stableChild = sig != null && previous?.sig === sig ? previous.child : child
+    if (sig == null)
+      previousChildCache.delete(index)
+    else
+      previousChildCache.set(index, { child: stableChild, sig })
+    const processed = processChild(stableChild)
+    return {
+      ...processed,
+      index,
+      key: `${props.indexKey || 'paragraph'}-${index}`,
+      customAttrs: processed.isCustomComponent
+        ? getCustomNodeAttrs(processed.child as any, resolvedHtmlPolicy.value)
+        : undefined,
+      hasSlotChildren: Array.isArray((processed.child as any).children) && (processed.child as any).children.length > 0,
+      slotContent: String((processed.child as any).content ?? ''),
+      originalChild: stableChild,
+    }
+  })
+})
 </script>
 
 <template>
