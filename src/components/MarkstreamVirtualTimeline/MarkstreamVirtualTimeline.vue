@@ -350,6 +350,27 @@ const layoutRecordByKey = new Map<string, TimelineRecord>()
 const layoutSizeTree = shallowRef(new TimelineFenwickTree([]))
 const layoutRevision = ref(0)
 let layoutEstimateSnapshot: Array<number | undefined> = []
+// Vue re-invokes function refs whenever the ref callback identity changes, and
+// visibleWindow() materializes fresh record objects on every scroll/size
+// recompute. Without a stable per-key callback, each timeline render would
+// disconnect/recreate every visible item's ResizeObserver and force a
+// synchronous re-measure. The callback resolves the current canonical record
+// via layoutRecordByKey at call time so it never acts on a stale record object.
+const measureRecordElementHandles = new Map<string, (el: Element | { $el?: Element | null } | null | undefined) => void>()
+
+interface MarkdownPropsCacheEntry {
+  cacheKey: string
+  content: string
+  props: MarkstreamVirtualMarkdownProps
+}
+
+// getMarkdownProps() is invoked from the template for every visible markdown
+// record on every timeline render. Rebuilding the props object each time gives
+// MarkdownRender fresh identities for virtualScroll and the event handlers,
+// forcing a re-render even when content/final/mode are unchanged. Cache by the
+// same identity factors the adapter uses; closures resolve the current record
+// via layoutRecordByKey so entries stay valid across record materialization.
+const markdownPropsCache = new Map<string, MarkdownPropsCacheEntry>()
 
 const layout = computed(() => {
   void layoutRevision.value
@@ -394,6 +415,15 @@ function rebuildLayoutRecords() {
     if (!layoutRecordByKey.has(key)) {
       layoutRecordByKey.set(key, record)
     }
+  }
+
+  for (const key of measureRecordElementHandles.keys()) {
+    if (!layoutRecordByKey.has(key))
+      measureRecordElementHandles.delete(key)
+  }
+  for (const key of markdownPropsCache.keys()) {
+    if (!layoutRecordByKey.has(key))
+      markdownPropsCache.delete(key)
   }
 
   layoutRecords.value = records
@@ -519,13 +549,29 @@ function getIdentityToken(value: unknown) {
   return String(id)
 }
 
+// Streaming appends replace the items array every tick while unchanged items
+// keep the same text string references. Memoizing by string value turns the
+// per-tick O(total text) layout-signature hashing into O(changed text) for
+// typical append-only threads. Plain Map (WeakMap keys must be objects) with a
+// bounded size since streamed threads accumulate distinct text values.
+const timelineContentHashCache = new Map<string, string>()
+const TIMELINE_CONTENT_HASH_CACHE_MAX_ENTRIES = 4096
+
 function hashTimelineString(value: string) {
+  const cached = timelineContentHashCache.get(value)
+  if (cached !== undefined)
+    return cached
+
   let hash = 2166136261
   for (let index = 0; index < value.length; index++) {
     hash ^= value.charCodeAt(index)
     hash = Math.imul(hash, 16777619)
   }
-  return (hash >>> 0).toString(36)
+  const result = (hash >>> 0).toString(36)
+  if (timelineContentHashCache.size >= TIMELINE_CONTENT_HASH_CACHE_MAX_ENTRIES)
+    timelineContentHashCache.clear()
+  timelineContentHashCache.set(value, result)
+  return result
 }
 
 function getCheapTimelineItemContentSignature(item: any, index: number, markdown: boolean) {
@@ -1503,19 +1549,51 @@ function setMeasuredItemElement(record: TimelineRecord, el: Element | { $el?: El
 }
 
 function measureRecordElement(record: TimelineRecord) {
-  return (el: Element | { $el?: Element | null } | null | undefined) => {
-    setMeasuredItemElement(record, el)
+  const key = record.key
+  let handle = measureRecordElementHandles.get(key)
+  if (!handle) {
+    handle = (el) => {
+      setMeasuredItemElement(layoutRecordByKey.get(key) ?? record, el)
+    }
+    measureRecordElementHandles.set(key, handle)
   }
+  return handle
 }
 
 function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProps {
-  const item = getRecordLiveItem(record)
-  const final = getMarkstreamTimelineItemFinal(item, record.index, props)
-  const restoreState = markdownStates.get(record.key)
+  // Materialized visible records are fresh objects per recompute; the canonical
+  // record (stable per key between rebuilds) carries the same item/index/kind
+  // and is what the closures below must resolve against.
+  const current = layoutRecordByKey.get(record.key) ?? record
+  const item = getRecordLiveItem(current)
+  const final = getMarkstreamTimelineItemFinal(item, current.index, props)
+  const sessionKey = getSessionKey(current)
   const markdownMode = normalizedTimelineMarkdownMode.value
+  const renderCodeBlocksAsPre = normalizedRenderCodeBlocksAsPre.value
+  const fade = props.markdownFade === true
+  const content = getMarkstreamTimelineItemContent(item, current.index, props)
+  const cacheKey = [
+    sessionKey,
+    final ? 'final' : 'live',
+    timelineMarkdownMeasurementKey.value,
+    markdownMode,
+    renderCodeBlocksAsPre ? 'pre' : 'none',
+    fade ? 'fade' : 'no-fade',
+  ].join('\u0001')
+  const cached = markdownPropsCache.get(current.key)
+
+  if (cached && cached.cacheKey === cacheKey && cached.content === content) {
+    const restoreState = markdownStates.get(record.key)
+    cached.props.virtualScroll.restoreState = isCompatibleMarkdownState(record, restoreState)
+      ? restoreState!
+      : null
+    return cached.props
+  }
+
+  const restoreState = markdownStates.get(record.key)
   const virtualScroll: MarkstreamVirtualScrollOptions = {
     enabled: true,
-    sessionKey: getSessionKey(record),
+    sessionKey,
     threadKey: normalizedThreadKey.value,
     scrollRoot: () => scrollRoot.value,
     restoreState: isCompatibleMarkdownState(record, restoreState) ? restoreState! : null,
@@ -1527,11 +1605,11 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
     heightDiffThresholdPx: TIMELINE_MARKDOWN_HEIGHT_DIFF_THRESHOLD_PX,
   }
 
-  return {
-    content: getMarkstreamTimelineItemContent(item, record.index, props),
+  const propsObject: MarkstreamVirtualMarkdownProps = {
+    content,
     final,
     mode: markdownMode,
-    renderCodeBlocksAsPre: normalizedRenderCodeBlocksAsPre.value,
+    renderCodeBlocksAsPre,
     ...(final
       ? {
           nodeVirtual: 'auto' as const,
@@ -1539,14 +1617,17 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
           liveNodeBuffer: TIMELINE_MARKDOWN_LIVE_NODE_BUFFER,
         }
       : {}),
-    fade: props.markdownFade === true,
-    indexKey: getSessionKey(record),
+    fade,
+    indexKey: sessionKey,
     virtualScroll,
     onHeightChange(metrics: MarkstreamVirtualMetrics) {
-      if (metrics.sessionKey !== getSessionKey(record))
+      // Resolve the live record at call time: cached closures must not act on
+      // records that were replaced by a layout rebuild.
+      const live = layoutRecordByKey.get(record.key) ?? record
+      if (metrics.sessionKey !== getSessionKey(live))
         return
 
-      setMarkdownLogicalHeight(record.key, metrics.totalHeight, {
+      setMarkdownLogicalHeight(live.key, metrics.totalHeight, {
         sessionKey: metrics.sessionKey,
         threadKey: normalizedThreadKey.value,
         measurementKey: timelineMarkdownMeasurementKey.value,
@@ -1556,26 +1637,31 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
       const allowRestoredFloorShrink = shouldReleaseRestoredMarkdownFloor(metrics)
       const logicalHeight = Math.ceil(metrics.totalHeight)
 
-      scheduleMarkdownReconcile(record, {
+      scheduleMarkdownReconcile(live, {
         allowMarkdownShrink,
         allowRestoredFloorShrink,
-        itemSizeSource: getItemSizeSource(record),
+        itemSizeSource: getItemSizeSource(live),
         logicalHeight,
         threadKey: normalizedThreadKey.value,
       })
 
-      emitHeightChange({ itemKey: record.key, metrics })
+      emitHeightChange({ itemKey: live.key, metrics })
     },
     onVirtualStateChange(state: MarkstreamVirtualState) {
-      if (state.sessionKey !== getSessionKey(record))
+      const live = layoutRecordByKey.get(record.key) ?? record
+      if (state.sessionKey !== getSessionKey(live))
         return
 
-      markdownStates.set(record.key, state)
-      seedMarkdownLogicalHeightFromState(record.key, state)
+      markdownStates.set(live.key, state)
+      virtualScroll.restoreState = state
+      seedMarkdownLogicalHeightFromState(live.key, state)
       scheduleThreadStateRemember()
-      emitVirtualStateChange({ itemKey: record.key, state })
+      emitVirtualStateChange({ itemKey: live.key, state })
     },
   }
+
+  markdownPropsCache.set(current.key, { cacheKey, content, props: propsObject })
+  return propsObject
 }
 
 function getSlotProps(record: TimelineRecord) {
@@ -2866,6 +2952,8 @@ onBeforeUnmount(() => {
     rememberThreadState()
   clearThreadRestoreSchedule()
   cleanupObservers()
+  markdownPropsCache.clear()
+  measureRecordElementHandles.clear()
 })
 
 defineExpose({

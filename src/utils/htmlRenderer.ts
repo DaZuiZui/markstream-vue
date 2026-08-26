@@ -269,6 +269,55 @@ export function hasCustomComponents(
   return hasCustomHtmlComponents(content, customComponents as Record<string, unknown>)
 }
 
+export interface HtmlResolveResult {
+  /** Resolution succeeded. */
+  ok: boolean
+  /** The content contains at least one custom-component tag. */
+  hasCustomComponents: boolean
+  /** VNode tree built from the tokens; null when no build was needed or parsing failed. */
+  nodes: any[] | null
+}
+
+/**
+ * Single-pass HTML render resolution: tokenizes the content once, checks for
+ * custom-component tags, and builds the VNode tree from the same tokens.
+ *
+ * Previously callers ran `hasCustomComponents` (full tokenize) and then
+ * `parseHtmlToVNodes` (second full tokenize) back to back, doubling the parse
+ * cost of every HTML node commit. This replaces both with one tokenize.
+ */
+export function resolveHtmlVNodes(
+  content: string,
+  customComponents: Record<string, Component>,
+  htmlPolicy: HtmlPolicy = 'safe',
+  forceBuild = false,
+): HtmlResolveResult {
+  try {
+    if (!forceBuild && Object.keys(customComponents).length === 0)
+      return { ok: true, hasCustomComponents: false, nodes: null }
+
+    const tokens = tokenizeHtml(content)
+    let hasCustom = false
+    for (const token of tokens) {
+      if (
+        (token.type === 'tag_open' || token.type === 'self_closing')
+        && isCustomComponent(token.tagName ?? '', customComponents)
+      ) {
+        hasCustom = true
+        break
+      }
+    }
+    const nodes = forceBuild || hasCustom
+      ? buildVNodeTree(tokens, customComponents, htmlPolicy)
+      : null
+    return { ok: true, hasCustomComponents: hasCustom, nodes }
+  }
+  catch (error) {
+    logError('Failed to parse HTML to VNodes:', error)
+    return { ok: false, hasCustomComponents: false, nodes: null }
+  }
+}
+
 /**
  * Parse HTML content to VNodes
  */

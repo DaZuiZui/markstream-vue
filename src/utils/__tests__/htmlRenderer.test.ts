@@ -13,6 +13,7 @@ import {
 
   isCustomComponent,
   parseHtmlToVNodes,
+  resolveHtmlVNodes,
   sanitizeAttrs,
   tokenizeHtml,
 } from '../htmlRenderer'
@@ -302,6 +303,30 @@ describe('htmlRenderer', () => {
       expect(nodes).not.toBeNull()
       const stringNodes = (nodes || []).filter((node): node is string => typeof node === 'string')
       expect(stringNodes).toContain('<unknown-tag />')
+    })
+  })
+
+  describe('resolveHtmlVNodes', () => {
+    it('skips VNode building when no custom components are registered', () => {
+      expect(resolveHtmlVNodes('<div>hello</div>', {})).toEqual({
+        ok: true,
+        hasCustomComponents: false,
+        nodes: null,
+      })
+    })
+
+    it('builds VNodes for custom components or forced streaming rendering', () => {
+      const custom = resolveHtmlVNodes('<mycomponent>hello</mycomponent>', {
+        mycomponent: MockComponentA,
+      })
+      const streaming = resolveHtmlVNodes('<div>hello</div>', {}, 'safe', true)
+
+      expect(custom.ok).toBe(true)
+      expect(custom.hasCustomComponents).toBe(true)
+      expect(custom.nodes).toHaveLength(1)
+      expect(streaming.ok).toBe(true)
+      expect(streaming.hasCustomComponents).toBe(false)
+      expect(streaming.nodes).toHaveLength(1)
     })
   })
 
