@@ -143,7 +143,10 @@ export function useSmoothStreamingBridge(
             && pendingBeforeAppend <= CONTINUOUS_STREAM_CHUNK_MAX_LENGTH
           )) {
             continuousSmallStream = true
-            smoothStream.reset(nextContent)
+            // The startsWith check above already proved nextContent extends
+            // source, so tell the controller to skip its internal re-check
+            // (another O(accumulated source) comparison per chunk).
+            smoothStream.reset(nextContent, { prefixKnown: true })
           }
           else {
             smoothStream.enqueue(appended)

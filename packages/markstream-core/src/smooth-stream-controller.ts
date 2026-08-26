@@ -228,13 +228,22 @@ class SmoothMarkdownStreamControllerImpl {
     this.emit()
   }
 
-  reset = (initialMarkdown = ''): void => {
+  reset = (initialMarkdown = '', options?: { prefixKnown?: boolean }): void => {
     if (this.destroyed)
       return
 
     this.cancelLoop()
 
-    if (initialMarkdown.startsWith(this.source)) {
+    if (options?.prefixKnown) {
+      // The caller (e.g. useSmoothStreamingBridge) has already verified that
+      // initialMarkdown extends this.source, so skip the redundant O(n)
+      // startsWith re-check the append branch would otherwise perform. Streaming
+      // appends hit this path on every chunk, so this avoids a second full
+      // string comparison of the whole accumulated source per commit.
+      this.source = initialMarkdown
+      this.scanAppendedSource()
+    }
+    else if (initialMarkdown.startsWith(this.source)) {
       this.source = initialMarkdown
       this.scanAppendedSource()
     }

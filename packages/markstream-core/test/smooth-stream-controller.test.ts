@@ -261,6 +261,35 @@ describe('smoothMarkdownStreamController', () => {
     controller.destroy()
   })
 
+  it('reset with prefixKnown extends the source without re-checking the prefix', () => {
+    const controller = createController()
+
+    controller.enqueue('hello')
+    // prefixKnown is only valid when the new content extends the source; the
+    // caller (e.g. useSmoothStreamingBridge) performs the full check.
+    controller.reset('hello world', { prefixKnown: true })
+
+    expect(controller.getSnapshot().source).toBe('hello world')
+    controller.destroy()
+  })
+
+  it('reset with prefixKnown matches the append branch of a plain reset', () => {
+    const withCheck = createController()
+    const known = createController()
+
+    withCheck.enqueue('abc')
+    known.enqueue('abc')
+
+    withCheck.reset('abcdef')
+    known.reset('abcdef', { prefixKnown: true })
+
+    expect(known.getSnapshot().source).toBe(withCheck.getSnapshot().source)
+    expect(known.getSnapshot().visible).toBe(withCheck.getSnapshot().visible)
+    expect(known.getSnapshot().pendingChars).toBe(withCheck.getSnapshot().pendingChars)
+    withCheck.destroy()
+    known.destroy()
+  })
+
   it('reopens the stream when enqueue is called after finish', () => {
     const controller = createController()
 

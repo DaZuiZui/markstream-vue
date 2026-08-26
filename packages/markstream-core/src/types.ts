@@ -38,7 +38,7 @@ export interface SmoothMarkdownStreamController {
   enqueue: (chunk: string) => void
   finish: (options?: { flush?: boolean }) => void
   flush: () => void
-  reset: (initialMarkdown?: string) => void
+  reset: (initialMarkdown?: string, options?: { prefixKnown?: boolean }) => void
   pause: () => void
   resume: () => void
   destroy: () => void
