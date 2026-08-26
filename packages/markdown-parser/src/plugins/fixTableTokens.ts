@@ -192,66 +192,77 @@ function hasTrailingPipeHeaderRowWithoutColon(line: string) {
 }
 
 export function fixTableTokens(tokens: MarkdownToken[], final = false, source = ''): MarkdownToken[] {
-  const fixedTokens = [...tokens]
+  // Only allocate the fixed array when a branch actually mutates tokens.
+  // fixTableTokens only inspects the trailing inline token; in the common
+  // no-table case returning the same array instance avoids a full copy on
+  // every parse (stream mode parses the appended fragment each commit).
   if (tokens.length < 3)
-    return fixedTokens
+    return tokens
   const i = tokens.length - 2
   const token = tokens[i]
-  if (token.type === 'inline') {
-    const sourceMap = tokens[i - 1]?.map
-    const tcontent = String(token.content ?? '')
-    const headerContent = tcontent.split('\n')[0] ?? ''
-    const [headerLine = '', separatorLine = '', ...rest] = tcontent.split('\n')
-    const hasTrailingNewlineSeparatorStart = !final
-      && !tcontent.includes('\n')
-      && /\r?\n$/.test(source)
-      && hasTrailingPipeHeaderRow(tcontent)
+  if (token.type !== 'inline')
+    return tokens
 
-    if (
-      !final
-      && (
-        (
-          tcontent.includes('\n')
-          && rest.length === 0
-          && hasTrailingPipeHeaderRow(headerLine)
-          && isTableSeparatorRowWithPartialTail(separatorLine)
-        )
-        || hasTrailingNewlineSeparatorStart
+  const sourceMap = tokens[i - 1]?.map
+  const tcontent = String(token.content ?? '')
+  const headerContent = tcontent.split('\n')[0] ?? ''
+  const [headerLine = '', separatorLine = '', ...rest] = tcontent.split('\n')
+  const hasTrailingNewlineSeparatorStart = !final
+    && !tcontent.includes('\n')
+    && /\r?\n$/.test(source)
+    && hasTrailingPipeHeaderRow(tcontent)
+
+  let fixedTokens: MarkdownToken[] | null = null
+
+  if (
+    !final
+    && (
+      (
+        tcontent.includes('\n')
+        && rest.length === 0
+        && hasTrailingPipeHeaderRow(headerLine)
+        && isTableSeparatorRowWithPartialTail(separatorLine)
       )
-    ) {
-      const body = headerContent.slice(1, -1).split('|').map(i => i.trim()).flatMap(i => createTh(i))
-      const insert = ([
-        ...createStart(sourceMap),
-        ...body,
-        ...createEnd(),
-      ] as unknown) as MarkdownToken[]
-      fixedTokens.splice(i - 1, 3, ...insert)
-    }
-    else if (
-      tcontent.includes('\n')
-      && rest.length === 0
-      && hasTrailingPipeHeaderRow(headerLine)
-      && isTableSeparatorRow(separatorLine)
-    ) {
-      // 解析 table
-      const body = headerContent.slice(1, -1).split('|').map(i => i.trim()).flatMap(i => createTh(i))
-      const insert = ([
-        ...createStart(sourceMap),
-        ...body,
-        ...createEnd(),
-      ] as unknown) as MarkdownToken[]
-      fixedTokens.splice(i - 1, 3, ...insert)
-    }
-    else if (
-      tcontent.includes('\n')
-      && rest.length === 0
-      && hasTrailingPipeHeaderRowWithoutColon(headerLine)
-      && isTruncatedSeparatorRow(separatorLine)
-    ) {
-      token.content = tcontent.slice(0, -2)
-      token.children!.splice(2, 1)
-    }
+      || hasTrailingNewlineSeparatorStart
+    )
+  ) {
+    const body = headerContent.slice(1, -1).split('|').map(i => i.trim()).flatMap(i => createTh(i))
+    const insert = ([
+      ...createStart(sourceMap),
+      ...body,
+      ...createEnd(),
+    ] as unknown) as MarkdownToken[]
+    fixedTokens = [...tokens]
+    fixedTokens.splice(i - 1, 3, ...insert)
+  }
+  else if (
+    tcontent.includes('\n')
+    && rest.length === 0
+    && hasTrailingPipeHeaderRow(headerLine)
+    && isTableSeparatorRow(separatorLine)
+  ) {
+    // 解析 table
+    const body = headerContent.slice(1, -1).split('|').map(i => i.trim()).flatMap(i => createTh(i))
+    const insert = ([
+      ...createStart(sourceMap),
+      ...body,
+      ...createEnd(),
+    ] as unknown) as MarkdownToken[]
+    fixedTokens = [...tokens]
+    fixedTokens.splice(i - 1, 3, ...insert)
+  }
+  else if (
+    tcontent.includes('\n')
+    && rest.length === 0
+    && hasTrailingPipeHeaderRowWithoutColon(headerLine)
+    && isTruncatedSeparatorRow(separatorLine)
+  ) {
+    // In-place mutation shared with the caller's token array (identical to the
+    // previous behavior where the shallow copy shared the same token objects).
+    token.content = tcontent.slice(0, -2)
+    token.children!.splice(2, 1)
+    return tokens
   }
 
-  return fixedTokens
+  return fixedTokens ?? tokens
 }

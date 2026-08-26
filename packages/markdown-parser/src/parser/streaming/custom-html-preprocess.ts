@@ -109,15 +109,6 @@ function stripDanglingHtmlLikeTail(markdown: string) {
     return true
   }
 
-  // Delegate to the full fence scanner used elsewhere: the previous local
-  // scanner only recognized direct and blockquote-prefixed fences, so a
-  // fence nested inside a list item (`- ```html` / `  <div`) was invisible
-  // and the incomplete `<div` tail got truncated from the code content on
-  // every non-final commit. `isInsideOpenMarkdownFenceBeforeOffset` also
-  // handles list/blockquote fence exit conditions (de-dent ends the fence).
-  const isInsideFencedCodeBlock = (src: string, pos: number) =>
-    isInsideOpenMarkdownFenceBeforeOffset(src, pos)
-
   // In streaming mode it's common to have an incomplete HTML-ish fragment at
   // the very end of the current buffer (e.g. '<fo' or '</think'). Letting it
   // reach markdown-it can produce visible mid-state text nodes. We only strip
@@ -126,11 +117,12 @@ function stripDanglingHtmlLikeTail(markdown: string) {
   const lastLt = s.lastIndexOf('<')
   if (lastLt === -1)
     return s
-  if (isInsideFencedCodeBlock(s, lastLt))
-    return s
 
-  // Only treat it as an HTML-ish tail when "<" looks like a tag start.
-  // This avoids truncating normal text/math like "y_{<i}" or "x < y".
+  // Run the cheap rejection checks BEFORE the O(region) fence scan: the fence
+  // scan only affects the strip decision, so in the common cases where the
+  // tail is plainly not a strip candidate (comparison, closed tag, plain
+  // whitespace) it is never needed. This removes a full line-by-line fence
+  // walk on every non-final commit that merely contains a '<'.
   if (lastLt > 0) {
     const prev = s[lastLt - 1]
     const prevIsWs = prev === ' ' || prev === '\t' || prev === '\n' || prev === '\r'
@@ -151,6 +143,15 @@ function stripDanglingHtmlLikeTail(markdown: string) {
     return s
 
   if (!isLikelyHtmlTagPrefix(tail))
+    return s
+
+  // Delegate to the full fence scanner used elsewhere: the previous local
+  // scanner only recognized direct and blockquote-prefixed fences, so a
+  // fence nested inside a list item (`- ```html` / `  <div`) was invisible
+  // and the incomplete `<div` tail got truncated from the code content on
+  // every non-final commit. `isInsideOpenMarkdownFenceBeforeOffset` also
+  // handles list/blockquote fence exit conditions (de-dent ends the fence).
+  if (isInsideOpenMarkdownFenceBeforeOffset(s, lastLt))
     return s
   return s.slice(0, lastLt)
 }

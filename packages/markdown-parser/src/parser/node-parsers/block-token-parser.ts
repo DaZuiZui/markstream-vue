@@ -458,8 +458,11 @@ export function parseBasicBlockToken(
         // If markdown-it provides a source map for this token, prefer anchoring the
         // re-extraction to that line range. This avoids accidentally matching an
         // earlier occurrence of the same custom tag that was tokenized as inline.
+        // Use the incrementally cached line-start offsets when available (O(1))
+        // instead of re-scanning the source from index 0 per html_block token.
+        const mappedLine = Number(token.map?.[0] ?? 0)
         const mappedLineStart = Array.isArray(token.map)
-          ? lineToIndex(source, Number(token.map?.[0] ?? 0))
+          ? context?.sourceLineOffsets?.[mappedLine] ?? lineToIndex(source, mappedLine)
           : 0
         const searchStart = Math.max(clampNonNegative(cursor), clampNonNegative(mappedLineStart))
 
