@@ -15,7 +15,7 @@ import { applyPostTransformNodes, finalizeHtmlBlockLoading } from './nodes/final
 import { getInternalNodeSourceRange, processTokensWithContext } from './nodes/token-to-nodes'
 import { createParseContext, ensureParseContext } from './parse-context'
 import { processTopLevelTokensWithReuse } from './reuse/structured-node-reuse'
-import { getParserRuntime } from './runtime'
+import { getCachedSourceLineOffsets, getParserRuntime } from './runtime'
 import { createSourceLineMapper } from './source-line-mapper'
 import { getSafeMarkdown } from './streaming/safe-markdown'
 import {
@@ -165,6 +165,10 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
       ? createSourceLineMapper(sourceMarkdown, safeMarkdown)
       : undefined,
     sourceMarkdown: safeMarkdown,
+    // Line-start offsets are a pure function of the source; cache them on the
+    // runtime and extend incrementally across streaming appends so the
+    // per-commit O(document) newline scan only touches the appended tail.
+    sourceLineOffsets: getCachedSourceLineOffsets(runtime, safeMarkdown),
     customHtmlBlockCursor: 0,
   }
   let result = processTopLevelTokensWithReuse(runtime, safeMarkdown, transformedTokens, internalOptions, {

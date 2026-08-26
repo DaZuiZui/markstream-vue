@@ -73,6 +73,48 @@ export interface SiblingHtmlChildrenRuntimeState {
   validateLink: ParseOptions['validateLink']
 }
 
+export interface SourceLineOffsetsRuntimeState {
+  /** The safe-markdown source the offsets were computed for. */
+  source: string
+  /** Position after the k-th newline (offsets[0] = 0). */
+  offsets: number[]
+}
+
+/**
+ * Resolve (and cache) the line-start offsets for a source string.
+ *
+ * Streaming commits grow the source append-only, so a previously cached
+ * offset array can be extended by scanning only the appended tail instead of
+ * re-scanning the whole document on every commit (the previous behavior
+ * rebuilt the offsets from scratch once per parse). Correctness is preserved
+ * by keying on the actual string: if the new source is not an extension of
+ * the cached one, the cache is rebuilt from scratch.
+ */
+export function getCachedSourceLineOffsets(runtime: ParserRuntime, source: string): number[] {
+  const cached = runtime.sourceLineOffsets
+
+  if (cached && cached.source === source)
+    return cached.offsets
+
+  if (cached && source.length > cached.source.length && source.startsWith(cached.source)) {
+    const offsets = cached.offsets
+    for (let i = cached.source.length; i < source.length; i++) {
+      if (source.charCodeAt(i) === 10)
+        offsets.push(i + 1)
+    }
+    cached.source = source
+    return offsets
+  }
+
+  const offsets = [0]
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 10)
+      offsets.push(i + 1)
+  }
+  runtime.sourceLineOffsets = { source, offsets }
+  return offsets
+}
+
 export interface ParserRuntimeSemantics {
   customHtmlTags: string
   hasCustomParserExtensions: boolean
@@ -126,6 +168,7 @@ export class ParserRuntime {
   detailsStitchCache = new WeakMap<object, { openRaw: string, explicitClose: boolean, closeSliceEnd: number, middleSource: string, node: ParsedNode }>()
   siblingHtmlChildren?: SiblingHtmlChildrenRuntimeState
   nodeSourceRanges = new WeakMap<object, { start: number, end: number }>()
+  sourceLineOffsets?: SourceLineOffsetsRuntimeState
   private documentSource?: string
   private semantics?: ParserRuntimeSemantics
   private finalized = false
@@ -230,6 +273,7 @@ export class ParserRuntime {
     this.siblingHtmlChildren = undefined
     this.detailsStitchCache = new WeakMap()
     this.nodeSourceRanges = new WeakMap()
+    this.sourceLineOffsets = undefined
   }
 }
 
