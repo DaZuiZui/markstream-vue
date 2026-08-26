@@ -292,6 +292,23 @@ class TimelineFenwickTree {
     values.forEach((value, index) => this.add(index, value))
   }
 
+  resize(count: number) {
+    const needed = count + 1
+    if (needed <= this.tree.length)
+      return
+
+    const oldLength = this.tree.length
+    const oldCount = oldLength - 1
+    const oldTotal = this.total
+    this.tree.length = needed
+    for (let cursor = oldLength; cursor < needed; cursor++) {
+      const rangeStart = cursor - (cursor & -cursor)
+      this.tree[cursor] = rangeStart < oldCount
+        ? oldTotal - this.prefixSum(rangeStart)
+        : 0
+    }
+  }
+
   add(index: number, delta: number) {
     if (!Number.isFinite(delta) || delta === 0)
       return
@@ -349,6 +366,9 @@ const layoutRecords = shallowRef<TimelineRecord[]>([])
 const layoutRecordByKey = new Map<string, TimelineRecord>()
 const layoutSizeTree = shallowRef(new TimelineFenwickTree([]))
 const layoutRevision = ref(0)
+// Snapshot of the host estimateItemHeight result per item index, populated
+// during detection so the rebuild reuses the values instead of re-invoking the
+// host function (the contract is one host call per item per rebuild).
 let layoutEstimateSnapshot: Array<number | undefined> = []
 // Vue re-invokes function refs whenever the ref callback identity changes, and
 // visibleWindow() materializes fresh record objects on every scroll/size
@@ -380,15 +400,112 @@ const layout = computed(() => {
   }
 })
 
-function rebuildLayoutRecords() {
-  const records: TimelineRecord[] = []
-  const sizes: number[] = []
+// Per-item layout signature cache, parallel to `layoutRecords`. Lets the
+// incremental rebuild prove prefix items are unchanged by comparing their
+// signatures (O(1) content-hash lookups for unchanged items) instead of
+// re-signing and rebuilding the whole list on every streaming tick.
+const lastItemLayoutSignatures: string[] = []
+// Structural layout inputs (measurement keys, thread key, accessor identities)
+// that invalidate every record. When they change a full rebuild is required;
+// otherwise only the divergent tail is rebuilt.
+let lastLayoutStructuralKey = ''
+// Increments whenever the incremental detector observes ANY item divergence,
+// so consecutive updates that diverge at the same index still produce a
+// different watch token and re-trigger the rebuild.
+let layoutItemChangeEpoch = 0
+let detectedLayoutRebuildFrom = 0
+
+function getLayoutStructuralKey() {
+  return [
+    timelineBaseMeasurementKey.value,
+    timelineMarkdownMeasurementKey.value,
+    normalizedThreadKey.value ?? '',
+    getIdentityToken(props.estimateItemHeight),
+    getIdentityToken(props.getKey),
+    getIdentityToken(props.getKind),
+    getIdentityToken(props.getContent),
+    getIdentityToken(props.getFinal),
+    getIdentityToken(props.getRevision),
+  ].join('\u0001')
+}
+
+// Per-item signature. The estimate portion is read from the snapshot populated
+// by detection, so the host estimateItemHeight is invoked exactly once per item
+// per evaluation (never again during the rebuild). Content signatures are
+// memoized, so unchanged non-markdown items cost an O(1) map hit.
+function getItemLayoutSignature(item: any, index: number) {
+  const markdown = isMarkstreamMarkdownTimelineItem(item, index, props)
+  const estimated = layoutEstimateSnapshot[index]
+  return [
+    getItemKey(item, index),
+    getMarkstreamTimelineItemKind(item, index, props),
+    markdown ? 1 : 0,
+    getMarkstreamTimelineItemRevision(item, index, props) ?? '',
+    estimated == null ? '' : String(estimated),
+    getCheapTimelineItemContentSignature(item, index, markdown),
+    getComponentIdentityToken(item?.component),
+  ].join('\u0001')
+}
+
+function getHostEstimatedItemHeight(item: any, index: number) {
+  if (typeof props.estimateItemHeight !== 'function')
+    return undefined
+
+  return Math.ceil(estimateMarkstreamTimelineItemHeight(item, index, props))
+}
+
+function rebuildLayoutRecords(options: { forceFull?: boolean } = {}) {
+  const items = props.items
+  const total = items.length
   const renderScopeKey = getTimelineRenderScopeKey()
+  const previous = layoutRecords.value
+  const prevCount = previous.length
 
-  layoutRecordByKey.clear()
+  const structuralKey = getLayoutStructuralKey()
+  const structuralChanged = lastLayoutStructuralKey !== structuralKey
+  lastLayoutStructuralKey = structuralKey
 
-  for (let index = 0; index < props.items.length; index++) {
-    const item = props.items[index]
+  // Explicit layoutRevision means the host forces a full rebuild; structural
+  // input changes invalidate every record; shrinking the dataset drops the
+  // tail (Fenwick shrinking would need a rebuild anyway); the first build has
+  // no prefix to reuse.
+  const fullRebuild = options.forceFull === true
+    || props.layoutRevision != null
+    || structuralChanged
+    || prevCount === 0
+    || total < prevCount
+
+  const rebuildFrom = fullRebuild
+    ? 0
+    : Math.min(detectedLayoutRebuildFrom, prevCount, total)
+
+  const records = new Array<TimelineRecord>(total)
+  const sizes = new Array<number>(total)
+  // Keys already registered for THIS build. Prefix records are reused and their
+  // keys are registered first, so a duplicate key later in the items keeps the
+  // first (prefix) record — matching the previous full-rebuild behavior where
+  // the map was rebuilt with first-occurrence-wins.
+  const seenLayoutKeys = new Set<string>()
+
+  for (let index = 0; index < rebuildFrom; index++) {
+    records[index] = previous[index]!
+    sizes[index] = previous[index]!.size
+    seenLayoutKeys.add(getItemKey(items[index]!, index))
+  }
+
+  if (fullRebuild) {
+    layoutRecordByKey.clear()
+  }
+  else {
+    for (let index = rebuildFrom; index < prevCount; index++) {
+      const record = previous[index]!
+      if (layoutRecordByKey.get(record.key) === record)
+        layoutRecordByKey.delete(record.key)
+    }
+  }
+
+  for (let index = rebuildFrom; index < total; index++) {
+    const item = items[index]
     const key = getItemKey(item, index)
     const recordBase = {
       item,
@@ -410,24 +527,58 @@ function rebuildLayoutRecords() {
       component: item?.component,
     }
 
-    records.push(record)
-    sizes.push(size)
-    if (!layoutRecordByKey.has(key)) {
+    records[index] = record
+    sizes[index] = size
+    // Register the first occurrence of each key for this build. Keys that
+    // persist across rebuilds must be overwritten (the previous entry is a
+    // stale record from an earlier build); keys seen earlier in this build are
+    // left untouched.
+    if (!seenLayoutKeys.has(key)) {
+      seenLayoutKeys.add(key)
       layoutRecordByKey.set(key, record)
+    }
+    lastItemLayoutSignatures[index] = getItemLayoutSignature(item, index)
+  }
+  lastItemLayoutSignatures.length = total
+
+  if (fullRebuild) {
+    for (const key of measureRecordElementHandles.keys()) {
+      if (!layoutRecordByKey.has(key))
+        measureRecordElementHandles.delete(key)
+    }
+    for (const key of markdownPropsCache.keys()) {
+      if (!layoutRecordByKey.has(key))
+        markdownPropsCache.delete(key)
+    }
+    layoutSizeTree.value = new TimelineFenwickTree(sizes)
+  }
+  else {
+    // Incremental: reuse the existing tree, extend it if the dataset grew, and
+    // apply per-item size deltas for the rebuilt tail.
+    const tree = layoutSizeTree.value
+    tree.resize(total)
+    for (let index = rebuildFrom; index < total; index++) {
+      const oldSize = index < prevCount ? previous[index]?.size ?? 0 : 0
+      const delta = sizes[index] - oldSize
+      if (delta !== 0)
+        tree.add(index, delta)
+    }
+
+    // Prune handles/caches for keys that disappeared from the replaced tail.
+    // layoutRecordByKey now holds every current key (first occurrence), so a
+    // key absent from it is genuinely gone. Only previous-tail indices can
+    // disappear (the prefix is signature-verified unchanged), so the sweep is
+    // bounded by the dirty tail size.
+    for (let index = rebuildFrom; index < prevCount; index++) {
+      const key = previous[index]?.key
+      if (key && !layoutRecordByKey.has(key)) {
+        measureRecordElementHandles.delete(key)
+        markdownPropsCache.delete(key)
+      }
     }
   }
 
-  for (const key of measureRecordElementHandles.keys()) {
-    if (!layoutRecordByKey.has(key))
-      measureRecordElementHandles.delete(key)
-  }
-  for (const key of markdownPropsCache.keys()) {
-    if (!layoutRecordByKey.has(key))
-      markdownPropsCache.delete(key)
-  }
-
   layoutRecords.value = records
-  layoutSizeTree.value = new TimelineFenwickTree(sizes)
   layoutEstimateSnapshot = []
   layoutRevision.value += 1
 }
@@ -592,36 +743,6 @@ function getCheapTimelineItemContentSignature(item: any, index: number, markdown
   return `${text.length}:${hashTimelineString(text)}`
 }
 
-function getEstimatedItemHeightSignature(item: any, index: number) {
-  if (typeof props.estimateItemHeight !== 'function')
-    return ''
-
-  const estimated = props.estimateItemHeight(item, index)
-  if (!Number.isFinite(estimated) || estimated <= 0)
-    return ''
-
-  const value = Math.ceil(estimated)
-  layoutEstimateSnapshot[index] = value
-  return String(value)
-}
-
-function getLayoutItemsSignature() {
-  return props.items.map((item, index) => {
-    const key = getItemKey(item, index)
-    const markdown = isMarkstreamMarkdownTimelineItem(item, index, props)
-
-    return [
-      key,
-      getMarkstreamTimelineItemKind(item, index, props),
-      markdown ? 1 : 0,
-      getMarkstreamTimelineItemRevision(item, index, props) ?? '',
-      getEstimatedItemHeightSignature(item, index),
-      getCheapTimelineItemContentSignature(item, index, markdown),
-      getComponentIdentityToken(item?.component),
-    ].join('\u0001')
-  }).join('\u0000')
-}
-
 function getLayoutRebuildSignature() {
   const explicit = props.layoutRevision
   if (explicit != null) {
@@ -632,7 +753,50 @@ function getLayoutRebuildSignature() {
     ].join('\u0001')
   }
 
-  return getLayoutItemsSignature()
+  // Incremental detection: compare each item against the signature cached at
+  // the last rebuild, stopping at the first divergence. Prefix items are O(1)
+  // (content hashes are memoized and key/kind/revision are cheap derivations),
+  // so a stable thread costs a cheap prefix scan instead of re-signing the
+  // whole list. A monotonically increasing epoch is folded into the token so
+  // consecutive updates diverging at the same index still change the value
+  // (otherwise the watch would miss the second update).
+  const items = props.items
+  const total = items.length
+  const hasHostEstimate = typeof props.estimateItemHeight === 'function'
+
+  // Populate the host estimate snapshot for every item (matching the previous
+  // whole-list signature, which invoked estimateItemHeight once per item per
+  // evaluation). The rebuild reuses these values instead of re-calling the
+  // host function. When no host estimate is provided the snapshot is cleared
+  // so stale entries never leak into signatures.
+  if (hasHostEstimate) {
+    layoutEstimateSnapshot.length = total
+    for (let index = 0; index < total; index++)
+      layoutEstimateSnapshot[index] = getHostEstimatedItemHeight(items[index]!, index)
+  }
+  else {
+    layoutEstimateSnapshot = []
+  }
+
+  const shared = Math.min(lastItemLayoutSignatures.length, total)
+  let divergence = shared
+  for (let index = 0; index < shared; index++) {
+    if (lastItemLayoutSignatures[index] !== getItemLayoutSignature(items[index]!, index)) {
+      divergence = index
+      // Without a host estimate the scan is cheap, so stop at the first
+      // divergence. With a host estimate the snapshot was already populated
+      // above and continuing keeps the token deterministic for all items.
+      if (!hasHostEstimate)
+        break
+    }
+  }
+
+  if (divergence === shared && total === lastItemLayoutSignatures.length)
+    return 'stable'
+
+  detectedLayoutRebuildFrom = divergence
+  layoutItemChangeEpoch += 1
+  return `inc:${layoutItemChangeEpoch}:${divergence}:${total}`
 }
 
 function getRecordLiveItem(record: Pick<TimelineRecord, 'item' | 'index'>) {
@@ -2730,7 +2894,10 @@ function restoreThreadState(
       restoredMarkdownLogicalHeights.set(key, restoredMarkdown)
   }
 
-  rebuildLayoutRecords()
+  // Restored state repopulates itemSizes/markdownStates wholesale, so records
+  // must be rebuilt (re-reading the freshly restored sizes) rather than
+  // incrementally skipped.
+  rebuildLayoutRecords({ forceFull: true })
 
   if (props.stickToBottom === true) {
     bottomPinned.value = true

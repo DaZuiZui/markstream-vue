@@ -5706,8 +5706,8 @@ function buildRenderedItemSignature(node: ParsedNode, index: number, globalSigna
  * The per-node signature tracks index, loading, estimated height and the
  * renderer-global signature so unchanged nodes skip all derivation work.
  */
-function buildRenderedItem(item: { node: ParsedNode, index: number }) {
-  const cacheSignature = buildRenderedItemSignature(item.node, item.index, getRenderedItemGlobalSignature())
+function buildRenderedItem(item: { node: ParsedNode, index: number }, globalSignature: readonly unknown[]) {
+  const cacheSignature = buildRenderedItemSignature(item.node, item.index, globalSignature)
   const cachedItem = renderedItemCache.get(item.node)
   if (cachedItem && hasSameRenderedItemSignature(cachedItem.signature, cacheSignature))
     return cachedItem.item
@@ -5886,8 +5886,20 @@ function buildRenderedItem(item: { node: ParsedNode, index: number }) {
 }
 
 const renderedItems = computed(() => {
+  // Capture the previous signature BEFORE getRenderedItemGlobalSignature
+  // refreshes the module-level cache, otherwise the comparison below would
+  // always see the just-stored value and never detect global changes.
+  const previousGlobalSignature = lastRenderedItemGlobalSignature
+  // Compute the renderer-global signature ONCE per evaluation and reuse the
+  // same array instance for every node. Passing it down avoids rebuilding the
+  // 24-element signature array + compare per dirty node (and per visible node
+  // in the virtualized path) on every streaming commit.
+  const globalSignature = getRenderedItemGlobalSignature()
+  const globalChanged = previousGlobalSignature !== globalSignature
+  lastRenderedItemGlobalSignature = globalSignature
+
   if (virtualizationEnabled.value)
-    return visibleNodes.value.map(item => buildRenderedItem(item))
+    return visibleNodes.value.map(item => buildRenderedItem(item, globalSignature))
 
   const nodes = parsedNodes.value
   const total = nodes.length
@@ -5899,14 +5911,6 @@ const renderedItems = computed(() => {
     renderedItemSourceNodes.length = total
     truncated = true
   }
-
-  // Capture the previous signature BEFORE getRenderedItemGlobalSignature
-  // refreshes the module-level cache, otherwise the comparison below would
-  // always see the just-stored value and never detect global changes.
-  const previousGlobalSignature = lastRenderedItemGlobalSignature
-  const globalSignature = getRenderedItemGlobalSignature()
-  const globalChanged = previousGlobalSignature !== globalSignature
-  lastRenderedItemGlobalSignature = globalSignature
 
   // Find the first index whose cached item no longer matches its parsed node
   // by identity or loading snapshot. Stable-prefix nodes are reused by the
@@ -5966,7 +5970,7 @@ const renderedItems = computed(() => {
     return lastRenderedItemsArray
 
   for (let index = dirtyStart; index < total; index++) {
-    cache[index] = buildRenderedItem({ node: nodes[index]!, index })
+    cache[index] = buildRenderedItem({ node: nodes[index]!, index }, globalSignature)
     // eslint-disable-next-line vue/no-side-effects-in-computed-properties -- In-place maintenance of the parallel source-node cache; not a reactive side effect.
     renderedItemSourceNodes[index] = nodes[index]!
   }
