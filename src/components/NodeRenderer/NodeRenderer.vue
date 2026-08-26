@@ -5614,6 +5614,12 @@ const previewHeightEstimateCache = new WeakMap<object, { code: string, height: n
 // rebuilt), which removes the per-commit O(N) signature build + WeakMap
 // lookup + object allocation for the whole document.
 const renderedItemsNonVirtual: RenderedItemLike[] = []
+// Source node each non-virtualized cache entry was built from. Code blocks are
+// rendered from a shallow clone (not the source node), so this parallel array
+// lets the identity scan distinguish a parser-reused source node (same object,
+// clean) from an externally supplied replacement node (new object, dirty)
+// without comparing against the clone in the item.
+const renderedItemSourceNodes: Array<ParsedNode | undefined> = []
 let lastRenderedItemGlobalSignature: readonly unknown[] | null = null
 // Array instance returned by the `renderedItems` computed on its last
 // evaluation. Reused verbatim on no-op commits so Vue skips the v-for re-render
@@ -5889,6 +5895,8 @@ const renderedItems = computed(() => {
   if (renderedItemsNonVirtual.length > total) {
     // eslint-disable-next-line vue/no-side-effects-in-computed-properties -- In-place truncation of the module-level incremental item cache; not a reactive side effect.
     renderedItemsNonVirtual.length = total
+    // eslint-disable-next-line vue/no-side-effects-in-computed-properties -- In-place truncation of the parallel source-node cache; not a reactive side effect.
+    renderedItemSourceNodes.length = total
     truncated = true
   }
 
@@ -5904,13 +5912,40 @@ const renderedItems = computed(() => {
   // by identity or loading snapshot. Stable-prefix nodes are reused by the
   // parser across streaming commits, while consumers may update loading in
   // place; both checks stay O(N) primitive/reference comparisons.
+  //
+  // Code blocks are rendered from a shallow clone (getCodeBlockRenderNode), so
+  // their cached item's node is the clone, never the source node. Comparing
+  // against the clone cache instead keeps the scan O(dirty tail): the clone is
+  // only recreated when the visible payload (language/loading/diff/code/raw/
+  // sourceMap) changes, so clone identity proves the item is fresh. Without
+  // this, any code block made the cached node !== source node, so the scan
+  // always fell back to the first code block and forced a full item rebuild +
+  // fresh array every streaming commit (defeating the no-op array reuse below).
   const cache = renderedItemsNonVirtual
   const identityLimit = Math.min(cache.length, total)
   let dirtyStart = globalChanged ? 0 : identityLimit
   if (!globalChanged) {
     for (let index = 0; index < identityLimit; index++) {
       const sourceNode = nodes[index]!
-      if (
+      if (sourceNode.type === 'code_block') {
+        // Code blocks are rendered from a shallow clone (getCodeBlockRenderNode),
+        // so their cached item's node is the clone, never the source node. The
+        // clone is only recreated when the visible payload changes, so clone
+        // identity + source-node identity + loading snapshot together prove the
+        // item is fresh. Without this, any code block made the cached node !==
+        // source node, so the scan always fell back to the first code block and
+        // forced a full item rebuild + fresh array every streaming commit
+        // (defeating the no-op array reuse below).
+        if (
+          cache[index]?.node !== codeBlockRenderCache[index]?.node
+          || renderedItemSourceNodes[index] !== sourceNode
+          || !Object.is(cache[index]?.sourceLoading, (sourceNode as { loading?: unknown }).loading)
+        ) {
+          dirtyStart = index
+          break
+        }
+      }
+      else if (
         cache[index]?.node !== sourceNode
         || !Object.is(cache[index]?.sourceLoading, (sourceNode as { loading?: unknown }).loading)
       ) {
@@ -5930,8 +5965,11 @@ const renderedItems = computed(() => {
   if (!truncated && dirtyStart === total)
     return lastRenderedItemsArray
 
-  for (let index = dirtyStart; index < total; index++)
+  for (let index = dirtyStart; index < total; index++) {
     cache[index] = buildRenderedItem({ node: nodes[index]!, index })
+    // eslint-disable-next-line vue/no-side-effects-in-computed-properties -- In-place maintenance of the parallel source-node cache; not a reactive side effect.
+    renderedItemSourceNodes[index] = nodes[index]!
+  }
 
   // New array identity so Vue re-renders; prefix entries are shared objects,
   // so the keyed v-for diff resolves them without re-creating anything.

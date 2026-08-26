@@ -15,7 +15,7 @@ export interface SmoothMarkdownStreamControllerVue {
   enqueue: (chunk: string) => void
   finish: (options?: { flush?: boolean }) => void
   flush: () => void
-  reset: (initialMarkdown?: string) => void
+  reset: (initialMarkdown?: string, options?: { prefixKnown?: boolean }) => void
   pause: () => void
   resume: () => void
 }
@@ -59,7 +59,7 @@ export function useSmoothMarkdownStream(options: SmoothMarkdownStreamOptions = {
     enqueue: (chunk: string) => controller.enqueue(chunk),
     finish: (finishOptions?: { flush?: boolean }) => controller.finish(finishOptions),
     flush: () => controller.flush(),
-    reset: (initialMarkdown?: string) => controller.reset(initialMarkdown),
+    reset: (initialMarkdown?: string, options?: { prefixKnown?: boolean }) => controller.reset(initialMarkdown, options),
     pause: () => controller.pause(),
     resume: () => controller.resume(),
   }

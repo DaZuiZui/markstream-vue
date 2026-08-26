@@ -150,3 +150,142 @@ describe('render item incremental maintenance benchmark', () => {
     expect(newMs).toBeLessThan(oldMs)
   }, 120_000)
 })
+
+describe('code-block identity scan', () => {
+  // Mirrors the `renderedItems` computed scan branch in NodeRenderer.vue for
+  // code blocks. Code blocks are rendered from a shallow clone (not the source
+  // node), so the cache stores the clone; a cached item is fresh only when the
+  // clone matches the code-block render cache, the source node is the same
+  // object it was built from, and the loading snapshot is unchanged.
+  function findDirtyStart(
+    nodes: Array<{ type: string, loading?: unknown }>,
+    cache: Array<{ node: unknown, sourceLoading?: unknown } | undefined>,
+    clones: Array<unknown | undefined>,
+    sourceNodes: Array<unknown | undefined>,
+  ) {
+    const identityLimit = Math.min(cache.length, nodes.length)
+    let dirtyStart = identityLimit
+    for (let index = 0; index < identityLimit; index++) {
+      const sourceNode = nodes[index]!
+      if (sourceNode.type === 'code_block') {
+        if (
+          cache[index]?.node !== clones[index]
+          || sourceNodes[index] !== sourceNode
+          || !Object.is(cache[index]?.sourceLoading, sourceNode.loading)
+        ) {
+          dirtyStart = index
+          break
+        }
+      }
+      else if (
+        cache[index]?.node !== sourceNode
+        || !Object.is(cache[index]?.sourceLoading, sourceNode.loading)
+      ) {
+        dirtyStart = index
+        break
+      }
+    }
+    return dirtyStart
+  }
+
+  function buildCommit(
+    nodes: Array<{ type: string, loading?: unknown }>,
+    cache: Array<{ node: unknown, sourceLoading?: unknown } | undefined>,
+    clones: Array<unknown | undefined>,
+    sourceNodes: Array<unknown | undefined>,
+  ) {
+    if (cache.length > nodes.length) {
+      cache.length = nodes.length
+      clones.length = nodes.length
+      sourceNodes.length = nodes.length
+    }
+    for (let index = 0; index < nodes.length; index++) {
+      const sourceNode = nodes[index]!
+      // Code blocks render a fresh clone object; other nodes render the source.
+      const rendered = sourceNode.type === 'code_block'
+        ? { ...sourceNode }
+        : sourceNode
+      cache[index] = { node: rendered, sourceLoading: sourceNode.loading }
+      if (sourceNode.type === 'code_block')
+        clones[index] = rendered
+      sourceNodes[index] = sourceNode
+    }
+  }
+
+  it('keeps a stable-prefix code block clean while the tail grows (no full rebuild)', () => {
+    const codeBlock = { type: 'code_block', loading: false }
+    const paragraph = { type: 'paragraph' }
+    const nodes: Array<{ type: string, loading?: unknown }> = Array.from(
+      { length: 50 },
+      (_, i) => (i === 10 ? { ...codeBlock } : { ...paragraph }),
+    )
+    const cache: Array<{ node: unknown, sourceLoading?: unknown } | undefined> = []
+    const clones: Array<unknown | undefined> = []
+    const sourceNodes: Array<unknown | undefined> = []
+    buildCommit(nodes, cache, clones, sourceNodes)
+
+    for (let append = 0; append < 10; append++) {
+      const start = nodes.length
+      for (let i = 0; i < 5; i++)
+        nodes.push({ ...paragraph })
+      // Tail entries are built once (only the tail is dirty).
+      for (let i = start; i < nodes.length; i++) {
+        const sourceNode = nodes[i]!
+        cache[i] = { node: sourceNode, sourceLoading: undefined }
+        sourceNodes[i] = sourceNode
+      }
+      // The scan must not fall back to the code block at index 10; the whole
+      // array (including the previously built tail) is clean, so the dirty
+      // start lands on `nodes.length` (the no-op case in the real computed).
+      expect(findDirtyStart(nodes, cache, clones, sourceNodes)).toBe(nodes.length)
+    }
+  })
+
+  it('detects a replaced code block source node as dirty', () => {
+    const codeBlock = { type: 'code_block', loading: false }
+    const paragraph = { type: 'paragraph' }
+    const nodes: Array<{ type: string, loading?: unknown }> = [
+      { ...paragraph },
+      { ...codeBlock },
+      { ...paragraph },
+    ]
+    const cache: Array<{ node: unknown, sourceLoading?: unknown } | undefined> = []
+    const clones: Array<unknown | undefined> = []
+    const sourceNodes: Array<unknown | undefined> = []
+    buildCommit(nodes, cache, clones, sourceNodes)
+    expect(findDirtyStart(nodes, cache, clones, sourceNodes)).toBe(3)
+
+    // Parent supplies a NEW code block object with identical content.
+    nodes[1] = { type: 'code_block', loading: false }
+    expect(findDirtyStart(nodes, cache, clones, sourceNodes)).toBe(1)
+  })
+
+  it('detects an in-place loading flip on a reused code block as dirty', () => {
+    const codeBlock = { type: 'code_block', loading: false }
+    const nodes: Array<{ type: string, loading?: unknown }> = [{ ...codeBlock }]
+    const cache: Array<{ node: unknown, sourceLoading?: unknown } | undefined> = []
+    const clones: Array<unknown | undefined> = []
+    const sourceNodes: Array<unknown | undefined> = []
+    buildCommit(nodes, cache, clones, sourceNodes)
+    expect(findDirtyStart(nodes, cache, clones, sourceNodes)).toBe(1)
+
+    // Same source object, loading flipped in place.
+    nodes[0]!.loading = true
+    expect(findDirtyStart(nodes, cache, clones, sourceNodes)).toBe(0)
+  })
+
+  it('detects a code block payload change via a fresh clone', () => {
+    const codeBlock = { type: 'code_block', loading: false }
+    const nodes: Array<{ type: string, loading?: unknown }> = [{ ...codeBlock }]
+    const cache: Array<{ node: unknown, sourceLoading?: unknown } | undefined> = []
+    const clones: Array<unknown | undefined> = []
+    const sourceNodes: Array<unknown | undefined> = []
+    buildCommit(nodes, cache, clones, sourceNodes)
+
+    // Payload changed (new code) -> the render cache produces a NEW clone.
+    const changed = { type: 'code_block', loading: false }
+    nodes[0] = changed
+    clones[0] = { ...changed }
+    expect(findDirtyStart(nodes, cache, clones, sourceNodes)).toBe(0)
+  })
+})
