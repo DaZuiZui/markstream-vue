@@ -4848,6 +4848,38 @@ describe('virtual timeline API', () => {
     wrapper.unmount()
   })
 
+  it('refreshes estimated heights for an explicit layout revision', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+
+    let estimated = 120
+    const wrapper = mount(MarkstreamVirtualTimeline, {
+      attachTo: document.body,
+      props: {
+        items: [{ kind: 'system-divider', id: 'd1', text: 'Today' }],
+        threadKey: 'explicit-estimate-change',
+        stickToBottom: false,
+        overscan: 10,
+        estimateItemHeight: () => estimated,
+      },
+    })
+    await flushAll()
+    expect((wrapper.vm as any).getTotalHeight()).toBe(120)
+
+    estimated = 220
+    await wrapper.setProps({ layoutRevision: 1 })
+    await flushAll()
+
+    expect((wrapper.vm as any).getTotalHeight()).toBe(220)
+
+    wrapper.unmount()
+  })
+
   it('rebuilds layout when the estimate item height function changes', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)

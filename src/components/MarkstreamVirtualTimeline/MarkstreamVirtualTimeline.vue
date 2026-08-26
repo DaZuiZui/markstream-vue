@@ -579,6 +579,7 @@ function rebuildLayoutRecords(options: { forceFull?: boolean } = {}) {
   }
 
   layoutRecords.value = records
+  layoutEstimateSnapshot = []
   layoutRevision.value += 1
 }
 
