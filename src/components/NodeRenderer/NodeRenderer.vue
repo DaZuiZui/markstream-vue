@@ -323,7 +323,7 @@ const streamRenderVersion = ref(0)
 // initializes; guard prefix invalidation until the model exists. The first
 // prefix build is full anyway, so dropping the early mark is safe.
 let heightModelReady = false
-const experimentContainerWidth = ref(0)
+const measuredContainerWidth = ref(0)
 const simpleTextProbeProfile = ref(createEmptySimpleTextProbeProfile())
 
 function resolveViewportPriorityRootMargin(value: unknown, fallback: string) {
@@ -771,14 +771,8 @@ const virtualScrollRequested = computed(() => Boolean(
 ))
 const hostVirtualScrollDomRequired = computed(() => virtualScrollRequested.value)
 const virtualScrollMounted = ref(false)
-let windowResizeListener: (() => void) | null = null
 onMounted(() => {
   virtualScrollMounted.value = true
-  if (isClient && !windowResizeListener) {
-    const handler = () => invalidateMeasuredContainerWidth()
-    window.addEventListener('resize', handler)
-    windowResizeListener = handler
-  }
 })
 
 const virtualScrollEnabled = computed(() => Boolean(
@@ -799,35 +793,14 @@ const textEstimationEnabled = computed(() => {
   return heightEstimationActive.value
     && heightExperimentConfig.value?.textEstimation !== false
 })
-// Non-reactive cache for the container width. `getMeasuredContainerWidth` is
-// reached from `getFallbackNodeHeight` for every deferred placeholder slot on
-// every streaming commit (and from height-estimation probes). Reading
-// `clientWidth` per call forces a reflow per placeholder per commit in large
-// streaming documents. The renderer container is a full-width block, so its
-// width only changes when the parent/window resizes; cache the read and
-// invalidate on window resize (and when the experiment flow re-measures).
-let measuredContainerWidthCache = 0
-let measuredContainerWidthCached = false
-
-function invalidateMeasuredContainerWidth() {
-  measuredContainerWidthCached = false
-}
-
 function getMeasuredContainerWidth() {
-  if (experimentContainerWidth.value > 0)
-    return experimentContainerWidth.value
-  if (measuredContainerWidthCached && measuredContainerWidthCache > 0)
-    return measuredContainerWidthCache
+  if (measuredContainerWidth.value > 0)
+    return measuredContainerWidth.value
   const width = readLayout(
     'getMeasuredContainerWidth.clientWidth',
     () => containerRef.value?.clientWidth || 0,
   )
-  const normalized = Number.isFinite(width) && width > 0 ? width : 0
-  measuredContainerWidthCache = normalized
-  // Only cache positive widths: a hidden/zero-width container is re-read so a
-  // later resize that reveals it picks up the real width.
-  measuredContainerWidthCached = normalized > 0
-  return normalized
+  return Number.isFinite(width) && width > 0 ? width : 0
 }
 
 const experimentProbeWidth = computed(() => {
@@ -1221,6 +1194,11 @@ function pruneHeightMeasurements(size: number) {
 }
 const deferNodes = computed(() => {
   return deferNodesDomRequired.value && viewportPriorityEnabled.value
+})
+const measuredContainerWidthActive = computed(() => {
+  return heightEstimationActive.value
+    || incrementalRenderingDomRequired.value
+    || (deferNodes.value && parsedNodes.value.length > resolvedInitialBatch.value)
 })
 const incrementalRenderingConfigured = computed(() => {
   return !renderAsFragment.value
@@ -1685,35 +1663,37 @@ function readSimpleTextProbeProfile() {
   markFallbackHeightPrefixDirty()
 }
 
-function updateExperimentContainerWidth() {
-  if (!heightEstimationActive.value) {
-    experimentContainerWidth.value = 0
+function updateMeasuredContainerWidth() {
+  if (!measuredContainerWidthActive.value || typeof ResizeObserver === 'undefined') {
+    measuredContainerWidth.value = 0
     return
   }
-  const width = readLayout('updateExperimentContainerWidth.clientWidth', () => containerRef.value?.clientWidth ?? 0)
-  experimentContainerWidth.value = width > 0 ? width : 0
+  const width = readLayout('updateMeasuredContainerWidth.clientWidth', () => containerRef.value?.clientWidth ?? 0)
+  measuredContainerWidth.value = width > 0 ? width : 0
 }
 
-let experimentResizeObserver: ResizeObserver | null = null
+let containerResizeObserver: ResizeObserver | null = null
 
-function cleanupExperimentResizeObserver() {
-  experimentResizeObserver?.disconnect()
-  experimentResizeObserver = null
+function cleanupContainerResizeObserver() {
+  containerResizeObserver?.disconnect()
+  containerResizeObserver = null
 }
 
-function setupExperimentResizeObserver() {
-  cleanupExperimentResizeObserver()
-  if (!heightEstimationActive.value || !containerRef.value || typeof ResizeObserver === 'undefined')
+function setupContainerResizeObserver() {
+  cleanupContainerResizeObserver()
+  if (!measuredContainerWidthActive.value || !containerRef.value || typeof ResizeObserver === 'undefined')
     return
-  experimentResizeObserver = new ResizeObserver(() => {
-    updateExperimentContainerWidth()
+  containerResizeObserver = new ResizeObserver(() => {
+    updateMeasuredContainerWidth()
+    if (!heightEstimationActive.value)
+      return
     if (activeRestoreAnchor.value)
       scheduleRestoreReconcile()
     if (activeVirtualBottomAnchor.value)
       scheduleVirtualBottomRestoreReconcile()
     scheduleVirtualMetricsEmit('resize')
   })
-  experimentResizeObserver.observe(containerRef.value)
+  containerResizeObserver.observe(containerRef.value)
 }
 
 const codeBlockComponent = computed(() => {
@@ -1833,7 +1813,7 @@ watchEffect(() => {
     return
   }
 
-  const width = experimentContainerWidth.value || readLayout('estimatedNodeHeights.clientWidth', () => containerRef.value?.clientWidth || 0)
+  const width = measuredContainerWidth.value || readLayout('estimatedNodeHeights.clientWidth', () => containerRef.value?.clientWidth || 0)
   if (!Number.isFinite(width) || width <= 0) {
     estimatedNodeHeightsCache = []
     estimatedNodeHeightsContext = []
@@ -1882,9 +1862,10 @@ heightModel = useHeightModel({
   heightEstimationActive,
   estimatedNodeHeights,
   getContainerWidth: getMeasuredContainerWidth,
+  shouldCacheStaticFallbackHeight: () => !props.nodes?.length,
   hasCustomParagraphComponent: () => Boolean(customComponentsMap.value.paragraph),
   getPrefixCacheKeyParts: () => {
-    const width = experimentContainerWidth.value || readLayout('getFallbackHeightPrefix.clientWidth', () => containerRef.value?.clientWidth || 0)
+    const width = measuredContainerWidth.value || readLayout('getFallbackHeightPrefix.clientWidth', () => containerRef.value?.clientWidth || 0)
     const widthBucket = getHeightCacheWidthBucket(width)
     const measurementKey = props.virtualScroll?.measurementKey == null
       ? ''
@@ -4718,15 +4699,15 @@ watch(
 )
 
 watch(
-  [() => containerRef.value, heightEstimationActive],
+  [() => containerRef.value, measuredContainerWidthActive],
   () => {
-    if (!heightEstimationActive.value) {
-      cleanupExperimentResizeObserver()
-      experimentContainerWidth.value = 0
+    if (!measuredContainerWidthActive.value) {
+      cleanupContainerResizeObserver()
+      measuredContainerWidth.value = 0
       return
     }
-    updateExperimentContainerWidth()
-    setupExperimentResizeObserver()
+    updateMeasuredContainerWidth()
+    setupContainerResizeObserver()
   },
   { immediate: true },
 )
@@ -4758,7 +4739,7 @@ watch(
 )
 
 watch(
-  [heightEstimationActive, experimentContainerWidth],
+  [heightEstimationActive, measuredContainerWidth],
   () => {
     markFallbackHeightPrefixDirty()
     if (virtualizationEnabled.value)
@@ -5050,7 +5031,7 @@ watch(
     () => props.virtualScroll?.measurementKey,
     () => parsedNodes.value.length,
     () => getVirtualSessionKey(),
-    experimentContainerWidth,
+    measuredContainerWidth,
   ],
   () => {
     tryImportVirtualHeightCache()
@@ -5066,7 +5047,7 @@ watch(
     () => props.virtualScroll?.measurementKey,
     () => parsedNodes.value.length,
     () => getVirtualSessionKey(),
-    experimentContainerWidth,
+    measuredContainerWidth,
   ],
   async ([enabled, state]) => {
     if (!enabled || !state)
@@ -5084,7 +5065,7 @@ watch(
 )
 
 watch(
-  [virtualScrollEnabled, experimentContainerWidth, () => props.virtualScroll?.restoreState, () => props.virtualScroll?.measurementKey],
+  [virtualScrollEnabled, measuredContainerWidth, () => props.virtualScroll?.restoreState, () => props.virtualScroll?.measurementKey],
   ([enabled]) => {
     if (!enabled)
       return
@@ -5112,7 +5093,7 @@ watch(
     virtualScrollEnabled,
     () => parsedNodes.value.length,
     () => getVirtualSessionKey(),
-    experimentContainerWidth,
+    measuredContainerWidth,
   ],
   async ([enabled]) => {
     const state = pendingImperativeVirtualRestoreState
@@ -5328,10 +5309,6 @@ onBeforeUnmount(() => {
   destroyNodeVisibilityState()
   clearContentStreamingTailIdleTimer()
   disconnectNodeContentResizeObserver()
-  if (windowResizeListener) {
-    window.removeEventListener('resize', windowResizeListener)
-    windowResizeListener = null
-  }
   for (const timers of nodeContentDeferredMeasureTimers.values()) {
     for (const id of timers)
       clearHeightSettlingTimer(id)
@@ -5341,7 +5318,7 @@ onBeforeUnmount(() => {
   nodeHeightSignatures.length = 0
   clearFinalHeightConvergenceTimers()
   clearPendingHeightMeasurements()
-  cleanupExperimentResizeObserver()
+  cleanupContainerResizeObserver()
   clearRestoreReconcile()
   clearActiveVirtualBottomAnchor()
   clearVirtualMetricsSchedule()
@@ -5679,7 +5656,7 @@ function getRenderedItemGlobalSignature(): readonly unknown[] {
     // `estimatedHeight`; fold it in so estimation changes rebuild all items.
     heightEstimationActive.value,
     heightEstimationExperimentRevision.value,
-    experimentContainerWidth.value,
+    measuredContainerWidth.value,
   ]
   if (lastRenderedItemGlobalSignature && hasSameRenderedItemSignature(lastRenderedItemGlobalSignature, values))
     return lastRenderedItemGlobalSignature
