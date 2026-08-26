@@ -49,7 +49,7 @@ Framework docs:
 
 Vue / Nuxt:
 ```txt
-pnpm add markstream-vue
+pnpm add markstream-vue@next
 import MarkdownRender from 'markstream-vue'
 import 'markstream-vue/index.css'
 ```
