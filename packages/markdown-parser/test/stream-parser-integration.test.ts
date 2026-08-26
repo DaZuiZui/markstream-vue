@@ -803,8 +803,12 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     )
 
     expect(streamed).toEqual(cold)
-    if (kind === 'image') {
-      // Images are deterministic per inline group; the stable prefix stays reusable.
+    if (kind === 'image' || kind === 'html') {
+      // Images are deterministic per inline group; the stable prefix stays
+      // reusable. Top-level html_block became reusable too: its node output is
+      // a deterministic function of the token group, and the mergeSplit/
+      // combine passes update the reused prefix nodes in place (identical to a
+      // cold full parse), so the stable prefix stays reusable.
       expect(timing.processTokensReusedTopLevelNodes ?? 0).toBeGreaterThan(0)
       expect(timing.processTokensInputTokens).toBeLessThan((md as any).stream.peek().length)
     }
