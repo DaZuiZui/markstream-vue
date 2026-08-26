@@ -54,7 +54,6 @@ import VmrContainerNode from './components/VmrContainerNode'
 import { useMarkstreamVirtualAdapter } from './composables/useMarkstreamVirtualAdapter'
 import { MARKSTREAM_I18N_FALLBACK_KEY, setDefaultI18nMap } from './composables/useSafeI18n'
 import { useSmoothMarkdownStream } from './composables/useSmoothMarkdownStream'
-import { useStickToBottom } from './composables/useStickToBottom'
 import { setIconTheme } from './icon-themes'
 import { setLanguageIconResolver } from './utils/languageIcon'
 import { MARKSTREAM_LANGUAGE_ICON_RESOLVER_KEY } from './utils/languageIconContext'
@@ -109,7 +108,6 @@ export type {
   SmoothMarkdownStreamController,
   SmoothMarkdownStreamOptions,
 } from './composables/useSmoothMarkdownStream'
-export type { StickToBottomController, StickToBottomOptions } from './composables/useStickToBottom'
 export type {
   CodeBlockDiffHideUnchangedRegions,
   CodeBlockDiffHideUnchangedRegionsOptions,
@@ -280,7 +278,6 @@ export {
   Tooltip,
   useMarkstreamVirtualAdapter,
   useSmoothMarkdownStream,
-  useStickToBottom,
   VmrContainerNode,
 }
 

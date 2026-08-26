@@ -9,6 +9,7 @@ import {
   toSafeMermaidSvgMarkup,
   toSafeSvgElement,
   useMarkstreamNodeLifecycle,
+  useStickToBottom,
 } from 'markstream-vue/utils'
 import {
   recommendWorkerThreshold,
@@ -45,6 +46,7 @@ void toSafeSvgElement
 void isBrokenMermaidSvg
 void MARKSTREAM_NODE_LIFECYCLE_KEY
 void useMarkstreamNodeLifecycle
+void useStickToBottom
 void safeRaf
 void recommendWorkerThreshold
 void enablePerfMonitoring

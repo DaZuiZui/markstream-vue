@@ -49,6 +49,7 @@ Read [references/scenarios.md](references/scenarios.md) before making dependency
       - Dynamic switch: `smoothStreaming={isStreaming ? 'auto' : false}`, `fade={!isStreaming}`.
     - Use `nodes` + `final` only for worker preparsing, shared AST stores, or custom AST control.
     - In Vue 3, use `typewriter="simple"` for a lightweight cursor on high-frequency streams; use precise mode only when the cursor must follow complex inline layout.
+    - For a non-virtual Vue 3 chat scroller, import `useStickToBottom` from `markstream-vue/utils`; call `scheduleScrollToBottom()` after the content update instead of starting a smooth `scrollIntoView()` animation for every token. Use `MarkstreamVirtualTimeline` with `stick-to-bottom="auto"` for long mixed timelines.
     - For manual pacing with `nodes`, use `useSmoothMarkdownStream`: `enqueue()` chunks, `finish()` when done, render from `visible`, wait for `caughtUp` before final parsing.
     - Preserve the default hardening: HTML policies now default to `safe`, and Mermaid runs in strict mode by default.
 5. Keep customization scoped.

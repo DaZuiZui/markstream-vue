@@ -35,6 +35,7 @@ Use this skill when the host app is Nuxt and SSR boundaries matter.
 - SSR safety comes before feature completeness.
 - Omit `mode` only when the surface should use rich docs defaults.
 - Smooth streaming is SSR-safe in `auto` mode (the default) because it gates on mount. Do not use `smooth-streaming="true"` for first-screen SSR content — it bypasses the mounted gate and can cause hydration mismatch or blank flash.
+- For a non-virtual chat scroller, import `useStickToBottom` from `markstream-vue/utils` and call `scheduleScrollToBottom()` after Vue commits new content. The composable attaches browser listeners after mount; use `MarkstreamVirtualTimeline` with `stick-to-bottom="auto"` for long mixed timelines.
 - Avoid import-time access to browser globals from server code paths.
 - Treat the enhanced code runtime, Mermaid workers, and similar heavy peers as client-only unless the repo already has a proven SSR pattern.
 - For large code blocks, the optional off-thread highlight pool (`setStreamDiffsWorkerPool` from `markstream-vue`, backed by an upstream `@pierre/diffs` `WorkerPoolManager`) is also client-only: inject it in a client-only plugin/component, never in server code paths.

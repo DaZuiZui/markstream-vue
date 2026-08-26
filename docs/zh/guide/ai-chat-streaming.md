@@ -79,7 +79,8 @@ const final = ref(false)
 
 ```vue
 <script setup lang="ts">
-import MarkdownRender, { useStickToBottom } from 'markstream-vue'
+import MarkdownRender from 'markstream-vue'
+import { useStickToBottom } from 'markstream-vue/utils'
 import { computed, nextTick, ref, watch } from 'vue'
 
 interface ChatMessage {

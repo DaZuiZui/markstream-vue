@@ -116,6 +116,7 @@ const doc = '<thinking>Need a plan</thinking>'
 ## 其他导出
 
 - 节点组件：`CodeBlockNode`、`MermaidBlockNode`、`MathBlockNode`、`ImageNode` 等（详见 [组件与节点渲染器](/zh/guide/components)）。
+- `useStickToBottom(scrollRoot, contentRoot, options?)`：从 `markstream-vue/utils` 导入；聊天内容流式增长且仍贴底时自动跟随，合并滚动写入，并在用户向上翻历史时停止跟随。详见 [AI 聊天与流式输出](/zh/guide/ai-chat-streaming#直播聊天自动滚到底但不要每个-token-都写滚动)。
 - `sanitizeImageSrc(value)`：自定义图片组件需要复用内置 strict 图片 URL 策略时可直接使用。
 - 工具：`VueRendererMarkdown`（全局组件插件）与共享类型定义（组件 props/解析器类型；参考 [/zh/guide/parser-api](/zh/guide/parser-api) 或 npm 上的 `stream-markdown-parser` README）。
 
