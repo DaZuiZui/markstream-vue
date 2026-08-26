@@ -1212,7 +1212,7 @@ export function CodeBlockNode(rawProps: CodeBlockNodeProps & CodeBlockNodeReactE
       catch {}
 
       const editorHost = editorHostRef.current
-      if (editorHost?.getAttribute('data-markstream-enhanced') !== 'true') {
+      if (editorHost && editorHost.getAttribute('data-markstream-enhanced') !== 'true') {
         const visuallyReady = await waitForEditorVisualReady(editorHost, helpers.whenVisualReady)
         if (visuallyReady) {
           applyEditorHeight(expanded)
