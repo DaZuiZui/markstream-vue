@@ -86,7 +86,25 @@ function splitCodeLines(source: string) {
   return displaySource ? displaySource.split(/\r\n|\n|\r/) : []
 }
 
+// Diff streaming commits feed the header stats on every chunk (watch + RAF +
+// onDidUpdateDiff can all re-run the same source pair within one frame). Cache
+// the most recent input pair: the stream is append-only, so consecutive calls
+// either share the pair (skip the whole LCS) or differ in the tail (the prefix
+// scan below is cheap). This removes the repeated full DP per frame without
+// changing any semantics.
+let cachedDiffStatsOriginal = ''
+let cachedDiffStatsModified = ''
+let cachedDiffStatsResult: { removed: number, added: number } | null = null
+
 export function estimateDiffStats(originalSource: string, modifiedSource: string) {
+  if (
+    cachedDiffStatsResult
+    && cachedDiffStatsOriginal === originalSource
+    && cachedDiffStatsModified === modifiedSource
+  ) {
+    return cachedDiffStatsResult
+  }
+
   const originalLines = splitCodeLines(originalSource)
   const modifiedLines = splitCodeLines(modifiedSource)
   let start = 0
@@ -112,38 +130,46 @@ export function estimateDiffStats(originalSource: string, modifiedSource: string
 
   const originalMiddleLength = Math.max(0, originalEnd - start + 1)
   const modifiedMiddleLength = Math.max(0, modifiedEnd - start + 1)
+  let result: { removed: number, added: number }
   if (originalMiddleLength === 0 || modifiedMiddleLength === 0) {
-    return {
+    result = {
       removed: originalMiddleLength,
       added: modifiedMiddleLength,
     }
   }
-
-  const maxCells = 1_500_000
-  if ((originalMiddleLength + 1) * (modifiedMiddleLength + 1) <= maxCells) {
-    const columns = modifiedMiddleLength + 1
-    let next = new Uint32Array(columns)
-    let current = new Uint32Array(columns)
-    for (let i = originalMiddleLength - 1; i >= 0; i--) {
-      current[modifiedMiddleLength] = 0
-      for (let j = modifiedMiddleLength - 1; j >= 0; j--) {
-        current[j] = originalLines[start + i] === modifiedLines[start + j]
-          ? next[j + 1] + 1
-          : Math.max(next[j], current[j + 1])
+  else {
+    const maxCells = 1_500_000
+    if ((originalMiddleLength + 1) * (modifiedMiddleLength + 1) <= maxCells) {
+      const columns = modifiedMiddleLength + 1
+      let next = new Uint32Array(columns)
+      let current = new Uint32Array(columns)
+      for (let i = originalMiddleLength - 1; i >= 0; i--) {
+        current[modifiedMiddleLength] = 0
+        for (let j = modifiedMiddleLength - 1; j >= 0; j--) {
+          current[j] = originalLines[start + i] === modifiedLines[start + j]
+            ? next[j + 1] + 1
+            : Math.max(next[j], current[j + 1])
+        }
+        const swap = next
+        next = current
+        current = swap
       }
-      const swap = next
-      next = current
-      current = swap
+      const commonMiddleLines = next[0]
+      result = {
+        removed: originalMiddleLength - commonMiddleLines,
+        added: modifiedMiddleLength - commonMiddleLines,
+      }
     }
-    const commonMiddleLines = next[0]
-    return {
-      removed: originalMiddleLength - commonMiddleLines,
-      added: modifiedMiddleLength - commonMiddleLines,
+    else {
+      result = {
+        removed: originalMiddleLength,
+        added: modifiedMiddleLength,
+      }
     }
   }
 
-  return {
-    removed: originalMiddleLength,
-    added: modifiedMiddleLength,
-  }
+  cachedDiffStatsOriginal = originalSource
+  cachedDiffStatsModified = modifiedSource
+  cachedDiffStatsResult = result
+  return result
 }

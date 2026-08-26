@@ -2512,7 +2512,10 @@ watch(
 watch(
   () => [props.node.originalCode, props.node.updatedCode, isDiff.value] as const,
   () => {
-    syncEstimatedDiffStats()
+    // Only the rAF-throttled refresh runs the (potentially expensive) diff
+    // LCS once per frame. Calling syncEstimatedDiffStats() here too would run
+    // the full DP synchronously on every streaming commit and again in the
+    // rAF callback for the same input pair.
     safeRaf(() => refreshDiffStats())
   },
   { immediate: true },
