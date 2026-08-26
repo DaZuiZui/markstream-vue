@@ -6,8 +6,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, nextTick, ref } from 'vue'
 import { useStickToBottom } from '../src/composables/useStickToBottom'
 
+function touchEvent(type: string, clientY: number) {
+  const event = new Event(type, { bubbles: true })
+  Object.defineProperty(event, 'touches', { value: [{ clientY }] })
+  return event
+}
+
 describe('useStickToBottom', () => {
-  it('ignores layout scroll events and unpins on the first upward wheel', async () => {
+  it('unpins only for explicit scroll intent', async () => {
     const frames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
       frames.push(callback)
@@ -63,6 +69,32 @@ describe('useStickToBottom', () => {
     scrollTop = 711
     root.dispatchEvent(new Event('scroll'))
     expect(controller.bottomPinned.value).toBe(true)
+
+    const contentEditable = document.createElement('div')
+    contentEditable.setAttribute('contenteditable', 'true')
+    const editableTargets = [
+      document.createElement('input'),
+      document.createElement('textarea'),
+      document.createElement('select'),
+      contentEditable,
+    ]
+    for (const target of editableTargets) {
+      root.append(target)
+      target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowUp' }))
+      expect(controller.bottomPinned.value).toBe(true)
+    }
+
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'PageUp' }))
+    expect(controller.bottomPinned.value).toBe(false)
+
+    scrollTop = 711
+    root.dispatchEvent(new Event('scroll'))
+    root.dispatchEvent(touchEvent('touchstart', 100))
+    root.dispatchEvent(touchEvent('touchmove', 104))
+    expect(controller.bottomPinned.value).toBe(true)
+
+    root.dispatchEvent(touchEvent('touchmove', 107))
+    expect(controller.bottomPinned.value).toBe(false)
 
     wrapper.unmount()
     vi.unstubAllGlobals()

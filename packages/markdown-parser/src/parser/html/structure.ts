@@ -84,10 +84,9 @@ function hasStructuredHtmlWrapperMarkers(fragment: string) {
 }
 
 function shouldStructureGenericHtmlBlockChildren(
-  innerRaw: string,
   children: ParsedNode[],
 ) {
-  if (!innerRaw.trim() || children.length === 0)
+  if (children.length === 0)
     return false
 
   if (children.some(child => STRUCTURED_HTML_WRAPPER_BLOCK_TYPES.has(String(child?.type ?? '').toLowerCase())))
@@ -101,9 +100,6 @@ function shouldStructureGenericHtmlBlockChildren(
   })) {
     return true
   }
-
-  if (!hasStructuredHtmlWrapperMarkers(innerRaw))
-    return false
 
   if (children.length > 1)
     return true
@@ -231,7 +227,7 @@ export function structureGenericHtmlBlockChildren(
     const children = siblingHtmlBlocks
       ? parseSiblingHtmlBlockChildren(siblingHtmlBlocks, context, childOptions, final, useSiblingCache)
       : parseDetailsFragmentChildren(innerRaw, context, childOptions)
-    if (!shouldStructureGenericHtmlBlockChildren(innerRaw, children))
+    if (!shouldStructureGenericHtmlBlockChildren(children))
       return node
 
     return {

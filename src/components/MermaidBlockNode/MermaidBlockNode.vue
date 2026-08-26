@@ -288,10 +288,12 @@ function clampPreviewHeight(height: number) {
   return clampMermaidPreviewHeight(height, minHeight, maxHeight)
 }
 
+const estimatedPreviewHeight = computed(() => {
+  return parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateMermaidPreviewHeight(baseFixedCode.value)
+})
+
 function resolveEstimatedPreviewHeight() {
-  return clampPreviewHeight(
-    parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateMermaidPreviewHeight(baseFixedCode.value),
-  )
+  return clampPreviewHeight(estimatedPreviewHeight.value)
 }
 
 function hasExternalPreviewHeightEstimate() {

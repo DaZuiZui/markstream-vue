@@ -15,6 +15,42 @@ afterEach(() => {
 })
 
 describe('mermaid static render performance', () => {
+  it('shares the streaming preview height estimate', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined as any)
+    const estimateMermaidPreviewHeight = vi.fn(() => 420)
+    vi.doMock('../src/utils/diagramHeight', async () => ({
+      ...await vi.importActual<typeof import('../src/utils/diagramHeight')>('../src/utils/diagramHeight'),
+      estimateMermaidPreviewHeight,
+    }))
+    vi.doMock('../src/workers/mermaidWorkerClient', () => ({
+      canParseOffthread: vi.fn(async () => false),
+      findPrefixOffthread: vi.fn(async () => null),
+      terminateWorker: vi.fn(),
+    }))
+    vi.doMock('../src/components/MermaidBlockNode/mermaid', () => ({
+      getMermaid: vi.fn(async () => ({ initialize: vi.fn(), render: vi.fn() })),
+      isMermaidEnabled: vi.fn(() => true),
+    }))
+
+    const MermaidBlockNode = (await import('../src/components/MermaidBlockNode/MermaidBlockNode.vue')).default
+    const wrapper = mount(MermaidBlockNode as any, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'mermaid',
+          code: 'flowchart TD\nA-->B\n',
+          raw: '```mermaid\nflowchart TD\nA',
+        },
+        loading: true,
+      },
+    })
+    await flushVueUpdates()
+
+    expect(estimateMermaidPreviewHeight).toHaveBeenCalledTimes(1)
+    expect((wrapper.get('.mermaid-preview-area').element as HTMLElement).style.height).toBe('420px')
+    wrapper.unmount()
+  })
+
   it('reserves the estimated height while a streamed source fallback is visible', async () => {
     vi.stubGlobal('IntersectionObserver', undefined as any)
     vi.doMock('../src/workers/mermaidWorkerClient', () => ({

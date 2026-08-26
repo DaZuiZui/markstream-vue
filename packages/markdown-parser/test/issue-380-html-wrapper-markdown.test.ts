@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getMarkdown, parseMarkdownToStructure } from '../src'
 
 const issue588Markdown = `# Metrics
@@ -159,6 +159,18 @@ describe('issue 380 html wrapper markdown regression', () => {
       const block = nodes.find(node => node?.type === 'html_block')
       expect(block?.children, `stream offset ${end}`).toBeUndefined()
     }
+  })
+
+  it('does not recursively parse a large pure-html wrapper', () => {
+    const rows = Array.from({ length: 1000 }, (_, index) => `    <li>row ${index}</li>`).join('\n')
+    const markdown = `<div>\n  <ul>\n${rows}\n  </ul>\n</div>`
+    const md = getMarkdown('large-pure-html-wrapper')
+    const blockParse = vi.spyOn(md.block, 'parse')
+
+    const nodes = parseMarkdownToStructure(markdown, md, { final: false }) as any[]
+
+    expect(nodes[0]?.children).toBeUndefined()
+    expect(blockParse).toHaveBeenCalledTimes(1)
   })
 
   it('still structures an indented code block inside an HTML wrapper', () => {

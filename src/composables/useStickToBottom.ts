@@ -11,6 +11,8 @@ export interface StickToBottomController {
   scrollToBottom: () => void
 }
 
+const TOUCH_UNPIN_THRESHOLD_PX = 6
+
 export function useStickToBottom(
   scrollRoot: Ref<HTMLElement | null>,
   contentRoot: Ref<HTMLElement | null>,
@@ -76,6 +78,9 @@ export function useStickToBottom(
   }
 
   function onKeydown(event: KeyboardEvent) {
+    const target = event.target
+    if (event.defaultPrevented || (target instanceof Element && target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')))
+      return
     if (event.key === 'ArrowUp' || event.key === 'PageUp' || event.key === 'Home')
       unpin()
   }
@@ -86,9 +91,8 @@ export function useStickToBottom(
 
   function onTouchMove(event: TouchEvent) {
     const nextY = event.touches[0]?.clientY ?? null
-    if (touchY != null && nextY != null && nextY > touchY)
+    if (touchY != null && nextY != null && nextY - touchY >= TOUCH_UNPIN_THRESHOLD_PX)
       unpin()
-    touchY = nextY
   }
 
   function onTouchEnd() {
