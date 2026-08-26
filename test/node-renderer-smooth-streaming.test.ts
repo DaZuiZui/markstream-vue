@@ -573,13 +573,13 @@ describe('node renderer smooth streaming', () => {
     await nextTick()
 
     const initialVersion = readStreamRenderVersion(wrapper)
-    const initialHtml = wrapper.html()
+    const initialText = wrapper.text()
 
     await wrapper.setProps({ final: true })
     await nextTick()
 
     expect(readStreamRenderVersion(wrapper)).toBe(initialVersion)
-    expect(wrapper.html()).toBe(initialHtml)
+    expect(wrapper.text()).toBe(initialText)
 
     wrapper.unmount()
   })

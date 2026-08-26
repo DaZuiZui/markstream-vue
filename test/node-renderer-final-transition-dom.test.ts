@@ -13,6 +13,36 @@ describe('node renderer final transition DOM stability', () => {
     removeCustomComponents(customId)
   })
 
+  it('does not hide finalized markdown during its first paint', async () => {
+    const finalWrapper = mount(NodeRenderer, {
+      props: {
+        content: '# Ready',
+        final: true,
+        fade: true,
+        batchRendering: false,
+        deferNodesUntilVisible: false,
+      },
+    })
+    await flushAll()
+
+    expect(finalWrapper.get('transition-stub').attributes('appear')).toBe('false')
+    finalWrapper.unmount()
+
+    const streamingWrapper = mount(NodeRenderer, {
+      props: {
+        content: '# Streaming',
+        final: false,
+        fade: true,
+        batchRendering: false,
+        deferNodesUntilVisible: false,
+      },
+    })
+    await flushAll()
+
+    expect(streamingWrapper.get('transition-stub').attributes('appear')).toBe('true')
+    streamingWrapper.unmount()
+  })
+
   it('does not remount unchanged long paragraph content when final changes', async () => {
     const mounted: string[] = []
     const unmounted: string[] = []

@@ -235,6 +235,37 @@ describe('diff CodeBlockNode fallback height stability', () => {
     wrapper.unmount()
   })
 
+  it('keeps the diff fallback line-number gutter on the editor background', async () => {
+    const helpers = getStreamDiffsHelpers()
+    helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
+
+    const wrapper = mount(CodeBlockNode, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'diff',
+          code: '',
+          raw: '',
+          diff: true,
+          originalCode: 'const value = 1',
+          updatedCode: 'const value = 2',
+        },
+        loading: false,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await flushPendingMicrotasks()
+
+    const pre = wrapper.get('pre.code-pre-fallback').element as HTMLElement
+    expect(pre.style.getPropertyValue('--markstream-diff-line-number-bg')).toBe('var(--markstream-diff-editor-bg)')
+    expect(pre.style.getPropertyValue('--markstream-diff-added-number-fill')).not.toBe('var(--markstream-diff-editor-bg)')
+    expect(pre.style.getPropertyValue('--markstream-diff-removed-number-fill')).not.toBe('var(--markstream-diff-editor-bg)')
+
+    wrapper.unmount()
+  })
+
   it.each(['unified', 'split'] as const)('shows no-final-newline metadata in the initial %s pre', async (diffStyle) => {
     const helpers = getStreamDiffsHelpers()
     helpers.createDiffEditor.mockImplementation(() => new Promise<void>(() => {}))
