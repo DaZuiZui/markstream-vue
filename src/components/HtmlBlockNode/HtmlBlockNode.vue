@@ -2,7 +2,7 @@
 import type { HtmlPolicy } from 'stream-markdown-parser'
 import type { NodeRendererProps } from '../../types/node-renderer-props'
 import { isHtmlTagBlocked, NON_STRUCTURING_HTML_TAGS, sanitizeHtmlContent, sanitizeHtmlTokenAttrs, tokenAttrsToRecord } from 'stream-markdown-parser'
-import { computed, defineAsyncComponent, defineComponent, inject, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, defineComponent, inject, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { DEFAULT_VIEWPORT_PRIORITY_ROOT_MARGIN, useOffscreenHeavyNodeDeferral, useViewportPriority, useViewportPriorityOptions } from '../../composables/viewportPriority'
 import { hasCustomComponents, parseHtmlToVNodes } from '../../utils/htmlRenderer'
 import { useCustomNodeComponents } from '../../utils/nodeComponents'
@@ -89,33 +89,19 @@ function isStreamingHtml(loading: boolean | undefined, raw: unknown, content: un
 const streamingObserved = ref(isStreamingHtml(props.node.loading, props.node.raw, props.node.content, props.node.tag))
 const shouldRender = ref(typeof window === 'undefined' || streamingObserved.value)
 const renderContent = ref(props.node.content)
-// A streaming HTML block can be parsed as structured children while it is
-// incomplete, then lose that field when the closing tag arrives. Switching
-// from the structured renderer to v-html in that transition replaces the
-// entire subtree for one frame and can make a pinned scroll container observe
-// a real height regression. Keep the last structured children for the lifetime
-// of that streamed block so its root DOM stays mounted.
-const lastStructuredChildren = shallowRef<any[] | null>(
-  Array.isArray(props.node.children) && props.node.children.length > 0
-    ? props.node.children
-    : null,
-)
+const streamingMinHeight = ref(0)
 const previousRaw = ref(String(props.node.raw ?? ''))
-const structuredChildren = computed(() => {
-  if (Array.isArray(props.node.children) && props.node.children.length > 0)
-    return props.node.children
-  return streamingObserved.value ? (lastStructuredChildren.value ?? []) : []
-})
+const structuredChildren = computed(() => Array.isArray(props.node.children) ? props.node.children : [])
 
 watch(
-  () => [props.node.loading, props.node.children, props.node.raw, props.node.content, props.node.tag] as const,
-  ([loading, children, raw, content, tag]) => {
+  () => [props.node.loading, props.node.raw, props.node.content, props.node.tag] as const,
+  ([loading, raw, content, tag]) => {
     const nextRaw = String(raw ?? '')
     const appendOnly = !previousRaw.value || nextRaw.startsWith(previousRaw.value)
     const streaming = isStreamingHtml(loading, raw, content, tag)
     if (!appendOnly) {
       streamingObserved.value = streaming
-      lastStructuredChildren.value = null
+      streamingMinHeight.value = 0
     }
     else if (streaming) {
       streamingObserved.value = true
@@ -123,8 +109,6 @@ watch(
     if (streaming)
       shouldRender.value = true
 
-    if (Array.isArray(children) && children.length > 0)
-      lastStructuredChildren.value = children
     previousRaw.value = nextRaw
   },
   { flush: 'sync' },
@@ -210,8 +194,48 @@ const viewportPriorityOptions = useViewportPriorityOptions()
 const offscreenHeavyNodeDeferral = useOffscreenHeavyNodeDeferral()
 const visibilityHandle = shallowRef<ReturnType<typeof registerVisibility> | null>(null)
 const isDeferred = !!props.node.loading
+let streamingHeightObserver: ResizeObserver | null = null
 
 if (typeof window !== 'undefined') {
+  watch(
+    [() => htmlRef.value, () => props.node.loading, streamingObserved],
+    ([el, loading, streaming], _oldValue, onCleanup) => {
+      streamingHeightObserver?.disconnect()
+      streamingHeightObserver = null
+      if (!el || !streaming || loading === false || typeof ResizeObserver === 'undefined')
+        return
+
+      const observer = new ResizeObserver((entries) => {
+        if (!streamingObserved.value || props.node.loading === false)
+          return
+        const entry = entries[0]
+        const borderBox = Array.isArray(entry?.borderBoxSize)
+          ? entry.borderBoxSize[0]
+          : entry?.borderBoxSize
+        const height = borderBox?.blockSize ?? entry?.contentRect.height ?? 0
+        if (height > streamingMinHeight.value)
+          streamingMinHeight.value = height
+      })
+      streamingHeightObserver = observer
+      observer.observe(el)
+      onCleanup(() => observer.disconnect())
+    },
+    { immediate: true },
+  )
+
+  watch(
+    () => props.node.loading,
+    async (loading) => {
+      if (loading !== false || !streamingObserved.value || streamingMinHeight.value <= 0)
+        return
+      await nextTick()
+      requestAnimationFrame(() => {
+        if (props.node.loading === false)
+          streamingMinHeight.value = 0
+      })
+    },
+  )
+
   watch(
     [
       () => htmlRef.value,
@@ -274,6 +298,8 @@ else {
 }
 
 onBeforeUnmount(() => {
+  streamingHeightObserver?.disconnect()
+  streamingHeightObserver = null
   visibilityHandle.value?.destroy?.()
   visibilityHandle.value = null
 })
@@ -284,6 +310,7 @@ onBeforeUnmount(() => {
     :is="isStructured ? structuredTag : 'div'"
     ref="htmlRef"
     class="html-block-node"
+    :style="streamingMinHeight > 0 ? { boxSizing: 'border-box', minHeight: `${streamingMinHeight}px` } : undefined"
     :data-markstream-viewport-pending="offscreenHeavyNodeDeferral && !shouldRender ? 'true' : undefined"
     v-bind="isStructured ? structuredBoundAttrs : undefined"
   >

@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import HtmlBlockNode from '../src/components/HtmlBlockNode/HtmlBlockNode.vue'
@@ -62,5 +62,38 @@ describe('htmlBlockNode streaming DOM stability', () => {
     await nextTick()
 
     expect(wrapper.find('table').element).toBe(first)
+  })
+
+  it('renders the final content instead of stale structured children', async () => {
+    const loadingNode = {
+      type: 'html_block',
+      tag: 'div',
+      raw: '<div><ul><li>',
+      content: '<div><ul><li></li></ul></div>',
+      loading: true,
+      children: [{
+        type: 'code_block',
+        language: 'plaintext',
+        code: 'stale intermediate parse',
+        raw: '    stale intermediate parse',
+      }],
+    }
+    const wrapper = mount(HtmlBlockNode, { props: { node: loadingNode as any } })
+    await nextTick()
+
+    await wrapper.setProps({
+      node: {
+        type: 'html_block',
+        tag: 'div',
+        raw: '<div><ul><li>fresh final content</li></ul></div>',
+        content: '<div><ul><li>fresh final content</li></ul></div>',
+        loading: false,
+      } as any,
+    })
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('fresh final content')
+    expect(wrapper.text()).not.toContain('stale intermediate parse')
   })
 })

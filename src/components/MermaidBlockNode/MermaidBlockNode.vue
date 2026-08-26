@@ -2675,6 +2675,7 @@ const computedButtonStyle = 'mermaid-action-btn p-[var(--ms-action-btn-padding)]
   content-visibility: auto;
   contain: content;
   contain-intrinsic-size: var(--ms-size-diagram-min-height) 240px;
+  contain-intrinsic-size: auto var(--ms-size-diagram-min-height) auto 240px;
 }
 
 ._mermaid :deep([data-mermaid-svg-layer]) {

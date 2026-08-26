@@ -75,12 +75,12 @@ const final = ref(false)
 
 ### 直播聊天自动滚到底，但不要每个 token 都写滚动
 
-如果聊天窗口要跟随最新 assistant 输出，滚动写入要用 `requestAnimationFrame` 合并，而且只在用户本来就接近底部时才跟随。不要在每个 chunk 上调用 `scrollIntoView({ behavior: 'smooth' })`；流式输出时这会制造一堆互相打断的滚动动画。
+如果聊天窗口要跟随最新 assistant 输出，使用 `useStickToBottom`。它会用 `requestAnimationFrame` 合并滚动写入，在布局触发的 scroll 事件中保留贴底意图，并在用户第一次向上滚轮、触摸、键盘或拖动滚动条时停止跟随。不要在每个 chunk 上调用 `scrollIntoView({ behavior: 'smooth' })`；流式输出时这会制造一堆互相打断的滚动动画。
 
 ```vue
 <script setup lang="ts">
-import MarkdownRender from 'markstream-vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import MarkdownRender, { useStickToBottom } from 'markstream-vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 interface ChatMessage {
   id: string
@@ -92,11 +92,7 @@ interface ChatMessage {
 const messages = ref<ChatMessage[]>([])
 const scrollRoot = ref<HTMLElement | null>(null)
 const contentRoot = ref<HTMLElement | null>(null)
-const bottomPinned = ref(true)
-
-const BOTTOM_THRESHOLD_PX = 64
-let scrollFrame = 0
-let resizeObserver: ResizeObserver | undefined
+const { bottomPinned, scheduleScrollToBottom } = useStickToBottom(scrollRoot, contentRoot)
 
 const latestOutputSignal = computed(() => {
   const latest = messages.value[messages.value.length - 1]
@@ -104,39 +100,6 @@ const latestOutputSignal = computed(() => {
     ? `${messages.value.length}:${latest.id}:${latest.content.length}:${latest.final}`
     : '0'
 })
-
-function isNearBottom(element: HTMLElement) {
-  return element.scrollHeight - element.clientHeight - element.scrollTop <= BOTTOM_THRESHOLD_PX
-}
-
-function updateBottomPinned() {
-  const root = scrollRoot.value
-  bottomPinned.value = !root || isNearBottom(root)
-}
-
-function scrollToBottomNow() {
-  const root = scrollRoot.value
-  if (!root)
-    return
-
-  root.scrollTo({
-    top: root.scrollHeight,
-    behavior: 'auto',
-  })
-}
-
-function scheduleScrollToBottom() {
-  if (!bottomPinned.value || scrollFrame)
-    return
-
-  scrollFrame = requestAnimationFrame(() => {
-    scrollFrame = 0
-    if (!bottomPinned.value)
-      return
-
-    scrollToBottomNow()
-  })
-}
 
 watch(
   latestOutputSignal,
@@ -146,25 +109,10 @@ watch(
   },
   { flush: 'post' },
 )
-
-onMounted(() => {
-  updateBottomPinned()
-  resizeObserver = new ResizeObserver(scheduleScrollToBottom)
-
-  if (contentRoot.value)
-    resizeObserver.observe(contentRoot.value)
-})
-
-onBeforeUnmount(() => {
-  if (scrollFrame)
-    cancelAnimationFrame(scrollFrame)
-
-  resizeObserver?.disconnect()
-})
 </script>
 
 <template>
-  <div ref="scrollRoot" class="chat-scroll" @scroll.passive="updateBottomPinned">
+  <div ref="scrollRoot" class="chat-scroll" tabindex="0">
     <div ref="contentRoot" class="chat-list">
       <article
         v-for="message in messages"
