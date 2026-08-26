@@ -2,7 +2,7 @@
 import type { HtmlPolicy } from 'stream-markdown-parser'
 import { sanitizeHtmlContent } from 'stream-markdown-parser'
 import { computed, defineComponent, inject } from 'vue'
-import { hasCustomComponents, parseHtmlToVNodes } from '../../utils/htmlRenderer'
+import { resolveHtmlVNodes } from '../../utils/htmlRenderer'
 import { useCustomNodeComponents } from '../../utils/nodeComponents'
 
 const props = defineProps<{
@@ -48,25 +48,16 @@ const renderMode = computed(() => {
   if (props.node.loading && !props.node.autoClosed)
     return { mode: 'text', content }
 
-  // When the inline HTML node is in a streaming mid-state and the parser has
-  // auto-closed it for rendering (`autoClosed: true`), prefer VNode rendering.
-  // Using `innerHTML` repeatedly replaces the subtree and can cause flicker.
-  if (props.node.loading && props.node.autoClosed) {
-    const nodes = parseHtmlToVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
-    if (nodes !== null)
-      return { mode: 'dynamic', nodes }
-  }
+  // Streaming mid-state with auto-close, or completed content with custom
+  // components: resolve in a single tokenize + VNode build pass. The old path
+  // ran hasCustomComponents (full tokenize) and then parseHtmlToVNodes
+  // (second full tokenize) back to back.
+  const forceDynamic = props.node.loading && props.node.autoClosed
+  const resolved = resolveHtmlVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
+  if (resolved.ok && (forceDynamic || resolved.hasCustomComponents))
+    return { mode: 'dynamic', nodes: resolved.nodes }
 
-  // Check if content contains custom components
-  if (!hasCustomComponents(content, customComponents.value))
-    return { mode: 'html', content: sanitizeHtmlContent(content, resolvedHtmlPolicy.value) }
-
-  // Parse and build VNode tree
-  const nodes = parseHtmlToVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
-  if (nodes === null)
-    return { mode: 'html', content: sanitizeHtmlContent(content, resolvedHtmlPolicy.value) } // Fallback to sanitized DOM rendering if parsing fails
-
-  return { mode: 'dynamic', nodes }
+  return { mode: 'html', content: sanitizeHtmlContent(content, resolvedHtmlPolicy.value) }
 })
 </script>
 

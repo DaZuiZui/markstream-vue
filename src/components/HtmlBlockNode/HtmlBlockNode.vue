@@ -4,7 +4,7 @@ import type { NodeRendererProps } from '../../types/node-renderer-props'
 import { isHtmlTagBlocked, NON_STRUCTURING_HTML_TAGS, sanitizeHtmlContent, sanitizeHtmlTokenAttrs, tokenAttrsToRecord } from 'stream-markdown-parser'
 import { computed, defineAsyncComponent, defineComponent, inject, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { DEFAULT_VIEWPORT_PRIORITY_ROOT_MARGIN, useOffscreenHeavyNodeDeferral, useViewportPriority, useViewportPriorityOptions } from '../../composables/viewportPriority'
-import { hasCustomComponents, parseHtmlToVNodes } from '../../utils/htmlRenderer'
+import { resolveHtmlVNodes } from '../../utils/htmlRenderer'
 import { useCustomNodeComponents } from '../../utils/nodeComponents'
 import { getPlainTextContent } from '../SimpleInlineRenderer/simpleInline'
 
@@ -170,23 +170,19 @@ const renderMode = computed(() => {
   // the node is still in a loading mid-state to keep DOM stable. Once a block
   // has streamed, keep this path after loading settles as well; otherwise the
   // transition to v-html can briefly remove the complete HTML subtree.
-  if (streamingObserved.value || props.node.loading) {
-    const nodes = parseHtmlToVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
-    if (nodes === null)
-      return { mode: 'text', content: props.node.raw ?? content }
-    return { mode: 'dynamic', nodes }
-  }
+  //
+  // resolveHtmlVNodes tokenizes once and reuses the tokens for both the
+  // custom-component check and the VNode build; the previous pair
+  // (hasCustomComponents + parseHtmlToVNodes) tokenized the same content twice.
+  const streaming = streamingObserved.value || props.node.loading
+  const resolved = resolveHtmlVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
+  if (resolved.ok && (streaming || resolved.hasCustomComponents))
+    return { mode: 'dynamic', nodes: resolved.nodes }
 
-  // Check if content contains custom components
-  if (!hasCustomComponents(content, customComponents.value))
-    return { mode: 'html', content: sanitizeHtmlContent(content, resolvedHtmlPolicy.value) }
+  if (streaming)
+    return { mode: 'text', content: props.node.raw ?? content }
 
-  // Parse and build VNode tree
-  const nodes = parseHtmlToVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
-  if (nodes === null)
-    return { mode: 'html', content: sanitizeHtmlContent(content, resolvedHtmlPolicy.value) } // Fallback to sanitized HTML if parsing fails
-
-  return { mode: 'dynamic', nodes }
+  return { mode: 'html', content: sanitizeHtmlContent(content, resolvedHtmlPolicy.value) }
 })
 
 const registerVisibility = useViewportPriority()
