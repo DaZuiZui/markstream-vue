@@ -1,3 +1,46 @@
+## [2.0.5](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.4...markstream-vue@2.0.5) (2026-08-26)
+
+
+### Bug Fixes
+
+* address review edge cases (CRLF grapheme split, rootMargin re-registration) ([90dd103](https://github.com/Simon-He95/markstream-vue/commit/90dd10301094126214f14f88d455c29eca563a9d)), closes [#29](https://github.com/Simon-He95/markstream-vue/issues/29)
+* address streaming performance review findings ([f50c737](https://github.com/Simon-He95/markstream-vue/commit/f50c73731328bf7c2aefe0234b017c59caaaabde))
+* align diff fallback gutter background ([488cc93](https://github.com/Simon-He95/markstream-vue/commit/488cc933541415427e2f6e2c1877052654a67f88))
+* **docs:** preserve placeholder frontmatter ([ceeee08](https://github.com/Simon-He95/markstream-vue/commit/ceeee0801661bfc8328884c79137589f50cb457b))
+* **docs:** redesign per-page OG images to match brand and stop text clipping ([b266810](https://github.com/Simon-He95/markstream-vue/commit/b2668106aad96fcfd0fe317c4570b9d2d68a1b67))
+* keep chat scroll helper out of root bundle ([c135449](https://github.com/Simon-He95/markstream-vue/commit/c135449fde38b519d127eb0e798a3ceca0ec2358))
+* keep code block loading shell within size budget ([6d85a40](https://github.com/Simon-He95/markstream-vue/commit/6d85a400822749a5f471e111993abe0a6dc78e52))
+* match code block loading header geometry ([2ccf7d2](https://github.com/Simon-He95/markstream-vue/commit/2ccf7d2beeecb8a95f4b9fd43aaa0638f3fc9a4d))
+* **parser:** do not reuse original raw when leftover strong is reparsed ([3c9e2aa](https://github.com/Simon-He95/markstream-vue/commit/3c9e2aa991a866f324fff24c8b1ec48f3e940245))
+* **parser:** keep Setext/thematic-break lines on the immediate-flush path ([7138e3a](https://github.com/Simon-He95/markstream-vue/commit/7138e3a986ac8763bd5a808aa862c82bcb4f3e1b))
+* **parser:** stabilize streaming nested html ([6f744b6](https://github.com/Simon-He95/markstream-vue/commit/6f744b6dcb14644b6c68d8daf06e3252320c9c36))
+* preserve bottom pinning during streaming ([d1b95ff](https://github.com/Simon-He95/markstream-vue/commit/d1b95ff0892ced8250cc14dba41b5ad6c66b730c))
+* preserve paragraph memo correctness ([5446dac](https://github.com/Simon-He95/markstream-vue/commit/5446dacd8844d8be5aa924d19236bb4e64559217))
+* preserve streaming heavy block geometry ([c61f077](https://github.com/Simon-He95/markstream-vue/commit/c61f077fca8352a397eaa3c1880e926cf2e40d26))
+* prevent code block first-frame flash ([01e478a](https://github.com/Simon-He95/markstream-vue/commit/01e478a656d5851a0336748f1ad6f48e091cd084))
+* **react:** guard editor handoff after unmount ([182f6df](https://github.com/Simon-He95/markstream-vue/commit/182f6dfdcdbed1372476e24097d0d9ecfb6d2ebb))
+* **renderer:** avoid stale width without resize observer ([9b0fee6](https://github.com/Simon-He95/markstream-vue/commit/9b0fee6102c317e2dba6ef8f27cef0a62143f33f))
+* **renderer:** correct placeholder cache invalidation ([3951f60](https://github.com/Simon-He95/markstream-vue/commit/3951f60f44ec1176d9c082713617b549beb05d69))
+* **scripts:** declare findFont as a top-level function for lint ([4be0657](https://github.com/Simon-He95/markstream-vue/commit/4be0657da2afcbc3677f82c5d03950eb979c43df))
+
+
+### Performance Improvements
+
+* **core:** skip redundant source prefix check on verified smooth-stream resets ([dd737ad](https://github.com/Simon-He95/markstream-vue/commit/dd737ad9e4d1d41502a80b737da23fda02a95624))
+* **parser:** cache source line offsets incrementally across streaming appends ([75745ae](https://github.com/Simon-He95/markstream-vue/commit/75745ae7de4329b114433f72d8f1a1dda5ab44cc))
+* **parser:** eliminate O(n²) math inline scanning during streaming ([c942d78](https://github.com/Simon-He95/markstream-vue/commit/c942d7841d17e6b63386edc0a0c161e37215b346))
+* **parser:** fast-path markdown token cloning during stream parses ([5a9cf41](https://github.com/Simon-He95/markstream-vue/commit/5a9cf41940f7ff60bfb12cec7a8b59be30291b97))
+* **parser:** incrementally rebuild linkify seed during structured reuse ([c34cfb7](https://github.com/Simon-He95/markstream-vue/commit/c34cfb78c5f1b1abc390b8e156c9e6a97f477003))
+* **parser:** scope math inline cache to inline state ([2e9b44a](https://github.com/Simon-He95/markstream-vue/commit/2e9b44af8df39171ad0b3846077fb8b8163b01db))
+* reduce streaming CPU with ref guards, parse coalescing, and core fast paths ([1055bf6](https://github.com/Simon-He95/markstream-vue/commit/1055bf6140dbc2180cdd64ae1851fc1fec208e0b))
+* reduce streaming layout work ([5bff6ca](https://github.com/Simon-He95/markstream-vue/commit/5bff6caa2c6461ece97f9128658551afc2cab021))
+* **renderer:** cache placeholder fallback height estimation and container width ([203332b](https://github.com/Simon-He95/markstream-vue/commit/203332b14b5b3e5c27bf9288c1b78fabb2ba9c34))
+* **renderer:** cut streaming CPU with stable inline children and no-op render short-circuits ([5870f90](https://github.com/Simon-He95/markstream-vue/commit/5870f908eb51b065a76c81b4a5b821577b24c583))
+* **renderer:** keep stable code-block render items fresh in the identity scan ([0d059b2](https://github.com/Simon-He95/markstream-vue/commit/0d059b21fcd12f7aa4274cae763b8f13a859f74f))
+* **renderer:** pre-merge per-node vnode props in the rendered item cache ([eda9f63](https://github.com/Simon-He95/markstream-vue/commit/eda9f63a0e458895c08588e510b592e10b82bec7))
+
+
+
 ## [2.0.4](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.2...markstream-vue@2.0.4) (2026-08-24)
 
 ### What's Changed
