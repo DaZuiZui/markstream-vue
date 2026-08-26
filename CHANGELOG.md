@@ -62,6 +62,15 @@
 - `markstream-angular@2.0.4`
 - `markstream-vue2@2.0.4`
 
+## [2.0.3](https://github.com/Simon-He95/markstream-vue/compare/markstream-react@2.0.2...markstream-react@2.0.3) (2026-08-23)
+
+### What's Changed
+
+> 独立的 `markstream-react` 发版。`markstream-vue` 没有对应的 2.0.3（2.0.2 之后直接发布 2.0.4），本版本变更已包含在后续全家桶 2.0.4 中。
+
+- fix(react)：流式追加的节点不再重复回放 fade 动画，文档整体替换时保留 fade（[#703](https://github.com/Simon-He95/markstream-vue/pull/703)）
+- fix(playground-react)：移除 deferred-value 层，React 18 测试预览与当前流内容保持同步（[#704](https://github.com/Simon-He95/markstream-vue/pull/704)）
+
 ## [2.0.2](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.1...markstream-vue@2.0.2) (2026-08-23)
 
 ### What's Changed
