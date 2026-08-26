@@ -771,8 +771,14 @@ const virtualScrollRequested = computed(() => Boolean(
 ))
 const hostVirtualScrollDomRequired = computed(() => virtualScrollRequested.value)
 const virtualScrollMounted = ref(false)
+let windowResizeListener: (() => void) | null = null
 onMounted(() => {
   virtualScrollMounted.value = true
+  if (isClient && !windowResizeListener) {
+    const handler = () => invalidateMeasuredContainerWidth()
+    window.addEventListener('resize', handler)
+    windowResizeListener = handler
+  }
 })
 
 const virtualScrollEnabled = computed(() => Boolean(
@@ -793,12 +799,35 @@ const textEstimationEnabled = computed(() => {
   return heightEstimationActive.value
     && heightExperimentConfig.value?.textEstimation !== false
 })
+// Non-reactive cache for the container width. `getMeasuredContainerWidth` is
+// reached from `getFallbackNodeHeight` for every deferred placeholder slot on
+// every streaming commit (and from height-estimation probes). Reading
+// `clientWidth` per call forces a reflow per placeholder per commit in large
+// streaming documents. The renderer container is a full-width block, so its
+// width only changes when the parent/window resizes; cache the read and
+// invalidate on window resize (and when the experiment flow re-measures).
+let measuredContainerWidthCache = 0
+let measuredContainerWidthCached = false
+
+function invalidateMeasuredContainerWidth() {
+  measuredContainerWidthCached = false
+}
+
 function getMeasuredContainerWidth() {
-  const width = experimentContainerWidth.value || readLayout(
+  if (experimentContainerWidth.value > 0)
+    return experimentContainerWidth.value
+  if (measuredContainerWidthCached && measuredContainerWidthCache > 0)
+    return measuredContainerWidthCache
+  const width = readLayout(
     'getMeasuredContainerWidth.clientWidth',
     () => containerRef.value?.clientWidth || 0,
   )
-  return Number.isFinite(width) && width > 0 ? width : 0
+  const normalized = Number.isFinite(width) && width > 0 ? width : 0
+  measuredContainerWidthCache = normalized
+  // Only cache positive widths: a hidden/zero-width container is re-read so a
+  // later resize that reveals it picks up the real width.
+  measuredContainerWidthCached = normalized > 0
+  return normalized
 }
 
 const experimentProbeWidth = computed(() => {
@@ -5299,6 +5328,10 @@ onBeforeUnmount(() => {
   destroyNodeVisibilityState()
   clearContentStreamingTailIdleTimer()
   disconnectNodeContentResizeObserver()
+  if (windowResizeListener) {
+    window.removeEventListener('resize', windowResizeListener)
+    windowResizeListener = null
+  }
   for (const timers of nodeContentDeferredMeasureTimers.values()) {
     for (const id of timers)
       clearHeightSettlingTimer(id)

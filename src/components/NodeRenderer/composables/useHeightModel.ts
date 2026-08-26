@@ -386,6 +386,31 @@ export function useHeightModel(options: HeightModelOptions) {
   let fallbackHeightPrefixCacheKey = ''
   let fallbackHeightPrefixAverageNodeHeight = -1
 
+  // Static fallback estimation cache keyed by the parsed node object. The
+  // stream parser reuses the exact same objects for the stable prefix across
+  // streaming commits, so a cached estimation stays valid for the lifetime of
+  // that node reference. Keying by object identity turns the per-placeholder
+  // estimation cost of a large streaming document from O(N) per commit into
+  // O(tail). A raw-length fingerprint guards against in-place content growth
+  // on consumer-supplied `nodes` (the common mutation pattern), falling back
+  // to a fresh estimation when the source text length changed.
+  const staticFallbackHeightCache = new WeakMap<object, { width: number, rawLength: number, height: number }>()
+
+  function getStaticFallbackNodeHeight(node: ParsedNode | undefined, width: number) {
+    if (!node || typeof node !== 'object')
+      return estimateStaticNodeHeightFallback(node, width)
+
+    const object = node as object
+    const rawLength = String((node as HeightFallbackNode).raw ?? (node as HeightFallbackNode).content ?? '').length
+    const cached = staticFallbackHeightCache.get(object)
+    if (cached && cached.width === width && cached.rawLength === rawLength)
+      return cached.height
+
+    const height = estimateStaticNodeHeightFallback(node, width)
+    staticFallbackHeightCache.set(object, { width, rawLength, height })
+    return height
+  }
+
   /**
    * Mark the fallback height prefix stale from `fromIndex` onward.
    *
@@ -424,7 +449,7 @@ export function useHeightModel(options: HeightModelOptions) {
       return estimated
     }
 
-    const staticHeight = estimateStaticNodeHeightFallback(
+    const staticHeight = getStaticFallbackNodeHeight(
       node,
       options.getContainerWidth() || 640,
     )
