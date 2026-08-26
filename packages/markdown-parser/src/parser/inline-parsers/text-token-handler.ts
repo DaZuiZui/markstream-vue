@@ -46,8 +46,14 @@ const STRIKETHROUGH_RE = /[^~]*~{2,}[^~]+/
 const HAS_STRONG_RE = /\*\*/
 const INLINE_REPARSE_MARKER_RE = /[[_*^~]/
 
+function isCurrentStreamToken(state: InlineParseState, token: MarkdownToken) {
+  return token === state.tokens[state.index]
+}
+
 function handleEmphasisAndStrikethrough(state: InlineParseState, content: string, token: MarkdownToken): boolean {
-  const rawSource = state.tokens.length === 1 ? state.raw : String(token.content ?? '')
+  const rawSource = isCurrentStreamToken(state, token) && state.tokens.length === 1
+    ? state.raw
+    : String(token.content ?? '')
   const markerCandidates: Array<{
     type: 'strong' | 'emphasis' | 'strikethrough'
     index: number
@@ -491,7 +497,7 @@ export function handleTextToken(state: InlineParseState, token: MarkdownToken) {
   const rawContent = String(token.content ?? '')
   const rawMarkerFlags = getInlineTextMarkerFlags(rawContent)
   const rawHasBackslash = (rawMarkerFlags & INLINE_TEXT_MARKER_BACKSLASH) !== 0
-  const rawSource = state.tokens.length === 1 && rawHasBackslash && typeof state.raw === 'string'
+  const rawSource = isCurrentStreamToken(state, token) && state.tokens.length === 1 && rawHasBackslash && typeof state.raw === 'string'
     ? String(state.raw)
     : ''
   let content = rawSource
