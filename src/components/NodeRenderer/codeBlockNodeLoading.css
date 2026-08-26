@@ -44,10 +44,6 @@
   overflow: visible;
 }
 
-[data-markstream-enhanced='false'] > .code-block-header {
-  min-height: 41px;
-}
-
 .code-block-header .code-header-main {
   min-width: 0;
   flex: 1 1 auto;
@@ -78,14 +74,6 @@
   white-space: nowrap;
   font-size: 12px;
   color: var(--code-line-number);
-}
-
-.code-block-header .code-header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--ms-gap-header-actions);
-  flex-wrap: wrap;
 }
 
 .code-block-header .icon-slot {

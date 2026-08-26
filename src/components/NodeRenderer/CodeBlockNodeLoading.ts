@@ -157,7 +157,7 @@ export default defineComponent({
                   header.caption ? h('div', { class: 'code-header-caption' }, header.caption) : null,
                 ]),
               ]),
-              h('div', { class: 'code-header-actions' }, [
+              h('div', { class: 'flex items-center gap-0.5' }, [
                 stats
                   ? h('div', { 'class': 'code-diff-stats', 'aria-label': `-${stats.removed} +${stats.added}` }, [
                       h('span', { class: 'code-diff-stat removed' }, `-${stats.removed}`),
@@ -166,7 +166,7 @@ export default defineComponent({
                   : null,
                 props.showCopyButton === false ? null : action('copy'),
                 props.showCollapseButton === false ? null : action('collapse'),
-                showMore ? action('more') : null,
+                showMore ? h('div', { class: 'relative' }, [action('more')]) : null,
               ]),
             ]),
         h('div', {
