@@ -2,7 +2,7 @@
 import type { HtmlPolicy } from 'stream-markdown-parser'
 import type { NodeRendererProps } from '../../types/node-renderer-props'
 import { isHtmlTagBlocked, NON_STRUCTURING_HTML_TAGS, sanitizeHtmlContent, sanitizeHtmlTokenAttrs, tokenAttrsToRecord } from 'stream-markdown-parser'
-import { computed, defineAsyncComponent, defineComponent, inject, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, defineComponent, inject, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { DEFAULT_VIEWPORT_PRIORITY_ROOT_MARGIN, useOffscreenHeavyNodeDeferral, useViewportPriority, useViewportPriorityOptions } from '../../composables/viewportPriority'
 import { hasCustomComponents, parseHtmlToVNodes } from '../../utils/htmlRenderer'
 import { useCustomNodeComponents } from '../../utils/nodeComponents'
@@ -71,9 +71,48 @@ const DynamicRenderer = defineComponent({
 })
 
 const htmlRef = ref<HTMLElement | null>(null)
-const shouldRender = ref(typeof window === 'undefined')
+function isStreamingHtml(loading: boolean | undefined, raw: unknown, content: unknown, tag: unknown) {
+  // The parser synthesizes a closing tag in `content` while an HTML block is
+  // still open. That distinction lets streamed blocks render immediately,
+  // while preserving viewport deferral for complete history/restored nodes
+  // that merely carry a loading flag.
+  if (loading !== true)
+    return false
+  const rawText = String(raw ?? '')
+  if (!rawText)
+    return false
+  if (rawText !== String(content ?? ''))
+    return true
+  const tagName = String(tag ?? '').trim()
+  return !!tagName && rawText.toLowerCase().includes(`</${tagName.toLowerCase()}`) === false
+}
+const streamingObserved = ref(isStreamingHtml(props.node.loading, props.node.raw, props.node.content, props.node.tag))
+const shouldRender = ref(typeof window === 'undefined' || streamingObserved.value)
 const renderContent = ref(props.node.content)
+const streamingMinHeight = ref(0)
+const previousRaw = ref(String(props.node.raw ?? ''))
 const structuredChildren = computed(() => Array.isArray(props.node.children) ? props.node.children : [])
+
+watch(
+  () => [props.node.loading, props.node.raw, props.node.content, props.node.tag] as const,
+  ([loading, raw, content, tag]) => {
+    const nextRaw = String(raw ?? '')
+    const appendOnly = !previousRaw.value || nextRaw.startsWith(previousRaw.value)
+    const streaming = isStreamingHtml(loading, raw, content, tag)
+    if (!appendOnly) {
+      streamingObserved.value = streaming
+      streamingMinHeight.value = 0
+    }
+    else if (streaming) {
+      streamingObserved.value = true
+    }
+    if (streaming)
+      shouldRender.value = true
+
+    previousRaw.value = nextRaw
+  },
+  { flush: 'sync' },
+)
 const structuredTag = computed(() => String(props.node.tag || 'div'))
 const detailsSummaryNode = computed(() => {
   if (structuredTag.value.trim().toLowerCase() !== 'details')
@@ -128,8 +167,10 @@ const renderMode = computed(() => {
 
   // Streaming HTML blocks are expensive to re-render via `innerHTML` because it
   // replaces the whole subtree on every tick. Prefer the VNode parser while
-  // the node is still in a loading mid-state to keep DOM stable.
-  if (props.node.loading) {
+  // the node is still in a loading mid-state to keep DOM stable. Once a block
+  // has streamed, keep this path after loading settles as well; otherwise the
+  // transition to v-html can briefly remove the complete HTML subtree.
+  if (streamingObserved.value || props.node.loading) {
     const nodes = parseHtmlToVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
     if (nodes === null)
       return { mode: 'text', content: props.node.raw ?? content }
@@ -153,8 +194,48 @@ const viewportPriorityOptions = useViewportPriorityOptions()
 const offscreenHeavyNodeDeferral = useOffscreenHeavyNodeDeferral()
 const visibilityHandle = shallowRef<ReturnType<typeof registerVisibility> | null>(null)
 const isDeferred = !!props.node.loading
+let streamingHeightObserver: ResizeObserver | null = null
 
 if (typeof window !== 'undefined') {
+  watch(
+    [() => htmlRef.value, () => props.node.loading, streamingObserved],
+    ([el, loading, streaming], _oldValue, onCleanup) => {
+      streamingHeightObserver?.disconnect()
+      streamingHeightObserver = null
+      if (!el || !streaming || loading === false || typeof ResizeObserver === 'undefined')
+        return
+
+      const observer = new ResizeObserver((entries) => {
+        if (!streamingObserved.value || props.node.loading === false)
+          return
+        const entry = entries[0]
+        const borderBox = Array.isArray(entry?.borderBoxSize)
+          ? entry.borderBoxSize[0]
+          : entry?.borderBoxSize
+        const height = borderBox?.blockSize ?? entry?.contentRect.height ?? 0
+        if (height > streamingMinHeight.value)
+          streamingMinHeight.value = height
+      })
+      streamingHeightObserver = observer
+      observer.observe(el)
+      onCleanup(() => observer.disconnect())
+    },
+    { immediate: true },
+  )
+
+  watch(
+    () => props.node.loading,
+    async (loading) => {
+      if (loading !== false || !streamingObserved.value || streamingMinHeight.value <= 0)
+        return
+      await nextTick()
+      requestAnimationFrame(() => {
+        if (props.node.loading === false)
+          streamingMinHeight.value = 0
+      })
+    },
+  )
+
   watch(
     [
       () => htmlRef.value,
@@ -170,7 +251,10 @@ if (typeof window !== 'undefined') {
         return
       }
       if (!el) {
-        shouldRender.value = false
+        // A streamed block must not flash back to its placeholder while its
+        // root element is being reattached during incremental parsing.
+        if (!streamingObserved.value)
+          shouldRender.value = false
         return
       }
       let active = true
@@ -214,6 +298,8 @@ else {
 }
 
 onBeforeUnmount(() => {
+  streamingHeightObserver?.disconnect()
+  streamingHeightObserver = null
   visibilityHandle.value?.destroy?.()
   visibilityHandle.value = null
 })
@@ -224,6 +310,7 @@ onBeforeUnmount(() => {
     :is="isStructured ? structuredTag : 'div'"
     ref="htmlRef"
     class="html-block-node"
+    :style="streamingMinHeight > 0 ? { boxSizing: 'border-box', minHeight: `${streamingMinHeight}px` } : undefined"
     :data-markstream-viewport-pending="offscreenHeavyNodeDeferral && !shouldRender ? 'true' : undefined"
     v-bind="isStructured ? structuredBoundAttrs : undefined"
   >

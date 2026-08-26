@@ -6751,6 +6751,7 @@ onBeforeUnmount(() => {
    /* 优化不可见时的渲染成本 */
   content-visibility: auto;
   contain-intrinsic-size: 800px 600px;
+  contain-intrinsic-size: auto 800px auto 600px;
 }
 
 .markdown-renderer.virtualized,

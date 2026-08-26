@@ -139,6 +139,7 @@ Besides the core renderer and parser helpers, the package exposes:
 
 - `CodeBlockNode`, `MermaidBlockNode`, `MathBlockNode`, `ImageNode`, etc. — see [Components](/guide/components) for their props and CSS requirements.
 - `useSmoothMarkdownStream(options?)` — adapts bursty source chunks into a stable `visible` Markdown stream with `final`/`pendingChars` state.
+- `useStickToBottom(scrollRoot, contentRoot, options?)` from `markstream-vue/utils` — follows streaming chat content while bottom-pinned, coalesces scroll writes, and stops following when the user scrolls up. See [AI Chat & Streaming](/guide/ai-chat-streaming#auto-scroll-a-live-chat-without-per-token-scroll-writes).
 - `sanitizeImageSrc(value)` — applies the built-in strict image URL policy when custom image components need the same behavior.
 - `VueRendererMarkdown` (global component plugin) and shared type exports (component prop interfaces, parser types).
 

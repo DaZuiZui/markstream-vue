@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getMarkdown, parseMarkdownToStructure } from '../src'
 
 const issue588Markdown = `# Metrics
@@ -134,6 +134,53 @@ describe('issue 380 html wrapper markdown regression', () => {
     expect(nodes[0]?.type).toBe('html_block')
     expect(nodes[0]?.tag).toBe('div')
     expect(nodes[0]?.children).toBeUndefined()
+  })
+
+  it('does not turn indented nested HTML into code blocks while the wrapper streams', () => {
+    const html = `<div>
+  <h3>Deployment summary</h3>
+  <p>This card keeps growing while it streams.</p>
+  <ul>
+    <li><strong>Region:</strong> cn-east-1</li>
+    <li><strong>Instances:</strong> 4 x 2 vCPU</li>
+    <li><strong>Status:</strong> healthy</li>
+  </ul>
+  <table>
+    <tr><th>Service</th><th>Version</th><th>Replicas</th></tr>
+    <tr><td>gateway</td><td>1.4.2</td><td>2</td></tr>
+    <tr><td>api</td><td>2.0.0</td><td>6</td></tr>
+    <tr><td>worker</td><td>1.9.7</td><td>8</td></tr>
+  </table>
+</div>`
+    const md = getMarkdown('streaming-pure-html-card')
+
+    for (let end = 20; end <= html.length; end += 20) {
+      const nodes = parseMarkdownToStructure(html.slice(0, end), md, { final: false }) as any[]
+      const block = nodes.find(node => node?.type === 'html_block')
+      expect(block?.children, `stream offset ${end}`).toBeUndefined()
+    }
+  })
+
+  it('does not recursively parse a large pure-html wrapper', () => {
+    const rows = Array.from({ length: 1000 }, (_, index) => `    <li>row ${index}</li>`).join('\n')
+    const markdown = `<div>\n  <ul>\n${rows}\n  </ul>\n</div>`
+    const md = getMarkdown('large-pure-html-wrapper')
+    const blockParse = vi.spyOn(md.block, 'parse')
+
+    const nodes = parseMarkdownToStructure(markdown, md, { final: false }) as any[]
+
+    expect(nodes[0]?.children).toBeUndefined()
+    expect(blockParse).toHaveBeenCalledTimes(1)
+  })
+
+  it('still structures an indented code block inside an HTML wrapper', () => {
+    const markdown = `<div>
+    const value = 1
+</div>`
+    const nodes = parseMarkdownToStructure(markdown, getMarkdown('html-wrapper-indented-code'), { final: true }) as any[]
+
+    expect(nodes[0]?.children?.map((child: any) => child?.type)).toEqual(['code_block'])
+    expect(nodes[0]?.children?.[0]?.code).toBe('const value = 1\n')
   })
 
   it('does not structure blocked tags even when their inner content looks like markdown blocks', () => {

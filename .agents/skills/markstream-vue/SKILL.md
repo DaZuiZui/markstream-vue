@@ -44,6 +44,7 @@ Use this skill when the host app is plain Vue 3, typically Vite-based, and not N
 - Omit `mode` only when the surface should use rich docs defaults.
 - Smooth streaming (`smooth-streaming="auto"`) is on by default when `typewriter` or `max-live-nodes <= 0`. It only paces the `content` path; `nodes` mode is never affected.
 - For manual pacing with `nodes`, use `useSmoothMarkdownStream` directly: `enqueue()` chunks, `finish()` when done, render from `visible`, and wait for `caughtUp` before final parsing.
+- For a non-virtual chat scroller that should follow streaming output, import `useStickToBottom` from `markstream-vue/utils` and call `scheduleScrollToBottom()` after Vue commits new content. It coalesces writes and preserves manual scrollback; do not run `scrollIntoView({ behavior: 'smooth' })` for every token. For long mixed timelines, use `MarkstreamVirtualTimeline` with `stick-to-bottom="auto"` instead.
 - Streaming vs recovering history: keep the same renderer mode for a given chat row; when `final=true`, disable smooth streaming/typewriter and optionally enable fade. Switch to `mode="docs"` only when moving content into a separate rich document surface. See `docs/guide/ai-chat-streaming.md` for full examples.
 - Prefer local component registration unless the repo already uses a shared plugin entry.
 - If a Vue 3 app already virtualizes messages, keep that outer virtualizer in charge and enable `virtual-scroll` only on large Markdown messages.
