@@ -686,29 +686,70 @@ function takeGraphemes(
     }
   }
 
-  // Fast path: if the requested window is pure ASCII AND the next code unit is
-  // also ASCII (so no combining mark can attach across the boundary), then each
-  // code unit is exactly one grapheme and Intl.Segmenter (plus its per-commit
-  // window slicing + ICU iteration) is unnecessary. The scan is bounded by
-  // `count` code units, so mixed content pays only a cheap charCodeAt pass over
-  // the ASCII head before falling through to the segmenter.
+  // Fast path: advance by code point through the window and commit the slice
+  // directly when every code point is a guaranteed single grapheme (ASCII or a
+  // whitelisted CJK/JP/KR code point) AND the code point right after the slice
+  // cannot attach to its last char. Otherwise Intl.Segmenter (plus its
+  // per-commit window slicing + ICU iteration) is used. The scan is bounded by
+  // `count` code points, so mixed content pays only a cheap charCodeAt pass
+  // over the simple head before falling through to the segmenter.
   const fastEnd = Math.min(normalizedEnd, start + count)
-  let asciiCursor = start
-  while (asciiCursor < fastEnd && input.charCodeAt(asciiCursor) <= 0x7F)
-    asciiCursor++
-  if (asciiCursor === fastEnd && (fastEnd >= normalizedEnd || input.charCodeAt(fastEnd) <= 0x7F)) {
+  let sliceEnd = start
+  let used = 0
+  let fastPathSafe = true
+  while (sliceEnd < fastEnd) {
+    const code = input.charCodeAt(sliceEnd)
+    if (code <= 0x7F) {
+      sliceEnd++
+      used++
+      continue
+    }
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = input.charCodeAt(sliceEnd + 1)
+      if (next < 0xDC00 || next > 0xDFFF) {
+        fastPathSafe = false
+        break
+      }
+      const codePoint = 0x10000 + ((code - 0xD800) << 10) + (next - 0xDC00)
+      if (!isGraphemeSimpleCodePoint(codePoint)) {
+        fastPathSafe = false
+        break
+      }
+      sliceEnd += 2
+      used++
+      continue
+    }
+    if (code >= 0xDC00 && code <= 0xDFFF) {
+      fastPathSafe = false
+      break
+    }
+    if (!isGraphemeSimpleCodePoint(code)) {
+      fastPathSafe = false
+      break
+    }
+    sliceEnd++
+    used++
+  }
+
+  if (fastPathSafe) {
     // CRLF (U+000D U+000A) is a single grapheme per UAX #29; taking exactly
-    // `count` code units here would split the pair and leak a lone `\r` to
+    // `count` code points here would split the pair and leak a lone `\r` to
     // consumers. Fall through to the segmenter when the boundary lands between
     // the two code units.
-    const splitsCrLf = fastEnd < normalizedEnd
-      && fastEnd > start
-      && input.charCodeAt(fastEnd - 1) === 0x0D
-      && input.charCodeAt(fastEnd) === 0x0A
+    const splitsCrLf = sliceEnd < normalizedEnd
+      && sliceEnd > start
+      && input.charCodeAt(sliceEnd - 1) === 0x0D
+      && input.charCodeAt(sliceEnd) === 0x0A
     if (!splitsCrLf) {
-      return {
-        text: input.slice(start, fastEnd),
-        graphemeCount: fastEnd - start,
+      const boundaryCode = sliceEnd < normalizedEnd ? input.charCodeAt(sliceEnd) : 0
+      const boundaryCodePoint = boundaryCode >= 0xD800 && boundaryCode <= 0xDBFF
+        ? 0x10000 + ((boundaryCode - 0xD800) << 10) + (input.charCodeAt(sliceEnd + 1) - 0xDC00)
+        : boundaryCode
+      if (sliceEnd >= normalizedEnd || !isGraphemeExtendCodePoint(boundaryCodePoint)) {
+        return {
+          text: input.slice(start, sliceEnd),
+          graphemeCount: used,
+        }
       }
     }
   }
@@ -746,4 +787,75 @@ function takeGraphemes(
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+// Code points that are guaranteed to be a single grapheme (UAX #29 GCB=Other)
+// in the mainstream CJK/Japanese/Korean scripts. Windows made only of these
+// (plus ASCII) can be sliced by code point without Intl.Segmenter. Everything
+// outside this whitelist — combining marks, emoji sequences, Indic/SE-Asian
+// scripts — falls through to the segmenter, so this fast path is a strict
+// superset of the old pure-ASCII check: it can only skip work, never change
+// the split.
+function isGraphemeSimpleCodePoint(codePoint: number) {
+  return (codePoint >= 0x2E80 && codePoint <= 0x303F) // CJK radicals .. CJK symbols/punctuation
+    || (codePoint >= 0x3040 && codePoint <= 0x30FF) // hiragana / katakana
+    || (codePoint >= 0x3100 && codePoint <= 0x31FF) // bopomofo / compatibility jamo / CJK strokes / katakana ext
+    || (codePoint >= 0x3200 && codePoint <= 0x33FF) // enclosed CJK / CJK compatibility
+    || (codePoint >= 0x3400 && codePoint <= 0x4DBF) // CJK ext A
+    || (codePoint >= 0x4E00 && codePoint <= 0x9FFF) // CJK unified
+    || (codePoint >= 0xAC00 && codePoint <= 0xD7A3) // Hangul syllables (LV/LVT are single graphemes)
+    || (codePoint >= 0xF900 && codePoint <= 0xFAFF) // CJK compat ideographs
+    || (codePoint >= 0xFE30 && codePoint <= 0xFE4F) // CJK compat forms
+    || (codePoint >= 0xFF00 && codePoint <= 0xFFEF) // fullwidth forms
+    || (codePoint >= 0x1F200 && codePoint <= 0x1F2FF) // enclosed ideographic supplement
+    || (codePoint >= 0x20000 && codePoint <= 0x2FFFF) // CJK ext B+ (astral, single grapheme)
+}
+
+// Code points that can attach to / combine with a preceding code point, or
+// join two code points into one grapheme cluster (GCB Extend/ZWJ/SpacingMark/
+// Prepend/Regional_Indicator, plus the common Indic/SE-Asian combining
+// blocks). Used only as a boundary check: if the code point right after a fast
+// slice is one of these, the slice must fall back to the segmenter so the
+// cluster is not split.
+function isGraphemeExtendCodePoint(codePoint: number) {
+  return (codePoint >= 0x0300 && codePoint <= 0x036F) // combining diacritics
+    || (codePoint >= 0x0483 && codePoint <= 0x0489)
+    || (codePoint >= 0x0591 && codePoint <= 0x05BD)
+    || (codePoint >= 0x05BF && codePoint <= 0x05BF)
+    || (codePoint >= 0x05C1 && codePoint <= 0x05C2)
+    || (codePoint >= 0x05C4 && codePoint <= 0x05C5)
+    || (codePoint >= 0x05C7 && codePoint <= 0x05C7)
+    || (codePoint >= 0x0610 && codePoint <= 0x061A)
+    || (codePoint >= 0x064B && codePoint <= 0x065F)
+    || (codePoint >= 0x0670 && codePoint <= 0x0670)
+    || (codePoint >= 0x06D6 && codePoint <= 0x06DC)
+    || (codePoint >= 0x06DF && codePoint <= 0x06E4)
+    || (codePoint >= 0x06E7 && codePoint <= 0x06E8)
+    || (codePoint >= 0x06EA && codePoint <= 0x06ED)
+    || (codePoint >= 0x0711 && codePoint <= 0x0711)
+    || (codePoint >= 0x0730 && codePoint <= 0x074A)
+    || (codePoint >= 0x07A6 && codePoint <= 0x07B0)
+    || (codePoint >= 0x07EB && codePoint <= 0x07F3)
+    || (codePoint >= 0x07FD && codePoint <= 0x07FD)
+    || (codePoint >= 0x0816 && codePoint <= 0x0819)
+    || (codePoint >= 0x081B && codePoint <= 0x0823)
+    || (codePoint >= 0x0825 && codePoint <= 0x0827)
+    || (codePoint >= 0x0829 && codePoint <= 0x082D)
+    || (codePoint >= 0x0859 && codePoint <= 0x085B)
+    || (codePoint >= 0x08D3 && codePoint <= 0x08E1)
+    || (codePoint >= 0x08E3 && codePoint <= 0x0902)
+    || (codePoint >= 0x0900 && codePoint <= 0x0DFF) // Devanagari..Malayalam combining
+    || (codePoint >= 0x0E00 && codePoint <= 0x0EFF) // Thai / Lao
+    || (codePoint >= 0x1000 && codePoint <= 0x109F) // Myanmar
+    || (codePoint >= 0x1100 && codePoint <= 0x11FF) // Hangul jamo
+    || (codePoint >= 0x1700 && codePoint <= 0x18FF) // Tagalog..Canadian syllabics
+    || (codePoint >= 0x1A00 && codePoint <= 0x1BFF) // Buginese..Balinese
+    || (codePoint >= 0x1AB0 && codePoint <= 0x1AFF) // combining supplement
+    || (codePoint >= 0x1DC0 && codePoint <= 0x1DFF) // combining marks supplement
+    || (codePoint >= 0x200C && codePoint <= 0x200D) // ZWJ / ZWNJ
+    || (codePoint >= 0x20D0 && codePoint <= 0x20FF) // combining marks for symbols
+    || (codePoint >= 0xFE00 && codePoint <= 0xFE0F) // variation selectors
+    || (codePoint >= 0xFE20 && codePoint <= 0xFE2F) // combining half marks
+    || (codePoint >= 0x1F1E6 && codePoint <= 0x1F1FF) // regional indicators (flag pairs)
+    || (codePoint >= 0xE0100 && codePoint <= 0xE01EF) // variation selectors supplement
 }

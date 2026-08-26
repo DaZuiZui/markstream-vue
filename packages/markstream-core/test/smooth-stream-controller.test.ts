@@ -135,6 +135,19 @@ describe('smoothMarkdownStreamController', () => {
     controller.destroy()
   })
 
+  it('keeps CJK text and fullwidth punctuation intact while streaming', async () => {
+    vi.useFakeTimers()
+    const controller = createController({ maxCharsPerCommit: 1, maxCommitFps: 60, startDelayMs: 0 })
+    const cjkText = '这是一个中文测试段落，包含中文标点「引号」和 English 混排。还有𠀀𠀁扩展汉字。'
+
+    controller.enqueue(cjkText)
+    await vi.advanceTimersByTimeAsync(4000)
+
+    expect(controller.getSnapshot().visible).toBe(cjkText)
+    expect(hasUnpairedSurrogate(controller.getSnapshot().visible)).toBe(false)
+    controller.destroy()
+  })
+
   it('keeps a grapheme intact when it spans appended chunks', async () => {
     vi.useFakeTimers()
     const controller = createController({
