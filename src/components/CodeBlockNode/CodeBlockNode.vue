@@ -740,9 +740,8 @@ function getDiffVisualVars(isDark: boolean) {
   const removedInline = isDark ? 'hsl(0 58% 58% / 0.28)' : 'var(--diff-removed-inline-bg)'
   const addedGutter = `linear-gradient(90deg, ${addedFg} 0 4px, transparent 4px 100%)`
   const removedGutter = `linear-gradient(90deg, ${removedFg} 0 4px, transparent 4px 100%)`
-  const lineNumberBg = isDark ? 'hsl(0 0% 7% / 0.98)' : 'hsl(var(--ms-muted) / 0.45)'
   return {
-    '--markstream-diff-line-number-bg': lineNumberBg,
+    '--markstream-diff-line-number-bg': 'var(--markstream-diff-editor-bg)',
     '--markstream-diff-added-fg': addedFg,
     '--markstream-diff-removed-fg': removedFg,
     '--markstream-diff-added-line': addedLine,
@@ -3937,7 +3936,7 @@ onUnmounted(() => {
   --markstream-diff-gutter-bg: transparent;
   --markstream-diff-gutter-guide: hsl(var(--ms-border) / 0.72);
   --markstream-diff-gutter-gap: 8px;
-  --markstream-diff-line-number-bg: hsl(var(--ms-muted) / 0.45);
+  --markstream-diff-line-number-bg: var(--markstream-diff-editor-bg);
   --markstream-diff-line-number: var(--code-line-number);
   --markstream-diff-line-number-active: var(--code-line-number);
   --markstream-diff-added-fg: var(--diff-added-fg);
@@ -3995,7 +3994,7 @@ onUnmounted(() => {
   );
   --markstream-diff-gutter-guide: hsl(var(--ms-muted-foreground) / 0.08);
   --markstream-diff-gutter-gap: 8px;
-  --markstream-diff-line-number-bg: hsl(0 0% 7% / 0.98);
+  --markstream-diff-line-number-bg: var(--markstream-diff-editor-bg);
   --markstream-diff-line-number: var(--code-line-number);
   --markstream-diff-line-number-active: var(--code-line-number);
   --markstream-diff-added-fg: hsl(152 42% 60%);
