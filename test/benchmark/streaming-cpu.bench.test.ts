@@ -255,10 +255,10 @@ describe('streaming CPU benchmark', () => {
     }
 
     const blockWrapper = mount(HtmlBlockNode, {
-      props: { node: { ...blockNode, content: `${seedLines}\n<my-widget>w</my-widget>`, raw: `${seedLines}\n<my-widget>w</my-widget>` }, customId: 'bench-d' },
+      props: { node: { ...blockNode, content: `${seedLines}\n<my-widget />`, raw: `${seedLines}\n<my-widget />` }, customId: 'bench-d' },
     })
     const inlineWrapper = mount(HtmlInlineNode, {
-      props: { node: { ...inlineNode, content: `${seedLines.replaceAll('<p>', '<span>').replaceAll('</p>', '</span>')}\n<my-widget>w</my-widget>` }, customId: 'bench-d' },
+      props: { node: { ...inlineNode, content: `${seedLines.replaceAll('<p>', '<span>').replaceAll('</p>', '</span>')}\n<my-widget />` }, customId: 'bench-d' },
     })
     await nextTick()
 
@@ -268,8 +268,8 @@ describe('streaming CPU benchmark', () => {
     const run = async (kind: 'block' | 'inline') => {
       // Prepend a line each tick so the widget stays anchored at the end.
       let content = kind === 'block'
-        ? `${seedLines}\n<my-widget>w</my-widget>`
-        : `${seedLines.replaceAll('<p>', '<span>').replaceAll('</p>', '</span>')}\n<my-widget>w</my-widget>`
+        ? `${seedLines}\n<my-widget />`
+        : `${seedLines.replaceAll('<p>', '<span>').replaceAll('</p>', '</span>')}\n<my-widget />`
       const wrapper = kind === 'block' ? blockWrapper : inlineWrapper
       for (let i = 0; i < WARMUP_D; i++) {
         content = `\n<p>warm line ${i}</p>${content}`

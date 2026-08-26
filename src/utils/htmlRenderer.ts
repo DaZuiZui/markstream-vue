@@ -270,11 +270,11 @@ export function hasCustomComponents(
 }
 
 export interface HtmlResolveResult {
-  /** Full parse (tokenize + build) succeeded. */
+  /** Resolution succeeded. */
   ok: boolean
   /** The content contains at least one custom-component tag. */
   hasCustomComponents: boolean
-  /** VNode tree built from the tokens; null when ok is false. */
+  /** VNode tree built from the tokens; null when no build was needed or parsing failed. */
   nodes: any[] | null
 }
 
@@ -290,8 +290,12 @@ export function resolveHtmlVNodes(
   content: string,
   customComponents: Record<string, Component>,
   htmlPolicy: HtmlPolicy = 'safe',
+  forceBuild = false,
 ): HtmlResolveResult {
   try {
+    if (!forceBuild && Object.keys(customComponents).length === 0)
+      return { ok: true, hasCustomComponents: false, nodes: null }
+
     const tokens = tokenizeHtml(content)
     let hasCustom = false
     for (const token of tokens) {
@@ -303,7 +307,9 @@ export function resolveHtmlVNodes(
         break
       }
     }
-    const nodes = buildVNodeTree(tokens, customComponents, htmlPolicy)
+    const nodes = forceBuild || hasCustom
+      ? buildVNodeTree(tokens, customComponents, htmlPolicy)
+      : null
     return { ok: true, hasCustomComponents: hasCustom, nodes }
   }
   catch (error) {

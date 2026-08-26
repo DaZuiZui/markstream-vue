@@ -174,8 +174,8 @@ const renderMode = computed(() => {
   // resolveHtmlVNodes tokenizes once and reuses the tokens for both the
   // custom-component check and the VNode build; the previous pair
   // (hasCustomComponents + parseHtmlToVNodes) tokenized the same content twice.
-  const streaming = streamingObserved.value || props.node.loading
-  const resolved = resolveHtmlVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
+  const streaming = streamingObserved.value || props.node.loading === true
+  const resolved = resolveHtmlVNodes(content, customComponents.value, resolvedHtmlPolicy.value, streaming)
   if (resolved.ok && (streaming || resolved.hasCustomComponents))
     return { mode: 'dynamic', nodes: resolved.nodes }
 

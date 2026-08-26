@@ -52,8 +52,8 @@ const renderMode = computed(() => {
   // components: resolve in a single tokenize + VNode build pass. The old path
   // ran hasCustomComponents (full tokenize) and then parseHtmlToVNodes
   // (second full tokenize) back to back.
-  const forceDynamic = props.node.loading && props.node.autoClosed
-  const resolved = resolveHtmlVNodes(content, customComponents.value, resolvedHtmlPolicy.value)
+  const forceDynamic = props.node.loading === true && props.node.autoClosed === true
+  const resolved = resolveHtmlVNodes(content, customComponents.value, resolvedHtmlPolicy.value, forceDynamic)
   if (resolved.ok && (forceDynamic || resolved.hasCustomComponents))
     return { mode: 'dynamic', nodes: resolved.nodes }
 

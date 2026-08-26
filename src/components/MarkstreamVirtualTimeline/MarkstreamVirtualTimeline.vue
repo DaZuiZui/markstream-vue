@@ -359,6 +359,7 @@ let layoutEstimateSnapshot: Array<number | undefined> = []
 const measureRecordElementHandles = new Map<string, (el: Element | { $el?: Element | null } | null | undefined) => void>()
 
 interface MarkdownPropsCacheEntry {
+  cacheKey: string
   content: string
   props: MarkstreamVirtualMarkdownProps
 }
@@ -414,6 +415,15 @@ function rebuildLayoutRecords() {
     if (!layoutRecordByKey.has(key)) {
       layoutRecordByKey.set(key, record)
     }
+  }
+
+  for (const key of measureRecordElementHandles.keys()) {
+    if (!layoutRecordByKey.has(key))
+      measureRecordElementHandles.delete(key)
+  }
+  for (const key of markdownPropsCache.keys()) {
+    if (!layoutRecordByKey.has(key))
+      markdownPropsCache.delete(key)
   }
 
   layoutRecords.value = records
@@ -1570,9 +1580,9 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
     renderCodeBlocksAsPre ? 'pre' : 'none',
     fade ? 'fade' : 'no-fade',
   ].join('\u0001')
-  const cached = markdownPropsCache.get(cacheKey)
+  const cached = markdownPropsCache.get(current.key)
 
-  if (cached && cached.content === content) {
+  if (cached && cached.cacheKey === cacheKey && cached.content === content) {
     const restoreState = markdownStates.get(record.key)
     cached.props.virtualScroll.restoreState = isCompatibleMarkdownState(record, restoreState)
       ? restoreState!
@@ -1650,7 +1660,7 @@ function getMarkdownProps(record: TimelineRecord): MarkstreamVirtualMarkdownProp
     },
   }
 
-  markdownPropsCache.set(cacheKey, { content, props: propsObject })
+  markdownPropsCache.set(current.key, { cacheKey, content, props: propsObject })
   return propsObject
 }
 

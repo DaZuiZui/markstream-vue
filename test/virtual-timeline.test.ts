@@ -558,6 +558,66 @@ describe('virtual timeline API', () => {
     wrapper.unmount()
   })
 
+  it('keeps only current per-item render caches', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+
+    const slotProps: any[] = []
+    const makeItem = (revision: number) => ({
+      id: 'a',
+      kind: 'assistant-markdown',
+      content: 'same content',
+      revision,
+      final: true,
+    })
+    const wrapper = mount(MarkstreamVirtualTimeline, {
+      attachTo: document.body,
+      props: {
+        items: [makeItem(1)],
+        threadKey: 'cache-pruning',
+        stickToBottom: false,
+        overscan: 10,
+      },
+      slots: {
+        default(props: any) {
+          slotProps.push(props)
+          return h('div', { ref: props.measureRef }, props.markdownProps.content)
+        },
+      },
+    })
+
+    await flushAll()
+    const first = slotProps.at(-1)
+
+    await wrapper.setProps({ items: [makeItem(2)] })
+    await flushAll()
+    const second = slotProps.at(-1)
+
+    await wrapper.setProps({ items: [makeItem(1)] })
+    await flushAll()
+    const cycled = slotProps.at(-1)
+
+    expect(second.markdownProps).not.toBe(first.markdownProps)
+    expect(cycled.markdownProps).not.toBe(first.markdownProps)
+    expect(cycled.measureRef).toBe(first.measureRef)
+
+    await wrapper.setProps({ items: [] })
+    await flushAll()
+    await wrapper.setProps({ items: [makeItem(1)] })
+    await flushAll()
+    const reinserted = slotProps.at(-1)
+
+    expect(reinserted.markdownProps).not.toBe(cycled.markdownProps)
+    expect(reinserted.measureRef).not.toBe(first.measureRef)
+
+    wrapper.unmount()
+  })
+
   it('passes renderer-scoped markdown restore state through timeline slot props', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(480)
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
