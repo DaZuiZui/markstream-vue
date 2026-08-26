@@ -4844,8 +4844,11 @@ watch(
 watch(
   () => renderedCount.value,
   () => {
+    // Keep this synchronous: batch rendering grows renderedCount batch by
+    // batch, and a bottom-pinned anchor must follow each batch immediately.
+    // Deferring to the next frame lets the scroll position drift for a frame.
     if (virtualizationEnabled.value)
-      scheduleCommitFocusSync()
+      scheduleFocusSync({ immediate: true })
   },
 )
 
