@@ -159,6 +159,23 @@ describe('smoothMarkdownStreamController', () => {
     controller.destroy()
   })
 
+  it.each([
+    ['CJK tone mark', '\u4E2D\u302A'],
+    ['halfwidth voiced mark', '\uFF76\uFF9E'],
+  ])('counts a %s cluster as one reveal unit', (_name, cluster) => {
+    const raf = createRafHarness()
+    const controller = createController({
+      ...FAST_ATOMIC_TEST_OPTIONS,
+      maxCharsPerCommit: 2,
+    })
+
+    controller.enqueue(`${cluster}x`)
+    raf.step(performance.now() + 40)
+
+    expect(controller.getSnapshot().visible).toBe(`${cluster}x`)
+    controller.destroy()
+  })
+
   it('counts astral CJK characters as one reveal unit', () => {
     const raf = createRafHarness()
     const controller = createController({

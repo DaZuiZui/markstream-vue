@@ -1475,6 +1475,8 @@ const {
   resolveScrollContainer,
   scheduleFocusSync,
   onScroll: handleVirtualScrollRootScroll,
+  requestFrame,
+  cancelFrame,
   getScrollTop: (root) => {
     const doc = root.ownerDocument || containerRef.value?.ownerDocument || document
     const isViewportRoot = root === doc.documentElement

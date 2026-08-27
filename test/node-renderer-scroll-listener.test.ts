@@ -104,6 +104,16 @@ describe('useScrollListener', () => {
     expect(h.scrollRootElement.value).toBeNull()
   })
 
+  it('observes scrolling when requestAnimationFrame is unavailable', () => {
+    vi.stubGlobal('requestAnimationFrame', undefined)
+    const h = createHarness()
+
+    h.listener.setupScrollListener()
+
+    expect(() => h.root.value!.dispatchEvent(new Event('scroll'))).not.toThrow()
+    expect(h.scheduleFocusSync).toHaveBeenCalledTimes(1)
+  })
+
   it('can attach a virtual-scroll-only listener without scheduling focus sync', () => {
     const onScroll = vi.fn()
     const h = createHarness({

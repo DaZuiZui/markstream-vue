@@ -2382,17 +2382,15 @@ async function waitForSingleEditorVisualReady() {
 // pair is wasted work (double diff computation + surface update). Content is
 // unchanged, so skipping the duplicate is semantically identical.
 let lastSettledDiffPair = ''
-let lastSettledDiffApplied = true
 
 async function updateDiffCodeWithSettledResult(original: string, updated: string, language: string) {
   const pairKey = `${original}\u0000${updated}\u0000${language}`
-  if (lastSettledDiffApplied && lastSettledDiffPair === pairKey)
+  if (lastSettledDiffPair === pairKey)
     return
 
   try {
     await updateDiffCode(original, updated, language)
     lastSettledDiffPair = pairKey
-    lastSettledDiffApplied = true
     return
   }
   catch (error) {
@@ -2408,13 +2406,12 @@ async function updateDiffCodeWithSettledResult(original: string, updated: string
 
   try {
     await updateDiffCode(original, updated, language)
+    lastSettledDiffPair = pairKey
   }
   catch (error) {
     if (!isPendingDiffResultError(error))
       throw error
   }
-  lastSettledDiffPair = pairKey
-  lastSettledDiffApplied = true
 }
 
 function getMaxHeightValue(): number {

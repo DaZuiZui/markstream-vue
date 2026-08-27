@@ -25,11 +25,23 @@ function stripSourceMap(value: unknown): unknown {
 
 function parseCold(source: string) {
   const md = getMarkdown(`html-reuse-cold-${Math.random()}`)
-  return stripSourceMap(parseMarkdownToStructure(source, md))
+  return stripSourceMap(parseMarkdownToStructure(source, md, {
+    final: false,
+    streamParse: false,
+  }))
 }
 
-function parseStreaming(source: string, md: ReturnType<typeof getMarkdown>) {
-  return stripSourceMap(parseMarkdownToStructure(source, md))
+function parseStreaming(
+  source: string,
+  md: ReturnType<typeof getMarkdown>,
+  parserMetrics?: { processTokensReusedTopLevelNodes?: number },
+) {
+  return stripSourceMap(parseMarkdownToStructure(source, md, {
+    final: false,
+    parserMetrics,
+    reuseStableTopLevelNodes: true,
+    streamParse: true,
+  }))
 }
 
 function expectStreamingMatchesCold(fullSource: string, chunkBoundaries: number[]) {
@@ -44,6 +56,18 @@ function expectStreamingMatchesCold(fullSource: string, chunkBoundaries: number[
 }
 
 describe('html_block top-level reuse streaming', () => {
+  it('preserves structured children when a completed wrapper becomes reusable', () => {
+    const md = getMarkdown(`html-reuse-completed-wrapper-${Math.random()}`)
+    const prefix = '<div>\n\n- item\n\n</div>\n\n'
+    parseStreaming(prefix, md)
+    parseStreaming(`${prefix}growing`, md)
+
+    const source = `${prefix}growing tail`
+    const parserMetrics: { processTokensReusedTopLevelNodes?: number } = {}
+    expect(parseStreaming(source, md, parserMetrics)).toEqual(parseCold(source))
+    expect(parserMetrics.processTokensReusedTopLevelNodes).toBe(1)
+  })
+
   it('keeps streamed and cold output identical for an unclosed <div> that grows', () => {
     const full = [
       '# Title',

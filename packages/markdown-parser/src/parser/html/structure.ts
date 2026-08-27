@@ -230,10 +230,8 @@ export function structureGenericHtmlBlockChildren(
     if (!shouldStructureGenericHtmlBlockChildren(children))
       return node
 
-    return {
-      ...node,
-      children,
-    } as ParsedNode
+    fields.children = children
+    return node
   }
 
   if (tailStart <= 0)

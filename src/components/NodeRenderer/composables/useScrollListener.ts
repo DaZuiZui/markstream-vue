@@ -9,6 +9,8 @@ export interface ScrollListenerOptions {
   scheduleFocusSync: (options?: { immediate?: boolean }) => void
   onScroll?: () => void
   getScrollTop?: (root: HTMLElement) => number
+  requestFrame?: typeof window.requestAnimationFrame | null
+  cancelFrame?: typeof window.cancelAnimationFrame | null
 }
 
 export interface ScrollListener {
@@ -33,11 +35,16 @@ export function useScrollListener(
   let lastObservedScrollTop: number | null = null
   let scrollObservationPending = false
   let scrollObservationRafId: number | null = null
+  const requestFrame = options.requestFrame === undefined
+    ? (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null)
+    : options.requestFrame
+  const cancelFrame = options.cancelFrame === undefined
+    ? (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null)
+    : options.cancelFrame
 
   function cleanupScrollListener() {
     if (scrollObservationRafId != null) {
-      if (typeof cancelAnimationFrame === 'function')
-        cancelAnimationFrame(scrollObservationRafId)
+      cancelFrame?.(scrollObservationRafId)
       scrollObservationRafId = null
     }
     scrollObservationPending = false
@@ -87,7 +94,7 @@ export function useScrollListener(
       if (scrollObservationPending)
         return
       scrollObservationPending = true
-      scrollObservationRafId = requestAnimationFrame(() => {
+      const observe = () => {
         scrollObservationPending = false
         scrollObservationRafId = null
         if (virtualizationEnabled.value) {
@@ -97,7 +104,11 @@ export function useScrollListener(
           else
             scheduleFocusSync()
         }
-      })
+      }
+      if (requestFrame)
+        scrollObservationRafId = requestFrame(observe)
+      else
+        observe()
     }
 
     const handler = () => {
