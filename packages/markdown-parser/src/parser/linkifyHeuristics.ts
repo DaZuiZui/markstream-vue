@@ -16,13 +16,8 @@ const EXPLICIT_FILENAME_CONTEXT_RE = /文件名\s*[:：]?|附件\s*[:：]?|路�
 const FILENAME_CONTEXT_RE = /文件名\s*[:：]?|文件\s*[:：]?|附件\s*[:：]?|档案\s*[:：]?|檔案\s*[:：]?|文档\s*[:：]?|文檔\s*[:：]?|资料\s*[:：]?|資料\s*[:：]?|路径\s*[:：]?|路徑\s*[:：]?|\bfile\s*name\b\s*[:：]?|\battachments?\b\s*[:：]?|\bfiles?\b\s*[:：]?|\bdocuments?\b\s*[:：]?|\bdocs?\b\s*[:：]?|\bpaths?\b\s*[:：]?/iu
 const MARKET_TICKER_CONTEXT_RE = /股票代码|股票代碼|证券代码|證券代碼|(?:代码|代碼|交易所|后缀|後綴|市场|市場)(?=$|[\s:：/|,，、()（）])|\btickers?\b|\bsymbols?\b|\bexchanges?\b/iu
 const LINKIFY_DEMOTION_CONTEXT_CACHE_LIMIT = 2000
-// Long AI answers routinely exceed 512 chars per paragraph; caching the inferred
-// demotion context for them too turns repeated streaming-commit replays of a
-// stable prefix into O(1) lookups instead of re-running three alternation
-// regexes over the same text every parse. The limit only guards against
-// pathologically huge single strings; eviction stays bounded by
-// LINKIFY_DEMOTION_CONTEXT_CACHE_LIMIT entries.
 const LINKIFY_DEMOTION_CONTEXT_CACHE_MAX_TEXT_LENGTH = 16384
+const LINKIFY_DEMOTION_CONTEXT_CACHE_MAX_TOTAL_TEXT_LENGTH = 512 * LINKIFY_DEMOTION_CONTEXT_CACHE_LIMIT
 const EMPTY_LINKIFY_DEMOTION_CONTEXT: LinkifyDemotionContext = {}
 const AMBIGUOUS_BARE_DOMAIN_EXTENSIONS = new Set([
   'ai',
@@ -158,17 +153,24 @@ export interface LinkifyDemotionContext {
 }
 
 const linkifyDemotionContextCache = new Map<string, LinkifyDemotionContext>()
+let linkifyDemotionContextCacheTextLength = 0
 
 function rememberLinkifyDemotionContext(text: string, context: LinkifyDemotionContext) {
   if (!text || text.length > LINKIFY_DEMOTION_CONTEXT_CACHE_MAX_TEXT_LENGTH)
     return context
 
+  if (!linkifyDemotionContextCache.has(text))
+    linkifyDemotionContextCacheTextLength += text.length
   linkifyDemotionContextCache.set(text, context)
-  while (linkifyDemotionContextCache.size > LINKIFY_DEMOTION_CONTEXT_CACHE_LIMIT) {
+  while (
+    linkifyDemotionContextCache.size > LINKIFY_DEMOTION_CONTEXT_CACHE_LIMIT
+    || linkifyDemotionContextCacheTextLength > LINKIFY_DEMOTION_CONTEXT_CACHE_MAX_TOTAL_TEXT_LENGTH
+  ) {
     const oldestKey = linkifyDemotionContextCache.keys().next().value
     if (!oldestKey)
       break
     linkifyDemotionContextCache.delete(oldestKey)
+    linkifyDemotionContextCacheTextLength -= oldestKey.length
   }
   return context
 }

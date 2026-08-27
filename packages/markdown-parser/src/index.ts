@@ -190,12 +190,7 @@ export function getMarkdown(msgId: string = `editor-${Date.now()}`, options: Get
     // at least one fence token made it through the block parser. Streaming
     // parses run this rule on every commit, so skipping the split for
     // fence-free documents removes a steady allocation source.
-    let lines: string[] | null = null
-    const getLines = () => {
-      if (!lines)
-        lines = src.split(/\r?\n/)
-      return lines
-    }
+    let lines: string[] | undefined
     for (const token of s.tokens) {
       if (token.type !== 'fence' || !token.map || !token.markup)
         continue
@@ -206,7 +201,8 @@ export function getMarkdown(msgId: string = `editor-${Date.now()}`, options: Get
       const minLen = markup.length
       // The closing line, if exists, should be the last line consumed by the block
       const lineIdx = Math.max(0, endLine - 1)
-      const line = getLines()[lineIdx] ?? ''
+      lines ??= src.split(/\r?\n/)
+      const line = lines[lineIdx] ?? ''
       let i = 0
       while (i < line.length && (line[i] === ' ' || line[i] === '\t')) i++
       let count = 0

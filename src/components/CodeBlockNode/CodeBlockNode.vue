@@ -1669,32 +1669,7 @@ let lastEditorLayoutWidth = 0
 let lastEditorLayoutHeight = 0
 const SCROLL_PARENT_OVERFLOW_RE = /auto|scroll|overlay/i
 
-// resolveScrollRootElement walks the ancestor chain with getComputedStyle calls,
-// and adjustScrollAfterHeightChange can run on every streaming height change.
-// The DOM ancestry between a code block and its scroll root changes only when
-// the block is moved/remounted, so cache the last (element → root) mapping;
-// keying by the container keeps multiple blocks independent. Invalidated lazily:
-// a cached hit re-verifies the element is still in the live document, which is
-// an O(1) isConnected check instead of an O(depth) style walk.
-const scrollRootResolutionCache = new WeakMap<HTMLElement, HTMLElement | null>()
-
 function resolveScrollRootElement(node?: HTMLElement | null) {
-  if (typeof window === 'undefined')
-    return null
-
-  if (!node)
-    return fallbackScrollRootElement(node)
-
-  const cached = scrollRootResolutionCache.get(node)
-  if (cached !== undefined && cached?.isConnected !== false)
-    return cached
-
-  const resolved = resolveScrollRootElementUncached(node)
-  scrollRootResolutionCache.set(node, resolved)
-  return resolved
-}
-
-function resolveScrollRootElementUncached(node?: HTMLElement | null) {
   if (typeof window === 'undefined')
     return null
   const doc = node?.ownerDocument ?? document
@@ -1711,13 +1686,6 @@ function resolveScrollRootElementUncached(node?: HTMLElement | null) {
     current = current.parentElement
   }
   return scrollRoot
-}
-
-function fallbackScrollRootElement(node?: HTMLElement | null) {
-  if (typeof window === 'undefined')
-    return null
-  const doc = node?.ownerDocument ?? document
-  return (doc.scrollingElement || doc.documentElement || doc.body) as HTMLElement | null
 }
 
 function isExternallyManagedScroll(container: HTMLElement) {
