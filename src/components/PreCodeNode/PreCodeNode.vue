@@ -61,13 +61,107 @@ function countCodeLines(code: string) {
 }
 
 const codeLineCount = computed(() => countCodeLines(displayCode.value))
-const logicalCodeLines = computed(() => {
-  const code = displayCode.value
-  const lines = code.split(/(?<=\n)|(?<=\r)(?!\n)/)
+
+// Logical-line split cache (append-only streaming fast path). See
+// getLogicalCodeLines below for the exactness argument.
+let logicalPrevCode: string | null = null
+let logicalPrevLines: string[] = []
+/**
+ * Equivalent to `code.split(/(?<=\n)|(?<=\r)(?!\n)/)` plus the legacy trailing
+ * empty entry when the code ends on a line break, but O(append) on pure-append
+ * streaming instead of O(document) per commit.
+ *
+ * Boundary rule (zero-width): an entry ends AFTER every `\n` and after every
+ * `\r` NOT followed by `\n`. Verified V8 reference points:
+ *   'a' -> ['a']; 'a\n' -> ['a\n']; 'a\r\nb' -> ['a\r\n', 'b'];
+ *   'a\rb' -> ['a\r', 'b']; '' -> [''].
+ *
+ * On a pure append, prev's entries survive verbatim (no boundary can appear
+ * inside a finalized entry) except one seam case: prev ending in a lone `\r`
+ * merges with appended text starting with `\n`, because CRLF spans the append
+ * point. That final entry is dropped and rescanned from its first character.
+ */
+function getLogicalCodeLines(code: string): string[] {
+  // null marks "never computed" so an empty display still takes the full path
+  // once and yields the legacy [''] reference shape.
+  if (logicalPrevCode !== null && code === logicalPrevCode)
+    return logicalPrevLines
+
+  let resumeOffset = 0
+  let lines: string[]
+  const isPureAppend = logicalPrevCode !== null && logicalPrevCode.length > 0
+    && code.length > logicalPrevCode.length
+    && code.startsWith(logicalPrevCode)
+  if (!isPureAppend) {
+    lines = []
+    resumeOffset = 0
+  }
+  else if (!(logicalPrevCode.endsWith('\r') && code[logicalPrevCode.length] === '\n')) {
+    // Entries before the append point are unchanged verbatim — except prev's
+    // trailing legacy '' entry: it exists only because prev ENDED on a line
+    // break, and appended content replaces that would-be empty tail entry
+    // (e.g. 'abc\n' + 'def' → ['abc\n','def'], never ['abc\n','','def']).
+    lines = logicalPrevLines.slice()
+    if (lines.length > 0 && lines[lines.length - 1] === '')
+      lines.pop()
+    resumeOffset = logicalPrevCode.length
+    // If the last surviving entry is still OPEN (not closed by its own \n or
+    // lone-\r boundary), appended text continues that entry: pop it and let
+    // the tail scan re-emit it starting from its own first character, so any
+    // boundary inside the append (CRLF glue, trailing \n) closes it exactly
+    // where a full split would.
+    const lastEntryLength = lines.length > 0 ? lines[lines.length - 1]!.length : 0
+    const lastIsClosed = lines.length > 0
+      && (lines[lines.length - 1]!.endsWith('\n') || lines[lines.length - 1] === '')
+    if (lines.length > 0 && !lastIsClosed) {
+      resumeOffset = logicalPrevCode.length - lastEntryLength
+      lines.pop()
+    }
+  }
+  else {
+    // prev ends in a dangling `\r` and the append starts with `\n`: CRLF
+    // spans the seam, so the entry holding that `\r` is actually still open.
+    // Drop it (plus the legacy '' entry, which always follows here) and
+    // rescan from the ENTRY's first character so its full `…中a\r\n`-style
+    // merged segment is rebuilt below — not just from the `\r` itself, which
+    // would lose any content preceding it inside that entry.
+    const droppedEntry = logicalPrevLines[logicalPrevLines.length - 2]!
+    lines = logicalPrevLines.slice(0, -2)
+    resumeOffset = logicalPrevCode.length - droppedEntry.length
+  }
+
+  // Tail scan from resumeOffset. With the open-entry rewind above, this scan
+  // always starts on a fresh segment boundary (either resumeOffset === 0, an
+  // entry start, or right after a boundary), so plain push-per-boundary
+  // matches the reference split exactly.
+  let segmentStart = resumeOffset
+  for (let index = segmentStart; index < code.length; index++) {
+    const char = code[index]
+    if (char === '\n') {
+      lines.push(code.slice(segmentStart, index + 1))
+      segmentStart = index + 1
+    }
+    else if (char === '\r' && code[index + 1] !== '\n') {
+      lines.push(code.slice(segmentStart, index + 1))
+      segmentStart = index + 1
+    }
+  }
+
+  if (segmentStart < code.length)
+    lines.push(code.slice(segmentStart))
+
+  if (lines.length === 0)
+    lines.push('')
+
   if (/(?:\r\n|\n|\r)$/.test(code))
     lines.push('')
+
+  logicalPrevCode = code
+  logicalPrevLines = lines
   return lines
-})
+}
+
+const logicalCodeLines = computed(() => getLogicalCodeLines(displayCode.value))
 
 const isDiffPreview = computed(() => props.showLineNumbers === true && props.node?.diff === true)
 
@@ -126,11 +220,26 @@ const reservedHeightStyle = computed(() => {
   }
 })
 
+// Repeated evaluations during streaming re-derive the line-number width from
+// the same sources; memoize the two splits by string identity with a small
+// FIFO bound so they are not re-split every frame.
+const splitDiffSourceCache = new Map<string, string[]>()
+const SPLIT_DIFF_SOURCE_CACHE_MAX = 8
 function splitDiffSource(source: unknown) {
   const code = getDisplayCode(source, isLoading.value)
   if (!code)
     return []
-  return code.split(/\r\n|\n|\r/)
+  const cached = splitDiffSourceCache.get(code)
+  if (cached)
+    return cached
+  const lines = code.split(/\r\n|\n|\r/)
+  splitDiffSourceCache.set(code, lines)
+  if (splitDiffSourceCache.size > SPLIT_DIFF_SOURCE_CACHE_MAX) {
+    const oldest = splitDiffSourceCache.keys().next().value
+    if (oldest !== undefined)
+      splitDiffSourceCache.delete(oldest)
+  }
+  return lines
 }
 
 const diffPreviewPanes = computed(() => {

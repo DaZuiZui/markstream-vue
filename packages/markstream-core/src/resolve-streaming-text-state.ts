@@ -61,8 +61,6 @@ export function resolveStreamingTextUpdate({
   typewriterEnabled,
   streamRenderVersionChanged = false,
 }: ResolveStreamingTextUpdateOptions): StreamingTextStateResult {
-  const renderedContent = `${currentState.settledContent}${currentState.streamedDelta}`
-
   if (!typewriterEnabled) {
     return {
       settledContent: nextContent,
@@ -70,6 +68,12 @@ export function resolveStreamingTextUpdate({
       appended: false,
     }
   }
+
+  // Skip the O(n) template-literal concat when there is no active delta: the
+  // result would equal settledContent exactly, so reuse it without copying.
+  const renderedContent = currentState.streamedDelta
+    ? `${currentState.settledContent}${currentState.streamedDelta}`
+    : currentState.settledContent
 
   // Framework replay guards (e.g. React StrictMode) may replay effects with
   // the same props while the delta animation is still active. Preserve the

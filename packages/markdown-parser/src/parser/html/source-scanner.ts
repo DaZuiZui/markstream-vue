@@ -1,8 +1,51 @@
 import type { ParsedNode } from '../../types'
 import { VOID_HTML_TAGS } from '../../htmlTags'
-import { escapeTagForRegExp, findTagCloseIndexOutsideQuotes } from '../../htmlTagUtils'
+import { escapeTagForRegExp } from '../../htmlTagUtils'
+import { getCachedRegex } from '../regex-cache'
 
 const NOT_WHITESPACE = /\S/
+const STARTS_LIKE_HTML_DOCUMENT_RE = /^(?:<!doctype\s+html[^>]*>\s*)?<html(?:\s[^>]*)?>/i
+const ENDS_WITH_HTML_CLOSE_RE = /<\/html>\s*$/i
+// Markup shapes whose "tag" is not an element name (comments, CDATA, doctypes,
+// processing instructions).
+const NON_ELEMENT_MARKUP_START_RE = /^<\s*[!?]/
+const MARKUP_TAG_NAME_RE = /^([A-Z][\w:-]*)/i
+const SELF_CLOSING_END_RE = /\/\s*>$/
+
+/**
+ * Quote-state scan equivalent to `findTagCloseIndexOutsideQuotes(source.slice(start))`
+ * but walking the original string with an index cursor, so a long tail after
+ * each `<` never materializes as a fresh O(rest-of-document) substring.
+ *
+ * The quote-state machine mirrors htmlTagUtils.findTagCloseIndexOutsideQuotes
+ * exactly: backslash escapes skip the next character, single/double quotes are
+ * tracked independently, and the first unquoted `>` wins. Returns an absolute
+ * source index (or -1).
+ */
+function findTagCloseIndexOutsideQuotesFrom(source: string, start: number): number {
+  let inSingle = false
+  let inDouble = false
+
+  for (let i = start; i < source.length; i++) {
+    const ch = source[i]
+    if (ch === '\\') {
+      i++
+      continue
+    }
+    if (!inDouble && ch === '\'') {
+      inSingle = !inSingle
+      continue
+    }
+    if (!inSingle && ch === '"') {
+      inDouble = !inDouble
+      continue
+    }
+    if (!inSingle && !inDouble && ch === '>')
+      return i
+  }
+
+  return -1
+}
 
 export function parseStandaloneHtmlDocument(markdown: string): ParsedNode[] | null {
   // Fast path: streaming markdown almost never starts like an HTML document.
@@ -17,8 +60,8 @@ export function parseStandaloneHtmlDocument(markdown: string): ParsedNode[] | nu
   if (!trimmed)
     return null
 
-  const startsLikeHtmlDocument = /^(?:<!doctype\s+html[^>]*>\s*)?<html(?:\s[^>]*)?>/i.test(trimmed)
-  const endsWithHtmlClose = /<\/html>\s*$/i.test(trimmed)
+  const startsLikeHtmlDocument = STARTS_LIKE_HTML_DOCUMENT_RE.test(trimmed)
+  const endsWithHtmlClose = ENDS_WITH_HTML_CLOSE_RE.test(trimmed)
   if (!startsLikeHtmlDocument || !endsWithHtmlClose)
     return null
 
@@ -50,7 +93,10 @@ export function isCloseOnlyHtmlBlockForTag(node: ParsedNode, tag: string) {
     return false
 
   const raw = String(node.raw ?? node.content ?? '')
-  return new RegExp(String.raw`^\s*<\s*\/\s*${escapeTagForRegExp(tag)}\s*>\s*$`, 'i').test(raw)
+  return getCachedRegex(
+    String.raw`^\s*<\s*\/\s*${escapeTagForRegExp(tag)}\s*>\s*$`,
+    'i',
+  ).test(raw)
 }
 
 const RAW_TEXT_HTML_TAGS = new Set(['iframe', 'script', 'style', 'textarea', 'title'])
@@ -81,13 +127,13 @@ export function findNextHtmlBlockFromSource(source: string, tag: string, startIn
       }
     }
 
-    const endRel = findTagCloseIndexOutsideQuotes(source.slice(start))
-    if (endRel === -1)
+    const closeIndex = findTagCloseIndexOutsideQuotesFrom(source, start)
+    if (closeIndex === -1)
       return null
 
-    const end = start + endRel + 1
+    const end = closeIndex + 1
     const raw = source.slice(start, end)
-    if (/^<\s*[!?]/.test(raw)) {
+    if (NON_ELEMENT_MARKUP_START_RE.test(raw)) {
       return {
         closing: false,
         end,
@@ -100,7 +146,7 @@ export function findNextHtmlBlockFromSource(source: string, tag: string, startIn
     const closing = body.startsWith('/')
     if (closing)
       body = body.slice(1).trimStart()
-    const tagMatch = body.match(/^([A-Z][\w:-]*)/i)
+    const tagMatch = body.match(MARKUP_TAG_NAME_RE)
     if (!tagMatch?.[1]) {
       return {
         closing: false,
@@ -113,13 +159,16 @@ export function findNextHtmlBlockFromSource(source: string, tag: string, startIn
     return {
       closing,
       end,
-      selfClosing: /\/\s*>$/.test(raw),
+      selfClosing: SELF_CLOSING_END_RE.test(raw),
       tag: tagMatch[1].toLowerCase(),
     }
   }
 
   const findRawTextClose = (rawTextTag: string, from: number) => {
-    const closeRe = new RegExp(String.raw`<\s*\/\s*${escapeTagForRegExp(rawTextTag)}(?=\s|>)`, 'gi')
+    const closeRe = getCachedRegex(
+      String.raw`<\s*\/\s*${escapeTagForRegExp(rawTextTag)}(?=\s|>)`,
+      'gi',
+    )
     closeRe.lastIndex = from
     const match = closeRe.exec(source)
     if (!match || match.index == null)
@@ -155,7 +204,7 @@ export function findNextHtmlBlockFromSource(source: string, tag: string, startIn
     return null
 
   const openTag = source.slice(start, openEnd + 1)
-  if (VOID_HTML_TAGS.has(lowerTag) || /\/\s*>$/.test(openTag)) {
+  if (VOID_HTML_TAGS.has(lowerTag) || SELF_CLOSING_END_RE.test(openTag)) {
     return {
       raw: openTag,
       start,
@@ -308,7 +357,10 @@ export function extendHtmlBlockCloseToLineEnding(source: string, startIndex: num
 }
 
 export function findLastClosingTagStart(raw: string, tag: string) {
-  const closeRe = new RegExp(String.raw`<\s*\/\s*${escapeTagForRegExp(tag)}(?=\s|>)`, 'gi')
+  const closeRe = getCachedRegex(
+    String.raw`<\s*\/\s*${escapeTagForRegExp(tag)}(?=\s|>)`,
+    'gi',
+  )
   let last = -1
   let match: RegExpExecArray | null
 

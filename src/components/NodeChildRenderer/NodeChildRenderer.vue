@@ -6,12 +6,6 @@ import { computed, defineAsyncComponent, inject } from 'vue'
 import { getCustomNodeAttrs } from '../../utils/htmlRenderer'
 import { isReservedNodeComponentKey, useCustomNodeComponents } from '../../utils/nodeComponents'
 
-interface NodeChild {
-  type: string
-  raw?: string
-  [key: string]: unknown
-}
-
 const props = withDefaults(defineProps<{
   node: NodeChild
   components: Record<string, Component | undefined>
@@ -21,6 +15,19 @@ const props = withDefaults(defineProps<{
 }>(), {
   fallbackToText: false,
 })
+
+// Hoisted to module scope: mounting one async wrapper per inline node would
+// otherwise allocate a fresh component definition + state per instance.
+const StructuredNodeRenderer = defineAsyncComponent({
+  loader: () => import('../NodeRenderer'),
+  suspensible: false,
+})
+
+interface NodeChild {
+  type: string
+  raw?: string
+  [key: string]: unknown
+}
 
 const overrides = useCustomNodeComponents(() => props.customId)
 const inheritedHtmlPolicy = inject<{ value?: HtmlPolicy } | undefined>('markstreamHtmlPolicy', undefined)
@@ -33,10 +40,6 @@ const nestedRendererProps = computed<Partial<NodeRendererProps>>(() => {
     customId: props.customId ?? inherited.customId,
     htmlPolicy: resolvedHtmlPolicy.value,
   }
-})
-const StructuredNodeRenderer = defineAsyncComponent({
-  loader: () => import('../NodeRenderer'),
-  suspensible: false,
 })
 
 const component = computed(() => props.components[String(props.node.type)])

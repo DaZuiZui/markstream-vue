@@ -27,13 +27,6 @@ import SubscriptNode from '../SubscriptNode'
 import SuperscriptNode from '../SuperscriptNode'
 import TextNode from '../TextNode'
 
-// Define the type for the node children
-interface NodeChild {
-  type: string
-  raw: string
-  [key: string]: unknown
-}
-
 const props = defineProps<{
   node: {
     type: 'paragraph'
@@ -46,6 +39,20 @@ const props = defineProps<{
   parseOptions?: NodeRendererProps['parseOptions']
   customMarkdownIt?: NodeRendererProps['customMarkdownIt']
 }>()
+
+// Hoisted to module scope: one async wrapper shared by every paragraph instead
+// of a fresh component definition + state per paragraph instance.
+const StructuredNodeRenderer = defineAsyncComponent({
+  loader: () => import('../NodeRenderer'),
+  suspensible: false,
+})
+
+// Define the type for the node children
+interface NodeChild {
+  type: string
+  raw: string
+  [key: string]: unknown
+}
 
 const overrides = useCustomNodeComponents(() => props.customId)
 const inheritedHtmlPolicy = inject<{ value?: HtmlPolicy } | undefined>('markstreamHtmlPolicy', undefined)
@@ -67,10 +74,6 @@ const nestedRendererProps = computed<Partial<NodeRendererProps>>(() => {
     customMarkdownIt: resolvedCustomMarkdownIt.value,
     htmlPolicy: resolvedHtmlPolicy.value,
   }
-})
-const StructuredNodeRenderer = defineAsyncComponent({
-  loader: () => import('../NodeRenderer'),
-  suspensible: false,
 })
 
 function isWhitespaceText(child: NodeChild) {

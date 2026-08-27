@@ -1,11 +1,12 @@
 import type { CodeBlockNode, MarkdownToken } from '../../types'
+import { getCachedRegex } from '../regex-cache'
 
 // A trailing line made only of the fence's own marker character is
 // ambiguous while streaming: one or two backticks may be the prefix of a
 // three-backtick closing fence. Withhold that line until the parser can prove
 // whether it is a close or literal code so the prefix does not flash in <pre>.
 function TRAILING_OWN_FENCE_CANDIDATE_LINE_RE(marker: string) {
-  return new RegExp(`(?:^|\\r\\n|\\n|\\r) {0,3}${marker}+[ \\t]*$`)
+  return getCachedRegex(`(?:^|\\r\\n|\\n|\\r) {0,3}${marker}+[ \\t]*$`)
 }
 
 // Unified diff metadata/header line prefixes to skip when splitting a diff
