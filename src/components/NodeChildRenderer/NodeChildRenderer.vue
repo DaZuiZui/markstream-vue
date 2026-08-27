@@ -2,9 +2,16 @@
 import type { HtmlPolicy } from 'stream-markdown-parser'
 import type { Component } from 'vue'
 import type { NodeRendererProps } from '../../types/node-renderer-props'
-import { computed, defineAsyncComponent, inject } from 'vue'
+import { computed, inject } from 'vue'
 import { getCustomNodeAttrs } from '../../utils/htmlRenderer'
 import { isReservedNodeComponentKey, useCustomNodeComponents } from '../../utils/nodeComponents'
+import { StructuredNodeRenderer } from '../NodeRenderer/structuredAsyncComponent'
+
+interface NodeChild {
+  type: string
+  raw?: string
+  [key: string]: unknown
+}
 
 const props = withDefaults(defineProps<{
   node: NodeChild
@@ -15,19 +22,6 @@ const props = withDefaults(defineProps<{
 }>(), {
   fallbackToText: false,
 })
-
-// Hoisted to module scope: mounting one async wrapper per inline node would
-// otherwise allocate a fresh component definition + state per instance.
-const StructuredNodeRenderer = defineAsyncComponent({
-  loader: () => import('../NodeRenderer'),
-  suspensible: false,
-})
-
-interface NodeChild {
-  type: string
-  raw?: string
-  [key: string]: unknown
-}
 
 const overrides = useCustomNodeComponents(() => props.customId)
 const inheritedHtmlPolicy = inject<{ value?: HtmlPolicy } | undefined>('markstreamHtmlPolicy', undefined)

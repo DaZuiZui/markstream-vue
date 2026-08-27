@@ -5637,7 +5637,6 @@ interface RenderedItemLike {
 interface RenderedItemCacheEntry {
   signature: unknown[]
   item: RenderedItemLike
-  index: number
 }
 
 // P1-6: cache the fully-built render item per parsed node reference. The
@@ -5665,10 +5664,6 @@ let lastRenderedItemGlobalSignature: readonly unknown[] | null = null
 // evaluation. Reused verbatim on no-op commits so Vue skips the v-for re-render
 // instead of diffing a freshly sliced array of identical items.
 let lastRenderedItemsArray: RenderedItemLike[] = []
-// Virtualized-path twin of `lastRenderedItemsArray`, kept separate so a
-// virtualization-mode switch can never leak a window-sized array into the
-// non-virtual no-op early-return above.
-let lastVirtualItemsArray: RenderedItemLike[] | null = null
 
 /**
  * Signature of all renderer-level (node-independent) inputs a rendered item
@@ -5925,7 +5920,7 @@ function buildRenderedItem(item: { node: ParsedNode, index: number }, globalSign
     indexKey,
     vnodeKey: `${rendererSessionIdentity.value}\u0000${item.index}\u0000${node.type}`,
   }
-  renderedItemCache.set(item.node, { signature: cacheSignature, item: renderedItem, index: item.index })
+  renderedItemCache.set(item.node, { signature: cacheSignature, item: renderedItem })
   return renderedItem
 }
 
@@ -5942,31 +5937,8 @@ const renderedItems = computed(() => {
   const globalChanged = previousGlobalSignature !== globalSignature
   lastRenderedItemGlobalSignature = globalSignature
 
-  if (virtualizationEnabled.value) {
-    const visible = visibleNodes.value
-    const previousVirtualArray = lastVirtualItemsArray
-    // Every item goes through buildRenderedItem exactly like before, so item
-    // freshness and reactive-dependency tracking are byte-for-byte equivalent
-    // to the unconditional .map() this used to be. The only change is the
-    // RETURNED array identity: when every item resolved to its previously
-    // returned object (all caches hit at their positions), reuse the prior
-    // array instance so Vue skips the keyed v-for diff and function-ref
-    // replays instead of diffing a fresh array of identical wrappers.
-    let unchanged = previousVirtualArray != null && previousVirtualArray.length === visible.length
-      && visible.length > 0
-    const next: RenderedItemLike[] = []
-    next.length = visible.length
-    for (let index = 0; index < visible.length; index++) {
-      const built = buildRenderedItem(visible[index]!, globalSignature)
-      next[index] = built
-      if (previousVirtualArray?.[index] !== built)
-        unchanged = false
-    }
-    // Virtual reuse cache lives outside reactivity on purpose; the eslint
-    // rule only tracks direct reactive mutations inside computeds.
-    lastVirtualItemsArray = next
-    return unchanged ? previousVirtualArray : next
-  }
+  if (virtualizationEnabled.value)
+    return visibleNodes.value.map(item => buildRenderedItem(item, globalSignature))
 
   const nodes = parsedNodes.value
   const total = nodes.length

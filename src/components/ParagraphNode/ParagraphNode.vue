@@ -2,7 +2,7 @@
 import type { HtmlPolicy } from 'stream-markdown-parser'
 import type { NodeRendererProps } from '../../types/node-renderer-props'
 import { normalizeCustomHtmlTags } from 'stream-markdown-parser'
-import { computed, defineAsyncComponent, inject } from 'vue'
+import { computed, inject } from 'vue'
 import { getCustomNodeAttrs, getHtmlTagFromContent, shouldRenderUnknownHtmlTagAsText } from '../../utils/htmlRenderer'
 import { isReservedNodeComponentKey, useCustomNodeComponents } from '../../utils/nodeComponents'
 import CheckboxNode from '../CheckboxNode'
@@ -19,6 +19,7 @@ import InlineCodeNode from '../InlineCodeNode'
 import InsertNode from '../InsertNode'
 import LinkNode from '../LinkNode'
 import { MathInlineNodeAsync } from '../NodeRenderer/asyncComponent'
+import { StructuredNodeRenderer } from '../NodeRenderer/structuredAsyncComponent'
 import ReferenceNode from '../ReferenceNode'
 import { getPlainTextContent } from '../SimpleInlineRenderer/simpleInline'
 import StrikethroughNode from '../StrikethroughNode'
@@ -26,6 +27,13 @@ import StrongNode from '../StrongNode'
 import SubscriptNode from '../SubscriptNode'
 import SuperscriptNode from '../SuperscriptNode'
 import TextNode from '../TextNode'
+
+// Define the type for the node children
+interface NodeChild {
+  type: string
+  raw: string
+  [key: string]: unknown
+}
 
 const props = defineProps<{
   node: {
@@ -39,20 +47,6 @@ const props = defineProps<{
   parseOptions?: NodeRendererProps['parseOptions']
   customMarkdownIt?: NodeRendererProps['customMarkdownIt']
 }>()
-
-// Hoisted to module scope: one async wrapper shared by every paragraph instead
-// of a fresh component definition + state per paragraph instance.
-const StructuredNodeRenderer = defineAsyncComponent({
-  loader: () => import('../NodeRenderer'),
-  suspensible: false,
-})
-
-// Define the type for the node children
-interface NodeChild {
-  type: string
-  raw: string
-  [key: string]: unknown
-}
 
 const overrides = useCustomNodeComponents(() => props.customId)
 const inheritedHtmlPolicy = inject<{ value?: HtmlPolicy } | undefined>('markstreamHtmlPolicy', undefined)

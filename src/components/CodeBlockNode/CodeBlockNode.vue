@@ -1669,47 +1669,23 @@ let lastEditorLayoutWidth = 0
 let lastEditorLayoutHeight = 0
 const SCROLL_PARENT_OVERFLOW_RE = /auto|scroll|overlay/i
 
-// Ancestor structure rarely mutates, and walking ancestors with getComputedStyle
-// on every height-sync tick forces style resolution. Memoize the resolved root
-// per (container -> direct parent) pair so dynamic reparenting still invalidates.
-const scrollRootElementCache = new WeakMap<HTMLElement, WeakMap<HTMLElement | null, HTMLElement | null>>()
-
 function resolveScrollRootElement(node?: HTMLElement | null) {
   if (typeof window === 'undefined')
     return null
   const doc = node?.ownerDocument ?? document
   const scrollRoot = (doc.scrollingElement || doc.documentElement || doc.body) as HTMLElement | null
-  // Reading .parentElement stays live (no layout cost); only the expensive
-  // ancestor overflow walk is cached.
-  const parent = node?.parentElement ?? null
-  if (!node)
-    return scrollRoot
-  // No ancestors to walk -> identical to the uncached loop (returns scrollRoot).
-  // Also keeps null out of WeakMap keys (invalid key would throw).
-  if (!parent)
-    return scrollRoot
-  let byParent = scrollRootElementCache.get(node)
-  if (!byParent) {
-    byParent = new WeakMap()
-    scrollRootElementCache.set(node, byParent)
-  }
-  if (byParent.has(parent))
-    return byParent.get(parent) ?? null
-  let current = parent
+  let current = node?.parentElement ?? null
   while (current) {
     if (current === doc.body || current === scrollRoot)
       break
     const style = window.getComputedStyle(current)
     const overflowY = (style.overflowY || '').toLowerCase()
     const overflow = (style.overflow || '').toLowerCase()
-    if (SCROLL_PARENT_OVERFLOW_RE.test(overflowY) || SCROLL_PARENT_OVERFLOW_RE.test(overflow)) {
-      break
-    }
+    if (SCROLL_PARENT_OVERFLOW_RE.test(overflowY) || SCROLL_PARENT_OVERFLOW_RE.test(overflow))
+      return current
     current = current.parentElement
   }
-  const resolved = current && current !== doc.body && current !== scrollRoot ? current : scrollRoot
-  byParent.set(parent, resolved)
-  return resolved
+  return scrollRoot
 }
 
 function isExternallyManagedScroll(container: HTMLElement) {
@@ -1873,17 +1849,14 @@ function syncInlineFoldProxies() {
   clearInlineFoldProxies()
 }
 
-function scheduleEditorHeightSync(allowDuringStreamingDiff: boolean | EditorHostHeightSyncOptions = false) {
+function scheduleEditorHeightSync(allowDuringStreamingDiff = false) {
   if (isUnmounted || deferredHeightSyncRafId != null)
     return
-  const syncOptions: EditorHostHeightSyncOptions = typeof allowDuringStreamingDiff === 'object'
-    ? allowDuringStreamingDiff
-    : {}
   const sync = () => {
     if (isUnmounted)
       return
     syncInlineFoldProxies()
-    syncEditorHostHeight(syncOptions)
+    syncEditorHostHeight(allowDuringStreamingDiff)
     layoutEditorToHost()
   }
   deferredHeightSyncRafId = safeRaf(() => {
@@ -1945,16 +1918,10 @@ function applyCollapsedContainerHeight(
     clearEstimatedFloor?: boolean
     allowBelowEstimatedFloor?: boolean
     preserveScrollableOverflow?: boolean
-    /**
-     * Diff height already measured earlier in the same synchronous pass.
-     * Presence of the key (even when undefined/null) marks the value as
-     * pre-measured and skips the second forced-layout read.
-     */
     renderedStreamingDiffHeight?: number | null
   } = {},
 ) {
   const streamingGuardActive = isDiff.value && props.loading !== false
-  // Reuse a measurement taken earlier in the same synchronous pass instead of forcing a second layout.
   const renderedStreamingDiffHeight = 'renderedStreamingDiffHeight' in options
     ? (streamingGuardActive ? (options.renderedStreamingDiffHeight ?? null) : null)
     : (streamingGuardActive ? measureRenderedDiffHeight(container) : null)
@@ -2059,10 +2026,10 @@ function bindEditorHeightSync() {
         )
         if (!shouldSync)
           return
-        // Coalesce per-mutation-burst inline syncs into one scheduled rAF pass
-        // (single-flight via deferredHeightSyncRafId) instead of forcing layout
-        // for every record batch.
-        scheduleEditorHeightSync({ preferModelDiffHeight: true })
+        syncInlineFoldProxies()
+        syncEditorHostHeight({ preferModelDiffHeight: true })
+        layoutEditorToHost()
+        scheduleStreamingDiffHeightChase()
       })
       observer.observe(host, {
         attributeFilter: ['class'],
@@ -2123,7 +2090,6 @@ function updateCollapsedHeight(options: EditorHostHeightSyncOptions = {}) {
       return
 
     const oldHeight = container.getBoundingClientRect().height
-    // Same synchronous pass: reuse the already-read border-box height instead of forcing a second layout.
     const currentRectHeight = Math.ceil(oldHeight || 0)
 
     const max = getMaxHeightValue()
@@ -2237,8 +2203,6 @@ function updateCollapsedHeight(options: EditorHostHeightSyncOptions = {}) {
         clearEstimatedFloor: true,
         allowBelowEstimatedFloor: allowBelowPlainEstimatedFloor || allowBelowStreamingDiffEstimatedFloor,
         preserveScrollableOverflow: shouldRestoreScrollableOverflow(container),
-        // Same synchronous chain: reuse the measurement taken above instead of forcing
-        // a second forced-layout read inside applyCollapsedContainerHeight.
         renderedStreamingDiffHeight: measuredDiffHeight,
       })
       adjustScrollAfterHeightChange(container, oldHeight, h)

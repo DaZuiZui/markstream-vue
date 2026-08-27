@@ -2,11 +2,11 @@ export function escapeTagForRegExp(tag: string) {
   return tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-export function findTagCloseIndexOutsideQuotes(input: string) {
+export function findTagCloseIndexOutsideQuotes(input: string, start = 0) {
   let inSingle = false
   let inDouble = false
 
-  for (let i = 0; i < input.length; i++) {
+  for (let i = start; i < input.length; i++) {
     const ch = input[i]
     if (ch === '\\') {
       i++

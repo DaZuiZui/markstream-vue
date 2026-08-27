@@ -62,106 +62,45 @@ function countCodeLines(code: string) {
 
 const codeLineCount = computed(() => countCodeLines(displayCode.value))
 
-// Logical-line split cache (append-only streaming fast path). See
-// getLogicalCodeLines below for the exactness argument.
-let logicalPrevCode: string | null = null
+let logicalPrevCode = ''
 let logicalPrevLines: string[] = []
-/**
- * Equivalent to `code.split(/(?<=\n)|(?<=\r)(?!\n)/)` plus the legacy trailing
- * empty entry when the code ends on a line break, but O(append) on pure-append
- * streaming instead of O(document) per commit.
- *
- * Boundary rule (zero-width): an entry ends AFTER every `\n` and after every
- * `\r` NOT followed by `\n`. Verified V8 reference points:
- *   'a' -> ['a']; 'a\n' -> ['a\n']; 'a\r\nb' -> ['a\r\n', 'b'];
- *   'a\rb' -> ['a\r', 'b']; '' -> [''].
- *
- * On a pure append, prev's entries survive verbatim (no boundary can appear
- * inside a finalized entry) except one seam case: prev ending in a lone `\r`
- * merges with appended text starting with `\n`, because CRLF spans the append
- * point. That final entry is dropped and rescanned from its first character.
- */
-function getLogicalCodeLines(code: string): string[] {
-  // null marks "never computed" so an empty display still takes the full path
-  // once and yields the legacy [''] reference shape.
-  if (logicalPrevCode !== null && code === logicalPrevCode)
-    return logicalPrevLines
+let logicalStableLineCount = 0
+let logicalTailStart = 0
+const LOGICAL_LINE_SPLIT_RE = /(?<=\n)|(?<=\r)(?!\n)/
 
-  let resumeOffset = 0
-  let lines: string[]
-  const isPureAppend = logicalPrevCode !== null && logicalPrevCode.length > 0
-    && code.length > logicalPrevCode.length
-    && code.startsWith(logicalPrevCode)
-  if (!isPureAppend) {
-    lines = []
-    resumeOffset = 0
+function getLogicalCodeLines(code: string): string[] {
+  const isPureAppend = code.length > logicalPrevCode.length && code.startsWith(logicalPrevCode)
+  const lines = isPureAppend ? logicalPrevLines : []
+  const segmentStart = isPureAppend ? logicalTailStart : 0
+  if (isPureAppend)
+    lines.length = logicalStableLineCount
+
+  for (const line of code.slice(segmentStart).split(LOGICAL_LINE_SPLIT_RE))
+    lines.push(line)
+
+  const lastChar = code[code.length - 1]
+  if (lastChar === '\r') {
+    logicalStableLineCount = lines.length - 1
+    logicalTailStart = code.length - lines[lines.length - 1]!.length
+    lines.push('')
   }
-  else if (!(logicalPrevCode.endsWith('\r') && code[logicalPrevCode.length] === '\n')) {
-    // Entries before the append point are unchanged verbatim — except prev's
-    // trailing legacy '' entry: it exists only because prev ENDED on a line
-    // break, and appended content replaces that would-be empty tail entry
-    // (e.g. 'abc\n' + 'def' → ['abc\n','def'], never ['abc\n','','def']).
-    lines = logicalPrevLines.slice()
-    if (lines.length > 0 && lines[lines.length - 1] === '')
-      lines.pop()
-    resumeOffset = logicalPrevCode.length
-    // If the last surviving entry is still OPEN (not closed by its own \n or
-    // lone-\r boundary), appended text continues that entry: pop it and let
-    // the tail scan re-emit it starting from its own first character, so any
-    // boundary inside the append (CRLF glue, trailing \n) closes it exactly
-    // where a full split would.
-    const lastEntryLength = lines.length > 0 ? lines[lines.length - 1]!.length : 0
-    const lastIsClosed = lines.length > 0
-      && (lines[lines.length - 1]!.endsWith('\n') || lines[lines.length - 1] === '')
-    if (lines.length > 0 && !lastIsClosed) {
-      resumeOffset = logicalPrevCode.length - lastEntryLength
-      lines.pop()
-    }
+  else if (lastChar === '\n') {
+    logicalStableLineCount = lines.length
+    logicalTailStart = code.length
+    lines.push('')
   }
   else {
-    // prev ends in a dangling `\r` and the append starts with `\n`: CRLF
-    // spans the seam, so the entry holding that `\r` is actually still open.
-    // Drop it (plus the legacy '' entry, which always follows here) and
-    // rescan from the ENTRY's first character so its full `…中a\r\n`-style
-    // merged segment is rebuilt below — not just from the `\r` itself, which
-    // would lose any content preceding it inside that entry.
-    const droppedEntry = logicalPrevLines[logicalPrevLines.length - 2]!
-    lines = logicalPrevLines.slice(0, -2)
-    resumeOffset = logicalPrevCode.length - droppedEntry.length
+    logicalStableLineCount = lines.length - 1
+    logicalTailStart = code.length - lines[lines.length - 1]!.length
   }
-
-  // Tail scan from resumeOffset. With the open-entry rewind above, this scan
-  // always starts on a fresh segment boundary (either resumeOffset === 0, an
-  // entry start, or right after a boundary), so plain push-per-boundary
-  // matches the reference split exactly.
-  let segmentStart = resumeOffset
-  for (let index = segmentStart; index < code.length; index++) {
-    const char = code[index]
-    if (char === '\n') {
-      lines.push(code.slice(segmentStart, index + 1))
-      segmentStart = index + 1
-    }
-    else if (char === '\r' && code[index + 1] !== '\n') {
-      lines.push(code.slice(segmentStart, index + 1))
-      segmentStart = index + 1
-    }
-  }
-
-  if (segmentStart < code.length)
-    lines.push(code.slice(segmentStart))
-
-  if (lines.length === 0)
-    lines.push('')
-
-  if (/(?:\r\n|\n|\r)$/.test(code))
-    lines.push('')
-
   logicalPrevCode = code
   logicalPrevLines = lines
   return lines
 }
 
-const logicalCodeLines = computed(() => getLogicalCodeLines(displayCode.value))
+const logicalCodeLines = computed(() => ({
+  lines: getLogicalCodeLines(displayCode.value),
+}))
 
 const isDiffPreview = computed(() => props.showLineNumbers === true && props.node?.diff === true)
 
@@ -220,26 +159,11 @@ const reservedHeightStyle = computed(() => {
   }
 })
 
-// Repeated evaluations during streaming re-derive the line-number width from
-// the same sources; memoize the two splits by string identity with a small
-// FIFO bound so they are not re-split every frame.
-const splitDiffSourceCache = new Map<string, string[]>()
-const SPLIT_DIFF_SOURCE_CACHE_MAX = 8
 function splitDiffSource(source: unknown) {
   const code = getDisplayCode(source, isLoading.value)
   if (!code)
     return []
-  const cached = splitDiffSourceCache.get(code)
-  if (cached)
-    return cached
-  const lines = code.split(/\r\n|\n|\r/)
-  splitDiffSourceCache.set(code, lines)
-  if (splitDiffSourceCache.size > SPLIT_DIFF_SOURCE_CACHE_MAX) {
-    const oldest = splitDiffSourceCache.keys().next().value
-    if (oldest !== undefined)
-      splitDiffSourceCache.delete(oldest)
-  }
-  return lines
+  return code.split(/\r\n|\n|\r/)
 }
 
 const diffPreviewPanes = computed(() => {
@@ -432,7 +356,7 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
     :data-markstream-line-numbers="props.showLineNumbers ? '1' : undefined"
     data-markstream-pre="1"
     tabindex="0"
-  ><code v-if="isDiffPreview" translate="no" class="markstream-pre__diff-code"><span v-for="pane in diffPreviewPanes" :key="pane.key" class="markstream-pre__diff-pane" :class="pane.className"><span class="markstream-pre__diff-pane-content"><span v-for="(line, index) in pane.lines" :key="line.key" class="markstream-pre__diff-line" :class="[`markstream-pre__diff-line--${line.kind}`, line.metadataKind ? `markstream-pre__diff-line--metadata-${line.metadataKind}` : '', { 'markstream-pre__diff-line--empty': line.empty, 'markstream-pre__diff-line--collapsed-first': line.collapsedFirst === true, 'markstream-pre__diff-line--collapsed-last': line.collapsedLast === true }]" :style="getDiffLineStyle(index, pane.key as 'original' | 'modified')"><span class="markstream-pre__diff-rail" aria-hidden="true" /><span v-if="line.kind === 'collapsed'" class="markstream-pre__diff-collapsed-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.47 5.47a.75.75 0 0 1 1.06 0L8 8.94l3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06" /></svg></span><span class="markstream-pre__diff-number" aria-hidden="true">{{ line.number }}</span><span class="markstream-pre__diff-content"><span class="markstream-pre__diff-content-inner">{{ line.code }}</span></span></span></span></span></code><template v-else><code v-if="wrapsPlainCodeLines()" translate="no" class="markstream-pre__code markstream-pre__code--wrapped"><span v-for="(line, index) in logicalCodeLines" :key="index" class="markstream-pre__logical-line" :data-line-number="index + 1" v-text="line" /></code><template v-else><span v-if="props.showLineNumbers" class="markstream-pre__line-numbers" aria-hidden="true"><span class="markstream-pre__line-numbers-text" v-text="lineNumbersText" /></span><code translate="no" class="markstream-pre__code" v-text="displayCode" /></template></template></pre>
+  ><code v-if="isDiffPreview" translate="no" class="markstream-pre__diff-code"><span v-for="pane in diffPreviewPanes" :key="pane.key" class="markstream-pre__diff-pane" :class="pane.className"><span class="markstream-pre__diff-pane-content"><span v-for="(line, index) in pane.lines" :key="line.key" class="markstream-pre__diff-line" :class="[`markstream-pre__diff-line--${line.kind}`, line.metadataKind ? `markstream-pre__diff-line--metadata-${line.metadataKind}` : '', { 'markstream-pre__diff-line--empty': line.empty, 'markstream-pre__diff-line--collapsed-first': line.collapsedFirst === true, 'markstream-pre__diff-line--collapsed-last': line.collapsedLast === true }]" :style="getDiffLineStyle(index, pane.key as 'original' | 'modified')"><span class="markstream-pre__diff-rail" aria-hidden="true" /><span v-if="line.kind === 'collapsed'" class="markstream-pre__diff-collapsed-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.47 5.47a.75.75 0 0 1 1.06 0L8 8.94l3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06" /></svg></span><span class="markstream-pre__diff-number" aria-hidden="true">{{ line.number }}</span><span class="markstream-pre__diff-content"><span class="markstream-pre__diff-content-inner">{{ line.code }}</span></span></span></span></span></code><template v-else><code v-if="wrapsPlainCodeLines()" translate="no" class="markstream-pre__code markstream-pre__code--wrapped"><span v-for="(line, index) in logicalCodeLines.lines" :key="index" class="markstream-pre__logical-line" :data-line-number="index + 1" v-text="line" /></code><template v-else><span v-if="props.showLineNumbers" class="markstream-pre__line-numbers" aria-hidden="true"><span class="markstream-pre__line-numbers-text" v-text="lineNumbersText" /></span><code translate="no" class="markstream-pre__code" v-text="displayCode" /></template></template></pre>
 </template>
 
 <style>

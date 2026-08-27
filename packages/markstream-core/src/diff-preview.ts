@@ -93,9 +93,6 @@ function reseedMatchCache(cache: DiffMatchCache, original: string[], modified: s
 const DIFF_HEADER_PREFIXES = ['diff ', 'index ', '--- ', '+++ ', '@@ ']
 const NO_NEWLINE_METADATA = '\\ No newline at end of file'
 
-// Hoisted per-call RegExp literals (previously allocated on every
-// displaySource/splitSource/hasFinalNewline call). None carry the /g flag, so
-// .replace/.split/.test are stateless and hoisting is behavior-neutral.
 const TRAILING_NEWLINE_RE = /\r\n$|\n$|\r$/
 const SOURCE_LINE_SPLIT_RE = /\r\n|\n|\r/
 const ENDS_WITH_NEWLINE_RE = /(?:\r\n|\n|\r)$/
@@ -223,25 +220,13 @@ function computeMatches(original: string[], modified: string[], cache?: DiffMatc
     const isolated = deltaOriginal.every(line => !cache.modifiedLines.has(line))
       && deltaModified.every(line => !cache.originalLines.has(line))
     if (isolated) {
-      // Task A decision — keep `matches.concat`: although the isolated append
-      // produces a strictly-growing suffix, the returned array identity is part
-      // of the function's observable contract (`buildInlineSourcePreviewLines`
-      // iterates it immediately, but `cache.matches` must remain a stable,
-      // distinct snapshot for the next frame's `isLinePrefix`+`isolated`
-      // validation). Reusing/pushing onto `cache.matches` would either alias
-      // the returned array with cache state across commits or require copying
-      // anyway; `concat` on an array of already-allocated match objects is O(tail)
-      // per frame and never copies line/match payloads, so keep it.
       const matches = cache.matches.concat(
         computeLcs(deltaOriginal, deltaModified).map(match => ({
           originalIndex: match.originalIndex + cache.original.length,
           modifiedIndex: match.modifiedIndex + cache.modified.length,
         })),
       )
-      // Pure append proven by isLinePrefix above, so instead of reseeding both
-      // full-line Sets via reseedMatchCache (O(prev + tail) with fresh Set
-      // allocations every frame), add only the delta lines to the existing Sets.
-      // The array references (original/modified/matches) are still refreshed.
+      // The prefix check above makes it safe to extend the existing line sets.
       for (const line of deltaOriginal)
         cache.originalLines.add(line)
       for (const line of deltaModified)

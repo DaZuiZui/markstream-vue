@@ -184,6 +184,36 @@ describe('pre code node diff preview', () => {
     wrapper.unmount()
   })
 
+  it('updates an open wrapped line when streaming appends without a line break', async () => {
+    const wrapper = mount(PreCodeNode, {
+      attrs: { class: 'is-wrap' },
+      props: {
+        loading: true,
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'txt',
+          code: 'first',
+          raw: 'first',
+          loading: true,
+        },
+      },
+    })
+
+    await wrapper.setProps({
+      node: {
+        type: 'code_block',
+        language: 'txt',
+        code: 'first second',
+        raw: 'first second',
+        loading: true,
+      },
+    })
+
+    expect(wrapper.get('.markstream-pre__logical-line').text()).toBe('first second')
+    wrapper.unmount()
+  })
+
   it('does not pin streaming pre height to the reserved estimate', () => {
     const wrapper = mount(PreCodeNode, {
       props: {

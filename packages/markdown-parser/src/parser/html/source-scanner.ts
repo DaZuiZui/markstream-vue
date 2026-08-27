@@ -1,6 +1,6 @@
 import type { ParsedNode } from '../../types'
 import { VOID_HTML_TAGS } from '../../htmlTags'
-import { escapeTagForRegExp } from '../../htmlTagUtils'
+import { escapeTagForRegExp, findTagCloseIndexOutsideQuotes } from '../../htmlTagUtils'
 import { getCachedRegex } from '../regex-cache'
 
 const NOT_WHITESPACE = /\S/
@@ -11,41 +11,6 @@ const ENDS_WITH_HTML_CLOSE_RE = /<\/html>\s*$/i
 const NON_ELEMENT_MARKUP_START_RE = /^<\s*[!?]/
 const MARKUP_TAG_NAME_RE = /^([A-Z][\w:-]*)/i
 const SELF_CLOSING_END_RE = /\/\s*>$/
-
-/**
- * Quote-state scan equivalent to `findTagCloseIndexOutsideQuotes(source.slice(start))`
- * but walking the original string with an index cursor, so a long tail after
- * each `<` never materializes as a fresh O(rest-of-document) substring.
- *
- * The quote-state machine mirrors htmlTagUtils.findTagCloseIndexOutsideQuotes
- * exactly: backslash escapes skip the next character, single/double quotes are
- * tracked independently, and the first unquoted `>` wins. Returns an absolute
- * source index (or -1).
- */
-function findTagCloseIndexOutsideQuotesFrom(source: string, start: number): number {
-  let inSingle = false
-  let inDouble = false
-
-  for (let i = start; i < source.length; i++) {
-    const ch = source[i]
-    if (ch === '\\') {
-      i++
-      continue
-    }
-    if (!inDouble && ch === '\'') {
-      inSingle = !inSingle
-      continue
-    }
-    if (!inSingle && ch === '"') {
-      inDouble = !inDouble
-      continue
-    }
-    if (!inSingle && !inDouble && ch === '>')
-      return i
-  }
-
-  return -1
-}
 
 export function parseStandaloneHtmlDocument(markdown: string): ParsedNode[] | null {
   // Fast path: streaming markdown almost never starts like an HTML document.
@@ -127,7 +92,7 @@ export function findNextHtmlBlockFromSource(source: string, tag: string, startIn
       }
     }
 
-    const closeIndex = findTagCloseIndexOutsideQuotesFrom(source, start)
+    const closeIndex = findTagCloseIndexOutsideQuotes(source, start)
     if (closeIndex === -1)
       return null
 
