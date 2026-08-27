@@ -93,14 +93,18 @@ function reseedMatchCache(cache: DiffMatchCache, original: string[], modified: s
 const DIFF_HEADER_PREFIXES = ['diff ', 'index ', '--- ', '+++ ', '@@ ']
 const NO_NEWLINE_METADATA = '\\ No newline at end of file'
 
+const TRAILING_NEWLINE_RE = /\r\n$|\n$|\r$/
+const SOURCE_LINE_SPLIT_RE = /\r\n|\n|\r/
+const ENDS_WITH_NEWLINE_RE = /(?:\r\n|\n|\r)$/
+
 function displaySource(source: unknown, loading: boolean) {
   const value = String(source ?? '')
-  return loading ? value : value.replace(/\r\n$|\n$|\r$/, '')
+  return loading ? value : value.replace(TRAILING_NEWLINE_RE, '')
 }
 
 function splitSource(source: unknown, loading: boolean) {
   const value = displaySource(source, loading)
-  return value ? value.split(/\r\n|\n|\r/) : []
+  return value ? value.split(SOURCE_LINE_SPLIT_RE) : []
 }
 
 function normalizeLanguage(language: unknown) {
@@ -153,7 +157,7 @@ function normalizeDiffBody(body: string, headers: boolean) {
 }
 
 function hasFinalNewline(source: unknown) {
-  return /(?:\r\n|\n|\r)$/.test(String(source ?? ''))
+  return ENDS_WITH_NEWLINE_RE.test(String(source ?? ''))
 }
 
 function createMetadataLine(
@@ -222,7 +226,14 @@ function computeMatches(original: string[], modified: string[], cache?: DiffMatc
           modifiedIndex: match.modifiedIndex + cache.modified.length,
         })),
       )
-      reseedMatchCache(cache, original, modified, matches)
+      // The prefix check above makes it safe to extend the existing line sets.
+      for (const line of deltaOriginal)
+        cache.originalLines.add(line)
+      for (const line of deltaModified)
+        cache.modifiedLines.add(line)
+      cache.original = original
+      cache.modified = modified
+      cache.matches = matches
       return matches
     }
   }
@@ -324,25 +335,17 @@ function buildInlinePatchPreviewLines(lines: string[]): DiffPreviewLine[] {
         originalLine = Number(match[1])
         modifiedLine = Number(match[2])
       }
-      result.push({
-        ...makeLine(raw, 'hunk', `inline-hunk-${index}`, ''),
-      })
+      result.push(makeLine(raw, 'hunk', `inline-hunk-${index}`, ''))
     }
     else if (isRemovedLine(raw)) {
-      result.push({
-        ...makeLine(normalizeDiffBody(raw.slice(1), headers), 'removed', `inline-removed-${index}`, originalLine++, true),
-      })
+      result.push(makeLine(normalizeDiffBody(raw.slice(1), headers), 'removed', `inline-removed-${index}`, originalLine++, true))
     }
     else if (isAddedLine(raw)) {
-      result.push({
-        ...makeLine(normalizeDiffBody(raw.slice(1), headers), 'added', `inline-added-${index}`, modifiedLine++, true),
-      })
+      result.push(makeLine(normalizeDiffBody(raw.slice(1), headers), 'added', `inline-added-${index}`, modifiedLine++, true))
     }
     else {
       const code = headers && raw.startsWith(' ') ? raw.slice(1) : raw
-      result.push({
-        ...makeLine(code, 'context', `inline-context-${index}`, modifiedLine),
-      })
+      result.push(makeLine(code, 'context', `inline-context-${index}`, modifiedLine))
       originalLine++
       modifiedLine++
     }
@@ -367,34 +370,24 @@ function buildInlineSourcePreviewLines(
 
     for (const match of matches) {
       while (originalIndex < match.originalIndex) {
-        result.push({
-          ...makeLine(original[originalIndex], 'removed', `inline-removed-source-${originalIndex}`, originalIndex + 1, shouldPreserveBlankKind(original, originalIndex)),
-        })
+        result.push(makeLine(original[originalIndex], 'removed', `inline-removed-source-${originalIndex}`, originalIndex + 1, shouldPreserveBlankKind(original, originalIndex)))
         originalIndex++
       }
       while (modifiedIndex < match.modifiedIndex) {
-        result.push({
-          ...makeLine(modified[modifiedIndex], 'added', `inline-added-source-${modifiedIndex}`, modifiedIndex + 1, shouldPreserveBlankKind(modified, modifiedIndex)),
-        })
+        result.push(makeLine(modified[modifiedIndex], 'added', `inline-added-source-${modifiedIndex}`, modifiedIndex + 1, shouldPreserveBlankKind(modified, modifiedIndex)))
         modifiedIndex++
       }
-      result.push({
-        ...makeLine(modified[match.modifiedIndex], 'context', `inline-context-source-${match.originalIndex}-${match.modifiedIndex}`, match.modifiedIndex + 1),
-      })
+      result.push(makeLine(modified[match.modifiedIndex], 'context', `inline-context-source-${match.originalIndex}-${match.modifiedIndex}`, match.modifiedIndex + 1))
       originalIndex = match.originalIndex + 1
       modifiedIndex = match.modifiedIndex + 1
     }
 
     while (originalIndex < original.length) {
-      result.push({
-        ...makeLine(original[originalIndex], 'removed', `inline-removed-source-${originalIndex}`, originalIndex + 1, shouldPreserveBlankKind(original, originalIndex)),
-      })
+      result.push(makeLine(original[originalIndex], 'removed', `inline-removed-source-${originalIndex}`, originalIndex + 1, shouldPreserveBlankKind(original, originalIndex)))
       originalIndex++
     }
     while (modifiedIndex < modified.length) {
-      result.push({
-        ...makeLine(modified[modifiedIndex], 'added', `inline-added-source-${modifiedIndex}`, modifiedIndex + 1, shouldPreserveBlankKind(modified, modifiedIndex)),
-      })
+      result.push(makeLine(modified[modifiedIndex], 'added', `inline-added-source-${modifiedIndex}`, modifiedIndex + 1, shouldPreserveBlankKind(modified, modifiedIndex)))
       modifiedIndex++
     }
 
@@ -407,31 +400,23 @@ function buildInlineSourcePreviewLines(
   let modifiedEnd = modified.length - 1
 
   while (start <= originalEnd && start <= modifiedEnd && original[start] === modified[start]) {
-    result.push({
-      ...makeLine(modified[start], 'context', `inline-prefix-${start}`, start + 1),
-    })
+    result.push(makeLine(modified[start], 'context', `inline-prefix-${start}`, start + 1))
     start++
   }
 
   const suffix: DiffPreviewLine[] = []
   while (originalEnd >= start && modifiedEnd >= start && original[originalEnd] === modified[modifiedEnd]) {
-    suffix.unshift({
-      ...makeLine(modified[modifiedEnd], 'context', `inline-suffix-${modifiedEnd}`, modifiedEnd + 1),
-    })
+    suffix.unshift(makeLine(modified[modifiedEnd], 'context', `inline-suffix-${modifiedEnd}`, modifiedEnd + 1))
     originalEnd--
     modifiedEnd--
   }
 
   for (let index = start; index <= originalEnd; index++) {
-    result.push({
-      ...makeLine(original[index], 'removed', `inline-removed-source-${index}`, index + 1, shouldPreserveBlankKind(original, index)),
-    })
+    result.push(makeLine(original[index], 'removed', `inline-removed-source-${index}`, index + 1, shouldPreserveBlankKind(original, index)))
   }
 
   for (let index = start; index <= modifiedEnd; index++) {
-    result.push({
-      ...makeLine(modified[index], 'added', `inline-added-source-${index}`, index + 1, shouldPreserveBlankKind(modified, index)),
-    })
+    result.push(makeLine(modified[index], 'added', `inline-added-source-${index}`, index + 1, shouldPreserveBlankKind(modified, index)))
   }
 
   return result.concat(suffix)
@@ -459,19 +444,11 @@ function buildSideBySideSourcePreviewPanes(
       const nextOriginalIndex = originalIndex + offset
       const nextModifiedIndex = modifiedIndex + offset
       originalLines.push(nextOriginalIndex < originalEnd
-        ? {
-            ...makeLine(originalSourceLines[nextOriginalIndex], 'removed', `original-changed-${blockIndex}-${nextOriginalIndex}`, nextOriginalIndex + 1, shouldPreserveBlankKind(originalSourceLines, nextOriginalIndex)),
-          }
-        : {
-            ...makeLine('', 'spacer', `original-spacer-${blockIndex}-${offset}`, ''),
-          })
+        ? makeLine(originalSourceLines[nextOriginalIndex], 'removed', `original-changed-${blockIndex}-${nextOriginalIndex}`, nextOriginalIndex + 1, shouldPreserveBlankKind(originalSourceLines, nextOriginalIndex))
+        : makeLine('', 'spacer', `original-spacer-${blockIndex}-${offset}`, ''))
       modifiedLines.push(nextModifiedIndex < modifiedEnd
-        ? {
-            ...makeLine(modifiedSourceLines[nextModifiedIndex], 'added', `modified-changed-${blockIndex}-${nextModifiedIndex}`, nextModifiedIndex + 1, shouldPreserveBlankKind(modifiedSourceLines, nextModifiedIndex)),
-          }
-        : {
-            ...makeLine('', 'spacer', `modified-spacer-${blockIndex}-${offset}`, ''),
-          })
+        ? makeLine(modifiedSourceLines[nextModifiedIndex], 'added', `modified-changed-${blockIndex}-${nextModifiedIndex}`, nextModifiedIndex + 1, shouldPreserveBlankKind(modifiedSourceLines, nextModifiedIndex))
+        : makeLine('', 'spacer', `modified-spacer-${blockIndex}-${offset}`, ''))
     }
     originalIndex = originalEnd
     modifiedIndex = modifiedEnd
@@ -480,12 +457,8 @@ function buildSideBySideSourcePreviewPanes(
 
   for (const match of matches) {
     appendChangedBlock(match.originalIndex, match.modifiedIndex)
-    originalLines.push({
-      ...makeLine(originalSourceLines[match.originalIndex], 'context', `original-context-${match.originalIndex}-${match.modifiedIndex}`, match.originalIndex + 1),
-    })
-    modifiedLines.push({
-      ...makeLine(modifiedSourceLines[match.modifiedIndex], 'context', `modified-context-${match.originalIndex}-${match.modifiedIndex}`, match.modifiedIndex + 1),
-    })
+    originalLines.push(makeLine(originalSourceLines[match.originalIndex], 'context', `original-context-${match.originalIndex}-${match.modifiedIndex}`, match.originalIndex + 1))
+    modifiedLines.push(makeLine(modifiedSourceLines[match.modifiedIndex], 'context', `modified-context-${match.originalIndex}-${match.modifiedIndex}`, match.modifiedIndex + 1))
     originalIndex = match.originalIndex + 1
     modifiedIndex = match.modifiedIndex + 1
   }
@@ -496,14 +469,10 @@ function buildSideBySideSourcePreviewPanes(
   if (originalMissing || modifiedMissing) {
     originalLines.push(originalMissing
       ? createMetadataLine('original-no-newline', 'removed')
-      : {
-          ...makeLine('', 'spacer', 'original-no-newline-spacer', ''),
-        })
+      : makeLine('', 'spacer', 'original-no-newline-spacer', ''))
     modifiedLines.push(modifiedMissing
       ? createMetadataLine('modified-no-newline', 'added')
-      : {
-          ...makeLine('', 'spacer', 'modified-no-newline-spacer', ''),
-        })
+      : makeLine('', 'spacer', 'modified-no-newline-spacer', ''))
   }
 
   return collapseDiffPanes([

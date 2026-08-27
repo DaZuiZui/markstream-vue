@@ -2,7 +2,7 @@
 import type { HtmlPolicy } from 'stream-markdown-parser'
 import type { NodeRendererProps } from '../../types/node-renderer-props'
 import { normalizeCustomHtmlTags } from 'stream-markdown-parser'
-import { computed, defineAsyncComponent, inject } from 'vue'
+import { computed, inject } from 'vue'
 import { getCustomNodeAttrs, getHtmlTagFromContent, shouldRenderUnknownHtmlTagAsText } from '../../utils/htmlRenderer'
 import { isReservedNodeComponentKey, useCustomNodeComponents } from '../../utils/nodeComponents'
 import CheckboxNode from '../CheckboxNode'
@@ -19,6 +19,7 @@ import InlineCodeNode from '../InlineCodeNode'
 import InsertNode from '../InsertNode'
 import LinkNode from '../LinkNode'
 import { MathInlineNodeAsync } from '../NodeRenderer/asyncComponent'
+import { StructuredNodeRenderer } from '../NodeRenderer/structuredAsyncComponent'
 import ReferenceNode from '../ReferenceNode'
 import { getPlainTextContent } from '../SimpleInlineRenderer/simpleInline'
 import StrikethroughNode from '../StrikethroughNode'
@@ -67,10 +68,6 @@ const nestedRendererProps = computed<Partial<NodeRendererProps>>(() => {
     customMarkdownIt: resolvedCustomMarkdownIt.value,
     htmlPolicy: resolvedHtmlPolicy.value,
   }
-})
-const StructuredNodeRenderer = defineAsyncComponent({
-  loader: () => import('../NodeRenderer'),
-  suspensible: false,
 })
 
 function isWhitespaceText(child: NodeChild) {

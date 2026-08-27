@@ -61,13 +61,41 @@ function countCodeLines(code: string) {
 }
 
 const codeLineCount = computed(() => countCodeLines(displayCode.value))
-const logicalCodeLines = computed(() => {
-  const code = displayCode.value
-  const lines = code.split(/(?<=\n)|(?<=\r)(?!\n)/)
-  if (/(?:\r\n|\n|\r)$/.test(code))
+
+let logicalPrevCode = ''
+let logicalPrevLines: string[] = []
+let logicalStableLineCount = 0
+let logicalTailStart = 0
+const LOGICAL_LINE_SPLIT_RE = /(?<=\n)|(?<=\r)(?!\n)/
+
+function getLogicalCodeLines(code: string): string[] {
+  const isPureAppend = code.length > logicalPrevCode.length && code.startsWith(logicalPrevCode)
+  const lines = isPureAppend ? logicalPrevLines : []
+  const segmentStart = isPureAppend ? logicalTailStart : 0
+  if (isPureAppend)
+    lines.length = logicalStableLineCount
+
+  for (const line of code.slice(segmentStart).split(LOGICAL_LINE_SPLIT_RE))
+    lines.push(line)
+
+  const lastChar = code[code.length - 1]
+  if (lastChar === '\n') {
+    logicalStableLineCount = lines.length
+    logicalTailStart = code.length
     lines.push('')
+  }
+  else {
+    logicalStableLineCount = lines.length - 1
+    logicalTailStart = code.length - lines[lines.length - 1]!.length
+    if (lastChar === '\r')
+      lines.push('')
+  }
+  logicalPrevCode = code
+  logicalPrevLines = lines
   return lines
-})
+}
+
+const logicalCodeLines = computed(() => getLogicalCodeLines(displayCode.value))
 
 const isDiffPreview = computed(() => props.showLineNumbers === true && props.node?.diff === true)
 

@@ -2,9 +2,10 @@
 import type { HtmlPolicy } from 'stream-markdown-parser'
 import type { Component } from 'vue'
 import type { NodeRendererProps } from '../../types/node-renderer-props'
-import { computed, defineAsyncComponent, inject } from 'vue'
+import { computed, inject } from 'vue'
 import { getCustomNodeAttrs } from '../../utils/htmlRenderer'
 import { isReservedNodeComponentKey, useCustomNodeComponents } from '../../utils/nodeComponents'
+import { StructuredNodeRenderer } from '../NodeRenderer/structuredAsyncComponent'
 
 interface NodeChild {
   type: string
@@ -33,10 +34,6 @@ const nestedRendererProps = computed<Partial<NodeRendererProps>>(() => {
     customId: props.customId ?? inherited.customId,
     htmlPolicy: resolvedHtmlPolicy.value,
   }
-})
-const StructuredNodeRenderer = defineAsyncComponent({
-  loader: () => import('../NodeRenderer'),
-  suspensible: false,
 })
 
 const component = computed(() => props.components[String(props.node.type)])

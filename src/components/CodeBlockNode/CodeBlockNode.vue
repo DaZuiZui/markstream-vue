@@ -1918,11 +1918,13 @@ function applyCollapsedContainerHeight(
     clearEstimatedFloor?: boolean
     allowBelowEstimatedFloor?: boolean
     preserveScrollableOverflow?: boolean
+    renderedStreamingDiffHeight?: number | null
   } = {},
 ) {
-  const renderedStreamingDiffHeight = isDiff.value && props.loading !== false
-    ? measureRenderedDiffHeight(container)
-    : null
+  const streamingGuardActive = isDiff.value && props.loading !== false
+  const renderedStreamingDiffHeight = 'renderedStreamingDiffHeight' in options
+    ? (streamingGuardActive ? (options.renderedStreamingDiffHeight ?? null) : null)
+    : (streamingGuardActive ? measureRenderedDiffHeight(container) : null)
   const resolvedContentHeight = renderedStreamingDiffHeight != null
     && renderedStreamingDiffHeight > contentHeight + PIXEL_EPSILON
     ? renderedStreamingDiffHeight
@@ -2088,9 +2090,10 @@ function updateCollapsedHeight(options: EditorHostHeightSyncOptions = {}) {
       return
 
     const oldHeight = container.getBoundingClientRect().height
+    const currentRectHeight = Math.ceil(oldHeight || 0)
 
     const max = getMaxHeightValue()
-    const rectH = Math.ceil((container.getBoundingClientRect?.().height) || 0)
+    const rectH = currentRectHeight
     const styleH = Number.parseFloat(container.style.height || '')
     const currentHostHeight = rectH > 0
       ? rectH
@@ -2200,6 +2203,7 @@ function updateCollapsedHeight(options: EditorHostHeightSyncOptions = {}) {
         clearEstimatedFloor: true,
         allowBelowEstimatedFloor: allowBelowPlainEstimatedFloor || allowBelowStreamingDiffEstimatedFloor,
         preserveScrollableOverflow: shouldRestoreScrollableOverflow(container),
+        renderedStreamingDiffHeight: measuredDiffHeight,
       })
       adjustScrollAfterHeightChange(container, oldHeight, h)
       return
