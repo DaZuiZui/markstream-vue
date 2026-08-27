@@ -1,12 +1,38 @@
 /**
  * @vitest-environment jsdom
  */
+import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import HtmlBlockNode from '../src/components/HtmlBlockNode/HtmlBlockNode.vue'
 
 describe('htmlBlockNode streaming DOM stability', () => {
+  // Unmount wrappers before the environment tears down. Leaving a mounted
+  // renderer alive lets its pending async-component loads resolve after the
+  // jsdom teardown, which surfaces as an EnvironmentTeardownError unhandled
+  // rejection and fails the whole worker.
+  const wrappers: VueWrapper<any>[] = []
+  afterEach(async () => {
+    while (wrappers.length) {
+      const wrapper = wrappers.pop()
+      if (wrapper) {
+        try {
+          await flushPromises()
+          await nextTick()
+          wrapper.unmount()
+        }
+        catch {}
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+
+  function trackMount(component: any, options: Record<string, unknown>) {
+    const wrapper = mount(component, options as any)
+    wrappers.push(wrapper as VueWrapper<any>)
+    return wrapper
+  }
   it('keeps table element stable while loading content grows', async () => {
     const nodeA = {
       type: 'html_block',
@@ -16,7 +42,7 @@ describe('htmlBlockNode streaming DOM stability', () => {
       loading: true,
     } as const
 
-    const wrapper = mount(HtmlBlockNode, {
+    const wrapper = trackMount(HtmlBlockNode, {
       props: {
         node: nodeA as any,
       },
@@ -47,7 +73,7 @@ describe('htmlBlockNode streaming DOM stability', () => {
       content: '<div><table><tr><td>1</td></tr>',
       loading: true,
     } as const
-    const wrapper = mount(HtmlBlockNode, { props: { node: loadingNode as any } })
+    const wrapper = trackMount(HtmlBlockNode, { props: { node: loadingNode as any } })
     await nextTick()
     const first = wrapper.find('table').element
 
@@ -78,7 +104,7 @@ describe('htmlBlockNode streaming DOM stability', () => {
         raw: '    stale intermediate parse',
       }],
     }
-    const wrapper = mount(HtmlBlockNode, { props: { node: loadingNode as any } })
+    const wrapper = trackMount(HtmlBlockNode, { props: { node: loadingNode as any } })
     await nextTick()
 
     await wrapper.setProps({
