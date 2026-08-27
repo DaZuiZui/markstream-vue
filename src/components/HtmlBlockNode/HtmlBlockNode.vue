@@ -2,11 +2,10 @@
 import type { HtmlPolicy } from 'stream-markdown-parser'
 import type { NodeRendererProps } from '../../types/node-renderer-props'
 import { isHtmlTagBlocked, NON_STRUCTURING_HTML_TAGS, sanitizeHtmlContent, sanitizeHtmlTokenAttrs, tokenAttrsToRecord } from 'stream-markdown-parser'
-import { computed, defineComponent, inject, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, defineComponent, inject, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { DEFAULT_VIEWPORT_PRIORITY_ROOT_MARGIN, useOffscreenHeavyNodeDeferral, useViewportPriority, useViewportPriorityOptions } from '../../composables/viewportPriority'
 import { resolveHtmlVNodes } from '../../utils/htmlRenderer'
 import { useCustomNodeComponents } from '../../utils/nodeComponents'
-import { StructuredNodeRenderer } from '../NodeRenderer/structuredAsyncComponent'
 import { getPlainTextContent } from '../SimpleInlineRenderer/simpleInline'
 
 const props = defineProps<{
@@ -32,6 +31,11 @@ const nestedRendererProps = computed<Partial<NodeRendererProps>>(() => {
     customId: props.customId ?? inherited.customId,
     htmlPolicy: resolvedHtmlPolicy.value,
   }
+})
+
+const StructuredNodeRenderer = defineAsyncComponent({
+  loader: () => import('../NodeRenderer'),
+  suspensible: false,
 })
 
 const boundAttrs = computed(() => {

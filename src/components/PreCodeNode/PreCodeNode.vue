@@ -79,12 +79,7 @@ function getLogicalCodeLines(code: string): string[] {
     lines.push(line)
 
   const lastChar = code[code.length - 1]
-  if (lastChar === '\r') {
-    logicalStableLineCount = lines.length - 1
-    logicalTailStart = code.length - lines[lines.length - 1]!.length
-    lines.push('')
-  }
-  else if (lastChar === '\n') {
+  if (lastChar === '\n') {
     logicalStableLineCount = lines.length
     logicalTailStart = code.length
     lines.push('')
@@ -92,15 +87,15 @@ function getLogicalCodeLines(code: string): string[] {
   else {
     logicalStableLineCount = lines.length - 1
     logicalTailStart = code.length - lines[lines.length - 1]!.length
+    if (lastChar === '\r')
+      lines.push('')
   }
   logicalPrevCode = code
   logicalPrevLines = lines
   return lines
 }
 
-const logicalCodeLines = computed(() => ({
-  lines: getLogicalCodeLines(displayCode.value),
-}))
+const logicalCodeLines = computed(() => getLogicalCodeLines(displayCode.value))
 
 const isDiffPreview = computed(() => props.showLineNumbers === true && props.node?.diff === true)
 
@@ -356,7 +351,7 @@ function getDiffLineStyle(index: number, side: 'original' | 'modified') {
     :data-markstream-line-numbers="props.showLineNumbers ? '1' : undefined"
     data-markstream-pre="1"
     tabindex="0"
-  ><code v-if="isDiffPreview" translate="no" class="markstream-pre__diff-code"><span v-for="pane in diffPreviewPanes" :key="pane.key" class="markstream-pre__diff-pane" :class="pane.className"><span class="markstream-pre__diff-pane-content"><span v-for="(line, index) in pane.lines" :key="line.key" class="markstream-pre__diff-line" :class="[`markstream-pre__diff-line--${line.kind}`, line.metadataKind ? `markstream-pre__diff-line--metadata-${line.metadataKind}` : '', { 'markstream-pre__diff-line--empty': line.empty, 'markstream-pre__diff-line--collapsed-first': line.collapsedFirst === true, 'markstream-pre__diff-line--collapsed-last': line.collapsedLast === true }]" :style="getDiffLineStyle(index, pane.key as 'original' | 'modified')"><span class="markstream-pre__diff-rail" aria-hidden="true" /><span v-if="line.kind === 'collapsed'" class="markstream-pre__diff-collapsed-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.47 5.47a.75.75 0 0 1 1.06 0L8 8.94l3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06" /></svg></span><span class="markstream-pre__diff-number" aria-hidden="true">{{ line.number }}</span><span class="markstream-pre__diff-content"><span class="markstream-pre__diff-content-inner">{{ line.code }}</span></span></span></span></span></code><template v-else><code v-if="wrapsPlainCodeLines()" translate="no" class="markstream-pre__code markstream-pre__code--wrapped"><span v-for="(line, index) in logicalCodeLines.lines" :key="index" class="markstream-pre__logical-line" :data-line-number="index + 1" v-text="line" /></code><template v-else><span v-if="props.showLineNumbers" class="markstream-pre__line-numbers" aria-hidden="true"><span class="markstream-pre__line-numbers-text" v-text="lineNumbersText" /></span><code translate="no" class="markstream-pre__code" v-text="displayCode" /></template></template></pre>
+  ><code v-if="isDiffPreview" translate="no" class="markstream-pre__diff-code"><span v-for="pane in diffPreviewPanes" :key="pane.key" class="markstream-pre__diff-pane" :class="pane.className"><span class="markstream-pre__diff-pane-content"><span v-for="(line, index) in pane.lines" :key="line.key" class="markstream-pre__diff-line" :class="[`markstream-pre__diff-line--${line.kind}`, line.metadataKind ? `markstream-pre__diff-line--metadata-${line.metadataKind}` : '', { 'markstream-pre__diff-line--empty': line.empty, 'markstream-pre__diff-line--collapsed-first': line.collapsedFirst === true, 'markstream-pre__diff-line--collapsed-last': line.collapsedLast === true }]" :style="getDiffLineStyle(index, pane.key as 'original' | 'modified')"><span class="markstream-pre__diff-rail" aria-hidden="true" /><span v-if="line.kind === 'collapsed'" class="markstream-pre__diff-collapsed-icon" aria-hidden="true"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.47 5.47a.75.75 0 0 1 1.06 0L8 8.94l3.47-3.47a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 0-1.06" /></svg></span><span class="markstream-pre__diff-number" aria-hidden="true">{{ line.number }}</span><span class="markstream-pre__diff-content"><span class="markstream-pre__diff-content-inner">{{ line.code }}</span></span></span></span></span></code><template v-else><code v-if="wrapsPlainCodeLines()" translate="no" class="markstream-pre__code markstream-pre__code--wrapped"><span v-for="(line, index) in logicalCodeLines" :key="index" class="markstream-pre__logical-line" :data-line-number="index + 1" v-text="line" /></code><template v-else><span v-if="props.showLineNumbers" class="markstream-pre__line-numbers" aria-hidden="true"><span class="markstream-pre__line-numbers-text" v-text="lineNumbersText" /></span><code translate="no" class="markstream-pre__code" v-text="displayCode" /></template></template></pre>
 </template>
 
 <style>
