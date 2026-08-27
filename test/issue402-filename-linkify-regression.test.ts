@@ -566,4 +566,14 @@ command.com`, filenameTldMd, { final: true })
     expect(textIncludes(nodes, 'docs/README.md')).toBe(true)
     expect(textIncludes(nodes, 'src/index.ts')).toBe(true)
   })
+
+  it('bounds cached linkify context by retained text length', () => {
+    const firstText = `file name: cache-budget-first-${'a'.repeat(15900)}`
+    const first = inferLinkifyDemotionContext(firstText)
+
+    for (let index = 0; index < 70; index++)
+      inferLinkifyDemotionContext(`file name: cache-budget-${index}-${'b'.repeat(15900)}`)
+
+    expect(inferLinkifyDemotionContext(firstText)).not.toBe(first)
+  })
 })

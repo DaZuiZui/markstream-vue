@@ -150,6 +150,26 @@ const diffPreviewPanes = computed(() => {
   })
 })
 
+// Streaming commits rebuild the diff panes on every append. Both the line-number
+// width and the "has collapsed rows" flag below re-scan all pane lines, so fold
+// them into one pass computed next to the panes instead of three O(N) scans per
+// commit (the splitDiffSource maxima are cheap head derivations but still avoid
+// re-splitting when the sources did not change).
+const diffPreviewSummary = computed(() => {
+  const panes = diffPreviewPanes.value
+  let maxNumberedLine = 1
+  let hasCollapsed = false
+  for (const pane of panes) {
+    for (const line of pane.lines) {
+      if (line.kind === 'collapsed')
+        hasCollapsed = true
+      if (typeof line.number === 'number' && line.number > maxNumberedLine)
+        maxNumberedLine = line.number
+    }
+  }
+  return { maxNumberedLine, hasCollapsed }
+})
+
 const lineNumberLayoutStyle = computed(() => {
   if (props.showLineNumbers !== true)
     return undefined
@@ -160,13 +180,8 @@ const lineNumberLayoutStyle = computed(() => {
       maximumLineNumber,
       splitDiffSource(props.node?.originalCode).length,
       splitDiffSource(props.node?.updatedCode).length,
+      diffPreviewSummary.value.maxNumberedLine,
     )
-    for (const pane of diffPreviewPanes.value) {
-      for (const line of pane.lines) {
-        if (typeof line.number === 'number')
-          maximumLineNumber = Math.max(maximumLineNumber, line.number)
-      }
-    }
   }
 
   const width = `${Math.max(2, String(maximumLineNumber).length)}ch`
@@ -178,7 +193,7 @@ const lineNumberLayoutStyle = computed(() => {
 })
 
 const hasCollapsedDiffPreview = computed(() => {
-  return diffPreviewPanes.value.some(pane => pane.lines.some(line => line.kind === 'collapsed'))
+  return isDiffPreview.value && diffPreviewSummary.value.hasCollapsed
 })
 
 const ariaLabel = computed(() => {

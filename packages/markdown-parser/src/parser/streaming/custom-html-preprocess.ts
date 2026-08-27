@@ -1,6 +1,25 @@
 import { normalizeCustomHtmlTags } from '../../customHtmlTags'
 import { isInsideOpenMarkdownFenceBeforeOffset } from './boundary-state'
 
+// Streaming commits call the close-tag blank-line normalization on every append
+// with the same normalized tag list. Compiling per call allocates a RegExp and
+// re-parses the pattern each time; cache by tag (case-insensitive tags are
+// normalized upstream, so exact-key caching is sound).
+const closingTagBlankLineReCache = new Map<string, RegExp>()
+function getClosingTagBlankLineRe(tag: string): RegExp {
+  let re = closingTagBlankLineReCache.get(tag)
+  if (!re) {
+    re = new RegExp(
+      String.raw`(^[\t ]*<\s*\/\s*${tag}\s*>[\t ]*)(\r?\n)(?![\t ]*\r?\n|$)`,
+      'gim',
+    )
+    if (closingTagBlankLineReCache.size >= 64)
+      closingTagBlankLineReCache.clear()
+    closingTagBlankLineReCache.set(tag, re)
+  }
+  return re
+}
+
 function stripDanglingHtmlLikeTail(markdown: string) {
   const isWs = (ch: string) => ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r'
 
@@ -1063,11 +1082,7 @@ export function normalizeStreamingCustomHtmlSource(
 
       if (safeMarkdown.includes('</')) {
         for (const tag of tags) {
-          const re = new RegExp(
-            String.raw`(^[\t ]*<\s*\/\s*${tag}\s*>[\t ]*)(\r?\n)(?![\t ]*\r?\n|$)`,
-            'gim',
-          )
-          safeMarkdown = safeMarkdown.replace(re, '$1$2$2')
+          safeMarkdown = safeMarkdown.replace(getClosingTagBlankLineRe(tag), '$1$2$2')
         }
       }
     }
