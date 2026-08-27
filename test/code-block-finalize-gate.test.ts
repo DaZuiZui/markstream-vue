@@ -877,6 +877,48 @@ describe('codeBlockNode final Diffs gate', () => {
     wrapper.unmount()
   })
 
+  it('retries a settled diff pair after the runtime result is still pending', async () => {
+    const runtime = helpers()
+    const pending = new Error('no diff result available')
+    runtime.updateDiff
+      .mockRejectedValueOnce(pending)
+      .mockRejectedValueOnce(pending)
+      .mockResolvedValue(undefined)
+    const diffNode = {
+      type: 'code_block' as const,
+      language: 'typescript',
+      code: '',
+      raw: '```diff\n-const before = 1\n+const after = 2\n```',
+      diff: true,
+      originalCode: 'const before = 1',
+      updatedCode: 'const after = 2',
+      loading: false,
+    }
+    const wrapper = mount(DeferredCodeBlockNode, {
+      props: {
+        node: diffNode,
+        loading: true,
+        stream: true,
+        showHeader: false,
+      },
+    })
+
+    await flush()
+    observers.at(-1)?.emit()
+    await vi.waitFor(() => expect(runtime.createDiffEditor).toHaveBeenCalledTimes(1))
+    await wrapper.setProps({
+      node: {
+        ...diffNode,
+        originalCode: 'const before = 0',
+      },
+    })
+    await vi.waitFor(() => expect(runtime.updateDiff).toHaveBeenCalledTimes(2))
+    await wrapper.setProps({ stream: false })
+
+    await vi.waitFor(() => expect(runtime.updateDiff).toHaveBeenCalledTimes(3))
+    wrapper.unmount()
+  })
+
   it.each([
     { diffStyle: 'unified' as const, contentHeight: 120, expectedHeight: 120, expectedOverflow: 'hidden' },
     { diffStyle: 'unified' as const, contentHeight: 720, expectedHeight: 240, expectedOverflow: 'auto' },

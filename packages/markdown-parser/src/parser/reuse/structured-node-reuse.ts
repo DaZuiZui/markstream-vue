@@ -53,6 +53,7 @@ const REUSABLE_TOP_LEVEL_SINGLE_TOKEN_TYPES = new Set([
   'code_block',
   'fence',
   'hr',
+  'html_block',
   'inline',
   'math_block',
 ])

@@ -2,9 +2,29 @@
  * @vitest-environment jsdom
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, ref } from 'vue'
 import { useScrollListener } from '../src/components/NodeRenderer/composables/useScrollListener'
+
+// P5 coalesces scroll observations (scrollTop read + focus sync) into one rAF
+// per frame, so unit tests must flush the pending frame after dispatching
+// scroll events.
+let frameCallbacks: FrameRequestCallback[] = []
+
+function flushFrames() {
+  const pending = frameCallbacks.splice(0)
+  for (const callback of pending)
+    callback(performance.now())
+}
+
+beforeEach(() => {
+  frameCallbacks = []
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frameCallbacks.push(callback)
+    return frameCallbacks.length
+  })
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
+})
 
 function createRoot() {
   const root = document.createElement('div')
@@ -58,6 +78,7 @@ function createHarness(options: {
 describe('useScrollListener', () => {
   afterEach(() => {
     document.body.innerHTML = ''
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
 
@@ -81,6 +102,16 @@ describe('useScrollListener', () => {
 
     expect(h.resolveScrollContainer).not.toHaveBeenCalled()
     expect(h.scrollRootElement.value).toBeNull()
+  })
+
+  it('observes scrolling when requestAnimationFrame is unavailable', () => {
+    vi.stubGlobal('requestAnimationFrame', undefined)
+    const h = createHarness()
+
+    h.listener.setupScrollListener()
+
+    expect(() => h.root.value!.dispatchEvent(new Event('scroll'))).not.toThrow()
+    expect(h.scheduleFocusSync).toHaveBeenCalledTimes(1)
   })
 
   it('can attach a virtual-scroll-only listener without scheduling focus sync', () => {
@@ -168,6 +199,7 @@ describe('useScrollListener', () => {
     )
 
     h.root.value!.dispatchEvent(new Event('scroll'))
+    flushFrames()
 
     expect(h.scheduleFocusSync).toHaveBeenCalledTimes(1)
     expect(h.scheduleFocusSync).toHaveBeenCalledWith()
@@ -188,6 +220,7 @@ describe('useScrollListener', () => {
 
     root.scrollTop = 3000
     root.dispatchEvent(new Event('scroll'))
+    flushFrames()
 
     expect(h.scheduleFocusSync).toHaveBeenCalledWith({ immediate: true })
   })
@@ -213,6 +246,7 @@ describe('useScrollListener', () => {
 
     root.scrollTop = -120
     root.dispatchEvent(new Event('scroll'))
+    flushFrames()
 
     expect(getScrollTop).toHaveBeenCalledWith(root)
     expect(h.scheduleFocusSync).toHaveBeenCalledWith({ immediate: true })
@@ -230,6 +264,11 @@ describe('useScrollListener', () => {
     h.listener.setupScrollListener()
     h.root.value!.dispatchEvent(new Event('scroll'))
 
+    // The external hook runs synchronously per scroll event; the focus sync is
+    // coalesced into the next frame.
+    expect(calls).toEqual(['hook'])
+    flushFrames()
+
     expect(calls).toEqual(['hook', 'focus'])
   })
 
@@ -245,6 +284,7 @@ describe('useScrollListener', () => {
     expect(h.scrollRootElement.value).toBe(h.root.value)
 
     h.root.value!.dispatchEvent(new Event('scroll'))
+    flushFrames()
 
     expect(h.scheduleFocusSync).toHaveBeenCalledTimes(1)
   })
@@ -276,6 +316,7 @@ describe('useScrollListener', () => {
     expect(h.scheduleFocusSync).not.toHaveBeenCalled()
 
     newRoot.dispatchEvent(new Event('scroll'))
+    flushFrames()
     expect(h.scheduleFocusSync).toHaveBeenCalledTimes(1)
   })
 
@@ -317,6 +358,7 @@ describe('useScrollListener', () => {
     expect(h.scrollRootElement.value).toBe(h.root.value)
 
     h.root.value!.dispatchEvent(new Event('scroll'))
+    flushFrames()
 
     expect(h.scheduleFocusSync).toHaveBeenCalledTimes(1)
   })
@@ -336,6 +378,7 @@ describe('useScrollListener', () => {
     expect(h.scrollRootElement.value).toBe(h.root.value)
 
     h.root.value!.dispatchEvent(new Event('scroll'))
+    flushFrames()
 
     expect(h.scheduleFocusSync).toHaveBeenCalledTimes(1)
   })

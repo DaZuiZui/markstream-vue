@@ -135,6 +135,61 @@ describe('smoothMarkdownStreamController', () => {
     controller.destroy()
   })
 
+  it('keeps CJK text and fullwidth punctuation intact while streaming', async () => {
+    vi.useFakeTimers()
+    const controller = createController({ maxCharsPerCommit: 1, maxCommitFps: 60, startDelayMs: 0 })
+    const cjkText = '这是一个中文测试段落，包含中文标点「引号」和 English 混排。还有𠀀𠀁扩展汉字。'
+
+    controller.enqueue(cjkText)
+    await vi.advanceTimersByTimeAsync(4000)
+
+    expect(controller.getSnapshot().visible).toBe(cjkText)
+    expect(hasUnpairedSurrogate(controller.getSnapshot().visible)).toBe(false)
+    controller.destroy()
+  })
+
+  it('does not split decomposed kana graphemes on the CJK fast path', () => {
+    const raf = createRafHarness()
+    const controller = createController(FAST_ATOMIC_TEST_OPTIONS)
+
+    controller.enqueue('\u304B\u3099x')
+    raf.step(performance.now() + 40)
+
+    expect(controller.getSnapshot().visible).toBe('\u304B\u3099')
+    controller.destroy()
+  })
+
+  it.each([
+    ['CJK tone mark', '\u4E2D\u302A'],
+    ['halfwidth voiced mark', '\uFF76\uFF9E'],
+  ])('counts a %s cluster as one reveal unit', (_name, cluster) => {
+    const raf = createRafHarness()
+    const controller = createController({
+      ...FAST_ATOMIC_TEST_OPTIONS,
+      maxCharsPerCommit: 2,
+    })
+
+    controller.enqueue(`${cluster}x`)
+    raf.step(performance.now() + 40)
+
+    expect(controller.getSnapshot().visible).toBe(`${cluster}x`)
+    controller.destroy()
+  })
+
+  it('counts astral CJK characters as one reveal unit', () => {
+    const raf = createRafHarness()
+    const controller = createController({
+      ...FAST_ATOMIC_TEST_OPTIONS,
+      maxCharsPerCommit: 2,
+    })
+
+    controller.enqueue('\uD840\uDC00\u4E2Dx')
+    raf.step(performance.now() + 40)
+
+    expect(controller.getSnapshot().visible).toBe('\uD840\uDC00\u4E2D')
+    controller.destroy()
+  })
+
   it('keeps a grapheme intact when it spans appended chunks', async () => {
     vi.useFakeTimers()
     const controller = createController({

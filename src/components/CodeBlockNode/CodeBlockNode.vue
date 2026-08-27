@@ -2375,9 +2375,22 @@ async function waitForSingleEditorVisualReady() {
   return false
 }
 
+// Settle-time dedupe: the diff-update watch and the loading->false watch both
+// run on settle and may call this with the same input pair (stream-diffs is
+// only fed after loading ends, so both watches observe the same final code).
+// updateDiffCode is a full diff hand-off; running it twice for an identical
+// pair is wasted work (double diff computation + surface update). Content is
+// unchanged, so skipping the duplicate is semantically identical.
+let lastSettledDiffPair = ''
+
 async function updateDiffCodeWithSettledResult(original: string, updated: string, language: string) {
+  const pairKey = `${original}\u0000${updated}\u0000${language}`
+  if (lastSettledDiffPair === pairKey)
+    return
+
   try {
     await updateDiffCode(original, updated, language)
+    lastSettledDiffPair = pairKey
     return
   }
   catch (error) {
@@ -2393,6 +2406,7 @@ async function updateDiffCodeWithSettledResult(original: string, updated: string
 
   try {
     await updateDiffCode(original, updated, language)
+    lastSettledDiffPair = pairKey
   }
   catch (error) {
     if (!isPendingDiffResultError(error))
@@ -2512,7 +2526,10 @@ watch(
 watch(
   () => [props.node.originalCode, props.node.updatedCode, isDiff.value] as const,
   () => {
-    syncEstimatedDiffStats()
+    // Only the rAF-throttled refresh runs the (potentially expensive) diff
+    // LCS once per frame. Calling syncEstimatedDiffStats() here too would run
+    // the full DP synchronously on every streaming commit and again in the
+    // rAF callback for the same input pair.
     safeRaf(() => refreshDiffStats())
   },
   { immediate: true },

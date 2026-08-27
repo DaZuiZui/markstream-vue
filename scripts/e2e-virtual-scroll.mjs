@@ -2004,6 +2004,15 @@ async function run() {
         for (let i = 0; i < 20; i++)
           await api.nextFrame()
 
+        // Settling swaps estimated heights for measured ones, which can change
+        // totalHeight after the initial scrollToRatio(1) ran; re-pin to the
+        // true bottom so the streaming probe actually starts pinned (its
+        // assertion requires distanceFromBottomPx < 48).
+        await api.scrollToRatio(1)
+        await api.settleVisibleRenderers()
+        for (let i = 0; i < 20; i++)
+          await api.nextFrame()
+
         api.clearEvents()
         await api.nextFrame()
 

@@ -203,9 +203,9 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
   // html passes still run over the whole result: mergeSplit and combine
   // re-derive post-pass prefix nodes from the pre-pass cache (split html
   // fragments and un-stitched details live in the reused prefix), so they must
-  // re-run every append. structureGeneric only structures non-details html
-  // blocks, which never appear in a reusable prefix (top-level `html_block`
-  // tokens are not reusable), so it can start at the reused tail safely.
+  // re-run every append. structureGeneric keeps parsed children on the source
+  // node, so reused generic html prefixes are already structured and it can
+  // start at the reused tail safely.
   const reuseTailStart = runtime.structuredReuseTailStart
   const tailStart = reuseTailStart && reuseTailStart > 0 && reuseTailStart < result.length
     ? reuseTailStart

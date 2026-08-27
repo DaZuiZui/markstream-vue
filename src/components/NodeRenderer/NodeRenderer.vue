@@ -1269,6 +1269,10 @@ const finalHeightConvergenceTimers: number[] = []
 const pendingHeightMeasurements = new Map<number, { height: number, allowShrink: boolean, version: number, el: HTMLElement }>()
 /** Maximum interval between full re-measure passes before metrics emission. */
 const METRICS_FULL_SCAN_INTERVAL_MS = 120
+// Below this many pending height records, flushVirtualMetricsEmit lets the
+// already-scheduled rAF write them back in one batch instead of force-flushing
+// (cancelling the rAF) on every emission.
+const PENDING_HEIGHT_FORCE_FLUSH_THRESHOLD = 8
 let lastFullMetricsScanAt = -Infinity
 const activeHeightSettlingTimers = new Set<number>()
 const heightSettlingTimerVersion = ref(0)
@@ -1471,6 +1475,8 @@ const {
   resolveScrollContainer,
   scheduleFocusSync,
   onScroll: handleVirtualScrollRootScroll,
+  requestFrame,
+  cancelFrame,
   getScrollTop: (root) => {
     const doc = root.ownerDocument || containerRef.value?.ownerDocument || document
     const isViewportRoot = root === doc.documentElement
@@ -4080,7 +4086,10 @@ function flushVirtualMetricsEmit() {
     lastFullMetricsScanAt = now
     measureTrackedNodeHeights()
   }
-  if (pendingHeightMeasurements.size > 0 || heightMeasurementRaf != null)
+  // Force-flush only when a meaningful batch accumulated or no flush is
+  // scheduled; tiny pending batches let the pending rAF flush naturally,
+  // keeping measurement writes coalesced into one layout pass per frame.
+  if (pendingHeightMeasurements.size > PENDING_HEIGHT_FORCE_FLUSH_THRESHOLD || heightMeasurementRaf == null)
     forceFlushPendingHeightMeasurements()
   emitVirtualMetricsNow(getVirtualMetrics(pendingVirtualMetricsReason))
 }
@@ -4677,13 +4686,40 @@ watch(
 // Some scroll containers (e.g. `flex-direction: column-reverse` chat lists)
 // report `scrollTop=0` when visually at the bottom. To avoid a blank initial
 // viewport in virtualized mode, resync focus after the DOM has committed.
+//
+// Three watchers fire on every streaming commit (parsedNodes.length x2 and
+// renderedCount) and each called scheduleFocusSync({ immediate: true }),
+// which cancels any pending sync and runs syncFocusToScroll synchronously —
+// up to 3 synchronous layout reads per commit. Deduplicate them into a single
+// per-frame sync so a commit pays for one focus sync instead of three. The
+// focus target is computed from the same state, so the final scroll position
+// is identical.
+let pendingCommitFocusSync = false
+
+function scheduleCommitFocusSync() {
+  if (!virtualizationEnabled.value || !isClient || pendingCommitFocusSync)
+    return
+  pendingCommitFocusSync = true
+  if (requestFrame) {
+    requestFrame(() => {
+      pendingCommitFocusSync = false
+      scheduleFocusSync({ immediate: true })
+    })
+  }
+  else {
+    queueMicrotask(() => {
+      pendingCommitFocusSync = false
+      scheduleFocusSync({ immediate: true })
+    })
+  }
+}
+
 watch(
   [() => parsedNodes.value.length, () => virtualizationEnabled.value],
-  async ([length, enabled]) => {
+  ([length, enabled]) => {
     if (!enabled || !length || !isClient)
       return
-    await nextTick()
-    scheduleFocusSync({ immediate: true })
+    scheduleCommitFocusSync()
   },
   { flush: 'post' },
 )
@@ -4734,7 +4770,7 @@ watch(
   () => parsedNodes.value.length,
   () => {
     if (virtualizationEnabled.value)
-      scheduleFocusSync({ immediate: true })
+      scheduleCommitFocusSync()
   },
 )
 
@@ -4810,6 +4846,9 @@ watch(
 watch(
   () => renderedCount.value,
   () => {
+    // Keep this synchronous: batch rendering grows renderedCount batch by
+    // batch, and a bottom-pinned anchor must follow each batch immediately.
+    // Deferring to the next frame lets the scroll position drift for a frame.
     if (virtualizationEnabled.value)
       scheduleFocusSync({ immediate: true })
   },

@@ -686,29 +686,49 @@ function takeGraphemes(
     }
   }
 
-  // Fast path: if the requested window is pure ASCII AND the next code unit is
-  // also ASCII (so no combining mark can attach across the boundary), then each
-  // code unit is exactly one grapheme and Intl.Segmenter (plus its per-commit
-  // window slicing + ICU iteration) is unnecessary. The scan is bounded by
-  // `count` code units, so mixed content pays only a cheap charCodeAt pass over
-  // the ASCII head before falling through to the segmenter.
-  const fastEnd = Math.min(normalizedEnd, start + count)
-  let asciiCursor = start
-  while (asciiCursor < fastEnd && input.charCodeAt(asciiCursor) <= 0x7F)
-    asciiCursor++
-  if (asciiCursor === fastEnd && (fastEnd >= normalizedEnd || input.charCodeAt(fastEnd) <= 0x7F)) {
+  // Fast path: advance by code point through the window and commit the slice
+  // directly when every code point is a guaranteed single grapheme (ASCII or a
+  // whitelisted CJK/JP/KR code point) AND the code point right after the slice
+  // cannot attach to its last char. Otherwise Intl.Segmenter (plus its
+  // per-commit window slicing + ICU iteration) is used. The scan is bounded by
+  // `count` code points, so mixed content pays only a cheap code-point scan
+  // over the simple head before falling through to the segmenter.
+  let sliceEnd = start
+  let used = 0
+  let fastPathSafe = true
+  while (used < count && sliceEnd < normalizedEnd) {
+    const codePoint = input.codePointAt(sliceEnd)!
+    const codePointLength = codePoint > 0xFFFF ? 2 : 1
+    if (
+      sliceEnd + codePointLength > normalizedEnd
+      || !isGraphemeFastPathCodePoint(codePoint)
+    ) {
+      fastPathSafe = false
+      break
+    }
+    sliceEnd += codePointLength
+    used++
+  }
+
+  if (fastPathSafe && sliceEnd > start) {
     // CRLF (U+000D U+000A) is a single grapheme per UAX #29; taking exactly
-    // `count` code units here would split the pair and leak a lone `\r` to
+    // `count` code points here would split the pair and leak a lone `\r` to
     // consumers. Fall through to the segmenter when the boundary lands between
     // the two code units.
-    const splitsCrLf = fastEnd < normalizedEnd
-      && fastEnd > start
-      && input.charCodeAt(fastEnd - 1) === 0x0D
-      && input.charCodeAt(fastEnd) === 0x0A
+    const splitsCrLf = sliceEnd < normalizedEnd
+      && input.charCodeAt(sliceEnd - 1) === 0x0D
+      && input.charCodeAt(sliceEnd) === 0x0A
     if (!splitsCrLf) {
-      return {
-        text: input.slice(start, fastEnd),
-        graphemeCount: fastEnd - start,
+      const boundaryCodePoint = input.codePointAt(sliceEnd)
+      const boundaryCodePointLength = boundaryCodePoint != null && boundaryCodePoint > 0xFFFF ? 2 : 1
+      const hasSimpleBoundary = boundaryCodePoint != null
+        && sliceEnd + boundaryCodePointLength <= normalizedEnd
+        && isGraphemeFastPathCodePoint(boundaryCodePoint)
+      if (sliceEnd >= normalizedEnd || hasSimpleBoundary) {
+        return {
+          text: input.slice(start, sliceEnd),
+          graphemeCount: used,
+        }
       }
     }
   }
@@ -746,4 +766,33 @@ function takeGraphemes(
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+// Code points that are safe to reveal as one grapheme in the mainstream
+// CJK/Japanese/Korean scripts. Windows made only of these
+// (plus ASCII) can be sliced by code point without Intl.Segmenter. Everything
+// outside this whitelist — combining marks, emoji sequences, Indic/SE-Asian
+// scripts — falls through to the segmenter, so this fast path is a strict
+// superset of the old pure-ASCII check: it can only skip work, never change
+// the split.
+function isGraphemeSimpleCodePoint(codePoint: number) {
+  return (codePoint >= 0x2E80 && codePoint <= 0x3029) // CJK radicals .. Hangzhou numerals
+    || (codePoint >= 0x3030 && codePoint <= 0x303F) // CJK symbols/punctuation
+    || (codePoint >= 0x3040 && codePoint <= 0x3098) // hiragana
+    || (codePoint >= 0x309B && codePoint <= 0x30FF) // kana spacing marks / katakana
+    || (codePoint >= 0x3100 && codePoint <= 0x31FF) // bopomofo / compatibility jamo / CJK strokes / katakana ext
+    || (codePoint >= 0x3200 && codePoint <= 0x33FF) // enclosed CJK / CJK compatibility
+    || (codePoint >= 0x3400 && codePoint <= 0x4DBF) // CJK ext A
+    || (codePoint >= 0x4E00 && codePoint <= 0x9FFF) // CJK unified
+    || (codePoint >= 0xAC00 && codePoint <= 0xD7A3) // Hangul syllables (LV/LVT are single graphemes)
+    || (codePoint >= 0xF900 && codePoint <= 0xFAFF) // CJK compat ideographs
+    || (codePoint >= 0xFE30 && codePoint <= 0xFE4F) // CJK compat forms
+    || (codePoint >= 0xFF00 && codePoint <= 0xFF9D) // fullwidth forms / halfwidth kana
+    || (codePoint >= 0xFFA0 && codePoint <= 0xFFEF) // halfwidth hangul / symbols
+    || (codePoint >= 0x1F200 && codePoint <= 0x1F2FF) // enclosed ideographic supplement
+    || (codePoint >= 0x20000 && codePoint <= 0x2FFFF) // CJK ext B+ (astral, single grapheme)
+}
+
+function isGraphemeFastPathCodePoint(codePoint: number) {
+  return codePoint <= 0x7F || isGraphemeSimpleCodePoint(codePoint)
 }

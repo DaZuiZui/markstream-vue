@@ -9,6 +9,8 @@ export interface ScrollListenerOptions {
   scheduleFocusSync: (options?: { immediate?: boolean }) => void
   onScroll?: () => void
   getScrollTop?: (root: HTMLElement) => number
+  requestFrame?: typeof window.requestAnimationFrame | null
+  cancelFrame?: typeof window.cancelAnimationFrame | null
 }
 
 export interface ScrollListener {
@@ -31,8 +33,22 @@ export function useScrollListener(
 
   let detachScrollHandler: (() => void) | null = null
   let lastObservedScrollTop: number | null = null
+  let scrollObservationPending = false
+  let scrollObservationRafId: number | null = null
+  const requestFrame = options.requestFrame === undefined
+    ? (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : null)
+    : options.requestFrame
+  const cancelFrame = options.cancelFrame === undefined
+    ? (typeof cancelAnimationFrame === 'function' ? cancelAnimationFrame : null)
+    : options.cancelFrame
 
   function cleanupScrollListener() {
+    if (scrollObservationRafId != null) {
+      cancelFrame?.(scrollObservationRafId)
+      scrollObservationRafId = null
+    }
+    scrollObservationPending = false
+
     if (detachScrollHandler) {
       detachScrollHandler()
       detachScrollHandler = null
@@ -69,15 +85,39 @@ export function useScrollListener(
 
     lastObservedScrollTop = readObservedScrollTop(root)
 
-    const handler = () => {
-      onScroll?.()
-      if (virtualizationEnabled.value) {
-        const options = resolveFocusSyncScheduleOptions(root)
-        if (options)
-          scheduleFocusSync(options)
-        else
-          scheduleFocusSync()
+    // Scroll events fire at input frequency (120Hz+) while the browser only
+    // paints at 60fps, so reading scrollTop (a synchronous layout read) and
+    // running the focus sync on every event is pure waste. Deduplicate into a
+    // single observation per frame; the jump detection below compares the
+    // previous frame's scrollTop, so semantics are unchanged.
+    const scheduleScrollObservation = () => {
+      if (scrollObservationPending)
+        return
+      scrollObservationPending = true
+      const observe = () => {
+        scrollObservationPending = false
+        scrollObservationRafId = null
+        if (virtualizationEnabled.value) {
+          const options = resolveFocusSyncScheduleOptions(root)
+          if (options)
+            scheduleFocusSync(options)
+          else
+            scheduleFocusSync()
+        }
       }
+      if (requestFrame)
+        scrollObservationRafId = requestFrame(observe)
+      else
+        observe()
+    }
+
+    const handler = () => {
+      // Anchor release must stay synchronous: bottom-anchor restore logic can
+      // run between the scroll event and the next frame, and releasing the
+      // anchor first is what keeps the scroll position user-controlled.
+      onScroll?.()
+      if (virtualizationEnabled.value)
+        scheduleScrollObservation()
     }
 
     root.addEventListener('scroll', handler, { passive: true })
