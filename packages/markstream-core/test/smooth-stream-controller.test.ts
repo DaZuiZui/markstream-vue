@@ -148,6 +148,31 @@ describe('smoothMarkdownStreamController', () => {
     controller.destroy()
   })
 
+  it('does not split decomposed kana graphemes on the CJK fast path', () => {
+    const raf = createRafHarness()
+    const controller = createController(FAST_ATOMIC_TEST_OPTIONS)
+
+    controller.enqueue('\u304B\u3099x')
+    raf.step(performance.now() + 40)
+
+    expect(controller.getSnapshot().visible).toBe('\u304B\u3099')
+    controller.destroy()
+  })
+
+  it('counts astral CJK characters as one reveal unit', () => {
+    const raf = createRafHarness()
+    const controller = createController({
+      ...FAST_ATOMIC_TEST_OPTIONS,
+      maxCharsPerCommit: 2,
+    })
+
+    controller.enqueue('\uD840\uDC00\u4E2Dx')
+    raf.step(performance.now() + 40)
+
+    expect(controller.getSnapshot().visible).toBe('\uD840\uDC00\u4E2D')
+    controller.destroy()
+  })
+
   it('keeps a grapheme intact when it spans appended chunks', async () => {
     vi.useFakeTimers()
     const controller = createController({

@@ -77,8 +77,24 @@ describe('streaming coalescing perf guards', () => {
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.restoreAllMocks()
+    // Drain every pending macrotask (batch-measure fallback timers, deferred
+    // measurement timers, etc.) while the jsdom environment is still alive.
+    // A timer firing after unstubAllGlobals/restoreAllMocks can tear the env
+    // down mid-callback and crash the worker ("window is not defined" in
+    // useBatchRenderingScheduler's window.setTimeout fallback).
+    vi.useRealTimers()
+    return new Promise<void>((resolve) => {
+      setTimeout(resolve, 150)
+    })
+      .then(async () => {
+        // one extra macrotask turn so chained setTimeout(0) callbacks also run
+        await new Promise(r => setTimeout(r, 0))
+        await new Promise(r => setTimeout(r, 0))
+      })
+      .finally(() => {
+        vi.unstubAllGlobals()
+        vi.restoreAllMocks()
+      })
   })
 
   it('p5: 120 scroll events in one frame cause one scrollTop observation', async () => {

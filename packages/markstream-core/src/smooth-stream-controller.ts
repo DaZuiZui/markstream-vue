@@ -693,11 +693,14 @@ function takeGraphemes(
   // per-commit window slicing + ICU iteration) is used. The scan is bounded by
   // `count` code points, so mixed content pays only a cheap charCodeAt pass
   // over the simple head before falling through to the segmenter.
-  const fastEnd = Math.min(normalizedEnd, start + count)
   let sliceEnd = start
   let used = 0
   let fastPathSafe = true
-  while (sliceEnd < fastEnd) {
+  while (used < count) {
+    if (sliceEnd >= normalizedEnd) {
+      fastPathSafe = false
+      break
+    }
     const code = input.charCodeAt(sliceEnd)
     if (code <= 0x7F) {
       sliceEnd++
@@ -731,21 +734,25 @@ function takeGraphemes(
     used++
   }
 
-  if (fastPathSafe) {
+  if (fastPathSafe && sliceEnd > start) {
     // CRLF (U+000D U+000A) is a single grapheme per UAX #29; taking exactly
     // `count` code points here would split the pair and leak a lone `\r` to
     // consumers. Fall through to the segmenter when the boundary lands between
     // the two code units.
     const splitsCrLf = sliceEnd < normalizedEnd
-      && sliceEnd > start
       && input.charCodeAt(sliceEnd - 1) === 0x0D
       && input.charCodeAt(sliceEnd) === 0x0A
     if (!splitsCrLf) {
-      const boundaryCode = sliceEnd < normalizedEnd ? input.charCodeAt(sliceEnd) : 0
-      const boundaryCodePoint = boundaryCode >= 0xD800 && boundaryCode <= 0xDBFF
+      // A Extend-class code point right after the slice (e.g. U+3099 combining
+      // dakuten after hiragana, which sits inside the "simple" CJK block) would
+      // attach to the last committed char, so the grapheme is not complete:
+      // fall through to the segmenter.
+      const boundaryCode = input.charCodeAt(sliceEnd)
+      const hasNext = sliceEnd < normalizedEnd
+      const boundaryCodePoint = hasNext && boundaryCode >= 0xD800 && boundaryCode <= 0xDBFF
         ? 0x10000 + ((boundaryCode - 0xD800) << 10) + (input.charCodeAt(sliceEnd + 1) - 0xDC00)
         : boundaryCode
-      if (sliceEnd >= normalizedEnd || !isGraphemeExtendCodePoint(boundaryCodePoint)) {
+      if (!hasNext || !isGraphemeExtendCodePoint(boundaryCodePoint)) {
         return {
           text: input.slice(start, sliceEnd),
           graphemeCount: used,
@@ -854,6 +861,7 @@ function isGraphemeExtendCodePoint(codePoint: number) {
     || (codePoint >= 0x1DC0 && codePoint <= 0x1DFF) // combining marks supplement
     || (codePoint >= 0x200C && codePoint <= 0x200D) // ZWJ / ZWNJ
     || (codePoint >= 0x20D0 && codePoint <= 0x20FF) // combining marks for symbols
+    || (codePoint >= 0x3099 && codePoint <= 0x309A) // combining dakuten/handakuten (inside the kana block)
     || (codePoint >= 0xFE00 && codePoint <= 0xFE0F) // variation selectors
     || (codePoint >= 0xFE20 && codePoint <= 0xFE2F) // combining half marks
     || (codePoint >= 0x1F1E6 && codePoint <= 0x1F1FF) // regional indicators (flag pairs)
