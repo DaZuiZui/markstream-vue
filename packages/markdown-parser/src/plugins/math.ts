@@ -794,10 +794,6 @@ function getTolerantBoundaryScanWindow(
   const nextLineBreak = source.indexOf('\n', start)
   start = nextLineBreak === -1 ? source.length : nextLineBreak + 1
   const lineOffset = countLineBreaks(source.slice(0, start))
-  if (cache) {
-    cache.lineOffset = lineOffset
-    cache.windowStart = start
-  }
   return {
     source: source.slice(start),
     lineOffset,
