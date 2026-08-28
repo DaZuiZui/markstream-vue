@@ -622,6 +622,28 @@ function trimRightSpaceOrTab(value: string) {
   return value.slice(0, end)
 }
 
+/**
+ * Memo for computing the tolerant-boundary scan-window line offset
+ * incrementally. Streaming appends grow the source monotonically; recomputing
+ * `countLineBreaks(source.slice(0, start))` from scratch on every commit is
+ * O(document) of interpreted JS per chunk. Instead, when the new source is an
+ * append of the memoized one, only newlines in the previously-uncounted region
+ * are counted.
+ *
+ * Invariant: the memo holds exactly what a full recomputation would return for
+ * `memo.source` (`lineOffset`, `windowStart`). It is a module-level single
+ * slot: any non-append source (multiple parser instances interleaved, content
+ * replacement) misses the `startsWith` check and falls back to a full
+ * recomputation, so it can never return a wrong value.
+ */
+interface TolerantBoundaryScanWindowMemo {
+  lineOffset: number
+  source: string
+  windowStart: number
+}
+
+let tolerantBoundaryScanWindowMemo: TolerantBoundaryScanWindowMemo | undefined
+
 function countLineBreaks(value: string) {
   let count = 0
   for (let index = 0; index < value.length; index++) {
@@ -768,18 +790,74 @@ function hashTolerantBoundaryContent(content: string) {
 }
 
 function getTolerantBoundaryScanWindow(source: string) {
-  if (source.length <= TOLERANT_BOUNDARY_SCAN_TAIL_CHARS)
+  if (source.length <= TOLERANT_BOUNDARY_SCAN_TAIL_CHARS) {
+    tolerantBoundaryScanWindowMemo = undefined
     return { source, lineOffset: 0 }
+  }
+
+  // The scan window is the fixed-size tail of the source, anchored to its END:
+  //   cut = source.length - TAIL  (source.length > TAIL here, so cut > 0)
+  //   start = (index of the first '\n' at or after cut) + 1, or source.length
+  //           when no such '\n' exists (window becomes empty).
+  // `start` is thus the exclusive end of the prefix whose newline count forms
+  // `lineOffset = countLineBreaks(source.slice(0, start))`.
+  //
+  // Incremental update when `source` appends the memoized one
+  // (`source = prevSource + appended`, memo holds windowStart = prevStart and
+  // lineOffset = countLineBreaks(prevSource.slice(0, prevStart))):
+  //
+  // Because prevStart was the first newline index + 1 at or after
+  // cutPrev = prevLength - TAIL, every index in [cut, prevStart) is preceded
+  // by that same newline (there is no '\n' in [cutPrev, prevStart - 1]) while
+  // cut > cutPrev. Hence the first '\n' at or after `cut` is either exactly
+  // `prevStart - 1` (giving start === prevStart) or lies at >= prevLength
+  // (giving start > prevStart): start >= prevStart always, and
+  // [0, start) = [0, prevStart) ∪ [prevStart, min(start, prevLength))
+  //            ∪ [prevLength, start)  (last region only when start > prevLength)
+  // is an exact partition, so:
+  //   lineOffset = memo.lineOffset
+  //     + countLineBreaks(prevSource.slice(prevStart, start))  // [prevStart, min(start, prevLength))
+  //     + countLineBreaks(source.slice(prevLength, start))     // [prevLength, start), appended head
+  // (the second slice is empty when start <= prevLength; the first is empty
+  // when start >= prevLength — exactly one of them is non-empty).
+  const memo = tolerantBoundaryScanWindowMemo
+  if (memo && memo.source !== source && source.startsWith(memo.source)) {
+    const prevLength = memo.source.length
+    const cut = source.length - TOLERANT_BOUNDARY_SCAN_TAIL_CHARS
+    let start = source.indexOf('\n', cut)
+    start = start === -1 ? source.length : start + 1
+
+    let lineOffset = memo.lineOffset
+    if (start > memo.windowStart)
+      lineOffset += countLineBreaks(memo.source.slice(memo.windowStart, start))
+    if (start > prevLength)
+      lineOffset += countLineBreaks(source.slice(prevLength, start))
+
+    if (start === source.length) {
+      // No '\n' after cut: the window is empty and the newline count of the
+      // whole source is now memoized, keeping future appends incremental.
+      tolerantBoundaryScanWindowMemo = { lineOffset, source, windowStart: start }
+      return { source: '', lineOffset }
+    }
+
+    tolerantBoundaryScanWindowMemo = { lineOffset, source, windowStart: start }
+    return { source: source.slice(start), lineOffset }
+  }
 
   let start = source.length - TOLERANT_BOUNDARY_SCAN_TAIL_CHARS
   const nextLineBreak = source.indexOf('\n', start)
-  if (nextLineBreak === -1)
-    return { source: '', lineOffset: countLineBreaks(source) }
+  if (nextLineBreak === -1) {
+    const lineOffset = countLineBreaks(source)
+    tolerantBoundaryScanWindowMemo = { lineOffset, source, windowStart: source.length }
+    return { source: '', lineOffset }
+  }
 
   start = nextLineBreak + 1
+  const lineOffset = countLineBreaks(source.slice(0, start))
+  tolerantBoundaryScanWindowMemo = { lineOffset, source, windowStart: start }
   return {
     source: source.slice(start),
-    lineOffset: countLineBreaks(source.slice(0, start)),
+    lineOffset,
   }
 }
 
