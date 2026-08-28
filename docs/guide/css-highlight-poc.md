@@ -24,10 +24,9 @@ setCustomComponents('css-highlight-benchmark', {
 })
 ```
 
-`CssHighlightCodeBlock` is intentionally a repository-local experiment, not a
-published root export. Copy the prototype source from this repository into
-your application, adapt it to your lexer/highlighter, and register it through
-the stable `code_block` override API.
+`CssHighlightCodeBlock` is exported as an experimental lazy component. Register
+it through the stable `code_block` override API; it remains opt-in and does not
+replace the default renderer.
 
 The adapter intentionally uses a small lexer rather than MicroLighter's
 module-global `highlightAll()` API. Each instance receives a unique registry
@@ -40,6 +39,21 @@ Run the reproducible Chrome fixture benchmark with:
 ```bash
 pnpm benchmark:css-highlight
 ```
+
+For streaming behavior, reuse the real-browser split harness:
+
+```bash
+MARKSTREAM_STREAMING_SPLIT_RENDERERS=markstream-local,markstream-css-highlight-local,markstream-css-highlight-worker \
+  pnpm benchmark:streaming-split
+```
+
+The streaming artifact separates per-chunk commit avg/p95/max, main-thread
+busy ratio, long tasks, frame timing, mutations, and the settle handoff. The
+CSS Highlight row also reports tokenizer, `StaticRange` construction, registry
+update, first-enhanced, and disposal timings. `loading` commits must report
+zero tokenizer and registry work. The worker-tokenizer row is intentionally
+reported as unavailable until a pure transferable tokenizer and worker
+lifecycle are implemented.
 
 It records plain `<pre>`, this local adapter, and pinned MicroLighter 2.1.0
 rows for 1/12/24 blocks and 100/1,000/10,000 lines by default. The checked-in
@@ -56,6 +70,8 @@ manager.
 The current evidence supports keeping this as a documented custom-component
 recipe. A synthetic Chrome run showed that shallow DOM does not guarantee a
 faster result: tokenizer and range creation dominated at 1,000-line fixtures.
+The static fixture is not a streaming conclusion; use the split harness before
+making a renderer decision.
 The raw exploratory measurements are checked in at
 `test/benchmark/css-highlight-results.json`. A release decision still requires
 the real-browser matrix described in Issue #726, including MicroLighter 2.1.0

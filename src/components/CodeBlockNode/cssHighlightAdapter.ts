@@ -23,6 +23,37 @@ export interface CssHighlightToken {
   category: 'comment' | 'keyword' | 'string' | 'number' | 'type' | 'function'
 }
 
+export interface CssHighlightBenchmarkMetrics {
+  enhanceCalls: number
+  streamingSkips: number
+  tokenizeCalls: number
+  tokenizeMs: number
+  rangeBuildMs: number
+  registryMs: number
+  rangeCount: number
+  firstEnhancedAt: number | null
+  lastDisposedAt: number | null
+}
+
+/** Optional probe consumed by the real-browser benchmark. */
+export function getCssHighlightBenchmarkMetrics(): CssHighlightBenchmarkMetrics {
+  const scope = globalThis as typeof globalThis & { __markstreamCssHighlightMetrics?: CssHighlightBenchmarkMetrics }
+  if (!scope.__markstreamCssHighlightMetrics) {
+    scope.__markstreamCssHighlightMetrics = {
+      enhanceCalls: 0,
+      streamingSkips: 0,
+      tokenizeCalls: 0,
+      tokenizeMs: 0,
+      rangeBuildMs: 0,
+      registryMs: 0,
+      rangeCount: 0,
+      firstEnhancedAt: null,
+      lastDisposedAt: null,
+    }
+  }
+  return scope.__markstreamCssHighlightMetrics
+}
+
 const SUPPORTED_LANGUAGES = new Set([
   'bash',
   'css',
@@ -122,9 +153,16 @@ export function applyCssHighlights(root: HTMLElement, code: string, language: st
   if (!css?.highlights || !HighlightCtor || !StaticRangeCtor || typeof document === 'undefined')
     return null
 
+  const metrics = getCssHighlightBenchmarkMetrics()
+  metrics.tokenizeCalls++
+  const tokenizeStarted = typeof performance !== 'undefined' ? performance.now() : 0
+  const tokens = tokenizeCssHighlightCode(code, language)
+  metrics.tokenizeMs += (typeof performance !== 'undefined' ? performance.now() : 0) - tokenizeStarted
   const names = new Set<string>()
   const byCategory = new Map<string, unknown[]>()
-  for (const token of tokenizeCssHighlightCode(code, language)) {
+  const rangeStarted = typeof performance !== 'undefined' ? performance.now() : 0
+  let rangeCount = 0
+  for (const token of tokens) {
     const start = resolveTextPosition(root, token.start)
     const end = resolveTextPosition(root, token.end)
     if (!start || !end)
@@ -139,12 +177,19 @@ export function applyCssHighlights(root: HTMLElement, code: string, language: st
       endOffset: end.offset,
     }))
     byCategory.set(name, ranges)
+    rangeCount++
   }
+  metrics.rangeBuildMs += (typeof performance !== 'undefined' ? performance.now() : 0) - rangeStarted
+  metrics.rangeCount += rangeCount
 
+  const registryStarted = typeof performance !== 'undefined' ? performance.now() : 0
   for (const name of names)
     css.highlights.delete(name)
   for (const [name, ranges] of byCategory)
     css.highlights.set(name, new HighlightCtor(...ranges))
+  metrics.registryMs += (typeof performance !== 'undefined' ? performance.now() : 0) - registryStarted
+  if (metrics.firstEnhancedAt == null)
+    metrics.firstEnhancedAt = typeof performance !== 'undefined' ? performance.now() : 0
 
   let disposed = false
   return () => {
@@ -153,6 +198,7 @@ export function applyCssHighlights(root: HTMLElement, code: string, language: st
     disposed = true
     for (const name of names)
       css.highlights?.delete(name)
+    metrics.lastDisposedAt = typeof performance !== 'undefined' ? performance.now() : 0
   }
 }
 

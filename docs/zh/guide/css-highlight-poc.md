@@ -24,9 +24,8 @@ setCustomComponents('css-highlight-benchmark', {
 })
 ```
 
-`CssHighlightCodeBlock` 有意只作为仓库内实验代码，不作为已发布包的根导出。
-请将本仓库中的原型源码复制到应用内，根据自己的 lexer/高亮器进行调整，再通过
-稳定的 `code_block` 覆盖 API 注册。
+`CssHighlightCodeBlock` 作为实验性 lazy component 从根入口导出。请通过稳定的
+`code_block` override API 注册；它仍然是 opt-in，不会替换默认 renderer。
 
 适配器使用小型 lexer，而不是 MicroLighter 的模块级全局
 `highlightAll()` API。每个实例都有独立的 registry 前缀，优先使用
@@ -39,6 +38,20 @@ Custom Highlight 的浏览器和不支持的语言仍会以可读的无高亮形
 ```bash
 pnpm benchmark:css-highlight
 ```
+
+流式行为请复用真实浏览器 split harness：
+
+```bash
+MARKSTREAM_STREAMING_SPLIT_RENDERERS=markstream-local,markstream-css-highlight-local,markstream-css-highlight-worker \
+  pnpm benchmark:streaming-split
+```
+
+该 artifact 会拆分记录每次 chunk commit 的 avg/p95/max、主线程 busy ratio、
+long task、帧耗时、mutation 以及 settled 交接过程。CSS Highlight 行还会记录
+tokenize、`StaticRange` 构建、registry 更新、首次 enhanced 和 dispose 耗时。
+`loading` 阶段必须保持 tokenizer 与 registry 更新次数为 0。worker tokenizer 行
+会在纯可传输 tokenizer 和 worker 生命周期实现前明确记录为 unavailable，不能用
+主线程结果代替。
 
 脚本默认覆盖 1/12/24 个代码块以及 100/1,000/10,000 行，记录 plain
 `<pre>`、本地适配器和锁定版本的 MicroLighter 2.1.0。为控制运行成本，仓库中
@@ -55,4 +68,5 @@ DOM 变浅并不意味着一定更快：在 1,000 行 fixture 中，tokenizer �
 创建占据了主要成本。原始探索数据位于
 `test/benchmark/css-highlight-results.json`。正式决策仍需按 Issue #726 的
 真实浏览器矩阵执行，并分别测试 MicroLighter 2.1.0 发布包与 PR #18 合并后
-的当前 `main`（修复尚未随发布包发布）。
+的当前 `main`（修复尚未随发布包发布）。静态 fixture 不能代表 streaming 结论，
+正式选型前应先运行 split harness。

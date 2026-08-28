@@ -20,7 +20,7 @@
 <script setup lang="ts">
 import type { CodeBlockNodeProps } from '../../types/component-props'
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { applyCssHighlights, cssHighlightStyleText, isCssHighlightLanguageSupported } from './cssHighlightAdapter'
+import { applyCssHighlights, cssHighlightStyleText, getCssHighlightBenchmarkMetrics, isCssHighlightLanguageSupported } from './cssHighlightAdapter'
 
 defineOptions({ name: 'CssHighlightCodeBlock', inheritAttrs: false })
 
@@ -59,7 +59,13 @@ async function enhance() {
   const currentGeneration = ++generation
   clearHighlights()
   unsupported.value = false
-  if (loading.value || !code.value || typeof window === 'undefined')
+  const metrics = getCssHighlightBenchmarkMetrics()
+  metrics.enhanceCalls++
+  if (loading.value) {
+    metrics.streamingSkips++
+    return
+  }
+  if (!code.value || typeof window === 'undefined')
     return
   if (!isCssHighlightLanguageSupported(language.value)) {
     unsupported.value = !['', 'plain', 'text', 'plaintext'].includes(language.value)
