@@ -11,6 +11,7 @@ AdmonitionNode
 BlockquoteNode
 CheckboxNode
 CodeBlockNode
+CssHighlightCodeBlock
 D2BlockNode
 DefinitionListNode
 EmojiNode

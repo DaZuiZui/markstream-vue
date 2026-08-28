@@ -1,0 +1,324 @@
+{
+  "status": "exploratory",
+  "generatedAt": "2026-08-28T06:38:14.946Z",
+  "environment": {
+    "browser": "Chrome 152.0.7977.64",
+    "cpu": "Apple M4",
+    "platform": "darwin"
+  },
+  "fixture": {
+    "blocks": [
+      1,
+      12,
+      24
+    ],
+    "lines": [
+      100,
+      1000
+    ]
+  },
+  "implementations": {
+    "css-highlight-local": "same lexer categories and StaticRange strategy as src/components/CodeBlockNode/cssHighlightAdapter.ts",
+    "microlighter-2.1.0": "npm package pinned in devDependencies",
+    "microlighter-main": "not supplied"
+  },
+  "modes": [
+    "plain-pre",
+    "css-highlight-local",
+    "microlighter-2.1.0",
+    "microlighter-main",
+    "stream-diffs-main-thread",
+    "stream-diffs-worker-pool"
+  ],
+  "results": [
+    {
+      "mode": "plain-pre",
+      "blocks": 1,
+      "lines": 100,
+      "durationMs": 50,
+      "domNodes": 2,
+      "ranges": 0,
+      "status": "measured"
+    },
+    {
+      "mode": "css-highlight-local",
+      "blocks": 1,
+      "lines": 100,
+      "durationMs": 61,
+      "domNodes": 2,
+      "ranges": 300,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-2.1.0",
+      "blocks": 1,
+      "lines": 100,
+      "durationMs": 59,
+      "domNodes": 2,
+      "ranges": 400,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-main",
+      "blocks": 1,
+      "lines": 100,
+      "status": "not-run",
+      "reason": "Set MICROLIGHTER_MAIN_DIST to a built dist directory from current upstream main."
+    },
+    {
+      "mode": "stream-diffs-main-thread",
+      "blocks": 1,
+      "lines": 100,
+      "status": "unavailable",
+      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+    },
+    {
+      "mode": "stream-diffs-worker-pool",
+      "blocks": 1,
+      "lines": 100,
+      "status": "not-run",
+      "reason": "Run this harness against the stream-diffs playground surface; the standalone fixture cannot construct its worker pool."
+    },
+    {
+      "mode": "plain-pre",
+      "blocks": 1,
+      "lines": 1000,
+      "durationMs": 29,
+      "domNodes": 2,
+      "ranges": 0,
+      "status": "measured"
+    },
+    {
+      "mode": "css-highlight-local",
+      "blocks": 1,
+      "lines": 1000,
+      "durationMs": 38,
+      "domNodes": 2,
+      "ranges": 3000,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-2.1.0",
+      "blocks": 1,
+      "lines": 1000,
+      "durationMs": 1035,
+      "domNodes": 2,
+      "ranges": 4000,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-main",
+      "blocks": 1,
+      "lines": 1000,
+      "status": "not-run",
+      "reason": "Set MICROLIGHTER_MAIN_DIST to a built dist directory from current upstream main."
+    },
+    {
+      "mode": "stream-diffs-main-thread",
+      "blocks": 1,
+      "lines": 1000,
+      "status": "unavailable",
+      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+    },
+    {
+      "mode": "stream-diffs-worker-pool",
+      "blocks": 1,
+      "lines": 1000,
+      "status": "not-run",
+      "reason": "Run this harness against the stream-diffs playground surface; the standalone fixture cannot construct its worker pool."
+    },
+    {
+      "mode": "plain-pre",
+      "blocks": 12,
+      "lines": 100,
+      "durationMs": 45,
+      "domNodes": 24,
+      "ranges": 0,
+      "status": "measured"
+    },
+    {
+      "mode": "css-highlight-local",
+      "blocks": 12,
+      "lines": 100,
+      "durationMs": 50,
+      "domNodes": 24,
+      "ranges": 3600,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-2.1.0",
+      "blocks": 12,
+      "lines": 100,
+      "durationMs": 173,
+      "domNodes": 24,
+      "ranges": 4800,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-main",
+      "blocks": 12,
+      "lines": 100,
+      "status": "not-run",
+      "reason": "Set MICROLIGHTER_MAIN_DIST to a built dist directory from current upstream main."
+    },
+    {
+      "mode": "stream-diffs-main-thread",
+      "blocks": 12,
+      "lines": 100,
+      "status": "unavailable",
+      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+    },
+    {
+      "mode": "stream-diffs-worker-pool",
+      "blocks": 12,
+      "lines": 100,
+      "status": "not-run",
+      "reason": "Run this harness against the stream-diffs playground surface; the standalone fixture cannot construct its worker pool."
+    },
+    {
+      "mode": "plain-pre",
+      "blocks": 12,
+      "lines": 1000,
+      "durationMs": 48,
+      "domNodes": 24,
+      "ranges": 0,
+      "status": "measured"
+    },
+    {
+      "mode": "css-highlight-local",
+      "blocks": 12,
+      "lines": 1000,
+      "durationMs": 297,
+      "domNodes": 24,
+      "ranges": 36000,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-2.1.0",
+      "blocks": 12,
+      "lines": 1000,
+      "durationMs": 12202,
+      "domNodes": 24,
+      "ranges": 48000,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-main",
+      "blocks": 12,
+      "lines": 1000,
+      "status": "not-run",
+      "reason": "Set MICROLIGHTER_MAIN_DIST to a built dist directory from current upstream main."
+    },
+    {
+      "mode": "stream-diffs-main-thread",
+      "blocks": 12,
+      "lines": 1000,
+      "status": "unavailable",
+      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+    },
+    {
+      "mode": "stream-diffs-worker-pool",
+      "blocks": 12,
+      "lines": 1000,
+      "status": "not-run",
+      "reason": "Run this harness against the stream-diffs playground surface; the standalone fixture cannot construct its worker pool."
+    },
+    {
+      "mode": "plain-pre",
+      "blocks": 24,
+      "lines": 100,
+      "durationMs": 24,
+      "domNodes": 48,
+      "ranges": 0,
+      "status": "measured"
+    },
+    {
+      "mode": "css-highlight-local",
+      "blocks": 24,
+      "lines": 100,
+      "durationMs": 48,
+      "domNodes": 48,
+      "ranges": 7200,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-2.1.0",
+      "blocks": 24,
+      "lines": 100,
+      "durationMs": 299,
+      "domNodes": 48,
+      "ranges": 9600,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-main",
+      "blocks": 24,
+      "lines": 100,
+      "status": "not-run",
+      "reason": "Set MICROLIGHTER_MAIN_DIST to a built dist directory from current upstream main."
+    },
+    {
+      "mode": "stream-diffs-main-thread",
+      "blocks": 24,
+      "lines": 100,
+      "status": "unavailable",
+      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+    },
+    {
+      "mode": "stream-diffs-worker-pool",
+      "blocks": 24,
+      "lines": 100,
+      "status": "not-run",
+      "reason": "Run this harness against the stream-diffs playground surface; the standalone fixture cannot construct its worker pool."
+    },
+    {
+      "mode": "plain-pre",
+      "blocks": 24,
+      "lines": 1000,
+      "durationMs": 104,
+      "domNodes": 48,
+      "ranges": 0,
+      "status": "measured"
+    },
+    {
+      "mode": "css-highlight-local",
+      "blocks": 24,
+      "lines": 1000,
+      "durationMs": 434,
+      "domNodes": 48,
+      "ranges": 72000,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-2.1.0",
+      "blocks": 24,
+      "lines": 1000,
+      "durationMs": 24952,
+      "domNodes": 48,
+      "ranges": 96000,
+      "status": "measured"
+    },
+    {
+      "mode": "microlighter-main",
+      "blocks": 24,
+      "lines": 1000,
+      "status": "not-run",
+      "reason": "Set MICROLIGHTER_MAIN_DIST to a built dist directory from current upstream main."
+    },
+    {
+      "mode": "stream-diffs-main-thread",
+      "blocks": 24,
+      "lines": 1000,
+      "status": "unavailable",
+      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+    },
+    {
+      "mode": "stream-diffs-worker-pool",
+      "blocks": 24,
+      "lines": 1000,
+      "status": "not-run",
+      "reason": "Run this harness against the stream-diffs playground surface; the standalone fixture cannot construct its worker pool."
+    }
+  ],
+  "caveat": "Run with Chrome. stream-diffs rows are explicit not-run entries until the playground adapter is supplied; do not use this exploratory artifact as release evidence."
+}

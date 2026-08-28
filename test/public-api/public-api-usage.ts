@@ -40,6 +40,7 @@ import MarkdownRender, {
   clearGlobalCustomComponents,
   clearRegisteredMarkdownPlugins,
   CodeBlockNode,
+  CssHighlightCodeBlock,
   D2BlockNode,
   disableD2,
   disableInfographic,
@@ -400,6 +401,7 @@ void captureVirtualStatesBeforeThreadSwitch
 void restoreVirtualStateAfterThreadSwitch
 void infographicLoader
 void CodeBlockNode
+void CssHighlightCodeBlock
 void D2BlockNode
 void MathBlockNode
 void MathInlineNode
