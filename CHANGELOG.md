@@ -1,3 +1,44 @@
+## [2.0.6](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.5...markstream-vue@2.0.6) (2026-08-28)
+
+
+### Bug Fixes
+
+* bound streaming caches and skip unused HTML VNodes ([dc278bf](https://github.com/Simon-He95/markstream-vue/commit/dc278bf4973948c49ace999865f9ac6d9704bc9e))
+* bound streaming caches safely ([31204fe](https://github.com/Simon-He95/markstream-vue/commit/31204fe02aab3d08f189bd1965cb1551a7ed514d))
+* **core:** correct CJK fast-path grapheme boundary and window bugs ([a33e940](https://github.com/Simon-He95/markstream-vue/commit/a33e94024e0fec214acb033cb9281c0e46674254))
+* correct incremental timeline rebuild ([8f18a5a](https://github.com/Simon-He95/markstream-vue/commit/8f18a5a202efd4b4138ddfd0fc8506964c612d0e))
+* keep code block loading header height stable ([4a4dd05](https://github.com/Simon-He95/markstream-vue/commit/4a4dd05bf0cf8c1be442b8fb47112cdcd411a9e8))
+* keep streaming-cpu benchmark under CI test timeouts ([47a854d](https://github.com/Simon-He95/markstream-vue/commit/47a854dd4c33b8e200be4a3d7f50b7bc65f734cd))
+* **parser:** remove unreachable cache write ([7f395e9](https://github.com/Simon-He95/markstream-vue/commit/7f395e914da91fe4754d070518311596d20a194a))
+* **perf:** preserve streaming optimization correctness ([fd2e3e2](https://github.com/Simon-He95/markstream-vue/commit/fd2e3e2a88917bfffcce31b316f5bbf87afc2040))
+* **perf:** remove redundant hot-path defenses ([b4ee267](https://github.com/Simon-He95/markstream-vue/commit/b4ee267bd759c829e10023332dc8d724ffb92d4b))
+* **perf:** simplify streaming hot-path optimizations ([9de2040](https://github.com/Simon-He95/markstream-vue/commit/9de2040febfc78886a44f19044aed9824da6391a))
+* **perf:** tighten streaming hot-path optimizations ([daaf0c9](https://github.com/Simon-He95/markstream-vue/commit/daaf0c96e58d9901b153b3447de061dbe696e5c1))
+* refresh explicit timeline estimates ([2eab12c](https://github.com/Simon-He95/markstream-vue/commit/2eab12c1c3c605aba7df01783f389f8a21450073))
+* **renderer:** keep batch-render focus sync synchronous ([903539b](https://github.com/Simon-He95/markstream-vue/commit/903539b7f50fe48203f62257446fe338d2b628f0))
+* **test:** avoid pending html renderer import ([e374344](https://github.com/Simon-He95/markstream-vue/commit/e374344825a69f3e1ff52def035964c50b61744e))
+
+
+### Performance Improvements
+
+* **code-block:** dedupe settle-time diff hand-off for identical pairs ([41794c8](https://github.com/Simon-He95/markstream-vue/commit/41794c8c7f338283b098913816dcd5ca719e965c))
+* **code-block:** memoize diff header stats and drop eager per-commit LCS ([ca7508f](https://github.com/Simon-He95/markstream-vue/commit/ca7508f6a1d6c4213381c848ad8618f51fa64b66))
+* **core:** extend grapheme fast path to CJK/JP/KR scripts ([b80e1d5](https://github.com/Simon-He95/markstream-vue/commit/b80e1d5c547ae4a05e76289b0d0a85209391de79))
+* **core:** incremental diff-preview line splitting and allocation-free blank checks ([1fb22e3](https://github.com/Simon-He95/markstream-vue/commit/1fb22e36d366dc5145133921319c3d68d6cf6530))
+* cut streaming CPU across parser, diff-preview, and renderer hot paths ([0771ba9](https://github.com/Simon-He95/markstream-vue/commit/0771ba9ab4fc531e4da02fd17b2e856ee9097d56))
+* cut streaming CPU churn in virtual timeline and HTML nodes ([f93a2c2](https://github.com/Simon-He95/markstream-vue/commit/f93a2c2d784913a82bad57fef2bde76b78657f75))
+* cut streaming CPU with lazy fence scan, cached linkify context, and single-pass diff summary ([652c3a3](https://github.com/Simon-He95/markstream-vue/commit/652c3a3ea34be8f5e249b1c40f7642a040758866))
+* incremental timeline layout rebuild and streaming parser fast paths ([f23bfae](https://github.com/Simon-He95/markstream-vue/commit/f23bfae2cd726bcc4f135af64d563f9599676ca4))
+* **parser:** incremental tolerant-math scan-window line offsets ([fc20353](https://github.com/Simon-He95/markstream-vue/commit/fc203533f0faf1cc08abc99a6db8dcc08f25767a))
+* **parser:** reuse stable top-level html_block nodes during streaming ([0ef94a4](https://github.com/Simon-He95/markstream-vue/commit/0ef94a4ae707231ad4e6cec0a612c28c9b11c387))
+* **renderer:** coalesce scrollTop reads and focus sync to one rAF per frame ([2e5a7fe](https://github.com/Simon-He95/markstream-vue/commit/2e5a7fee4ba9170f512312e79f08a8c022ce9ca4))
+* **renderer:** dedupe per-commit focus sync into one rAF ([b14f3d1](https://github.com/Simon-He95/markstream-vue/commit/b14f3d1679f8aa4463195811bae6db21dba462c2))
+* **renderer:** only force-flush height measurements for meaningful batches ([1f7cdb6](https://github.com/Simon-He95/markstream-vue/commit/1f7cdb693ada432b1fd297c2f4a6e4b056cb3cdd))
+* **renderer:** single DOM pass per virtual-metrics emission, cache prune on final ([832f503](https://github.com/Simon-He95/markstream-vue/commit/832f503bbddc0ab6ec6b5b9e4813526a31f55474))
+* **timeline:** stop whole-list re-renders per item emit, coalesce scroll metrics to rAF ([f3b61f8](https://github.com/Simon-He95/markstream-vue/commit/f3b61f83cd2277bd4061a0010eb4e711887d0c65))
+
+
+
 ## [2.0.5](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.4...markstream-vue@2.0.5) (2026-08-26)
 
 
