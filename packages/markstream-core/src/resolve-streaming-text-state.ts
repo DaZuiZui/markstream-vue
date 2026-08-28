@@ -61,11 +61,7 @@ export function resolveStreamingTextUpdate({
   typewriterEnabled,
   streamRenderVersionChanged = false,
 }: ResolveStreamingTextUpdateOptions): StreamingTextStateResult {
-  // Reuse the settled string when no delta is pending instead of allocating a
-  // concatenated copy with an identical value.
-  const renderedContent = currentState.streamedDelta
-    ? currentState.settledContent + currentState.streamedDelta
-    : currentState.settledContent
+  const renderedContent = `${currentState.settledContent}${currentState.streamedDelta}`
 
   if (!typewriterEnabled) {
     return {

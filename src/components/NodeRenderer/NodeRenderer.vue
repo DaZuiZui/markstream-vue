@@ -1145,8 +1145,13 @@ function recordNodeHeightCore(
   return true
 }
 
-function getNodeLayoutHeight(index: number, contentEl: HTMLElement) {
+function getNodeLayoutHeight(
+  index: number,
+  contentEl: HTMLElement,
+  visibleHeights?: Map<number, number>,
+) {
   const contentElHeight = readLayout('getNodeLayoutHeight.content.offsetHeight', () => contentEl.offsetHeight)
+  visibleHeights?.set(index, contentElHeight)
   // The content element always wraps the node payload, so a positive content
   // height already pins the slot's border-box height (slot padding relies on
   // margin collapse inside the flow-root content, not on the slot element).
@@ -4107,7 +4112,8 @@ function flushVirtualMetricsEmit() {
     // One physical pass feeds both the height model and the emitted
     // visibleDomHeight, instead of measureTrackedNodeHeights() plus a second
     // O(N) offsetHeight sweep inside getVisibleDomHeight().
-    measuredElementHeights = measureTrackedNodeHeights()
+    measuredElementHeights = new Map()
+    measureTrackedNodeHeights(measuredElementHeights)
   }
   // Force-flush only when a meaningful batch accumulated or no flush is
   // scheduled; tiny pending batches let the pending rAF flush naturally,
@@ -4395,8 +4401,7 @@ function measureNodeHeight(index: number, el: HTMLElement, preMeasuredHeight?: n
 function measureTrackedNodeHeights(sink?: Map<number, number>) {
   for (const [index, el] of nodeContentElements) {
     if (el) {
-      const height = getNodeLayoutHeight(index, el)
-      sink?.set(index, height)
+      const height = getNodeLayoutHeight(index, el, sink)
       measureNodeHeight(index, el, height)
     }
   }

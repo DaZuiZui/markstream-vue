@@ -725,20 +725,8 @@ function hashTimelineString(value: string) {
     hash = Math.imul(hash, 16777619)
   }
   const result = (hash >>> 0).toString(36)
-  // Evict the oldest eighth instead of clear(): a wholesale clear makes long
-  // threads periodically re-hash every item at once (visible as scroll-time
-  // CPU spikes). Map preserves insertion order, so the oldest entries are the
-  // least-recently inserted keys.
-  if (timelineContentHashCache.size >= TIMELINE_CONTENT_HASH_CACHE_MAX_ENTRIES) {
-    const evictCount = Math.max(1, TIMELINE_CONTENT_HASH_CACHE_MAX_ENTRIES >> 3)
-    let evicted = 0
-    for (const key of timelineContentHashCache.keys()) {
-      timelineContentHashCache.delete(key)
-      evicted += 1
-      if (evicted >= evictCount)
-        break
-    }
-  }
+  if (timelineContentHashCache.size >= TIMELINE_CONTENT_HASH_CACHE_MAX_ENTRIES)
+    timelineContentHashCache.clear()
   timelineContentHashCache.set(value, result)
   return result
 }
@@ -1146,58 +1134,6 @@ function updateScrollMetrics(options: { remember?: boolean } = {}) {
   }
 }
 
-let scrollMetricsRaf: number | null = null
-
-function cancelScheduledScrollMetrics() {
-  if (scrollMetricsRaf != null && typeof cancelAnimationFrame === 'function')
-    cancelAnimationFrame(scrollMetricsRaf)
-  scrollMetricsRaf = null
-}
-
-// Scroll events fire at input frequency (120Hz+) while the browser paints at
-// frame rate. The fallthrough observation path only needs the last event's
-// values once per frame, so the scrollTop/viewportHeight writes and
-// updateBottomPinned coalesce into a single updateScrollMetrics per frame.
-// The remember schedule stays event-synchronous (internally throttled) so the
-// 80ms capture window opens at event time, and the synchronous branches in
-// handleTimelineScroll (restore gate, pending programmatic scroll, bottom-pin
-// DOM writes) bypass this and stay immediate.
-function scheduleScrollMetricsUpdate() {
-  // The remember window must open at event time (not frame time) so captures
-  // still read the last event's viewport; it is internally throttled to once
-  // per THREAD_STATE_REMEMBER_DELAY_MS exactly as before. The fallthrough is
-  // only reachable when restorePaintReady is true, which implies
-  // restoringThread is false, matching the old remember condition.
-  scheduleThreadStateRemember()
-
-  if (scrollMetricsRaf != null)
-    return
-
-  if (typeof requestAnimationFrame !== 'function') {
-    updateScrollMetrics()
-    return
-  }
-
-  scrollMetricsRaf = requestAnimationFrame(() => {
-    scrollMetricsRaf = null
-    // While a restore repaint gate owns scroll handling it enforces the
-    // anchor synchronously per event; a queued observation must not write
-    // scroll refs mid-restore. The remember schedule already fired at event
-    // time, so only the ref writes are skipped here.
-    if (!restorePaintReady.value)
-      return
-    updateScrollMetrics({ remember: false })
-  })
-}
-
-function applyPendingScrollMetrics() {
-  if (scrollMetricsRaf == null)
-    return
-
-  cancelScheduledScrollMetrics()
-  updateScrollMetrics({ remember: false })
-}
-
 function applyScrollOffset(
   offset: number,
   options: {
@@ -1294,7 +1230,7 @@ function handleTimelineScroll() {
   }
 
   pendingProgrammaticScroll = null
-  scheduleScrollMetricsUpdate()
+  updateScrollMetrics()
 }
 
 function scrollToOffset(offset: number) {
@@ -1957,9 +1893,6 @@ function captureOuterAnchor(): MarkstreamThreadAnchor | undefined {
 }
 
 function captureThreadStateForKey(threadKey = normalizedThreadKey.value): MarkstreamThreadVirtualState {
-  // A scroll observation may be queued for the next frame; state captures must
-  // always observe the latest scroll metrics, so apply it synchronously here.
-  applyPendingScrollMetrics()
   flushPendingLayoutReconciles()
 
   const itemHeights: Record<string, number> = {}
@@ -3190,7 +3123,6 @@ onUpdated(() => {
 onBeforeUnmount(() => {
   if (!flushThreadStateRemember())
     rememberThreadState()
-  cancelScheduledScrollMetrics()
   clearThreadRestoreSchedule()
   cleanupObservers()
   markdownPropsCache.clear()

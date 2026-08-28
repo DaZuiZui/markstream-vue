@@ -43,14 +43,8 @@ interface SourceLineMatch {
   originalIndex: number
 }
 
-/**
- * Cross-frame cache for incremental LCS reuse while a diff streams (append-only
- * content). `buildDiffPreviewPanes`/`computeMatches` mutate it in place; pass a
- * fresh one per diff block (e.g. a ref in the component) — it self-validates
- * against non-append content changes and re-seeds on a full recompute.
- */
 /** Cached split state of one source side, used to reuse earlier line strings across streaming frames. */
-export interface SourceSplitCache {
+interface SourceSplitCache {
   /** Displayed source (trailing newline trimmed when not loading) the lines were split from. */
   source: string
   /** Loading flag the lines were split with. */
@@ -59,6 +53,12 @@ export interface SourceSplitCache {
   lines: string[]
 }
 
+/**
+ * Cross-frame cache for incremental LCS reuse while a diff streams (append-only
+ * content). `buildDiffPreviewPanes`/`computeMatches` mutate it in place; pass a
+ * fresh one per diff block (e.g. a ref in the component) — it self-validates
+ * against non-append content changes and re-seeds on a full recompute.
+ */
 export interface DiffMatchCache {
   /** Original lines the cached matches were computed for. */
   original: string[]
@@ -171,10 +171,7 @@ function normalizeLanguage(language: unknown) {
 }
 
 function isBlank(code: string) {
-  // `\s` covers the exact same whitespace set as `String.prototype.trim`
-  // (including \u00a0, \ufeff, \u3000, \u2028, \u2029) without allocating a
-  // trimmed copy per line.
-  return /^\s*$/.test(code)
+  return String(code ?? '').trim().length === 0
 }
 
 function makeLine(
