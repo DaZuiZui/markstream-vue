@@ -1026,18 +1026,6 @@ export function useMarkstreamVirtualAdapter<T = MarkstreamTimelineItem>(
     }
 
     markdownPropsCache.set(cacheKey, props)
-    if (final) {
-      const liveCacheKey = [
-        itemKey,
-        sessionKey,
-        'live',
-        measurementKey,
-        markdownMode,
-        renderCodeBlocksAsPre,
-        options.markdownFade === true ? 'fade' : 'no-fade',
-      ].join(':')
-      markdownPropsCache.delete(liveCacheKey)
-    }
     return props
   }
 

@@ -48,7 +48,7 @@ function setTolerantMathBoundaryStreamCache(
   source: string,
   key: string | null,
   explicitBracketMath: ExplicitBracketMathStreamState = scanExplicitBracketMathStreamState(source).state,
-  scanWindow: TolerantBoundaryScanWindowCache = { lineOffset: 0, source: '', windowStart: 0 },
+  scanWindow: TolerantBoundaryScanWindowCache = { lineOffset: 0, windowStart: 0 },
 ) {
   runtime.tolerantMathBoundary = {
     explicitBracketMath,
@@ -771,7 +771,9 @@ export function syncTolerantMathBoundaryStreamCache(runtime: ParserRuntime, sour
     }
   }
 
-  const scanWindow = previous?.scanWindow ?? { lineOffset: 0, source: '', windowStart: 0 }
+  const scanWindow = sourceExtendsPrevious && previous
+    ? previous.scanWindow
+    : { lineOffset: 0, windowStart: 0 }
   const nextKey = getTolerantMathBlockBoundaryStreamKey(source, scanWindow)
   const sourceWasReplaced = previous ? !sourceExtendsPrevious : false
 

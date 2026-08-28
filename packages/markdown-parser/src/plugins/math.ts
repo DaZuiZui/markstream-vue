@@ -624,7 +624,6 @@ function trimRightSpaceOrTab(value: string) {
 
 interface TolerantBoundaryScanWindowCache {
   lineOffset: number
-  source: string
   windowStart: number
 }
 
@@ -780,14 +779,13 @@ function getTolerantBoundaryScanWindow(
   if (source.length <= TOLERANT_BOUNDARY_SCAN_TAIL_CHARS)
     return { source, lineOffset: 0 }
 
-  if (cache && source.startsWith(cache.source)) {
+  if (cache) {
     const cut = source.length - TOLERANT_BOUNDARY_SCAN_TAIL_CHARS
     let start = source.indexOf('\n', cut)
     start = start === -1 ? source.length : start + 1
     const lineOffset = cache.lineOffset
       + countLineBreaks(source.slice(cache.windowStart, start))
     cache.lineOffset = lineOffset
-    cache.source = source
     cache.windowStart = start
     return { source: source.slice(start), lineOffset }
   }
@@ -798,7 +796,6 @@ function getTolerantBoundaryScanWindow(
   const lineOffset = countLineBreaks(source.slice(0, start))
   if (cache) {
     cache.lineOffset = lineOffset
-    cache.source = source
     cache.windowStart = start
   }
   return {

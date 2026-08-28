@@ -34,7 +34,6 @@ export interface TolerantMathBoundaryRuntimeState {
   pendingCandidate: boolean
   scanWindow: {
     lineOffset: number
-    source: string
     windowStart: number
   }
 }

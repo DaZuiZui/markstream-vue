@@ -158,7 +158,7 @@ describe('parser runtime lifecycle characterization', () => {
     const runtime = getParserRuntime(md)
 
     parseStreaming(source, md)
-    expect(runtime.tolerantMathBoundary?.scanWindow.source).toBe(source)
+    expect(runtime.tolerantMathBoundary?.scanWindow.windowStart).toBeGreaterThan(0)
 
     parseMarkdownToStructure(source, md, { final: true })
     expect(runtime.tolerantMathBoundary).toBeUndefined()

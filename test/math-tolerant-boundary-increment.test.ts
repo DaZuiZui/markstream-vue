@@ -20,7 +20,7 @@ function coldKey(source: string) {
 
 describe('tolerant math boundary stream key incremental lineOffset', () => {
   it('warm (incremental) keys equal full-recomputation keys across appends', () => {
-    const cache = { lineOffset: 0, source: '', windowStart: 0 }
+    const cache = { lineOffset: 0, windowStart: 0 }
     const paragraphs = [
       'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod.\n',
       '| a | b |\n| --- | --- |\n| 1 | 2 |\n',
@@ -52,7 +52,7 @@ describe('tolerant math boundary stream key incremental lineOffset', () => {
   })
 
   it('single-char appends crossing the window cut boundary stay exact', () => {
-    const cache = { lineOffset: 0, source: '', windowStart: 0 }
+    const cache = { lineOffset: 0, windowStart: 0 }
     // Build past the tail threshold, then append one char at a time. The cut
     // index (source.length - TAIL) advances one position per append and sweeps
     // over newline positions, exercising both the "first newline after cut is
@@ -72,7 +72,7 @@ describe('tolerant math boundary stream key incremental lineOffset', () => {
   })
 
   it('newline-free appends keep the clamped empty-window branch exact', () => {
-    const cache = { lineOffset: 0, source: '', windowStart: 0 }
+    const cache = { lineOffset: 0, windowStart: 0 }
     // Window start clamps to source.length when no '\n' exists after the cut:
     // the window is empty and the key is null, while the memo must keep
     // tracking the newline count for later appends that reintroduce '\n'.
@@ -99,28 +99,8 @@ describe('tolerant math boundary stream key incremental lineOffset', () => {
     expect(getTolerantMathBlockBoundaryStreamKey(source, cache)).toBe(coldKey(source))
   })
 
-  it('non-append replacement invalidates the memo without wrong output', () => {
-    const cache = { lineOffset: 0, source: '', windowStart: 0 }
-    const mathBlock = 'text $$\nE = mc^2\n$$\n'
-    const filler = 'word '.repeat(120)
-    const docA = `${mathBlock + filler}\n`.repeat(600)
-    const docB = `${`# Other document\n${filler}${mathBlock}`}\n`.repeat(600)
-
-    const keyA1 = getTolerantMathBlockBoundaryStreamKey(docA, cache)
-    const keyB = getTolerantMathBlockBoundaryStreamKey(docB, cache)
-
-    // Complete replacement: docB does not extend docA.
-    expect(keyB).not.toBe(keyA1)
-
-    // Back to docA (now a non-append vs the memoized docB).
-    expect(getTolerantMathBlockBoundaryStreamKey(docA, cache)).toBe(keyA1)
-    // And cold recomputation agrees with both.
-    expect(coldKey(docA)).toBe(keyA1)
-    expect(coldKey(docB)).toBe(keyB)
-  })
-
   it('mayContainTolerantMathBlockBoundaryOpener stays correct on long streamed docs', () => {
-    const cache = { lineOffset: 0, source: '', windowStart: 0 }
+    const cache = { lineOffset: 0, windowStart: 0 }
     const paragraph = 'Plain narrative line without delimiters.\n'
     const mathBlock = 'inline text $$\n\\int_0^1 x^2 dx\n$$\n'
 

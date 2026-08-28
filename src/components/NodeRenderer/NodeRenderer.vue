@@ -1148,10 +1148,8 @@ function recordNodeHeightCore(
 function getNodeLayoutHeight(
   index: number,
   contentEl: HTMLElement,
-  visibleHeights?: Map<number, number>,
 ) {
   const contentElHeight = readLayout('getNodeLayoutHeight.content.offsetHeight', () => contentEl.offsetHeight)
-  visibleHeights?.set(index, contentElHeight)
   // The content element always wraps the node payload, so a positive content
   // height already pins the slot's border-box height (slot padding relies on
   // margin collapse inside the flow-root content, not on the slot element).
@@ -2301,24 +2299,20 @@ const providedNodeLifecycle: MarkstreamNodeLifecycle = {
 
 provide(MARKSTREAM_NODE_LIFECYCLE_KEY, providedNodeLifecycle)
 
-function getVisibleDomHeight(preMeasuredElementHeights?: Map<number, number>) {
-  // Prefer the (index → height) capture from the same-pass
-  // measureTrackedNodeHeights() scan: reusing those readings skips a second
+function getVisibleDomHeight(preMeasuredHeight?: number) {
+  // Prefer the total captured by the same-pass measureTrackedNodeHeights()
+  // scan: reusing those readings skips a second
   // full offsetHeight sweep of nodeContentElements within the same emission.
   // Fall back to a fresh DOM scan when this frame skipped the full pass.
-  if (preMeasuredElementHeights) {
-    let total = 0
-    for (const height of preMeasuredElementHeights.values())
-      total += height > 0 ? height : 0
-    return Math.ceil(Math.max(0, total))
-  }
+  if (preMeasuredHeight !== undefined)
+    return preMeasuredHeight
 
   let total = 0
 
   for (const el of nodeContentElements.values())
-    total += readLayout('getVisibleDomHeight.offsetHeight', () => el?.offsetHeight ?? 0)
+    total += readLayout('getVisibleDomHeight.offsetHeight', () => el.offsetHeight)
 
-  return Math.ceil(Math.max(0, total))
+  return total
 }
 
 function getVirtualizedDomLogicalHeight() {
@@ -2443,7 +2437,7 @@ function resolveVirtualConfidence(
 function getVirtualMetrics(
   reason: MarkstreamVirtualReason = 'manual',
   phase?: MarkstreamVirtualPhase,
-  preMeasuredElementHeights?: Map<number, number>,
+  preMeasuredVisibleDomHeight?: number,
 ): MarkstreamVirtualMetrics {
   const summary = buildVirtualHeightSummary()
   const resolvedPhase = resolveVirtualPhase(phase)
@@ -2460,7 +2454,7 @@ function getVirtualMetrics(
     averageNodeHeight: summary.averageNodeHeight,
     topSpacerHeight: summary.topSpacerHeight,
     bottomSpacerHeight: summary.bottomSpacerHeight,
-    visibleDomHeight: getVisibleDomHeight(preMeasuredElementHeights),
+    visibleDomHeight: getVisibleDomHeight(preMeasuredVisibleDomHeight),
     totalHeight: getRendererLogicalHeight(summary),
     width: summary.width,
     final: effectiveFinal.value === true,
@@ -4106,21 +4100,20 @@ function flushVirtualMetricsEmit() {
   // Throttling to a 120ms window keeps the freshness contract while cutting
   // the settle-phase full-scan rate by ~75% (emits run up to ~30/s).
   const now = getVirtualNow()
-  let measuredElementHeights: Map<number, number> | undefined
+  let measuredVisibleDomHeight: number | undefined
   if (now - lastFullMetricsScanAt >= METRICS_FULL_SCAN_INTERVAL_MS) {
     lastFullMetricsScanAt = now
     // One physical pass feeds both the height model and the emitted
     // visibleDomHeight, instead of measureTrackedNodeHeights() plus a second
     // O(N) offsetHeight sweep inside getVisibleDomHeight().
-    measuredElementHeights = new Map()
-    measureTrackedNodeHeights(measuredElementHeights)
+    measuredVisibleDomHeight = measureTrackedNodeHeights()
   }
   // Force-flush only when a meaningful batch accumulated or no flush is
   // scheduled; tiny pending batches let the pending rAF flush naturally,
   // keeping measurement writes coalesced into one layout pass per frame.
   if (pendingHeightMeasurements.size > PENDING_HEIGHT_FORCE_FLUSH_THRESHOLD || heightMeasurementRaf == null)
     forceFlushPendingHeightMeasurements()
-  emitVirtualMetricsNow(getVirtualMetrics(pendingVirtualMetricsReason, undefined, measuredElementHeights))
+  emitVirtualMetricsNow(getVirtualMetrics(pendingVirtualMetricsReason, undefined, measuredVisibleDomHeight))
 }
 
 function scheduleVirtualMetricsEmit(reason: MarkstreamVirtualReason) {
@@ -4393,19 +4386,18 @@ function queueNodeHeightRecord(index: number, el: HTMLElement, height: number) {
     flushPendingHeightMeasurements()
 }
 
-function measureNodeHeight(index: number, el: HTMLElement, preMeasuredHeight?: number) {
-  const height = preMeasuredHeight ?? getNodeLayoutHeight(index, el)
-  queueNodeHeightRecord(index, el, height)
+function measureNodeHeight(index: number, el: HTMLElement) {
+  queueNodeHeightRecord(index, el, getNodeLayoutHeight(index, el))
 }
 
-function measureTrackedNodeHeights(sink?: Map<number, number>) {
+function measureTrackedNodeHeights() {
+  let visibleDomHeight = 0
   for (const [index, el] of nodeContentElements) {
-    if (el) {
-      const height = getNodeLayoutHeight(index, el, sink)
-      measureNodeHeight(index, el, height)
-    }
+    const height = getNodeLayoutHeight(index, el)
+    visibleDomHeight += height
+    queueNodeHeightRecord(index, el, height)
   }
-  return sink
+  return visibleDomHeight
 }
 
 function getNodeContentResizeObserver() {

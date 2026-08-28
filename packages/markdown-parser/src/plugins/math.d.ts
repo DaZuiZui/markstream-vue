@@ -7,7 +7,6 @@ export declare function normalizeStandaloneBackslashT(s: string, opts?: MathOpti
 export declare function hasMarkstreamMathPlugin(md: MarkdownIt): boolean;
 interface TolerantBoundaryScanWindowCache {
     lineOffset: number;
-    source: string;
     windowStart: number;
 }
 export declare function getTolerantMathBlockBoundaryStreamKey(markdown: string, scanWindowCache?: TolerantBoundaryScanWindowCache): string | null;
