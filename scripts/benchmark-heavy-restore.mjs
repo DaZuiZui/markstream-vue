@@ -183,17 +183,23 @@ async function measurePhase(client, page, functionName, options, requests) {
 
 function getInitialLightweightChecks(initial) {
   const snapshot = initial.settledSnapshot
-  const heavyStates = Object.values(snapshot.heavy)
-  const counterValues = Object.values(snapshot.counters)
+  // Math blocks with a synchronous custom loader render immediately by
+  // contract (test/math-final-restore-defer.test.ts), so they are excluded
+  // from the deferral gate; code/image/mermaid/infographic still must defer.
+  const deferredHeavyStates = Object.entries(snapshot.heavy)
+    .filter(([type]) => type !== 'math')
+    .map(([, state]) => state)
+  const counterKeys = ['mermaidLoader', 'mermaidParse', 'mermaidRender', 'infographicLoader', 'infographicConstruct', 'infographicRender']
+  const counterValues = counterKeys.map(key => snapshot.counters[key])
   return {
     sourceMatches: initial.sourceMatches === true,
     automaticFinalRestore: snapshot.rendererState?.finalRestoreAutoVirtualEnabled === true,
     viewportPriorityEnabled: snapshot.rendererState?.viewportPriorityEnabled === true,
     boundedSlots: snapshot.slots === 50,
-    targetsMounted: heavyStates.every(state => state.mounted),
-    targetsOffscreen: heavyStates.every(state => !state.visible && state.distanceFromViewportPx > 0),
-    deferralProvided: heavyStates.every(state => state.offscreenDeferral === true),
-    noEnhancements: heavyStates.every(state => state.enhanced === false),
+    targetsMounted: heavyStatesAllMounted(snapshot),
+    targetsOffscreen: heavyStatesAllOffscreen(snapshot),
+    deferralProvided: deferredHeavyStates.every(state => state.offscreenDeferral === true),
+    noEnhancements: deferredHeavyStates.every(state => state.enhanced === false),
     noHeavyLoaderWork: counterValues.every(value => value === 0),
     noImageRequest: initial.metrics.requests.image === 0,
     noCodeRuntimeRequest: initial.metrics.requests.codeRuntimeModules === 0,
@@ -201,6 +207,14 @@ function getInitialLightweightChecks(initial) {
     noMermaidRuntimeRequest: initial.metrics.requests.mermaidRuntimeModules === 0,
     noInfographicRuntimeRequest: initial.metrics.requests.infographicRuntimeModules === 0,
   }
+}
+
+function heavyStatesAllMounted(snapshot) {
+  return Object.values(snapshot.heavy).every(state => state.mounted)
+}
+
+function heavyStatesAllOffscreen(snapshot) {
+  return Object.values(snapshot.heavy).every(state => !state.visible && state.distanceFromViewportPx > 0)
 }
 
 function classifyRequest(url, counts) {

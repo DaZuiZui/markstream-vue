@@ -8,6 +8,8 @@ export interface BatchRenderingStateOptions {
   isTestEnv: boolean
   renderAsFragment: ComputedRef<boolean>
   forceFullRenderFinalContent?: ComputedRef<boolean>
+  /** Final restore with a large document: keep incremental batching active. */
+  finalRestoreBatchingEnabled?: ComputedRef<boolean>
 }
 
 export interface BatchRenderingState {
@@ -75,6 +77,7 @@ export function useBatchRenderingState(
     return batchingEnabled.value
       && !options.continuousStreaming?.value
       && !options.forceFullRenderFinalContent?.value
+      && !options.finalRestoreBatchingEnabled?.value
       && (props.maxLiveNodes ?? 0) <= 0
   })
 
