@@ -1,5 +1,6 @@
+import type { DiffMatchCache } from 'markstream-core'
 import type { CodeBlockNodeProps } from '../../types/component-props'
-import { buildDiffPreviewPanes } from 'markstream-core'
+import { buildDiffPreviewPanes, createDiffMatchCache } from 'markstream-core'
 import { defineComponent, h } from 'vue'
 import { getLanguageIcon, languageMap, normalizeLanguageIdentifier } from '../../utils/languageIcon'
 import {
@@ -13,6 +14,11 @@ import { resolvePreCodeVisualOptions } from '../PreCodeNode/preCodeVisual'
 import './codeBlockNodeLoading.css'
 
 type CodeBlockFallbackProps = CodeBlockNodeProps & Record<string, unknown>
+
+// Cross-frame LCS cache for the loading shell's diff stats. Content is validated
+// inside buildDiffPreviewPanes (append-only prefix check with full recompute
+// fallback), so a shared module-level cache stays correct across diff blocks.
+const loadingDiffMatchCache: DiffMatchCache = createDiffMatchCache()
 
 export default defineComponent({
   name: 'CodeBlockNodeLoadingShell',
@@ -77,6 +83,7 @@ export default defineComponent({
             originalCode: props.node?.originalCode,
             updatedCode: props.node?.updatedCode,
             loading: true,
+            matchCache: loadingDiffMatchCache,
           }).flatMap(pane => pane.lines)
         : []
       const stats = isDiff
