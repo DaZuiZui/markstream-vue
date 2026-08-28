@@ -2041,10 +2041,7 @@ function isSameVirtualThreadKey(threadKey: string | undefined) {
   return (threadKey ?? '') === (getVirtualThreadKey() ?? '')
 }
 
-// Memoized layout key: the 26-element stringify result is reused by all hot
-// call sites (metrics emission, settle signatures, event keys) via the
-// computeds below instead of being rebuilt per call.
-const virtualRendererLayoutKey = computed(() => {
+function getVirtualRendererLayoutKey() {
   return buildVirtualRendererLayoutKey({
     renderCodeBlocksAsPre: resolvedRenderCodeBlocksAsPre.value,
     isDark: rendererProps.isDark,
@@ -2054,19 +2051,13 @@ const virtualRendererLayoutKey = computed(() => {
     codeBlockOptions: rendererProps.codeBlockOptions,
     codeBlockProps: rendererProps.codeBlockProps,
   })
-})
-
-// Composed measurement key memoized for the same reason; it changes only when
-// the host measurementKey or a layout-affecting option changes.
-const virtualMeasurementKeyCache = computed(() => {
-  return buildVirtualMeasurementKey(
-    props.virtualScroll?.measurementKey,
-    virtualRendererLayoutKey.value,
-  )
-})
+}
 
 function getVirtualMeasurementKey() {
-  return virtualMeasurementKeyCache.value
+  return buildVirtualMeasurementKey(
+    props.virtualScroll?.measurementKey,
+    getVirtualRendererLayoutKey(),
+  )
 }
 
 function getCurrentVirtualWidth() {

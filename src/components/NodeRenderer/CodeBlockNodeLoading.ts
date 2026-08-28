@@ -1,4 +1,3 @@
-import type { DiffMatchCache } from 'markstream-core'
 import type { CodeBlockNodeProps } from '../../types/component-props'
 import { buildDiffPreviewPanes, createDiffMatchCache } from 'markstream-core'
 import { defineComponent, h } from 'vue'
@@ -14,11 +13,6 @@ import { resolvePreCodeVisualOptions } from '../PreCodeNode/preCodeVisual'
 import './codeBlockNodeLoading.css'
 
 type CodeBlockFallbackProps = CodeBlockNodeProps & Record<string, unknown>
-
-// Cross-frame LCS cache for the loading shell's diff stats. Content is validated
-// inside buildDiffPreviewPanes (append-only prefix check with full recompute
-// fallback), so a shared module-level cache stays correct across diff blocks.
-const loadingDiffMatchCache: DiffMatchCache = createDiffMatchCache()
 
 export default defineComponent({
   name: 'CodeBlockNodeLoadingShell',
@@ -59,6 +53,7 @@ export default defineComponent({
   emits: ['click', 'mouseover', 'mouseout', 'copy', 'previewCode', 'handleArtifactClick'],
   setup(rawProps, { attrs }) {
     const props = rawProps as CodeBlockFallbackProps
+    const loadingDiffMatchCache = createDiffMatchCache()
     return () => {
       const options = props.codeBlockOptions ?? {}
       const visual = resolvePreCodeVisualOptions(options)

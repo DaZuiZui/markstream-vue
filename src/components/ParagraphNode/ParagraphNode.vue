@@ -289,15 +289,8 @@ const processedChildren = computed(() => {
     }
   }
   return children.map((child, index) => {
+    const sig = getChildRenderSignature(child)
     const previous = previousChildCache.get(index)
-    // Fast path: identical reference means identical content (nodes are never
-    // mutated in place), so the previous cached child object stays valid
-    // without recomputing the recursive signature for every streaming commit.
-    let sig: string | null
-    if (child === previous?.child)
-      sig = previous.sig
-    else
-      sig = getChildRenderSignature(child)
     const stableChild = sig != null && previous?.sig === sig ? previous.child : child
     if (sig == null)
       previousChildCache.delete(index)
