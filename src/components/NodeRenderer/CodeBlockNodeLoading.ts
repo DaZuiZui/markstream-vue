@@ -1,5 +1,5 @@
 import type { CodeBlockNodeProps } from '../../types/component-props'
-import { buildDiffPreviewPanes } from 'markstream-core'
+import { buildDiffPreviewPanes, createDiffMatchCache } from 'markstream-core'
 import { defineComponent, h } from 'vue'
 import { getLanguageIcon, languageMap, normalizeLanguageIdentifier } from '../../utils/languageIcon'
 import {
@@ -53,6 +53,7 @@ export default defineComponent({
   emits: ['click', 'mouseover', 'mouseout', 'copy', 'previewCode', 'handleArtifactClick'],
   setup(rawProps, { attrs }) {
     const props = rawProps as CodeBlockFallbackProps
+    const loadingDiffMatchCache = createDiffMatchCache()
     return () => {
       const options = props.codeBlockOptions ?? {}
       const visual = resolvePreCodeVisualOptions(options)
@@ -77,6 +78,7 @@ export default defineComponent({
             originalCode: props.node?.originalCode,
             updatedCode: props.node?.updatedCode,
             loading: true,
+            matchCache: loadingDiffMatchCache,
           }).flatMap(pane => pane.lines)
         : []
       const stats = isDiff
