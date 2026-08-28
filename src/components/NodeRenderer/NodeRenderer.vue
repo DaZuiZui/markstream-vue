@@ -4447,8 +4447,10 @@ function scheduleFinalHeightConvergence() {
   if (!isClient || !effectiveFinal.value || !nodeContentElements.size)
     return
 
+  // ResizeObserver covers layout changes without element re-registration. If
+  // it is unavailable, keep all fallback convergence rounds.
   clearFinalHeightConvergenceTimers()
-  for (const delay of [80, 240, 640]) {
+  for (const delay of nodeContentResizeObserver ? [80] : [80, 240, 640]) {
     const timer = scheduleHeightSettlingTimer(delay, () => {
       for (const [index, el] of nodeContentElements) {
         if (el)
