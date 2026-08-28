@@ -7,6 +7,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import HtmlBlockNode from '../src/components/HtmlBlockNode/HtmlBlockNode.vue'
 
+// Warm the async StructuredNodeRenderer chunk (NodeRenderer → BlockquoteNode)
+// before tests run. HtmlBlockNode only loads it lazily when a structured child
+// renders, and on slow CI workers that dynamic import can resolve after the
+// jsdom teardown, surfacing as an EnvironmentTeardownError that fails the
+// whole worker.
+await import('../src/components/NodeRenderer')
+
 describe('htmlBlockNode streaming DOM stability', () => {
   // Unmount wrappers before the environment tears down. Leaving a mounted
   // renderer alive lets its pending async-component loads resolve after the
