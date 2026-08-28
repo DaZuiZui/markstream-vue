@@ -1,6 +1,6 @@
 {
   "status": "exploratory",
-  "generatedAt": "2026-08-28T06:38:14.946Z",
+  "generatedAt": "2026-08-28T08:10:00.941Z",
   "environment": {
     "browser": "Chrome 152.0.7977.64",
     "cpu": "Apple M4",
@@ -35,7 +35,7 @@
       "mode": "plain-pre",
       "blocks": 1,
       "lines": 100,
-      "durationMs": 50,
+      "durationMs": 43,
       "domNodes": 2,
       "ranges": 0,
       "status": "measured"
@@ -44,7 +44,7 @@
       "mode": "css-highlight-local",
       "blocks": 1,
       "lines": 100,
-      "durationMs": 61,
+      "durationMs": 42,
       "domNodes": 2,
       "ranges": 300,
       "status": "measured"
@@ -53,7 +53,7 @@
       "mode": "microlighter-2.1.0",
       "blocks": 1,
       "lines": 100,
-      "durationMs": 59,
+      "durationMs": 46,
       "domNodes": 2,
       "ranges": 400,
       "status": "measured"
@@ -69,8 +69,10 @@
       "mode": "stream-diffs-main-thread",
       "blocks": 1,
       "lines": 100,
-      "status": "unavailable",
-      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+      "durationMs": 259,
+      "domNodes": 960,
+      "ranges": 0,
+      "status": "measured"
     },
     {
       "mode": "stream-diffs-worker-pool",
@@ -83,7 +85,7 @@
       "mode": "plain-pre",
       "blocks": 1,
       "lines": 1000,
-      "durationMs": 29,
+      "durationMs": 25,
       "domNodes": 2,
       "ranges": 0,
       "status": "measured"
@@ -101,7 +103,7 @@
       "mode": "microlighter-2.1.0",
       "blocks": 1,
       "lines": 1000,
-      "durationMs": 1035,
+      "durationMs": 1009,
       "domNodes": 2,
       "ranges": 4000,
       "status": "measured"
@@ -117,8 +119,10 @@
       "mode": "stream-diffs-main-thread",
       "blocks": 1,
       "lines": 1000,
-      "status": "unavailable",
-      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+      "durationMs": 296,
+      "domNodes": 9060,
+      "ranges": 0,
+      "status": "measured"
     },
     {
       "mode": "stream-diffs-worker-pool",
@@ -131,7 +135,7 @@
       "mode": "plain-pre",
       "blocks": 12,
       "lines": 100,
-      "durationMs": 45,
+      "durationMs": 22,
       "domNodes": 24,
       "ranges": 0,
       "status": "measured"
@@ -140,7 +144,7 @@
       "mode": "css-highlight-local",
       "blocks": 12,
       "lines": 100,
-      "durationMs": 50,
+      "durationMs": 42,
       "domNodes": 24,
       "ranges": 3600,
       "status": "measured"
@@ -149,7 +153,7 @@
       "mode": "microlighter-2.1.0",
       "blocks": 12,
       "lines": 100,
-      "durationMs": 173,
+      "durationMs": 163,
       "domNodes": 24,
       "ranges": 4800,
       "status": "measured"
@@ -165,8 +169,10 @@
       "mode": "stream-diffs-main-thread",
       "blocks": 12,
       "lines": 100,
-      "status": "unavailable",
-      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+      "durationMs": 315,
+      "domNodes": 11520,
+      "ranges": 0,
+      "status": "measured"
     },
     {
       "mode": "stream-diffs-worker-pool",
@@ -188,7 +194,7 @@
       "mode": "css-highlight-local",
       "blocks": 12,
       "lines": 1000,
-      "durationMs": 297,
+      "durationMs": 204,
       "domNodes": 24,
       "ranges": 36000,
       "status": "measured"
@@ -197,7 +203,7 @@
       "mode": "microlighter-2.1.0",
       "blocks": 12,
       "lines": 1000,
-      "durationMs": 12202,
+      "durationMs": 12063,
       "domNodes": 24,
       "ranges": 48000,
       "status": "measured"
@@ -213,8 +219,10 @@
       "mode": "stream-diffs-main-thread",
       "blocks": 12,
       "lines": 1000,
-      "status": "unavailable",
-      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+      "durationMs": 1688,
+      "domNodes": 108720,
+      "ranges": 0,
+      "status": "measured"
     },
     {
       "mode": "stream-diffs-worker-pool",
@@ -227,7 +235,7 @@
       "mode": "plain-pre",
       "blocks": 24,
       "lines": 100,
-      "durationMs": 24,
+      "durationMs": 30,
       "domNodes": 48,
       "ranges": 0,
       "status": "measured"
@@ -236,7 +244,7 @@
       "mode": "css-highlight-local",
       "blocks": 24,
       "lines": 100,
-      "durationMs": 48,
+      "durationMs": 44,
       "domNodes": 48,
       "ranges": 7200,
       "status": "measured"
@@ -245,7 +253,7 @@
       "mode": "microlighter-2.1.0",
       "blocks": 24,
       "lines": 100,
-      "durationMs": 299,
+      "durationMs": 306,
       "domNodes": 48,
       "ranges": 9600,
       "status": "measured"
@@ -261,8 +269,10 @@
       "mode": "stream-diffs-main-thread",
       "blocks": 24,
       "lines": 100,
-      "status": "unavailable",
-      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+      "durationMs": 472,
+      "domNodes": 23040,
+      "ranges": 0,
+      "status": "measured"
     },
     {
       "mode": "stream-diffs-worker-pool",
@@ -275,7 +285,7 @@
       "mode": "plain-pre",
       "blocks": 24,
       "lines": 1000,
-      "durationMs": 104,
+      "durationMs": 81,
       "domNodes": 48,
       "ranges": 0,
       "status": "measured"
@@ -284,7 +294,7 @@
       "mode": "css-highlight-local",
       "blocks": 24,
       "lines": 1000,
-      "durationMs": 434,
+      "durationMs": 420,
       "domNodes": 48,
       "ranges": 72000,
       "status": "measured"
@@ -293,7 +303,7 @@
       "mode": "microlighter-2.1.0",
       "blocks": 24,
       "lines": 1000,
-      "durationMs": 24952,
+      "durationMs": 24298,
       "domNodes": 48,
       "ranges": 96000,
       "status": "measured"
@@ -309,8 +319,10 @@
       "mode": "stream-diffs-main-thread",
       "blocks": 24,
       "lines": 1000,
-      "status": "unavailable",
-      "reason": "page.evaluate: TypeError: Failed to resolve module specifier \"shiki\". Relative references must start with either \"/\", \"./\", or \"../\"."
+      "durationMs": 3197,
+      "domNodes": 217440,
+      "ranges": 0,
+      "status": "measured"
     },
     {
       "mode": "stream-diffs-worker-pool",

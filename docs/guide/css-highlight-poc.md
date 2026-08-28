@@ -16,12 +16,18 @@ Issue #726 adds an opt-in `CssHighlightCodeBlock` prototype. It keeps a plain
 Highlight ranges only after the node settles.
 
 ```ts
-import { CssHighlightCodeBlock, setCustomComponents } from 'markstream-vue'
+import { setCustomComponents } from 'markstream-vue'
+import MyCssHighlightCodeBlock from './MyCssHighlightCodeBlock.vue'
 
 setCustomComponents('css-highlight-benchmark', {
-  code_block: CssHighlightCodeBlock,
+  code_block: MyCssHighlightCodeBlock,
 })
 ```
+
+`CssHighlightCodeBlock` is intentionally a repository-local experiment, not a
+published root export. Copy the prototype source from this repository into
+your application, adapt it to your lexer/highlighter, and register it through
+the stable `code_block` override API.
 
 The adapter intentionally uses a small lexer rather than MicroLighter's
 module-global `highlightAll()` API. Each instance receives a unique registry

@@ -16,12 +16,17 @@ Issue #726 增加了可选的 `CssHighlightCodeBlock` 原型。代码块流式�
 Custom Highlight range。
 
 ```ts
-import { CssHighlightCodeBlock, setCustomComponents } from 'markstream-vue'
+import { setCustomComponents } from 'markstream-vue'
+import MyCssHighlightCodeBlock from './MyCssHighlightCodeBlock.vue'
 
 setCustomComponents('css-highlight-benchmark', {
-  code_block: CssHighlightCodeBlock,
+  code_block: MyCssHighlightCodeBlock,
 })
 ```
+
+`CssHighlightCodeBlock` 有意只作为仓库内实验代码，不作为已发布包的根导出。
+请将本仓库中的原型源码复制到应用内，根据自己的 lexer/高亮器进行调整，再通过
+稳定的 `code_block` 覆盖 API 注册。
 
 适配器使用小型 lexer，而不是 MicroLighter 的模块级全局
 `highlightAll()` API。每个实例都有独立的 registry 前缀，优先使用

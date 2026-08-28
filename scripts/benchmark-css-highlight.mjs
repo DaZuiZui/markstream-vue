@@ -19,7 +19,7 @@
  * under the License.
  */
 
-import { readFileSync, realpathSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { cpus } from 'node:os'
@@ -34,6 +34,94 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const microRoot = path.dirname(path.dirname(require.resolve('microlighter')))
 const streamRoot = path.join(realpathSync(path.join(root, 'node_modules/stream-diffs')), 'dist')
 const pierreRoot = path.join(realpathSync(path.join(root, 'node_modules/@pierre/diffs')), 'dist')
+const pierrePackageRoot = path.dirname(pierreRoot)
+const shikiRoot = path.dirname(realpathSync(require.resolve('shiki/package.json', { paths: [pierrePackageRoot] })))
+const shikijsPackages = [
+  '@shikijs/core',
+  '@shikijs/engine-javascript',
+  '@shikijs/engine-oniguruma',
+  '@shikijs/langs',
+  '@shikijs/themes',
+  '@shikijs/types',
+  '@shikijs/vscode-textmate',
+].map(name => ({
+  name,
+  ...(() => {
+    const resolved = realpathSync(require.resolve(name, { paths: [shikiRoot] }))
+    const root = path.dirname(path.dirname(resolved))
+    return { root, entry: path.relative(root, resolved) }
+  })(),
+}))
+function getImportEntry(packageJson) {
+  const exports = typeof packageJson.exports === 'string' ? packageJson.exports : packageJson.exports?.['.'] || packageJson.exports
+  const imported = typeof exports === 'string' ? exports : exports?.import || exports
+  const entry = typeof imported === 'string' ? imported : imported?.default || imported?.import?.default
+  return entry || packageJson.module || packageJson.main
+}
+const runtimePackages = [
+  '@shikijs/primitive',
+  'hast-util-to-html',
+  'oniguruma-to-es',
+].map((name) => {
+  const resolved = realpathSync(require.resolve(name, { paths: [shikiRoot] }))
+  let packageRoot = path.dirname(resolved)
+  while (packageRoot !== path.dirname(packageRoot)) {
+    const candidate = path.join(packageRoot, 'package.json')
+    if (existsSync(candidate) && JSON.parse(readFileSync(candidate, 'utf8')).name === name)
+      break
+    packageRoot = path.dirname(packageRoot)
+  }
+  const packageJson = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
+  const entry = getImportEntry(packageJson)
+  if (typeof entry !== 'string')
+    throw new Error(`Cannot determine browser entry for ${name}`)
+  return { name, root: packageRoot, entry: entry.replace(/^\.\//, '') }
+})
+// @pierre/diffs is published as an unbundled ESM package. Keep its transitive
+// imports available to the browser fixture by resolving them from the same
+// pnpm virtual store as the installed @pierre/diffs package.
+const pierreDependencyRoot = path.dirname(path.dirname(pierrePackageRoot))
+function findPnpmPackageRoot(name) {
+  const store = path.join(root, 'node_modules/.pnpm')
+  for (const entry of readdirSync(store)) {
+    const candidate = path.join(store, entry, 'node_modules', name)
+    if (existsSync(candidate))
+      return realpathSync(candidate)
+  }
+  throw new Error(`Cannot locate installed dependency ${name}`)
+}
+const pierrePackages = [
+  ['@pierre/theming', path.join(path.dirname(pierrePackageRoot), 'theming')],
+  ['@pierre/theme', path.join(path.dirname(pierrePackageRoot), 'theme')],
+  ['@shikijs/transformers', path.join(pierreDependencyRoot, '@shikijs/transformers')],
+  ['lru_map', path.join(pierreDependencyRoot, 'lru_map')],
+  ['hast-util-to-html', path.join(pierreDependencyRoot, 'hast-util-to-html')],
+  ['diff', path.join(pierreDependencyRoot, 'diff')],
+  ...[
+    'html-void-elements',
+    'character-entities-html4',
+    'character-entities-legacy',
+    'ccount',
+    'comma-separated-tokens',
+    'hast-util-whitespace',
+    'mdast-util-to-hast',
+    'property-information',
+    'space-separated-tokens',
+    'stringify-entities',
+    'zwitch',
+    'emoji-regex-xs',
+    'regex',
+    'regex-recursion',
+    'regex-utilities',
+  ].map(name => [name, findPnpmPackageRoot(name)]),
+].map(([name, packagePath]) => {
+  const packageRoot = realpathSync(packagePath)
+  const packageJson = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
+  const entry = getImportEntry(packageJson)
+  if (typeof entry !== 'string')
+    throw new Error(`Cannot determine browser entry for ${name}`)
+  return { name, root: packageRoot, entry: entry.replace(/^\.\//, '') }
+})
 const microMainRoot = process.env.MICROLIGHTER_MAIN_DIST
   ? path.resolve(process.env.MICROLIGHTER_MAIN_DIST)
   : null
@@ -114,7 +202,37 @@ function localHighlightScript() {
 }
 
 function pageHtml(body) {
-  return `<!doctype html><meta charset="utf-8"><script type="importmap">{"imports":{"@pierre/diffs":"/pierre/index.js"}}</script><style>body{font:14px monospace}pre{white-space:pre}</style>${body}`
+  const imports = {
+    '@pierre/diffs': '/pierre/index.js',
+    'shiki': '/shiki/dist/index.mjs',
+    'shiki/': '/shiki/dist/',
+  }
+  for (const { name, entry } of shikijsPackages) {
+    const slug = name.slice('@shikijs/'.length)
+    imports[name] = `/shikijs/${slug}/${entry}`
+    imports[`${name}/`] = `/shikijs/${slug}/dist/`
+  }
+  for (const { name, entry } of runtimePackages) {
+    const slug = name.replace(/^@shikijs\//, 'shikijs-').replace(/^@/, '').replaceAll('/', '-')
+    imports[name] = `/deps/${slug}/${entry}`
+    imports[`${name}/`] = `/deps/${slug}/`
+  }
+  for (const { name, entry } of pierrePackages) {
+    const slug = name.replace(/^@/, '').replaceAll('/', '-')
+    imports[name] = `/deps/${slug}/${entry}`
+    imports[`${name}/`] = `/deps/${slug}/`
+  }
+  return `<!doctype html><meta charset="utf-8"><script type="importmap">${JSON.stringify({ imports })}</script><style>body{font:14px monospace}pre{white-space:pre}</style>${body}`
+}
+
+function resolveBrowserFile(base) {
+  if (existsSync(base))
+    return base
+  for (const extension of ['.js', '.mjs']) {
+    if (existsSync(`${base}${extension}`))
+      return `${base}${extension}`
+  }
+  return base
 }
 
 function serve() {
@@ -139,6 +257,63 @@ function serve() {
       const file = path.join(pierreRoot, pathname.slice('/pierre/'.length))
       try {
         response.setHeader('content-type', 'text/javascript')
+        response.end(readFileSync(file))
+      }
+      catch { response.writeHead(404).end() }
+      return
+    }
+    if (pathname.startsWith('/shiki/')) {
+      const file = resolveBrowserFile(path.join(shikiRoot, pathname.slice('/shiki/'.length)))
+      try {
+        response.setHeader('content-type', file.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
+        response.end(readFileSync(file))
+      }
+      catch { response.writeHead(404).end() }
+      return
+    }
+    if (pathname.startsWith('/shikijs/')) {
+      const [, , packageName, ...segments] = pathname.split('/')
+      const packageInfo = shikijsPackages.find(({ name }) => name.slice('@shikijs/'.length) === packageName)
+      const file = packageInfo && resolveBrowserFile(path.join(packageInfo.root, ...segments))
+      try {
+        if (!file)
+          throw new Error('Unknown Shiki dependency')
+        response.setHeader('content-type', file.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
+        response.end(readFileSync(file))
+      }
+      catch { response.writeHead(404).end() }
+      return
+    }
+    if (pathname.startsWith('/deps/')) {
+      const [, , slug, ...segments] = pathname.split('/')
+      const packageInfo = [...runtimePackages, ...pierrePackages].find(({ name }) => {
+        const packageSlug = name.replace(/^@shikijs\//, 'shikijs-').replace(/^@/, '').replaceAll('/', '-')
+        return packageSlug === slug
+      })
+      let file = packageInfo && path.join(packageInfo.root, ...segments)
+      // Package subpath exports (for example @pierre/theming/themes) point
+      // into dist even though the browser import-map prefix omits that detail.
+      if (file && !existsSync(file)) {
+        const distFile = path.join(packageInfo.root, 'dist', ...segments)
+        if (existsSync(distFile)) {
+          file = distFile
+        }
+        else if (existsSync(`${distFile}.js`)) {
+          file = `${distFile}.js`
+        }
+        else if (existsSync(`${distFile}.mjs`)) {
+          file = `${distFile}.mjs`
+        }
+        else {
+          const entryDirFile = path.join(packageInfo.root, path.dirname(packageInfo.entry), ...segments)
+          const sourceFile = path.join(packageInfo.root, 'src', ...segments)
+          file = existsSync(sourceFile) || existsSync(`${sourceFile}.js`) ? resolveBrowserFile(sourceFile) : resolveBrowserFile(entryDirFile)
+        }
+      }
+      try {
+        if (!file)
+          throw new Error('Unknown runtime dependency')
+        response.setHeader('content-type', file.endsWith('.wasm') ? 'application/wasm' : 'text/javascript')
         response.end(readFileSync(file))
       }
       catch { response.writeHead(404).end() }
@@ -182,6 +357,12 @@ async function main() {
             continue
           }
           const page = await browser.newPage()
+          const failedRequests = []
+          page.on('requestfailed', request => failedRequests.push(`${request.url()} (${request.failure()?.errorText || 'failed'})`))
+          page.on('response', (response) => {
+            if (response.status() >= 400)
+              failedRequests.push(`${response.url()} (HTTP ${response.status()})`)
+          })
           try {
             const url = `http://127.0.0.1:${port}/fixture?lines=${lines}&blocks=${blocks}`
             const started = Date.now()
@@ -215,7 +396,8 @@ async function main() {
             results.push({ mode, blocks, lines, durationMs: Date.now() - started, domNodes, ranges, status: 'measured' })
           }
           catch (error) {
-            results.push({ mode, blocks, lines, status: 'unavailable', reason: String(error?.message || error) })
+            const detail = failedRequests.length ? `; requests: ${[...new Set(failedRequests)].join(', ')}` : ''
+            results.push({ mode, blocks, lines, status: 'unavailable', reason: `${String(error?.message || error)}${detail}` })
           }
           finally {
             await page.close()
