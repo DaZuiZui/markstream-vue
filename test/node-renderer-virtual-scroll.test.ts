@@ -125,12 +125,13 @@ function installManualMeasurementPlatform() {
     disconnect() {}
   })
 
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function () {
+  const offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function () {
     return heights.get(this) ?? 0
   })
 
   return {
     heights,
+    offsetHeight,
     resizeCallbacks,
     flushFrames() {
       const pending = frames.splice(0)
@@ -1482,6 +1483,47 @@ describe('node renderer virtual-scroll coordination', () => {
     await flushAll()
 
     expect(handle.getVirtualMetrics().totalHeight).not.toBe(500)
+
+    wrapper.unmount()
+  })
+
+  it('skips redundant final convergence reads when ResizeObserver is active', async () => {
+    const platform = installManualMeasurementPlatform()
+    const NodeRenderer = (await import('../src/components/NodeRenderer')).default
+    const wrapper = mount(NodeRenderer, {
+      props: {
+        nodes: [createParagraph(1), createParagraph(2)],
+        final: false,
+        fade: false,
+        viewportPriority: false,
+        virtualScroll: {
+          enabled: true,
+          sessionKey: 'final-convergence-reads',
+          settleMode: 'manual',
+          emitIntervalMs: 0,
+        },
+      },
+    })
+
+    await flushAll()
+
+    const contentEls = getRootNodeContentElements(wrapper.element)
+    for (const el of contentEls) {
+      platform.heights.set(el, 40)
+      platform.resizeCallbacks.get(el)?.([], {} as ResizeObserver)
+    }
+    platform.flushFrames()
+    await nextTick()
+    platform.offsetHeight.mockClear()
+
+    await wrapper.setProps({ final: true })
+    await new Promise(resolve => setTimeout(resolve, 700))
+    platform.flushFrames()
+    await nextTick()
+
+    const contentReads = platform.offsetHeight.mock.instances
+      .filter(instance => contentEls.includes(instance as HTMLElement))
+    expect(contentReads.length).toBe(4)
 
     wrapper.unmount()
   })

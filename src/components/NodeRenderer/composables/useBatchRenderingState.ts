@@ -8,8 +8,6 @@ export interface BatchRenderingStateOptions {
   isTestEnv: boolean
   renderAsFragment: ComputedRef<boolean>
   forceFullRenderFinalContent?: ComputedRef<boolean>
-  /** Final restore with a large document: keep incremental batching active. */
-  finalRestoreBatchingEnabled?: ComputedRef<boolean>
 }
 
 export interface BatchRenderingState {
@@ -77,10 +75,6 @@ export function useBatchRenderingState(
     return batchingEnabled.value
       && !options.continuousStreaming?.value
       && !options.forceFullRenderFinalContent?.value
-      // `finalRestoreBatchingEnabled` is an explicit paced-restore opt-in;
-      // it may override the force-full-render default when the host wants a
-      // large final restore mounted across idle slices instead of one frame.
-      && (!options.forceFullRenderFinalContent?.value || options.finalRestoreBatchingEnabled?.value === true)
       && (props.maxLiveNodes ?? 0) <= 0
   })
 

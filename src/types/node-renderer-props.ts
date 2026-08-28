@@ -370,12 +370,6 @@ export interface NodeRendererProps {
   fade?: boolean
   /** Enable incremental/batched rendering of nodes to avoid large single flush costs. Default: true */
   batchRendering?: boolean
-  /**
-   * Opt in to idle-paced mounting of a large final restore instead of the
-   * default single-pass synchronous mount. The rendered end state is
-   * identical; only the pacing changes. Default: false
-   */
-  finalRestoreBatching?: boolean
   /** How many nodes to render immediately before batching kicks in. Default: 40 */
   initialRenderBatchSize?: number
   /** How many additional nodes to render per batch tick. Default: 80 */

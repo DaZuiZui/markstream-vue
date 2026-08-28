@@ -480,16 +480,10 @@ export function useHeightModel(options: HeightModelOptions) {
     }
 
     // The average height feeds fallback heights for nodes that have neither a
-    // measured nor an estimated height. Snapshot it so average drift
-    // (normally caused by new measurements) invalidates only when it actually
-    // moves meaningfully: streaming appends land new measurements on nearly
-    // every commit, and an exact comparison used to invalidate the whole
-    // prefix (full O(N) rebuild) for sub-pixel average changes. Quantize the
-    // comparison with a ~5% (min 8px) tolerance — far below the estimation
-    // error this average already carries, so spacer heights stay effectively
-    // identical while the prefix rebuild stays O(dirty tail).
+    // measured nor an estimated height. Snapshot it so average drift (normally
+    // caused by new measurements) invalidates only when it actually moves.
     const averageNodeHeight = options.averageNodeHeight.value
-    if (!averageNodeHeightTolerates(fallbackHeightPrefixAverageNodeHeight, averageNodeHeight)) {
+    if (fallbackHeightPrefixAverageNodeHeight !== averageNodeHeight) {
       fallbackHeightPrefixAverageNodeHeight = averageNodeHeight
       markFallbackHeightPrefixDirty(0)
     }
@@ -719,22 +713,4 @@ export function useHeightModel(options: HeightModelOptions) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
-}
-
-/**
- * Tolerance check for the average node height snapshot that guards the
- * fallback height prefix cache. Streaming appends land new measurements on
- * nearly every commit, and the old exact comparison used to invalidate the
- * whole prefix (full O(N) rebuild) for sub-pixel average drift. The band is
- * ~5% of the previous value with an 8px floor — comfortably below the
- * estimation error the fallback average already absorbs — so the prefix
- * rebuild stays O(dirty tail) while spacer heights remain effectively
- * identical.
- */
-function averageNodeHeightTolerates(previous: number, next: number) {
-  if (!Number.isFinite(next) || next <= 0)
-    return previous === next
-  if (!Number.isFinite(previous) || previous <= 0)
-    return false
-  return Math.abs(next - previous) <= Math.max(8, previous * 0.05)
 }

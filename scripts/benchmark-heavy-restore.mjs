@@ -193,9 +193,11 @@ function getInitialLightweightChecks(initial) {
   const counterValues = counterKeys.map(key => snapshot.counters[key])
   return {
     sourceMatches: initial.sourceMatches === true,
-    automaticFinalRestore: snapshot.rendererState?.finalRestoreAutoVirtualEnabled === true,
+    automaticFinalRestore: snapshot.rendererState?.finalRestoreAutoVirtualEnabled === !disableAutoVirtual,
     viewportPriorityEnabled: snapshot.rendererState?.viewportPriorityEnabled === true,
-    boundedSlots: snapshot.slots === 50,
+    boundedSlots: disableAutoVirtual
+      ? snapshot.slots === snapshot.rendererState?.parsedNodeCount
+      : snapshot.slots === 50,
     targetsMounted: heavyStatesAllMounted(snapshot),
     targetsOffscreen: heavyStatesAllOffscreen(snapshot),
     deferralProvided: deferredHeavyStates.every(state => state.offscreenDeferral === true),

@@ -259,7 +259,6 @@ const rendererProps = {
   get parseCoalesceMs() { return resolveRendererProp('parseCoalesceMs') },
   get fade() { return resolvedFade.value },
   get batchRendering() { return resolvedBatchRendering.value },
-  get finalRestoreBatching() { return props.finalRestoreBatching },
   get initialRenderBatchSize() { return resolvedInitialRenderBatchSize.value },
   get renderBatchSize() { return resolvedRenderBatchSize.value },
   get renderBatchDelay() { return resolvedRenderBatchDelay.value },
@@ -482,19 +481,10 @@ watch(
 
 watch(
   [renderContent, () => props.nodes, requestedFinal],
-  ([content, nodes, finalRequested], previous) => {
+  ([content, nodes, finalRequested]) => {
     const nextContent = content ?? ''
 
     if (nodes?.length || finalRequested === true) {
-      // A final dataset that REPLACES (rather than extends) a previously
-      // streamed non-final tail is a new dataset for auto-virtualization
-      // purposes: without this reset, any instance that ever streamed a
-      // partial update can never use final-restore auto-virtualization again
-      // (final content would mount in one blocking frame).
-      const previousContent = previous?.[0] ?? ''
-      if (finalRequested === true && nextContent && previousContent && !nextContent.startsWith(previousContent)) {
-        hasObservedNonFinalContent.value = false
-      }
       clearContentStreamingTailActive()
       continuousStreamingObserved.value = false
       previousContentStreamValue = nextContent
@@ -890,15 +880,6 @@ const {
   isClient,
 })
 const forceFullRenderFinalContent = computed(() => effectiveFinal.value === true && !virtualScrollRequested.value)
-// Paced final restore is opt-in only: the default contract mounts a final
-// restore in one synchronous pass (covered by
-// test/node-renderer-dom-mode.test.ts 'renders final non-virtual content
-// without incremental placeholders' and the auto-virtual window tests).
-// Hosts who prefer idle-paced mounting of large restored documents can pass
-// `finalRestoreBatching: true`.
-const finalRestoreBatchingEnabled = computed(() => {
-  return forceFullRenderFinalContent.value && props.finalRestoreBatching === true
-})
 const {
   resolvedBatchSize,
   resolvedInitialBatch,
@@ -913,7 +894,6 @@ const {
   isTestEnv,
   renderAsFragment,
   forceFullRenderFinalContent,
-  finalRestoreBatchingEnabled,
   continuousStreaming: computed(() => continuousStreamingObserved.value && effectiveFinal.value !== true),
 })
 const incrementalRenderingDomRequired = computed(() => {
@@ -922,7 +902,7 @@ const incrementalRenderingDomRequired = computed(() => {
     && resolvedBatchSize.value > 0
     && !isTestEnv
     && (rendererProps.maxLiveNodes ?? 0) <= 0
-    && (!forceFullRenderFinalContent.value || finalRestoreBatchingEnabled.value)
+    && !forceFullRenderFinalContent.value
 })
 const placeholderHeightEstimationActive = computed(() => incrementalRenderingDomRequired.value)
 const nodeHeightEstimationActive = computed(() => heightEstimationActive.value || placeholderHeightEstimationActive.value)
@@ -955,7 +935,7 @@ watch(
 // Height signatures per node index, stored in a flat array so stale-range
 // scans can start at the parser's dirty start instead of walking the whole
 // measured set on every streaming commit. `undefined` = no signature yet.
-const nodeHeightSignatures: Array<number | undefined> = []
+const nodeHeightSignatures: Array<string | undefined> = []
 const EMPTY_ESTIMATED_NODE_HEIGHTS: Array<EstimatedNodeHeight | null> = []
 let estimatedNodeHeightsCache: Array<EstimatedNodeHeight | null> = []
 let estimatedNodeHeightsContext: unknown[] = []
@@ -1125,9 +1105,7 @@ function rememberNodeHeightSignature(index: number) {
   if (!Number.isInteger(index) || index < 0 || index >= parsedNodes.value.length)
     return
 
-  // Same cheap fingerprint as the invalidation scan — remember/forget only
-  // feed that scan, so both sides must use the same signature scheme.
-  nodeHeightSignatures[index] = getNodeCheapHeightFingerprint(index)
+  nodeHeightSignatures[index] = getNodeHeightCacheSignature(index)
 }
 
 function forgetNodeHeightSignatures(indices: Iterable<number>) {
@@ -2862,86 +2840,6 @@ function getNodeHeightCacheSignature(index: number) {
   return hashVirtualString(stableHeightSignatureValue(node))
 }
 
-/**
- * Cheap per-node content fingerprint for height-signature invalidation.
- *
- * `getNodeHeightCacheSignature` runs a recursive structural serialization of
- * the node, which is fine for one-off exports but too expensive to run for the
- * dirty tail on every streaming commit (the growing tail node — a paragraph or
- * code block — was fully re-serialized twice per commit). The invalidation
- * scan only needs to detect that visible content changed, the same guarantee
- * the rendered-item identity cache relies on: node object identity plus cheap
- * length/probe hashes. Two different contents colliding here would merely skip
- * one height invalidation that the next measurement corrects, never corrupt
- * output.
- */
-function getNodeCheapHeightFingerprint(index: number) {
-  const node = parsedNodes.value[index] as {
-    type?: unknown
-    raw?: unknown
-    code?: unknown
-    content?: unknown
-    text?: unknown
-    loading?: unknown
-  } | undefined
-  if (!node)
-    return 0
-
-  const type = typeof node.type === 'string' ? node.type : ''
-  const raw = typeof node.raw === 'string' ? node.raw : ''
-  const code = typeof node.code === 'string' ? node.code : ''
-  const content = typeof node.content === 'string' ? node.content : ''
-  const text = typeof node.text === 'string' ? node.text : ''
-  const loading = node.loading === true ? 1 : 0
-
-  // Full FNV-1a over short fields and sampled fixed-offset probes over long
-  // ones. Four isolated chars can miss a same-length edit between samples
-  // (e.g. inserted line breaks mid-paragraph), so long fields hash a spread
-  // of 16 deterministic positions plus a running char-class counter — still
-  // O(probes) instead of O(n) serialization, but an edit anywhere flips at
-  // least one sampled position with near-certainty for realistic sizes.
-  const probe = (input: string) => {
-    if (!input)
-      return 0
-    const length = input.length
-    if (length <= 48) {
-      // Short fields: hash everything.
-      let hash = 2166136261
-      for (let i = 0; i < length; i++) {
-        hash ^= input.charCodeAt(i)
-        hash = Math.imul(hash, 16777619)
-      }
-      return hash >>> 0
-    }
-    let hash = 2166136261
-    for (let i = 0; i < 16; i++) {
-      const position = Math.min(length - 1, Math.floor((length - 1) * i / 15))
-      hash ^= input.charCodeAt(position)
-      hash = Math.imul(hash, 16777619)
-    }
-    // Char-class histogram (newline/whitespace density shifts break line
-    // estimates even when all sampled chars match).
-    let structure = 0
-    for (let i = 0; i < length; i++) {
-      const codeUnit = input.charCodeAt(i)
-      if (codeUnit === 10)
-        structure = (structure + 1) & 0xFF
-      else if (codeUnit === 32 || codeUnit === 9)
-        structure = (structure + 0x100) & 0xFFFF
-    }
-    hash = Math.imul(hash ^ structure, 16777619)
-    return hash >>> 0
-  }
-
-  let hash = Number.parseInt(hashVirtualString(type), 36) || 2166136261
-  hash = hashVirtualSignatureInto(hash, String(probe(raw)))
-  hash = hashVirtualSignatureInto(hash, String(probe(code)))
-  hash = hashVirtualSignatureInto(hash, String(probe(content)))
-  hash = hashVirtualSignatureInto(hash, String(probe(text)))
-  hash = hashVirtualSignatureInto(hash, String(loading))
-  return hash
-}
-
 function hashVirtualSignatureInto(seed: number, signature: string) {
   let hash = seed
   for (let index = 0; index < signature.length; index++) {
@@ -3468,11 +3366,6 @@ function getHeightCacheSignature(cache: MarkstreamHeightCache) {
   ].join(':')
 }
 
-let lastImportedHeightCacheSource: unknown[] | null = null
-let lastImportedHeightCacheNodeCount = -1
-let lastImportedHeightCacheMaxIndex = -1
-let lastImportedHeightCacheWidthBucket = Number.NaN
-
 function tryImportVirtualHeightCache(cache = props.virtualScroll?.heightCache) {
   if (!virtualScrollEnabled.value || !cache?.length)
     return false
@@ -3482,30 +3375,6 @@ function tryImportVirtualHeightCache(cache = props.virtualScroll?.heightCache) {
 
   if (!canReuseStandaloneHeightCache())
     return false
-
-  // Memoize the import decision for the hot watcher path: the watcher deps
-  // include `parsedNodes.value.length`, so it re-fires on every streaming
-  // commit. When the height-cache array identity is unchanged, the node count
-  // only grew, and the width bucket is the same, the bounded-cache scan +
-  // O(cache) signature hash can only produce a different outcome if the
-  // growth EXPOSED cache entries that were out of range at the previous
-  // import (a stable standalone cache may cover the complete document while
-  // `parsedNodes` is still growing). Track the highest imported index and
-  // fall through to the full scan once growth passes it; pure appends below
-  // that boundary keep the O(1) hit path.
-  const nodeCount = parsedNodes.value.length
-  const widthBucket = virtualLayoutWidthBucket.value
-  if (
-    cache === lastImportedHeightCacheSource
-    && nodeCount >= lastImportedHeightCacheNodeCount
-    && lastImportedHeightCacheNodeCount > 0
-    && widthBucket === lastImportedHeightCacheWidthBucket
-    && nodeCount <= lastImportedHeightCacheMaxIndex + 1
-  ) {
-    lastImportedHeightCacheNodeCount = nodeCount
-    lastImportedVirtualHeightCacheSource = 'standalone'
-    return true
-  }
 
   const boundedCache = getBoundedHeightCache(cache, {
     requireSignature: true,
@@ -3519,22 +3388,13 @@ function tryImportVirtualHeightCache(cache = props.virtualScroll?.heightCache) {
   }
 
   const signature = getHeightCacheSignature(boundedCache)
-  const maxImportedIndex = boundedCache.reduce((max, entry) => Math.max(max, entry.index), -1)
   if (signature === lastImportedVirtualHeightCacheSignature) {
-    lastImportedHeightCacheSource = cache
-    lastImportedHeightCacheNodeCount = nodeCount
-    lastImportedHeightCacheMaxIndex = maxImportedIndex
-    lastImportedHeightCacheWidthBucket = widthBucket
     lastImportedVirtualHeightCacheSource = 'standalone'
     return true
   }
 
   importHeightCache(boundedCache, { mode: 'merge' })
   markFallbackHeightPrefixDirty()
-  lastImportedHeightCacheSource = cache
-  lastImportedHeightCacheNodeCount = nodeCount
-  lastImportedHeightCacheMaxIndex = maxImportedIndex
-  lastImportedHeightCacheWidthBucket = widthBucket
   lastImportedVirtualHeightCacheSignature = signature
   lastImportedVirtualHeightCacheSource = 'standalone'
   resetVirtualMetricsEventDedupes()
@@ -3741,12 +3601,7 @@ function invalidateChangedNodeHeights(reason: MarkstreamVirtualReason = 'content
       continue
     }
 
-    // Cheap fingerprint for the per-commit invalidation scan: the deep
-    // structural signature (`getNodeHeightCacheSignature`) is re-serialized at
-    // export/compat-check time, while this scan runs on every streaming commit
-    // over the dirty tail (the growing tail node would be fully re-serialized
-    // twice per commit with the deep signature).
-    const signature = getNodeCheapHeightFingerprint(index)
+    const signature = getNodeHeightCacheSignature(index)
     const previousSignature = nodeHeightSignatures[index]
 
     if (previousSignature != null && previousSignature !== signature)
@@ -4244,27 +4099,9 @@ function flushVirtualMetricsEmit() {
   // entirely ballooned scroll-phase DOM retention (~3.5k -> ~30k nodes).
   // Throttling to a 120ms window keeps the freshness contract while cutting
   // the settle-phase full-scan rate by ~75% (emits run up to ~30/s).
-  //
-  // Once the layout is fully settled with no pending measurement work there is
-  // nothing the scan can learn (all tracked heights are already recorded and
-  // deduped by recordNodeHeightCore), so the scan is skipped entirely until
-  // new activity (content change, re-registration, async node settle) resets
-  // the quiet state via scheduleVirtualMetricsEmit's activity check.
   const now = getVirtualNow()
   let measuredVisibleDomHeight: number | undefined
-  const layoutQuiet = isLayoutSettled() && activeHeightSettlingTimers.size === 0
-  if (layoutQuiet) {
-    // Quiet mode must also bypass the getVisibleDomHeight(undefined) fallback,
-    // which would otherwise sweep every tracked element's offsetHeight and
-    // reintroduce the forced layout this path exists to avoid. The recorded
-    // node heights are the authoritative settled values (the resize observer
-    // keeps them current), so their cached sum is used instead.
-    let total = 0
-    for (const index of nodeContentElements.keys())
-      total += nodeHeights[index] ?? 0
-    measuredVisibleDomHeight = total
-  }
-  else if (now - lastFullMetricsScanAt >= METRICS_FULL_SCAN_INTERVAL_MS) {
+  if (now - lastFullMetricsScanAt >= METRICS_FULL_SCAN_INTERVAL_MS) {
     lastFullMetricsScanAt = now
     // One physical pass feeds both the height model and the emitted
     // visibleDomHeight, instead of measureTrackedNodeHeights() plus a second
@@ -4610,35 +4447,14 @@ function scheduleFinalHeightConvergence() {
   if (!isClient || !effectiveFinal.value || !nodeContentElements.size)
     return
 
-  // Convergence rounds catch heights that change AFTER mount (async images,
-  // KaTeX, chunk-swapped code blocks). A node whose content element never
-  // re-registered (version unchanged) and already has a recorded height was
-  // measured after its last content commit, so re-reading it every round is a
-  // forced layout that cannot produce a new value — but only while the resize
-  // observer is watching: layout can also change WITHOUT re-registration
-  // (image/font load, async custom component) and the later 240/640ms rounds
-  // are the only fallback when ResizeObserver is unavailable. Track the last
-  // round a node was measured in and always re-measure when no observer is
-  // covering it.
-  const lastRoundVersions = new Map<number, number>()
-  const hasResizeObserver = nodeContentResizeObserver != null
-
+  // ResizeObserver covers layout changes without element re-registration. If
+  // it is unavailable, keep all fallback convergence rounds.
   clearFinalHeightConvergenceTimers()
-  for (const [round, delay] of [80, 240, 640].entries()) {
+  for (const delay of nodeContentResizeObserver ? [80] : [80, 240, 640]) {
     const timer = scheduleHeightSettlingTimer(delay, () => {
       for (const [index, el] of nodeContentElements) {
-        if (!el)
-          continue
-        if (!hasResizeObserver) {
-          lastRoundVersions.set(index, nodeContentVersions.get(index) ?? 0)
+        if (el)
           measureNodeHeight(index, el)
-          continue
-        }
-        const version = nodeContentVersions.get(index) ?? 0
-        if (round > 0 && lastRoundVersions.get(index) === version && nodeHeights[index] != null)
-          continue
-        lastRoundVersions.set(index, version)
-        measureNodeHeight(index, el)
       }
     }, 'final')
 
@@ -4741,53 +4557,13 @@ watch(
   { immediate: true },
 )
 
-let idlePrefetchScheduled = false
-
-function scheduleHeavyRuntimeIdlePrefetch() {
-  if (idlePrefetchScheduled || !isClient || !hasIdleCallback)
-    return
-  if (typeof window === 'undefined' || !window.requestIdleCallback)
-    return
-  // Prefetch the stream-diffs runtime once per renderer lifetime when the
-  // final document contains code blocks that will need it on scroll. This
-  // moves the chunk fetch + compile off the scroll path (where the first
-  // code block currently pays it) into an idle slice after restore settles.
-  // The preload is a no-op when the runtime is already cached or the optional
-  // peer is absent.
-  const hasEnhancedCodeBlock = parsedNodes.value.some(node => node.type === 'code_block')
-  if (!hasEnhancedCodeBlock)
-    return
-  idlePrefetchScheduled = true
-  window.requestIdleCallback(() => {
-    idlePrefetchScheduled = false
-    void import('../CodeBlockNode/streamDiffs')
-      .then(mod => mod.preloadCodeBlockRuntime())
-      .catch(() => {})
-  }, { timeout: 2000 })
-}
-
 watch(
   effectiveFinal,
   (final) => {
-    if (final) {
+    if (final)
       scheduleFinalHeightConvergence()
-      scheduleHeavyRuntimeIdlePrefetch()
-    }
     scheduleVirtualMetricsEmit(final ? 'final' : 'content')
   },
-  // `immediate` covers the history-restore case where the renderer mounts
-  // with `final: true` already set (and content changes that keep final
-  // true re-enter through the parsedNodes watcher below).
-  { immediate: true },
-)
-
-watch(
-  [() => parsedNodes.value.length, effectiveFinal],
-  ([, final]) => {
-    if (final)
-      scheduleHeavyRuntimeIdlePrefetch()
-  },
-  { flush: 'post' },
 )
 
 // Throttled version of scheduleVirtualMetricsEmit for high-frequency watchers
@@ -5125,37 +4901,6 @@ function resetVirtualSettleConfirmation() {
   resetVirtualMetricsEventDedupes()
 }
 
-let settleSignatureHeightCacheRevision = -1
-let settleSignatureHeightCacheTotal = -1
-let settleSignatureHeightCacheValue = 0
-
-/**
- * Memoized total estimated height for settle signatures.
- *
- * The auto/manual settle watchers re-fire on nearly every streaming commit
- * (deps include node count, heightStats and renderedCount) and each signature
- * needs `estimateHeightRange(0, total)`. The prefix cache makes that cheap in
- * the steady state, but measurement-driven average drift can still force an
- * O(N) prefix rebuild per watcher run. Signatures only compare equal/unequal
- * values, and the watchers already re-run when any of their deps change, so a
- * per-revision memo keyed on (parser revision, node count) is transparent.
- */
-function getSettleSignatureTotalHeight() {
-  const total = parsedNodes.value.length
-  const revision = getParsedNodesRevision()
-  if (
-    revision === settleSignatureHeightCacheRevision
-    && total === settleSignatureHeightCacheTotal
-  ) {
-    return settleSignatureHeightCacheValue
-  }
-
-  settleSignatureHeightCacheRevision = revision
-  settleSignatureHeightCacheTotal = total
-  settleSignatureHeightCacheValue = Math.round(estimateHeightRange(0, total))
-  return settleSignatureHeightCacheValue
-}
-
 function getAutoVirtualSettleSignature() {
   const total = parsedNodes.value.length
 
@@ -5165,7 +4910,7 @@ function getAutoVirtualSettleSignature() {
     getVirtualMeasurementKey(),
     virtualLayoutWidthBucket.value,
     total,
-    getSettleSignatureTotalHeight(),
+    Math.round(estimateHeightRange(0, total)),
     Math.round(getCurrentVirtualWidth()),
     heightStats.count,
     Math.round(heightStats.total),
@@ -5189,10 +4934,6 @@ function resetVirtualSessionRuntimeState() {
   clearVirtualMetricsSchedule()
   clearAllHeightSettlingTimers()
   lastEmittedVirtualMetrics = null
-  lastImportedHeightCacheSource = null
-  lastImportedHeightCacheNodeCount = -1
-  lastImportedHeightCacheMaxIndex = -1
-  lastImportedHeightCacheWidthBucket = Number.NaN
   lastImportedVirtualHeightCacheSignature = null
   lastImportedVirtualHeightCacheSource = null
   lastAppliedVirtualRestoreSignature = null
@@ -5219,10 +4960,6 @@ function resetVirtualLayoutMeasurements(reason: MarkstreamVirtualReason = 'resiz
 
   seedCurrentNodeHeightSignatures()
 
-  lastImportedHeightCacheSource = null
-  lastImportedHeightCacheNodeCount = -1
-  lastImportedHeightCacheMaxIndex = -1
-  lastImportedHeightCacheWidthBucket = Number.NaN
   lastImportedVirtualHeightCacheSignature = null
   lastImportedVirtualHeightCacheSource = null
   lastAppliedVirtualRestoreSignature = null
@@ -5490,7 +5227,7 @@ function getManualSettleSignature(token: unknown) {
     virtualLayoutWidthBucket.value,
     getManualSettleTokenKey(token),
     parsedNodes.value.length,
-    getSettleSignatureTotalHeight(),
+    Math.round(estimateHeightRange(0, parsedNodes.value.length)),
     Math.round(getCurrentVirtualWidth()),
     heightStats.count,
     Math.round(heightStats.total),
