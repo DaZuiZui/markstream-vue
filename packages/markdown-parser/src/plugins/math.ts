@@ -622,6 +622,11 @@ function trimRightSpaceOrTab(value: string) {
   return value.slice(0, end)
 }
 
+interface TolerantBoundaryScanWindowCache {
+  lineOffset: number
+  windowStart: number
+}
+
 function countLineBreaks(value: string) {
   let count = 0
   for (let index = 0; index < value.length; index++) {
@@ -767,28 +772,43 @@ function hashTolerantBoundaryContent(content: string) {
   return hash.toString(36)
 }
 
-function getTolerantBoundaryScanWindow(source: string) {
+function getTolerantBoundaryScanWindow(
+  source: string,
+  cache?: TolerantBoundaryScanWindowCache,
+) {
   if (source.length <= TOLERANT_BOUNDARY_SCAN_TAIL_CHARS)
     return { source, lineOffset: 0 }
 
+  if (cache) {
+    const cut = source.length - TOLERANT_BOUNDARY_SCAN_TAIL_CHARS
+    let start = source.indexOf('\n', cut)
+    start = start === -1 ? source.length : start + 1
+    const lineOffset = cache.lineOffset
+      + countLineBreaks(source.slice(cache.windowStart, start))
+    cache.lineOffset = lineOffset
+    cache.windowStart = start
+    return { source: source.slice(start), lineOffset }
+  }
+
   let start = source.length - TOLERANT_BOUNDARY_SCAN_TAIL_CHARS
   const nextLineBreak = source.indexOf('\n', start)
-  if (nextLineBreak === -1)
-    return { source: '', lineOffset: countLineBreaks(source) }
-
-  start = nextLineBreak + 1
+  start = nextLineBreak === -1 ? source.length : nextLineBreak + 1
+  const lineOffset = countLineBreaks(source.slice(0, start))
   return {
     source: source.slice(start),
-    lineOffset: countLineBreaks(source.slice(0, start)),
+    lineOffset,
   }
 }
 
-export function mayContainTolerantMathBlockBoundaryOpener(markdown: string) {
+export function mayContainTolerantMathBlockBoundaryOpener(
+  markdown: string,
+  scanWindowCache?: TolerantBoundaryScanWindowCache,
+) {
   const fullSource = String(markdown ?? '')
   if (!fullSource || (!fullSource.includes('$$') && !fullSource.includes('\\[')))
     return false
 
-  const { source } = getTolerantBoundaryScanWindow(fullSource)
+  const { source } = getTolerantBoundaryScanWindow(fullSource, scanWindowCache)
   if (!source)
     return false
 
@@ -813,12 +833,15 @@ export function mayContainTolerantMathBlockBoundaryOpener(markdown: string) {
   return false
 }
 
-export function getTolerantMathBlockBoundaryStreamKey(markdown: string) {
+export function getTolerantMathBlockBoundaryStreamKey(
+  markdown: string,
+  scanWindowCache?: TolerantBoundaryScanWindowCache,
+) {
   const fullSource = String(markdown ?? '')
   if (!fullSource || (!fullSource.includes('$$') && !fullSource.includes('\\[')))
     return null
 
-  const { source, lineOffset } = getTolerantBoundaryScanWindow(fullSource)
+  const { source, lineOffset } = getTolerantBoundaryScanWindow(fullSource, scanWindowCache)
   if (!source)
     return null
 

@@ -152,6 +152,18 @@ describe('parser runtime lifecycle characterization', () => {
     expect(next[0]).not.toBe(first[0])
   })
 
+  it('releases the tolerant-math scan cache when a stream finishes', () => {
+    const md = getMarkdown('parser-runtime-tolerant-math-cache')
+    const source = `inline text $$\nE = mc^2\n$$\n${'long line\n'.repeat(3000)}`
+    const runtime = getParserRuntime(md)
+
+    parseStreaming(source, md)
+    expect(runtime.tolerantMathBoundary?.scanWindow.windowStart).toBeGreaterThan(0)
+
+    parseMarkdownToStructure(source, md, { final: true })
+    expect(runtime.tolerantMathBoundary).toBeUndefined()
+  })
+
   it('does not mutate frozen public parse options', () => {
     const customHtmlTags = Object.freeze(['thinking'])
     const options = Object.freeze({

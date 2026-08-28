@@ -214,8 +214,14 @@ const restoredItemHeightFloors = new Map<string, number>()
 const restoredItemHeightFloorSources = new Map<string, TimelineItemSizeSource>()
 const restoredMarkdownLogicalHeights = new Map<string, number>()
 const pendingRestoredMarkdownFloorReleaseKeys = new Set<string>()
-const markdownStates = reactive(new Map<string, MarkstreamVirtualState>()) as Map<string, MarkstreamVirtualState>
-const markdownLogicalHeights = reactive(new Map<string, number>()) as Map<string, number>
+// Plain (non-reactive) Maps. Reading these during render (getMarkdownProps →
+// markdownStates.get) must not create a component-wide reactive dependency:
+// a single item's ~96ms onVirtualStateChange emit would otherwise re-render
+// every visible record. Per-item state still reaches its MarkdownRender via
+// the synchronous virtualScroll.restoreState mutation; paths that need
+// re-render (restore / thread switch) explicitly force a full record rebuild.
+const markdownStates = new Map<string, MarkstreamVirtualState>()
+const markdownLogicalHeights = new Map<string, number>()
 const markdownLogicalHeightSources = new Map<string, MarkdownLogicalHeightSource>()
 const measuredElements = new Map<string, HTMLElement>()
 const resizeObservers = new Map<string, ResizeObserver>()

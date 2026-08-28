@@ -21,6 +21,7 @@ import {
 
 const TOLERANT_BOUNDARY_SPLIT_OPENERS = ['$', '\\[']
 const STREAMING_ADMONITION_OPEN_RE = /(^|\r?\n)[\t ]*:::[\t ]*(?:warning|info|note|tip|danger|caution|error)(?=[\t ]|\r?\n|$)[^\r\n]*(?:\r?\n[\t ]*)*$/
+type TolerantBoundaryScanWindowCache = NonNullable<ParserRuntime['tolerantMathBoundary']>['scanWindow']
 
 function createExplicitBracketMathContext(): ExplicitBracketMathContext {
   return {
@@ -47,12 +48,14 @@ function setTolerantMathBoundaryStreamCache(
   source: string,
   key: string | null,
   explicitBracketMath: ExplicitBracketMathStreamState = scanExplicitBracketMathStreamState(source).state,
+  scanWindow: TolerantBoundaryScanWindowCache = { lineOffset: 0, windowStart: 0 },
 ) {
   runtime.tolerantMathBoundary = {
     explicitBracketMath,
     source,
     key,
-    pendingCandidate: key === null && mayContainTolerantMathBlockBoundaryOpener(source),
+    pendingCandidate: key === null && mayContainTolerantMathBlockBoundaryOpener(source, scanWindow),
+    scanWindow,
   }
 }
 
@@ -768,7 +771,10 @@ export function syncTolerantMathBoundaryStreamCache(runtime: ParserRuntime, sour
     }
   }
 
-  const nextKey = getTolerantMathBlockBoundaryStreamKey(source)
+  const scanWindow = sourceExtendsPrevious && previous
+    ? previous.scanWindow
+    : { lineOffset: 0, windowStart: 0 }
+  const nextKey = getTolerantMathBlockBoundaryStreamKey(source, scanWindow)
   const sourceWasReplaced = previous ? !sourceExtendsPrevious : false
 
   if (previous && (sourceWasReplaced || previous.key !== nextKey || completesExplicitBracketMathClose))
@@ -776,7 +782,7 @@ export function syncTolerantMathBoundaryStreamCache(runtime: ParserRuntime, sour
   else if (!previous && nextKey)
     runtime.resetStreamOnly()
 
-  setTolerantMathBoundaryStreamCache(runtime, source, nextKey, nextExplicitBracketMath)
+  setTolerantMathBoundaryStreamCache(runtime, source, nextKey, nextExplicitBracketMath, scanWindow)
 }
 
 export function shouldUseSyncParseForPendingTolerantMathBoundary(runtime: ParserRuntime) {

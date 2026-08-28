@@ -43,6 +43,16 @@ interface SourceLineMatch {
   originalIndex: number
 }
 
+/** Cached split state of one source side, used to reuse earlier line strings across streaming frames. */
+interface SourceSplitCache {
+  /** Displayed source (trailing newline trimmed when not loading) the lines were split from. */
+  source: string
+  /** Loading flag the lines were split with. */
+  loading: boolean
+  /** Lines produced by splitting `source`. */
+  lines: string[]
+}
+
 /**
  * Cross-frame cache for incremental LCS reuse while a diff streams (append-only
  * content). `buildDiffPreviewPanes`/`computeMatches` mutate it in place; pass a
@@ -60,6 +70,10 @@ export interface DiffMatchCache {
   originalLines: Set<string>
   /** All modified lines, used for the append-isolation check. */
   modifiedLines: Set<string>
+  /** Cached display string + split result of the original source (optional, for incremental re-splits). */
+  originalSplit?: SourceSplitCache
+  /** Cached display string + split result of the modified source (optional, for incremental re-splits). */
+  modifiedSplit?: SourceSplitCache
 }
 
 export function createDiffMatchCache(): DiffMatchCache {
@@ -105,6 +119,47 @@ function displaySource(source: unknown, loading: boolean) {
 function splitSource(source: unknown, loading: boolean) {
   const value = displaySource(source, loading)
   return value ? value.split(SOURCE_LINE_SPLIT_RE) : []
+}
+
+/**
+ * Incremental variant of `splitSource`. When the new display source is a pure
+ * append of the previously split one (and the loading flag is unchanged), only
+ * the last cached line plus the appended tail need a fresh split — earlier line
+ * strings are reused by reference, keeping per-frame cost proportional to the
+ * appended tail instead of the whole document. Any other change (replacement,
+ * shrink, loading flip) falls back to a full re-split and reseeds the cache.
+ */
+function splitSourceCached(source: unknown, loading: boolean, cache: DiffMatchCache, side: 'original' | 'modified') {
+  const value = displaySource(source, loading)
+  const splitKey: 'originalSplit' | 'modifiedSplit' = side === 'original' ? 'originalSplit' : 'modifiedSplit'
+  const previous = cache[splitKey]
+
+  if (previous && loading === previous.loading && value.startsWith(previous.source)) {
+    if (value === '') {
+      cache[splitKey] = { source: '', loading, lines: [] }
+      return []
+    }
+    const tail = value.slice(previous.source.length)
+    if (tail === '')
+      return previous.lines
+    // A cached source ending in `\r` may pair with an appended `\n` into a
+    // single CRLF break, invalidating the phantom trailing piece of the
+    // previous split — re-split from that `\r` and drop its leading piece.
+    const endsWithCr = previous.source.endsWith('\r')
+    const region = endsWithCr
+      ? previous.source.slice(-1) + tail
+      : (previous.lines.at(-1) ?? '') + tail
+    const fresh = region.split(SOURCE_LINE_SPLIT_RE)
+    const lines = endsWithCr
+      ? previous.lines.slice(0, -1).concat(fresh.slice(1))
+      : previous.lines.slice(0, -1).concat(fresh)
+    cache[splitKey] = { source: value, loading, lines }
+    return lines
+  }
+
+  const lines = value ? value.split(SOURCE_LINE_SPLIT_RE) : []
+  cache[splitKey] = { source: value, loading, lines }
+  return lines
 }
 
 function normalizeLanguage(language: unknown) {
@@ -360,8 +415,12 @@ function buildInlineSourcePreviewLines(
   loading: boolean,
   cache?: DiffMatchCache,
 ): DiffPreviewLine[] {
-  const original = splitSource(originalSource, loading)
-  const modified = splitSource(modifiedSource, loading)
+  const original = cache
+    ? splitSourceCached(originalSource, loading, cache, 'original')
+    : splitSource(originalSource, loading)
+  const modified = cache
+    ? splitSourceCached(modifiedSource, loading, cache, 'modified')
+    : splitSource(modifiedSource, loading)
   const matches = computeMatches(original, modified, cache)
   if (matches.length > 0) {
     const result: DiffPreviewLine[] = []
@@ -429,8 +488,12 @@ function buildSideBySideSourcePreviewPanes(
   hideUnchangedRegions: BuildDiffPreviewOptions['hideUnchangedRegions'],
   cache?: DiffMatchCache,
 ): DiffPreviewPane[] {
-  const originalSourceLines = splitSource(originalSource, loading)
-  const modifiedSourceLines = splitSource(modifiedSource, loading)
+  const originalSourceLines = cache
+    ? splitSourceCached(originalSource, loading, cache, 'original')
+    : splitSource(originalSource, loading)
+  const modifiedSourceLines = cache
+    ? splitSourceCached(modifiedSource, loading, cache, 'modified')
+    : splitSource(modifiedSource, loading)
   const matches = computeMatches(originalSourceLines, modifiedSourceLines, cache)
   const originalLines: DiffPreviewLine[] = []
   const modifiedLines: DiffPreviewLine[] = []
