@@ -10,18 +10,28 @@
  *
  * @vitest-environment node
  */
-import { describe, expect, it } from 'vitest'
 import { getMarkdown, parseMarkdownToStructure } from 'stream-markdown-parser'
+import { describe, expect, it } from 'vitest'
 
 function makeParts(blockCount: number) {
   const parts: string[] = []
   for (let i = 0; i < blockCount; i++) {
     switch (i % 5) {
-      case 0: parts.push(`# Heading ${i}\n\nSome paragraph text with **bold** and \`code\` and a [link](https://example.com/${i}).`); break
-      case 1: parts.push('```ts\nconst value = ' + i + '\nconsole.log(value)\n```'); break
-      case 2: parts.push('- item one\n- item two\n- item three with longer text to wrap a bit'); break
-      case 3: parts.push('> A quote block with some text that spans\n> multiple lines for realism ' + i); break
-      case 4: parts.push('Paragraph ' + i + ' with $x^2 + y^2$ inline math and more text to pad length reasonably.'); break
+      case 0:
+        parts.push(`# Heading ${i}\n\nSome paragraph text with **bold** and \`code\` and a [link](https://example.com/${i}).`)
+        break
+      case 1:
+        parts.push(`\`\`\`ts\nconst value = ${i}\nconsole.log(value)\n\`\`\``)
+        break
+      case 2:
+        parts.push('- item one\n- item two\n- item three with longer text to wrap a bit')
+        break
+      case 3:
+        parts.push(`> A quote block with some text that spans\n> multiple lines for realism ${i}`)
+        break
+      case 4:
+        parts.push(`Paragraph ${i} with $x^2 + y^2$ inline math and more text to pad length reasonably.`)
+        break
     }
   }
   return parts
