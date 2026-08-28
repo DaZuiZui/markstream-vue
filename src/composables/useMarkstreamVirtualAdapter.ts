@@ -360,6 +360,17 @@ export function useMarkstreamVirtualAdapter<T = MarkstreamTimelineItem>(
   const markdownLogicalHeights = reactive(new Map<string, number>()) as Map<string, number>
   const markdownLogicalHeightSources = new Map<string, MarkdownLogicalHeightSource>()
   const markdownPropsCache = new Map<string, MarkstreamVirtualMarkdownProps>()
+
+  // Evicts every cached props entry whose key belongs to `itemKey` (keys start
+  // with `${itemKey}:`) except `keepKey`, used when a 'final' props object
+  // replaces the superseded 'live' variants of the same message.
+  function pruneMarkdownPropsCache(itemKey: string, keepKey: string) {
+    const prefix = `${itemKey}:`
+    for (const key of markdownPropsCache.keys()) {
+      if (key !== keepKey && key.startsWith(prefix))
+        markdownPropsCache.delete(key)
+    }
+  }
   const measuredElements = new Map<string, HTMLElement>()
   const resizeObservers = new Map<string, ResizeObserver>()
   const restoringThread = ref(false)
@@ -1026,6 +1037,12 @@ export function useMarkstreamVirtualAdapter<T = MarkstreamTimelineItem>(
     }
 
     markdownPropsCache.set(cacheKey, props)
+    // When a final entry is written, evict the stale 'live' entry (and any
+    // older config variants) for the same item: `final` only flips live→final,
+    // so those keys can never be requested again and would otherwise linger
+    // until dispose() in long sessions.
+    if (final)
+      pruneMarkdownPropsCache(itemKey, cacheKey)
     return props
   }
 
