@@ -327,7 +327,7 @@ describe('pre code node diff preview', () => {
     { suffix: '\n', expectedLoading: '3ch', expectedSettled: '2ch' },
     { suffix: '\r', expectedLoading: '3ch', expectedSettled: '2ch' },
     { suffix: '\r\n', expectedLoading: '3ch', expectedSettled: '2ch' },
-  ])('keeps diff gutter width stable for terminal $suffix line breaks', async ({ suffix, expectedLoading, expectedSettled }) => {
+  ])('counts terminal $suffix line breaks for the diff gutter', async ({ suffix, expectedLoading, expectedSettled }) => {
     const source = `${Array.from({ length: 99 }, (_, index) => `line ${index + 1}`).join(suffix)}${suffix}`
     const wrapper = mount(PreCodeNode, {
       props: {

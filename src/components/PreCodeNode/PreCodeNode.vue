@@ -193,8 +193,8 @@ const diffPreviewPanes = computed(() => {
 // Streaming commits rebuild the diff panes on every append. Both the line-number
 // width and the "has collapsed rows" flag below re-scan all pane lines, so fold
 // them into one pass computed next to the panes instead of three O(N) scans per
-// commit (the source line counts are cheap derivations but still avoid
-// allocating split arrays when the sources did not change).
+// commit. Source line counts only need a number, so they are scanned without
+// allocating split arrays.
 const diffPreviewSummary = computed(() => {
   const panes = diffPreviewPanes.value
   let maxNumberedLine = 1

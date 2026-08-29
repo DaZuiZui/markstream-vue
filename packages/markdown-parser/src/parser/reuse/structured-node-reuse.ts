@@ -1,7 +1,7 @@
 import type { Token } from '../../markdown-it-types'
 import type { MarkdownToken, ParsedNode, ParseOptions } from '../../types'
 import type { ParseContext } from '../parse-context'
-import type { ParserRuntime, StructuredStreamGroupBoundary, StructuredStreamRuntimeState } from '../runtime'
+import type { ParserRuntime, StructuredStreamRuntimeState } from '../runtime'
 import { isCacheStableLinkValidator, readSyntheticLinkOrigin } from '../../plugins/linkTokenMetadata'
 import { getTopLevelStreamParseMode, shouldUseTopLevelStreamParse } from '../streaming/tokenizer'
 
@@ -279,36 +279,18 @@ function updateStructuredStreamCache(
     return
   }
 
-  const stableGroupCount = groups.mixed
-    ? Math.max(0, groupStarts.length - 1)
-    : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1)
-
-  // On the append/tail reuse path markdown-it-ts keeps the token array and
-  // its prefix token objects stable. Reuse the already-built boundary objects
-  // for the stable prefix and rebuild only the dirty/new tail. The old final
-  // group is deliberately excluded when it was not stable: it may have
-  // absorbed appended content even when its boundary token objects look the
-  // same.
-  const previousStructuredStream = runtime.structuredStream
-  const previousBoundaries = previousSeed !== undefined
-    && previousStructuredStream?.tokens === tokens
-    ? previousStructuredStream.groupBoundaries
-    : undefined
-  const reusedBoundaryCount = previousBoundaries
-    ? Math.min(previousStructuredStream!.stableGroupCount, stableGroupCount, previousBoundaries.length)
-    : 0
-  const groupBoundaries: StructuredStreamGroupBoundary[] = previousBoundaries
-    ? previousBoundaries.slice(0, reusedBoundaryCount)
-    : []
-  for (let index = reusedBoundaryCount; index < groupStarts.length; index++) {
-    const start = groupStarts[index]
+  const groupBoundaries = groupStarts.map((start, index) => {
     const end = groupStarts[index + 1] ?? tokens.length
-    groupBoundaries.push({
+    return {
       firstToken: tokens[start],
       lastToken: tokens[end - 1],
       tokenCount: end - start,
-    })
-  }
+    }
+  })
+
+  const stableGroupCount = groups.mixed
+    ? Math.max(0, groupStarts.length - 1)
+    : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1)
 
   // On the incremental append path the prefix nodes (and their raws) are
   // unchanged, so reuse the previous seed's prefix instead of re-slicing and
