@@ -431,7 +431,7 @@ export function processTopLevelTokensWithReuse(
     && stableGroupCount > 0
     && previous.requireClosingStrong === options.requireClosingStrong
     && previous.validateLink === options.validateLink
-    && source.startsWith(previous.source)
+    && runtime.sourceExtends(previous.source, source)
     && groupStarts.length >= stableGroupCount
     && (mode === 'append' || mode === 'tail')
     && hasStableStructuredStreamGroupBoundaries(previous, tokens, groupStarts, stableGroupCount)

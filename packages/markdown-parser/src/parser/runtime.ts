@@ -97,10 +97,10 @@ export interface SourceLineOffsetsRuntimeState {
 export function getCachedSourceLineOffsets(runtime: ParserRuntime, source: string): number[] {
   const cached = runtime.sourceLineOffsets
 
-  if (cached && cached.source === source)
+  if (cached?.source === source)
     return cached.offsets
 
-  if (cached && source.length > cached.source.length && source.startsWith(cached.source)) {
+  if (cached && source.length > cached.source.length && runtime.sourceExtends(cached.source, source)) {
     const offsets = cached.offsets
     for (let i = cached.source.length; i < source.length; i++) {
       if (source.charCodeAt(i) === 10)
@@ -175,6 +175,8 @@ export class ParserRuntime {
   sourceLineOffsets?: SourceLineOffsetsRuntimeState
   private documentSource?: string
   private semantics?: ParserRuntimeSemantics
+  private sourceRelationPrevious?: string
+  private sourceRelationCurrent?: string
   private finalized = false
   private resettingStream = false
   private streamStateActive = false
@@ -184,11 +186,23 @@ export class ParserRuntime {
     this.markdownIt = markdownIt
   }
 
+  sourceExtends(previousSource: string, currentSource: string) {
+    if (this.sourceRelationPrevious === previousSource && this.sourceRelationCurrent === currentSource)
+      return true
+
+    if (!currentSource.startsWith(previousSource))
+      return false
+
+    this.sourceRelationPrevious = previousSource
+    this.sourceRelationCurrent = currentSource
+    return true
+  }
+
   beginRootParse(source: string, semantics: ParserRuntimeSemantics) {
     this.streamResetInCurrentRootParse = false
     const sourceChangedNonAppend = this.documentSource !== undefined
       && source !== this.documentSource
-      && !source.startsWith(this.documentSource)
+      && !this.sourceExtends(this.documentSource, source)
     const semanticsChanged = this.semantics !== undefined && !sameSemantics(this.semantics, semantics)
 
     if (this.finalized || sourceChangedNonAppend || semanticsChanged)
@@ -200,6 +214,10 @@ export class ParserRuntime {
   }
 
   finishRootParse(final: boolean) {
+    // Relation sharing is scoped to one root parse; do not retain its previous source.
+    this.sourceRelationPrevious = undefined
+    this.sourceRelationCurrent = undefined
+
     if (!final)
       return
 
@@ -278,6 +296,8 @@ export class ParserRuntime {
     this.detailsStitchCache = new WeakMap()
     this.nodeSourceRanges = new WeakMap()
     this.sourceLineOffsets = undefined
+    this.sourceRelationPrevious = undefined
+    this.sourceRelationCurrent = undefined
   }
 }
 

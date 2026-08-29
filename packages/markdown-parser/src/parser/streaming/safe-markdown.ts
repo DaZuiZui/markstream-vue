@@ -126,7 +126,7 @@ export function getSafeMarkdown(runtime: ParserRuntime, sourceMarkdown: string, 
     && previous
     && previous.mode === mode
     && sourceMarkdown.length >= previous.source.length
-    && sourceMarkdown.startsWith(previous.source)
+    && runtime.sourceExtends(previous.source, sourceMarkdown)
   ) {
     // The window cut MUST be a raw-source index. The previous implementation
     // cut `previous.safeMarkdown` at a safeMarkdown index but sliced the raw
