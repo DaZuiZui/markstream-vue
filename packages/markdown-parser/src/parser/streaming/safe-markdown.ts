@@ -114,7 +114,7 @@ export function getSafeMarkdown(runtime: ParserRuntime, sourceMarkdown: string, 
   const previous = options.isFragment ? undefined : runtime.safeMarkdown
   const sourceRelation = options.isFragment
     ? undefined
-    : runtime.getSourceRelation('safe-markdown', previous?.source, sourceMarkdown)
+    : runtime.getSourceRelation(previous?.source, sourceMarkdown)
 
   let safeMarkdown: string
   if (
@@ -128,7 +128,7 @@ export function getSafeMarkdown(runtime: ParserRuntime, sourceMarkdown: string, 
     && !options.customHtmlTags?.length
     && previous
     && previous.mode === mode
-    && (sourceRelation?.kind === 'same' || sourceRelation?.kind === 'append')
+    && (sourceRelation === 'same' || sourceRelation === 'append')
   ) {
     // The window cut MUST be a raw-source index. The previous implementation
     // cut `previous.safeMarkdown` at a safeMarkdown index but sliced the raw

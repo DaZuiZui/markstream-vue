@@ -86,65 +86,17 @@ export interface SourceLineOffsetsRuntimeState {
 
 export type SourceAppendRelationKind = 'none' | 'same' | 'append' | 'replace'
 
-export type ParserSourceCacheKind
-  = | 'document'
-    | 'safe-markdown'
-    | 'tolerant-math'
-    | 'pending-explicit-math'
-    | 'structured-stream'
-    | 'sibling-html'
-    | 'line-offsets'
+export function getSourceAppendRelation(previousSource: string | undefined, currentSource: string): SourceAppendRelationKind {
+  if (previousSource === undefined)
+    return 'none'
 
-/**
- * A source relationship calculated for one exact source layer and one parse.
- * `appendStart` uses JavaScript UTF-16 string offsets, matching `slice()`.
- */
-export interface SourceAppendRelation {
-  readonly currentSource: string
-  readonly previousSource?: string
-  readonly kind: SourceAppendRelationKind
-  readonly appendStart: number | null
-}
+  if (currentSource === previousSource)
+    return 'same'
 
-interface SourceAppendRelationMemo {
-  previousSource?: string
-  currentSource: string
-  relation: SourceAppendRelation
-}
+  if (currentSource.length > previousSource.length && currentSource.startsWith(previousSource))
+    return 'append'
 
-export function getSourceAppendRelation(previousSource: string | undefined, currentSource: string): SourceAppendRelation {
-  if (previousSource === undefined) {
-    return {
-      currentSource,
-      kind: 'none',
-      appendStart: null,
-    }
-  }
-
-  if (currentSource === previousSource) {
-    return {
-      currentSource,
-      previousSource,
-      kind: 'same',
-      appendStart: null,
-    }
-  }
-
-  if (currentSource.length > previousSource.length && currentSource.startsWith(previousSource)) {
-    return {
-      currentSource,
-      previousSource,
-      kind: 'append',
-      appendStart: previousSource.length,
-    }
-  }
-
-  return {
-    currentSource,
-    previousSource,
-    kind: 'replace',
-    appendStart: null,
-  }
+  return 'replace'
 }
 
 /**
@@ -159,15 +111,14 @@ export function getSourceAppendRelation(previousSource: string | undefined, curr
  */
 export function getCachedSourceLineOffsets(runtime: ParserRuntime, source: string): number[] {
   const cached = runtime.sourceLineOffsets
-  const relation = runtime.getSourceRelation('line-offsets', cached?.source, source)
+  const relation = runtime.getSourceRelation(cached?.source, source)
 
-  if (cached && relation.kind === 'same')
+  if (cached && relation === 'same')
     return cached.offsets
 
-  if (cached && relation.kind === 'append') {
-    const appendStart = relation.appendStart!
+  if (cached && relation === 'append') {
     const offsets = cached.offsets
-    for (let i = appendStart; i < source.length; i++) {
+    for (let i = cached.source.length; i < source.length; i++) {
       if (source.charCodeAt(i) === 10)
         offsets.push(i + 1)
     }
@@ -240,13 +191,9 @@ export class ParserRuntime {
   sourceLineOffsets?: SourceLineOffsetsRuntimeState
   private documentSource?: string
   private semantics?: ParserRuntimeSemantics
-  private sourceRelationMemo = new Map<ParserSourceCacheKind, SourceAppendRelationMemo>()
-  /**
-   * Pure relation results can be shared when two cache layers receive the
-   * exact same source pair. The cache-kind entry still gets a distinct
-   * relation object, so this never makes one layer authoritative for another.
-   */
-  private sourceRelationPairMemo?: SourceAppendRelationMemo
+  private sourceRelationPrevious?: string
+  private sourceRelationCurrent?: string
+  private sourceRelationKind?: SourceAppendRelationKind
   private finalized = false
   private resettingStream = false
   private streamStateActive = false
@@ -257,39 +204,22 @@ export class ParserRuntime {
   }
 
   getSourceRelation(
-    cacheKind: ParserSourceCacheKind,
     previousSource: string | undefined,
     currentSource: string,
-  ): SourceAppendRelation {
-    const cached = this.sourceRelationMemo.get(cacheKind)
-    if (cached && cached.previousSource === previousSource && cached.currentSource === currentSource)
-      return cached.relation
+  ): SourceAppendRelationKind {
+    if (this.sourceRelationPrevious === previousSource && this.sourceRelationCurrent === currentSource)
+      return this.sourceRelationKind!
 
-    const pairMemo = this.sourceRelationPairMemo
-    const relation = pairMemo
-      && pairMemo.previousSource === previousSource
-      && pairMemo.currentSource === currentSource
-      ? {
-          ...pairMemo.relation,
-        }
-      : getSourceAppendRelation(previousSource, currentSource)
-    this.sourceRelationPairMemo = {
-      previousSource,
-      currentSource,
-      relation,
-    }
-    this.sourceRelationMemo.set(cacheKind, {
-      previousSource,
-      currentSource,
-      relation,
-    })
-    return relation
+    this.sourceRelationPrevious = previousSource
+    this.sourceRelationCurrent = currentSource
+    this.sourceRelationKind = getSourceAppendRelation(previousSource, currentSource)
+    return this.sourceRelationKind
   }
 
   beginRootParse(source: string, semantics: ParserRuntimeSemantics) {
     this.streamResetInCurrentRootParse = false
-    const relation = this.getSourceRelation('document', this.documentSource, source)
-    const sourceChangedNonAppend = relation.kind === 'replace'
+    const relation = this.getSourceRelation(this.documentSource, source)
+    const sourceChangedNonAppend = relation === 'replace'
     const semanticsChanged = this.semantics !== undefined && !sameSemantics(this.semantics, semantics)
 
     if (this.finalized || sourceChangedNonAppend || semanticsChanged)
@@ -301,6 +231,11 @@ export class ParserRuntime {
   }
 
   finishRootParse(final: boolean) {
+    // Relation sharing is scoped to one root parse; do not retain its previous source.
+    this.sourceRelationPrevious = undefined
+    this.sourceRelationCurrent = undefined
+    this.sourceRelationKind = undefined
+
     if (!final)
       return
 
@@ -379,8 +314,9 @@ export class ParserRuntime {
     this.detailsStitchCache = new WeakMap()
     this.nodeSourceRanges = new WeakMap()
     this.sourceLineOffsets = undefined
-    this.sourceRelationMemo.clear()
-    this.sourceRelationPairMemo = undefined
+    this.sourceRelationPrevious = undefined
+    this.sourceRelationCurrent = undefined
+    this.sourceRelationKind = undefined
   }
 }
 
