@@ -84,6 +84,69 @@ export interface SourceLineOffsetsRuntimeState {
   offsets: number[]
 }
 
+export type SourceAppendRelationKind = 'none' | 'same' | 'append' | 'replace'
+
+export type ParserSourceCacheKind
+  = | 'document'
+    | 'safe-markdown'
+    | 'tolerant-math'
+    | 'pending-explicit-math'
+    | 'structured-stream'
+    | 'sibling-html'
+    | 'line-offsets'
+
+/**
+ * A source relationship calculated for one exact source layer and one parse.
+ * `appendStart` uses JavaScript UTF-16 string offsets, matching `slice()`.
+ */
+export interface SourceAppendRelation {
+  readonly currentSource: string
+  readonly previousSource?: string
+  readonly kind: SourceAppendRelationKind
+  readonly appendStart: number | null
+}
+
+interface SourceAppendRelationMemo {
+  previousSource?: string
+  currentSource: string
+  relation: SourceAppendRelation
+}
+
+export function getSourceAppendRelation(previousSource: string | undefined, currentSource: string): SourceAppendRelation {
+  if (previousSource === undefined) {
+    return {
+      currentSource,
+      kind: 'none',
+      appendStart: null,
+    }
+  }
+
+  if (currentSource === previousSource) {
+    return {
+      currentSource,
+      previousSource,
+      kind: 'same',
+      appendStart: null,
+    }
+  }
+
+  if (currentSource.length > previousSource.length && currentSource.startsWith(previousSource)) {
+    return {
+      currentSource,
+      previousSource,
+      kind: 'append',
+      appendStart: previousSource.length,
+    }
+  }
+
+  return {
+    currentSource,
+    previousSource,
+    kind: 'replace',
+    appendStart: null,
+  }
+}
+
 /**
  * Resolve (and cache) the line-start offsets for a source string.
  *
@@ -96,13 +159,15 @@ export interface SourceLineOffsetsRuntimeState {
  */
 export function getCachedSourceLineOffsets(runtime: ParserRuntime, source: string): number[] {
   const cached = runtime.sourceLineOffsets
+  const relation = runtime.getSourceRelation('line-offsets', cached?.source, source)
 
-  if (cached && cached.source === source)
+  if (cached && relation.kind === 'same')
     return cached.offsets
 
-  if (cached && source.length > cached.source.length && source.startsWith(cached.source)) {
+  if (cached && relation.kind === 'append') {
+    const appendStart = relation.appendStart!
     const offsets = cached.offsets
-    for (let i = cached.source.length; i < source.length; i++) {
+    for (let i = appendStart; i < source.length; i++) {
       if (source.charCodeAt(i) === 10)
         offsets.push(i + 1)
     }
@@ -175,6 +240,13 @@ export class ParserRuntime {
   sourceLineOffsets?: SourceLineOffsetsRuntimeState
   private documentSource?: string
   private semantics?: ParserRuntimeSemantics
+  private sourceRelationMemo = new Map<ParserSourceCacheKind, SourceAppendRelationMemo>()
+  /**
+   * Pure relation results can be shared when two cache layers receive the
+   * exact same source pair. The cache-kind entry still gets a distinct
+   * relation object, so this never makes one layer authoritative for another.
+   */
+  private sourceRelationPairMemo?: SourceAppendRelationMemo
   private finalized = false
   private resettingStream = false
   private streamStateActive = false
@@ -184,11 +256,40 @@ export class ParserRuntime {
     this.markdownIt = markdownIt
   }
 
+  getSourceRelation(
+    cacheKind: ParserSourceCacheKind,
+    previousSource: string | undefined,
+    currentSource: string,
+  ): SourceAppendRelation {
+    const cached = this.sourceRelationMemo.get(cacheKind)
+    if (cached && cached.previousSource === previousSource && cached.currentSource === currentSource)
+      return cached.relation
+
+    const pairMemo = this.sourceRelationPairMemo
+    const relation = pairMemo
+      && pairMemo.previousSource === previousSource
+      && pairMemo.currentSource === currentSource
+      ? {
+          ...pairMemo.relation,
+        }
+      : getSourceAppendRelation(previousSource, currentSource)
+    this.sourceRelationPairMemo = {
+      previousSource,
+      currentSource,
+      relation,
+    }
+    this.sourceRelationMemo.set(cacheKind, {
+      previousSource,
+      currentSource,
+      relation,
+    })
+    return relation
+  }
+
   beginRootParse(source: string, semantics: ParserRuntimeSemantics) {
     this.streamResetInCurrentRootParse = false
-    const sourceChangedNonAppend = this.documentSource !== undefined
-      && source !== this.documentSource
-      && !source.startsWith(this.documentSource)
+    const relation = this.getSourceRelation('document', this.documentSource, source)
+    const sourceChangedNonAppend = relation.kind === 'replace'
     const semanticsChanged = this.semantics !== undefined && !sameSemantics(this.semantics, semantics)
 
     if (this.finalized || sourceChangedNonAppend || semanticsChanged)
@@ -278,6 +379,8 @@ export class ParserRuntime {
     this.detailsStitchCache = new WeakMap()
     this.nodeSourceRanges = new WeakMap()
     this.sourceLineOffsets = undefined
+    this.sourceRelationMemo.clear()
+    this.sourceRelationPairMemo = undefined
   }
 }
 
