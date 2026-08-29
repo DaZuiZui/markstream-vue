@@ -154,11 +154,23 @@ const reservedHeightStyle = computed(() => {
   }
 })
 
-function splitDiffSource(source: unknown) {
-  const code = getDisplayCode(source, isLoading.value)
+function countDiffSourceLines(source: unknown, loading: boolean) {
+  const code = getDisplayCode(source, loading)
   if (!code)
-    return []
-  return code.split(/\r\n|\n|\r/)
+    return 0
+
+  let count = 1
+  for (let index = 0; index < code.length; index++) {
+    if (code[index] === '\n') {
+      count++
+    }
+    else if (code[index] === '\r') {
+      count++
+      if (code[index + 1] === '\n')
+        index++
+    }
+  }
+  return count
 }
 
 const diffPreviewPanes = computed(() => {
@@ -181,8 +193,8 @@ const diffPreviewPanes = computed(() => {
 // Streaming commits rebuild the diff panes on every append. Both the line-number
 // width and the "has collapsed rows" flag below re-scan all pane lines, so fold
 // them into one pass computed next to the panes instead of three O(N) scans per
-// commit (the splitDiffSource maxima are cheap head derivations but still avoid
-// re-splitting when the sources did not change).
+// commit (the source line counts are cheap derivations but still avoid
+// allocating split arrays when the sources did not change).
 const diffPreviewSummary = computed(() => {
   const panes = diffPreviewPanes.value
   let maxNumberedLine = 1
@@ -206,8 +218,8 @@ const lineNumberLayoutStyle = computed(() => {
   if (isDiffPreview.value) {
     maximumLineNumber = Math.max(
       maximumLineNumber,
-      splitDiffSource(props.node?.originalCode).length,
-      splitDiffSource(props.node?.updatedCode).length,
+      countDiffSourceLines(props.node?.originalCode, isLoading.value),
+      countDiffSourceLines(props.node?.updatedCode, isLoading.value),
       diffPreviewSummary.value.maxNumberedLine,
     )
   }

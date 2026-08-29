@@ -324,6 +324,50 @@ describe('pre code node diff preview', () => {
   })
 
   it.each([
+    { suffix: '\n', expectedLoading: '3ch', expectedSettled: '2ch' },
+    { suffix: '\r', expectedLoading: '3ch', expectedSettled: '2ch' },
+    { suffix: '\r\n', expectedLoading: '3ch', expectedSettled: '2ch' },
+  ])('keeps diff gutter width stable for terminal $suffix line breaks', async ({ suffix, expectedLoading, expectedSettled }) => {
+    const source = `${Array.from({ length: 99 }, (_, index) => `line ${index + 1}`).join(suffix)}${suffix}`
+    const wrapper = mount(PreCodeNode, {
+      props: {
+        loading: true,
+        showLineNumbers: true,
+        node: {
+          type: 'code_block',
+          language: 'txt',
+          diff: true,
+          originalCode: source,
+          updatedCode: source,
+          code: '',
+          raw: '',
+          loading: true,
+        },
+      },
+    })
+
+    const pre = wrapper.get('pre').element as HTMLElement
+    expect(pre.style.getPropertyValue('--markstream-pre-line-number-width')).toBe(expectedLoading)
+
+    await wrapper.setProps({
+      loading: false,
+      node: {
+        type: 'code_block',
+        language: 'txt',
+        diff: true,
+        originalCode: source,
+        updatedCode: source,
+        code: '',
+        raw: '',
+        loading: false,
+      },
+    })
+
+    expect(pre.style.getPropertyValue('--markstream-pre-line-number-width')).toBe(expectedSettled)
+    wrapper.unmount()
+  })
+
+  it.each([
     { diffInline: false, pane: 'modified' },
     { diffInline: true, pane: 'inline' },
   ])('reserves the three-digit $pane diff fallback gutter for a three-digit source', ({ diffInline, pane }) => {

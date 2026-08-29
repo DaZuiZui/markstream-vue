@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getMarkdown, parseMarkdownToStructure } from '../src'
+import { getParserRuntime } from '../src/parser/runtime'
 import { readSyntheticLinkOrigin } from '../src/plugins/linkTokenMetadata'
 
 function buildLargeAppendFriendlyDoc(paragraphs: number) {
@@ -74,6 +75,35 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     expect(stats.appendHits + stats.tailHits + stats.cacheHits).toBeGreaterThan(0)
     expect(stats.fullParses).toBe(1)
     expect(stats.lastMode).not.toBe('full')
+  })
+
+  it('reuses stable structured boundary objects across append commits', () => {
+    const md = getMarkdown('stream-parser-structured-boundary-cache')
+    const firstSource = buildLargeAppendFriendlyDoc(40)
+    parseMarkdownToStructure(firstSource, md, {
+      final: false,
+      streamParse: true,
+      reuseStableTopLevelNodes: true,
+    } as any)
+
+    const runtime = getParserRuntime(md)
+    const firstBoundaries = runtime.structuredStream?.groupBoundaries
+    const firstBoundary = firstBoundaries?.[0]
+    expect(firstBoundary).toBeDefined()
+
+    parseMarkdownToStructure(
+      `${firstSource}Appended paragraph that should reuse the stable boundary prefix.\n\n`,
+      md,
+      {
+        final: false,
+        streamParse: true,
+        reuseStableTopLevelNodes: true,
+      } as any,
+    )
+
+    const nextBoundaries = runtime.structuredStream?.groupBoundaries
+    expect(nextBoundaries?.[0]).toBe(firstBoundary)
+    expect(nextBoundaries?.length).toBeGreaterThan(firstBoundaries?.length ?? 0)
   })
 
   it('does not reprocess the stable top-level token prefix after stream append hits', () => {
