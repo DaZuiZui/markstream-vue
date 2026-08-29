@@ -20,8 +20,8 @@
 
 1. **普通 Markdown 大文档：当前已测最大 parser 阶段是 tokenize，不是 `processTokens`。** 50k synthetic blocks 的 cold parse 中，tokenize 约占 58.6%，`processTokens` 约占 27.1%。
 2. **HTML/details 文档：顶层 HTML pass 是最明确的 parser 热点。** 50k blocks 中 HTML passes 约占 51.5%；10k blocks / 100 次 append 中累计约 1.91 秒，占总时间约 53.6%。
-3. **Fenwick 扩容是目前最明确的可量化算法热点，但只在“节点长度逐步增长且已有大量 measured nodes”这一调用模式下成立。** 直接 micro-benchmark 中，N=10000、M=1000 逐节点 append 为 5108.3ms，batch append 为 16.1ms；这不是端到端 UI 数据，必须先确认生产调用模式。
-4. **非虚拟 rendered-item 路径仍有 O(N) prefix scan、`visibleNodes.map` 与 `cache.slice()`。** 但现有 synthetic rebuild benchmark 的 50.4x 只证明局部算法收益，不能当作真实 Vue/DOM 端到端收益。
+3. **Fenwick 扩容是目前最明确的可量化算法热点，并已在本 PR 中做最小修复。** N=10000、M=1000 的同机复测中，逐节点 append 中位数从 5373.4ms 降至 55.6ms（约 96.7x），batch append 从 12.75ms 降至 11.94ms；这是算法级 micro-benchmark，不是端到端 UI 数据。
+4. **非虚拟 rendered-item 路径仍有 O(N) prefix scan 与 `cache.slice()`。** 但现有 synthetic rebuild benchmark 的 50.4x 只证明局部算法收益，不能当作真实 Vue/DOM 端到端收益。
 5. **parser worker 与 heavy-node islands 有潜在高收益，但目前没有足够证据证明它们会同时降低总 CPU、主线程长任务和用户感知延迟。** parser worker 还会触及 MarkdownIt plugin、custom renderer、SSR/hydration、对象 identity 等语义边界。
 6. **目前不建议先重写 `processTokens`、全面重写 NodeRenderer、强制所有 heavy node 使用 worker，或移除 restore/focus/measurement 的同步保护。** 这些方向要么没有根因证据，要么风险高于已证实收益。
 
@@ -50,7 +50,7 @@
 - 现有 Playwright/Chrome streaming benchmark；
 - 两轮独立 verifier 审计，明确区分硬证据、静态事实和 `[UNVERIFIED]` 推断。
 
-说明：本次没有修改运行时代码。`pnpm run build:parser` 产生的 dist 和 `.tmp` benchmark 输出均为生成物；调查结束时源码工作区保持干净。本文档与交接文档是本次有意保存的调查产物。
+说明：原始调查没有修改运行时代码。PR review 阶段只落地了已通过正确性对照和性能复测的 Fenwick 扩容修复；其余大改方向仍未放行。`pnpm run build:parser` 产生的 dist 和 `.tmp` benchmark 输出均为生成物。
 
 ---
 
@@ -166,7 +166,7 @@ HTML:        total 3653.67ms, htmlBlockPasses 1911.48ms,
 
 此外还存在可见的线性复制：
 
-```ts
+```text
 previous.groupStarts.concat(tailGroups.starts)
 previousSeed.slice(...).concat(...)
 previous.nodes.slice(...).concat(tailNodes)
@@ -181,7 +181,7 @@ previous.nodes.slice(...).concat(tailNodes)
 
 ### 3.4 Fenwick measured-node 扩容：最明确的算法热点
 
-[useHeightMeasurements.ts](src/components/NodeRenderer/composables/useHeightMeasurements.ts#L164) 在 dataset 增长时遍历 `nodeHeights`，重新应用已测节点在扩容后的 Fenwick update path。[NodeRenderer.vue](src/components/NodeRenderer/NodeRenderer.vue#L1924) 会在节点数量变化时触发同步。
+原实现的 [useHeightMeasurements.ts](src/components/NodeRenderer/composables/useHeightMeasurements.ts) 在 dataset 增长时遍历全部 `nodeHeights`，重新应用已测节点在扩容后的 Fenwick update path。[NodeRenderer.vue](src/components/NodeRenderer/NodeRenderer.vue#L1924) 会在节点数量变化时触发同步。
 
 直接 benchmark：
 
@@ -196,7 +196,16 @@ previous.nodes.slice(...).concat(tailNodes)
 
 每个矩阵的 sum/count 语义校验通过。
 
-这证明连续逐节点扩容的算法敏感性，但 benchmark 是直接调用 composable 的 Node microbenchmark：不包含 Vue batching、watch 调度、DOM、浏览器 layout，也没有证明生产中会以逐节点方式改变 `items.length`。因此应先用真实 timeline trace 确认 `syncHeightTreeSize` 调用次数和 measured-node 密度，再选择延迟扩容、frame 内合并或动态 Fenwick 结构。
+这证明连续逐节点扩容的算法敏感性，但 benchmark 是直接调用 composable 的 Node microbenchmark：不包含 Vue batching、watch 调度、DOM 或浏览器 layout。
+
+PR review 阶段采用了更小的修复：扩容时只初始化新增 slots、应用新增范围内已有的 measurement，并补齐覆盖旧边界的少量 Fenwick slots；不再遍历全部已测节点，也没有引入延迟调度、feature gate 或新状态。N=10000、M=1000 的同机复测结果：
+
+| 场景 | 修复前中位数 | 修复后中位数 | 比值 |
+|---|---:|---:|---:|
+| 逐节点 append 10,000 次 | 5373.4ms（3 runs） | 55.6ms（5 runs） | 约 96.7x |
+| batch append 10,000 个 | 12.75ms（7 runs） | 11.94ms（7 runs） | 约 1.07x |
+
+sum/count 结果一致；单元测试还将逐步与批量增长后的完整 Fenwick arrays 和 full rebuild 对照，覆盖 1/2/4/8/16 等边界。该修复的算法收益已确认，真实 UI 中的绝对收益仍取决于 append commit 频率和 measured-node 密度。
 
 ### 3.5 Timeline `estimateItemHeight`：明确 O(N)，重要性取决于 callback
 
@@ -215,7 +224,6 @@ previous.nodes.slice(...).concat(tailNodes)
 
 非虚拟路径：
 
-- `visibleNodes` 全量 map：[NodeRenderer.vue](src/components/NodeRenderer/NodeRenderer.vue#L1929)；
 - rendered-item dirty boundary prefix scan：[NodeRenderer.vue](src/components/NodeRenderer/NodeRenderer.vue#L5994)；
 - 变更路径的 `cache.slice()`：[NodeRenderer.vue](src/components/NodeRenderer/NodeRenderer.vue#L6044)。
 
@@ -265,7 +273,7 @@ KaTeX 小公式的现有测试显示 direct path 可能比 worker 更快；cache
 | 方向 | 当前证据 | 预期收益 | 改动规模 | 风险 | 建议 |
 |---|---|---:|---:|---:|---|
 | HTML/details pass 增量化 | HTML cold/append 阶段计时直接支持 | HTML-heavy 高；普通 Markdown 低 | 大 | 高，跨 chunk / nested details / raw 定位 | **最值得 prototype** |
-| Fenwick append 扩容合并/重构 | Node microbenchmark 最高 418x 比值 | 长列表逐节点 append 可能极高 | 中 | 高，anchor/range/prefix 边界 | 先 trace，再 prototype |
+| Fenwick append 扩容 | Node microbenchmark + full-rebuild differential | 逐节点 append 算法级约 96.7x | 小 | 低，内部结构不变 | **已做最小修复；继续采集 E2E trace** |
 | tokenizer / stream scan 优化 | plain 50k tokenize 58.6% | 大 plain 文档高 | 大 | 很高，Markdown 语义和 fallback | 先 profile，不直接重写 |
 | Parser → renderer dirty metadata | 双层扫描/复制有源码证据 | 中到高，取决于 renderer 占比 | 中到大 | 高，HTML/plugin/custom boundary | 作为内部协议 prototype |
 | parser worker | 可减少主线程 parser 阻塞 | 主线程流畅度潜在高；总 CPU/wall time未证实 | 很大 | 极高，plugin/identity/SSR/clone | 仅做默认 parser MVP |
@@ -314,23 +322,17 @@ KaTeX 小公式的现有测试显示 direct path 可能比 worker 更快；cache
 
 只有在 10k/50k HTML append 中确认 html pass 时间按 dirty tail 下降，才批准扩大实现范围。
 
-### P1：Fenwick 扩容的真实调用 trace + 最小修复
+### P1：Fenwick 修复后的真实调用 trace
 
-先给 `syncHeightTreeSize` 增加仅在 benchmark/dev 使用的计数和耗时观测，确认：
+最小算法修复已完成；下一步只需在 benchmark/dev 环境观测：
 
 - items length 每秒变化次数；
 - 每次 M measured 数；
 - 每次 growth 的时间；
 - Vue batching 是否已经把多个 append 合并；
-- height query 是否发生在延迟扩容窗口内。
+- 修复后的绝对耗时和端到端占比。
 
-若真实模式接近 microbenchmark，再比较：
-
-1. frame/post-flush 内合并 dataset growth；
-2. append-only tail buffer，阈值后合并；
-3. 动态 Fenwick/分块 prefix 结构。
-
-每个版本必须验证 `prefixSum`、`lowerBound`、range estimate、bottom pin、restore anchor、width bucket 和 shrink/release 语义。
+只有 trace 仍显示该路径显著，才考虑调度或数据结构层面的进一步改动。
 
 ### P1/P2：plain tokenizer 与 ParseResult metadata
 
@@ -420,9 +422,9 @@ KaTeX 小公式的现有测试显示 direct path 可能比 worker 更快；cache
 | plain tokenize 为最大已测 parser 阶段 | 5k/10k/50k 函数级计时 | 50k tokenize 1621ms；硬证据，Node parser scope |
 | HTML pass 为 HTML workload 主导阶段 | 5k/10k/50k + 10k/100 commits | 50k 占约 51.5%，append 累计约 1911ms；硬证据，synthetic HTML scope |
 | `processTokens` 不是当前全局第一优先级 | 同上 | plain 27.1%、HTML 15.8%；硬证据，但未进一步拆内部函数 |
-| Fenwick growth 有高敏感性 | N/M Node microbenchmark | 10k/1k 逐节点 5108ms vs batch 16.1ms；硬证据，非 E2E |
+| Fenwick growth 修复 | N/M Node microbenchmark + full-rebuild differential | 10k/1k 逐节点 5373.4ms → 55.6ms，batch 12.75ms → 11.94ms；算法级硬证据，非 E2E |
 | rendered-item dirty-tail 算法优于朴素路径 | synthetic benchmark | 50.4x；局部算法证据，非真实 Vue E2E |
-| 非虚拟路径保留 O(N) scan/slice/map | 源码审计 | `NodeRenderer.vue:1929`, `5994`, `6044`；硬复杂度事实，收益 `[UNVERIFIED]` |
+| 非虚拟路径保留 O(N) scan/slice | 源码审计 | `NodeRenderer.vue:5994`, `6044`；硬复杂度事实，收益 `[UNVERIFIED]` |
 | Timeline estimate 保留全量 callback | 源码 + Vitest call-count | append/revision/width 变化按 N 调用；callback wall-time `[UNVERIFIED]` |
 | scheduler 有 coalescing / adaptive batch | Vitest | 行为测试通过；producer backlog/frame budget `[UNVERIFIED]` |
 | 小规模真实 Chrome 能测 Vue/DOM/layout | Playwright benchmark | 93 DOM nodes、无 long task；不能外推大规模 |
@@ -447,7 +449,7 @@ KaTeX 小公式的现有测试显示 direct path 可能比 worker 更快；cache
 
 1. 先补 P0 真实端到端 baseline 和 backlog/GC/DOM 分层观测；
 2. 对 HTML/details workload 做增量 pass prototype；
-3. 对 Fenwick growth 先做真实调用 trace，再做最小可回滚修复；
+3. 对已修复的 Fenwick growth 采集真实调用 trace，确认端到端绝对收益；
 4. 对 plain workload 继续拆 tokenize/stream scan；
 5. 只有 profile 明确支持时，才进入 ParseResult metadata、parser worker 或 heavy island 的大改 prototype；
 6. 每个 prototype 都以逐 commit cold-parse differential + scroll/hydration/worker failure gate 收口。

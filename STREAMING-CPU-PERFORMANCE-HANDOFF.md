@@ -19,8 +19,8 @@ Simon 希望在 streaming Markdown 渲染效果完全不变的前提下继续降
 1. **当前不是 naive full parse/render。** Stream/tail parse、structured node reuse、renderer dirty-tail cache、virtual layout、batch/coalescing、heavy defer/worker 已经存在。
 2. **Plain parser 的已测最大阶段是 tokenize。** 50k synthetic blocks：total 2767ms，tokenize 1621ms（58.6%），processTokens 749ms（27.1%）。不要先重写 processTokens。
 3. **HTML/details 是不同热点。** 50k HTML/details：HTML passes 2726ms（51.5%）；10k blocks/100 appends：HTML passes 1911ms（总计 3654ms，约 53.6%）。HTML pass 增量化是当前最有数据支持的 parser prototype。
-4. **Fenwick growth 是最强算法信号。** N=10000/M=1000 的逐节点 append 5108.3ms，batch 16.1ms；但这是直接 Node microbenchmark，必须先证明真实 Vue 生产调用模式。
-5. **非虚拟 renderer 仍有 O(N) 工作。** `visibleNodes.map`、dirty prefix scan、`cache.slice()` 仍存在；50.4x rendered-item benchmark 是局部 synthetic 算法证据，不是 Vue/DOM E2E。
+4. **Fenwick growth 是最强算法信号，且已做最小修复。** N=10000/M=1000 的同机复测中，逐节点 append 中位数从 5373.4ms 降至 55.6ms（约 96.7x），batch append 从 12.75ms 降至 11.94ms；完整 Fenwick arrays 与 full rebuild 对照一致。该数据仍是 Node microbenchmark，不是 Vue/DOM E2E。
+5. **非虚拟 renderer 仍有 O(N) 工作。** dirty prefix scan、`cache.slice()` 仍存在；50.4x rendered-item benchmark 是局部 synthetic 算法证据，不是 Vue/DOM E2E。`visibleNodes` computed 是惰性的，不属于非虚拟路径热点。
 6. **Parser worker/heavy islands 尚未被证明值得大改。** 可能降低主线程 blocking，但 worker transfer、总 CPU、DOM/layout、SSR/hydration、plugin semantics 仍未量化或完整覆盖。
 
 ## Progress — 完成与剩余
@@ -32,6 +32,7 @@ Simon 希望在 streaming Markdown 渲染效果完全不变的前提下继续降
 - 第二轮 parser 阶段 profiling；
 - 第二轮 Vue/Chrome 小规模 profiling；
 - 第二轮 Fenwick/scheduler 直接实测；
+- Fenwick 扩容最小修复、full-rebuild differential 与修复前后复测；
 - 第二轮 worker/restore/SSR 语义审计；
 - 第二轮独立 verifier：GAPS，但达到“研究报告可交付”门槛；
 - 报告和本 handoff 已保存到仓库根目录。
@@ -53,7 +54,7 @@ Simon 希望在 streaming Markdown 渲染效果完全不变的前提下继续降
 1. 建立稳定的当前 HEAD Chrome baseline：固定构建、浏览器、硬件、CPU throttle、warm/cold 和 3 warmup + 5 measured runs。
 2. 先修 benchmark harness 的规模/正确性问题：大 fixture timeout 和 full-mix oracle mismatch 必须可解释，不能只排除失败样本。
 3. 为每个 commit 输出可加总阶段：parser tokenize/HTML/process、renderer stabilization、Vue patch、DOM mutation、style/layout/paint、GC/heap、scheduler/backlog、final flush。
-4. 用真实 trace 判断 Fenwick growth 是否达到 `useHeightMeasurements.ts:164-185` 的 microbenchmark 模型；若达到，先实现 frame/post-flush 合并的最小可回滚 prototype。
+4. 用真实 trace 量化 Fenwick 修复后的端到端绝对收益；只有它仍显著时才继续改调度或数据结构。
 5. 对 HTML/details 先做 feature-gated pass 增量 prototype，保留 cold parse shadow/differential gate。
 6. 只有 plain tokenizer 或 renderer 二次 stabilization 经 profiling 证明占主导，才设计 ParseResult metadata / persistent vectors；不要凭 O(N) 静态事实直接重构。
 7. Parser worker 仅考虑默认 parser、append-only、可序列化 options 的 MVP；保留主线程 plugin/custom renderer fallback。
