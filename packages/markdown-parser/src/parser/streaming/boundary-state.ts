@@ -544,16 +544,13 @@ export function stripPendingExplicitMathTail(markdown: string, runtime: ParserRu
     return markdown
 
   const previous = useCache ? runtime.pendingExplicitMathTail : undefined
-  const sourceRelation = useCache
-    ? runtime.getSourceRelation(previous?.source, markdown)
-    : undefined
-  const state = sourceRelation === 'same'
-    ? previous!.state
-    : sourceRelation === 'append'
+  const state = previous?.source === markdown
+    ? previous.state
+    : previous && runtime.sourceExtends(previous.source, markdown)
       ? updateExplicitBracketMathStreamState(
-        previous!.state,
-        markdown.slice(previous!.source.length),
-        previous!.source!.length - previous!.state.lineBuffer.length,
+        previous.state,
+        markdown.slice(previous.source.length),
+        previous.source.length - previous.state.lineBuffer.length,
       ).state
       : scanExplicitBracketMathStreamState(markdown).state
   if (useCache)
@@ -742,13 +739,12 @@ export function syncTolerantMathBoundaryStreamCache(runtime: ParserRuntime, sour
     return
 
   const previous = runtime.tolerantMathBoundary
-  const sourceRelation = runtime.getSourceRelation(previous?.source, source)
 
-  if (sourceRelation === 'same')
+  if (previous?.source === source)
     return
 
-  const sourceExtendsPrevious = sourceRelation === 'append'
-  const appended = sourceExtendsPrevious ? source.slice(previous!.source.length) : ''
+  const sourceExtendsPrevious = previous ? runtime.sourceExtends(previous.source, source) : false
+  const appended = sourceExtendsPrevious && previous ? source.slice(previous.source.length) : ''
   const explicitBracketMathUpdate = sourceExtendsPrevious && previous
     ? updateExplicitBracketMathStreamState(
         previous.explicitBracketMath,

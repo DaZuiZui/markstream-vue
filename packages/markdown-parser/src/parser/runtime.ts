@@ -84,21 +84,6 @@ export interface SourceLineOffsetsRuntimeState {
   offsets: number[]
 }
 
-export type SourceAppendRelationKind = 'none' | 'same' | 'append' | 'replace'
-
-export function getSourceAppendRelation(previousSource: string | undefined, currentSource: string): SourceAppendRelationKind {
-  if (previousSource === undefined)
-    return 'none'
-
-  if (currentSource === previousSource)
-    return 'same'
-
-  if (currentSource.length > previousSource.length && currentSource.startsWith(previousSource))
-    return 'append'
-
-  return 'replace'
-}
-
 /**
  * Resolve (and cache) the line-start offsets for a source string.
  *
@@ -111,12 +96,11 @@ export function getSourceAppendRelation(previousSource: string | undefined, curr
  */
 export function getCachedSourceLineOffsets(runtime: ParserRuntime, source: string): number[] {
   const cached = runtime.sourceLineOffsets
-  const relation = runtime.getSourceRelation(cached?.source, source)
 
-  if (cached && relation === 'same')
+  if (cached?.source === source)
     return cached.offsets
 
-  if (cached && relation === 'append') {
+  if (cached && source.length > cached.source.length && runtime.sourceExtends(cached.source, source)) {
     const offsets = cached.offsets
     for (let i = cached.source.length; i < source.length; i++) {
       if (source.charCodeAt(i) === 10)
@@ -193,7 +177,6 @@ export class ParserRuntime {
   private semantics?: ParserRuntimeSemantics
   private sourceRelationPrevious?: string
   private sourceRelationCurrent?: string
-  private sourceRelationKind?: SourceAppendRelationKind
   private finalized = false
   private resettingStream = false
   private streamStateActive = false
@@ -203,23 +186,23 @@ export class ParserRuntime {
     this.markdownIt = markdownIt
   }
 
-  getSourceRelation(
-    previousSource: string | undefined,
-    currentSource: string,
-  ): SourceAppendRelationKind {
+  sourceExtends(previousSource: string, currentSource: string) {
     if (this.sourceRelationPrevious === previousSource && this.sourceRelationCurrent === currentSource)
-      return this.sourceRelationKind!
+      return true
+
+    if (!currentSource.startsWith(previousSource))
+      return false
 
     this.sourceRelationPrevious = previousSource
     this.sourceRelationCurrent = currentSource
-    this.sourceRelationKind = getSourceAppendRelation(previousSource, currentSource)
-    return this.sourceRelationKind
+    return true
   }
 
   beginRootParse(source: string, semantics: ParserRuntimeSemantics) {
     this.streamResetInCurrentRootParse = false
-    const relation = this.getSourceRelation(this.documentSource, source)
-    const sourceChangedNonAppend = relation === 'replace'
+    const sourceChangedNonAppend = this.documentSource !== undefined
+      && source !== this.documentSource
+      && !this.sourceExtends(this.documentSource, source)
     const semanticsChanged = this.semantics !== undefined && !sameSemantics(this.semantics, semantics)
 
     if (this.finalized || sourceChangedNonAppend || semanticsChanged)
@@ -234,7 +217,6 @@ export class ParserRuntime {
     // Relation sharing is scoped to one root parse; do not retain its previous source.
     this.sourceRelationPrevious = undefined
     this.sourceRelationCurrent = undefined
-    this.sourceRelationKind = undefined
 
     if (!final)
       return
@@ -316,7 +298,6 @@ export class ParserRuntime {
     this.sourceLineOffsets = undefined
     this.sourceRelationPrevious = undefined
     this.sourceRelationCurrent = undefined
-    this.sourceRelationKind = undefined
   }
 }
 

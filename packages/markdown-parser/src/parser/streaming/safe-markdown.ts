@@ -112,9 +112,6 @@ function transformStreamingSafeMarkdown(
 export function getSafeMarkdown(runtime: ParserRuntime, sourceMarkdown: string, isFinal: boolean, options: ParseContext) {
   const mode = `${isFinal ? 'final' : 'stream'}:${(options.customHtmlTags ?? []).join(',')}`
   const previous = options.isFragment ? undefined : runtime.safeMarkdown
-  const sourceRelation = options.isFragment
-    ? undefined
-    : runtime.getSourceRelation(previous?.source, sourceMarkdown)
 
   let safeMarkdown: string
   if (
@@ -128,7 +125,8 @@ export function getSafeMarkdown(runtime: ParserRuntime, sourceMarkdown: string, 
     && !options.customHtmlTags?.length
     && previous
     && previous.mode === mode
-    && (sourceRelation === 'same' || sourceRelation === 'append')
+    && sourceMarkdown.length >= previous.source.length
+    && runtime.sourceExtends(previous.source, sourceMarkdown)
   ) {
     // The window cut MUST be a raw-source index. The previous implementation
     // cut `previous.safeMarkdown` at a safeMarkdown index but sliced the raw
