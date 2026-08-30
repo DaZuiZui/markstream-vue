@@ -136,7 +136,7 @@ describe('issue 380 html wrapper markdown regression', () => {
     expect(nodes[0]?.children).toBeUndefined()
   })
 
-  it('does not turn indented nested HTML into code blocks while the wrapper streams', () => {
+  it('keeps issue #713 pure-html cards unstructured through streaming reuse', () => {
     const html = `<div>
   <h3>Deployment summary</h3>
   <p>This card keeps growing while it streams.</p>
@@ -152,13 +152,47 @@ describe('issue 380 html wrapper markdown regression', () => {
     <tr><td>worker</td><td>1.9.7</td><td>8</td></tr>
   </table>
 </div>`
-    const md = getMarkdown('streaming-pure-html-card')
+    const markdown = `# Streaming sample
 
-    for (let end = 20; end <= html.length; end += 20) {
-      const nodes = parseMarkdownToStructure(html.slice(0, end), md, { final: false }) as any[]
-      const block = nodes.find(node => node?.type === 'html_block')
-      expect(block?.children, `stream offset ${end}`).toBeUndefined()
+This document streams into the renderer in small chunks.
+
+## HTML card
+
+${html}
+
+## Following content
+
+    More content keeps streaming after the completed card.`
+    const md = getMarkdown('streaming-pure-html-card')
+    let reusedNodes = 0
+
+    for (let end = 20; end <= markdown.length; end += 20) {
+      const parserMetrics: { processTokensReusedTopLevelNodes?: number } = {}
+      const streamed = parseMarkdownToStructure(markdown.slice(0, end), md, {
+        final: false,
+        parserMetrics,
+        reuseStableTopLevelNodes: true,
+        streamParse: true,
+      }) as any[]
+      const block = streamed.find(node => node?.type === 'html_block' && node?.tag === 'div')
+      if (block)
+        expect(block.children, `stream offset ${end}`).toBeUndefined()
+      reusedNodes += parserMetrics.processTokensReusedTopLevelNodes ?? 0
     }
+
+    const finalStreamed = parseMarkdownToStructure(markdown, md, {
+      final: true,
+      reuseStableTopLevelNodes: true,
+      streamParse: true,
+    }) as any[]
+    const cold = parseMarkdownToStructure(markdown, getMarkdown('streaming-pure-html-card-cold'), {
+      final: true,
+      streamParse: false,
+    }) as any[]
+
+    expect(reusedNodes).toBeGreaterThan(0)
+    expect(finalStreamed).toEqual(cold)
+    expect(finalStreamed.find(node => node?.type === 'html_block' && node?.tag === 'div')?.children).toBeUndefined()
   })
 
   it('does not recursively parse a large pure-html wrapper', () => {
