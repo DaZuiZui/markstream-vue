@@ -172,18 +172,8 @@ export function processTokensWithContext(
     return []
 
   const result: ParsedNode[] = []
+  const resultContexts: ParseContext['linkifyDemotionResultContexts'] = []
   const linkifyContext = createLinkifyDemotionContextTracker(options)
-  const seedRaws = options.linkifyDemotionSeed
-  if (Array.isArray(seedRaws) && seedRaws.length) {
-    // Replay the reused prefix node raws into the demotion tracker. This is a
-    // top-level-node granularity approximation: a full parse remembers raws at
-    // nested granularity too (per-list-item paragraphs etc.). The demotion
-    // heuristics absorb the difference (continuation inheritance + per-block
-    // re-inference), and `test/linkify-seed-granularity.test.ts` pins the
-    // streamed == cold behavior for mixed-feature prefixes.
-    for (const raw of seedRaws)
-      linkifyContext.remember(String(raw ?? ''))
-  }
   const includeSourceMap = options?.includeSourceMap === true
   let i = 0
   // Note: table token normalization is applied during markdown-it parsing
@@ -197,6 +187,7 @@ export function processTokensWithContext(
       recordInternalNodeSourceRange(handled[0], tokens[i], options)
       result.push(handled[0])
       linkifyContext.remember(handled[0].raw)
+      resultContexts.push(linkifyContext.snapshot())
       i = handled[1]
       continue
     }
@@ -350,7 +341,11 @@ export function processTokensWithContext(
         i += 1
         break
     }
+    const context = linkifyContext.snapshot()
+    while (resultContexts.length < result.length)
+      resultContexts.push(context)
   }
 
+  options.linkifyDemotionResultContexts = resultContexts
   return result
 }

@@ -24,6 +24,7 @@ const cpuThrottleRate = Number(process.env.MARKSTREAM_HEAVY_RESTORE_CPU_THROTTLE
 const observationMs = Number(process.env.MARKSTREAM_HEAVY_RESTORE_OBSERVATION_MS || 1800)
 const timeoutMs = Number(process.env.MARKSTREAM_HEAVY_RESTORE_TIMEOUT_MS || 12000)
 const traceEnabled = process.env.MARKSTREAM_HEAVY_RESTORE_TRACE !== '0'
+const cpuProfileEnabled = process.env.MARKSTREAM_HEAVY_RESTORE_CPU_PROFILE === '1'
 const allowFailure = process.env.MARKSTREAM_HEAVY_RESTORE_ALLOW_FAILURE === '1'
 const disableAutoVirtual = process.env.MARKSTREAM_HEAVY_RESTORE_DISABLE_AUTO_VIRTUAL === '1'
 const tailNodes = Number(process.env.MARKSTREAM_HEAVY_RESTORE_TAIL_NODES || 72)
@@ -149,6 +150,32 @@ function requestDelta(before, after) {
   return Object.fromEntries(Object.keys(after).map(key => [key, after[key] - (before[key] || 0)]))
 }
 
+function summarizeCpuProfile(profile) {
+  const nodes = new Map(profile.nodes.map(node => [node.id, node]))
+  const totals = new Map()
+  for (let index = 0; index < (profile.samples?.length ?? 0); index++) {
+    const node = nodes.get(profile.samples[index])
+    if (!node)
+      continue
+    const frame = node.callFrame
+    const key = `${frame.functionName}\n${frame.url}\n${frame.lineNumber}`
+    const current = totals.get(key) ?? {
+      functionName: frame.functionName || '(anonymous)',
+      url: frame.url,
+      line: frame.lineNumber + 1,
+      selfTimeMs: 0,
+      samples: 0,
+    }
+    current.selfTimeMs += (profile.timeDeltas?.[index] ?? 0) / 1000
+    current.samples += 1
+    totals.set(key, current)
+  }
+  return Array.from(totals.values())
+    .sort((a, b) => b.selfTimeMs - a.selfTimeMs)
+    .slice(0, 30)
+    .map(entry => ({ ...entry, selfTimeMs: round(entry.selfTimeMs) }))
+}
+
 async function measurePhase(client, page, functionName, options, requests) {
   await client.send('HeapProfiler.collectGarbage').catch(() => {})
   const before = await getMetrics(client)
@@ -159,7 +186,14 @@ async function measurePhase(client, page, functionName, options, requests) {
       transferMode: 'ReturnAsStream',
     })
   }
+  if (cpuProfileEnabled) {
+    await client.send('Profiler.enable')
+    await client.send('Profiler.start')
+  }
   const result = await page.evaluate(({ functionName, options }) => window[functionName](options), { functionName, options })
+  const cpuProfile = cpuProfileEnabled
+    ? summarizeCpuProfile((await client.send('Profiler.stop')).profile)
+    : undefined
   const after = await getMetrics(client)
   const trace = traceEnabled ? await stopTracing(client) : {}
   await client.send('HeapProfiler.collectGarbage').catch(() => {})
@@ -177,6 +211,7 @@ async function measurePhase(client, page, functionName, options, requests) {
       retainedHeapDeltaMB: (retainedHeap - beforeHeap) / 1024 / 1024,
       requests: requestDelta(requestsBefore, requests),
       trace,
+      cpuProfile,
     },
   }
 }
@@ -427,7 +462,7 @@ async function main() {
       source: 'scripts/benchmark-heavy-restore.mjs',
       fixture: 'test/benchmark/heavy-restore',
       method: `${repeats}-run median, 4x CPU by default after page ready, ${observationMs}ms unscrolled observation, deterministic counted heavy loaders, per-phase CDP trace`,
-      config: { repeats, cpuThrottleRate, observationMs, timeoutMs, traceEnabled, allowFailure, disableAutoVirtual, tailNodes, sourceRoot },
+      config: { repeats, cpuThrottleRate, observationMs, timeoutMs, traceEnabled, cpuProfileEnabled, allowFailure, disableAutoVirtual, tailNodes, sourceRoot },
       environment: {
         platform: platform(),
         release: release(),

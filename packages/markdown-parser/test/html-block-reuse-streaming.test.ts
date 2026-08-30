@@ -143,6 +143,17 @@ describe('html_block top-level reuse streaming', () => {
     expectStreamingMatchesCold(full, boundaries)
   })
 
+  it('handles details appended after a reusable generic html prefix', () => {
+    const md = getMarkdown(`html-reuse-appended-details-${Math.random()}`)
+    const prefix = '<div>stable prefix</div>\n\ntrailing paragraph\n\n'
+    parseStreaming(prefix, md)
+
+    const source = `${prefix}<details>\n<summary>open me</summary>\n\nbody\n</details>\n`
+    const parserMetrics: { processTokensReusedTopLevelNodes?: number } = {}
+    expect(parseStreaming(source, md, parserMetrics)).toEqual(parseCold(source))
+    expect(parserMetrics.processTokensReusedTopLevelNodes).toBe(1)
+  })
+
   it('keeps streamed and cold output identical when an unclosed <details> grows then closes', () => {
     const full = [
       '<details open>',

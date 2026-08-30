@@ -245,7 +245,8 @@ export function createLinkifyDemotionContextTracker(
   options?: ParseOptions,
   sticky = false,
 ) {
-  let context: LinkifyDemotionContext | undefined
+  const parseContext = ensureParseContext(options)
+  let context: LinkifyDemotionContext | undefined = parseContext.linkifyDemotionSeedContext
 
   return {
     options(raw?: string) {
@@ -267,6 +268,9 @@ export function createLinkifyDemotionContextTracker(
     },
     reset() {
       context = undefined
+    },
+    snapshot() {
+      return context
     },
   }
 }

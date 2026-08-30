@@ -30,7 +30,7 @@ import MarkdownRender from '../NodeRenderer'
 defineOptions({ name: 'MarkstreamVirtualTimeline' })
 
 const props = withDefaults(defineProps<MarkstreamVirtualTimelineProps<any>>(), {
-  overscan: 4,
+  overscan: 1,
   overscanPx: 1200,
   stickToBottom: 'auto',
   markdownFade: false,
@@ -622,7 +622,7 @@ function lowerBoundRecordByOffset(offset: number, mode: 'gte' | 'gt' = 'gte') {
 }
 
 const effectiveOverscanItems = computed(() => {
-  const value = Math.max(0, props.overscan ?? 4)
+  const value = Math.max(0, props.overscan ?? 1)
   return value
 })
 

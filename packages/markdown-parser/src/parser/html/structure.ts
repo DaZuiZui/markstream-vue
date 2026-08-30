@@ -185,7 +185,6 @@ export function structureGenericHtmlBlockChildren(
   context: HtmlStructureContext,
   options: ParseContext,
   final: boolean,
-  tailStart = 0,
 ): ParsedNode[] {
   const processNode = (node: ParsedNode): ParsedNode => {
     if (node?.type !== 'html_block')
@@ -234,9 +233,7 @@ export function structureGenericHtmlBlockChildren(
     return node
   }
 
-  if (tailStart <= 0)
-    return nodes.map(processNode)
-  return nodes.slice(0, tailStart).concat(nodes.slice(tailStart).map(processNode))
+  return nodes.map(processNode)
 }
 
 export function hasTopLevelHtmlBlock(nodes: ParsedNode[], start = 0) {
@@ -526,12 +523,13 @@ export function mergeSplitTopLevelHtmlBlocks(
   source: string,
   context: HtmlStructureContext,
   options?: ParseContext,
+  initialSourceCursor = 0,
 ) {
   if (!source)
     return nodes
 
   const merged = nodes.slice()
-  let sourceHtmlCursor = 0
+  let sourceHtmlCursor = initialSourceCursor
 
   for (let i = 0; i < merged.length; i++) {
     const node = merged[i]

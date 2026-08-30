@@ -3,7 +3,7 @@
  */
 import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import HtmlBlockNode from '../src/components/HtmlBlockNode/HtmlBlockNode.vue'
 
@@ -33,6 +33,7 @@ describe('htmlBlockNode streaming DOM stability', () => {
       }
     }
     await new Promise(resolve => setTimeout(resolve, 0))
+    vi.unstubAllGlobals()
   })
 
   function trackMount(component: any, options: Record<string, unknown>) {
@@ -128,5 +129,55 @@ describe('htmlBlockNode streaming DOM stability', () => {
 
     expect(wrapper.text()).toContain('fresh final content')
     expect(wrapper.text()).not.toContain('stale intermediate parse')
+  })
+
+  it('keeps the measured streaming height until the settled DOM commits', async () => {
+    const resizeCallbacks: ResizeObserverCallback[] = []
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallbacks.push(callback)
+      }
+
+      observe() {}
+      disconnect() {}
+    })
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      frames.push(callback)
+      return frames.length
+    }))
+
+    const loadingNode = {
+      type: 'html_block',
+      tag: 'div',
+      raw: '<div><p>streaming card</p>',
+      content: '<div><p>streaming card</p></div>',
+      loading: true,
+    }
+    const wrapper = trackMount(HtmlBlockNode, { props: { node: loadingNode as any } })
+    await nextTick()
+
+    resizeCallbacks[0]!([{
+      borderBoxSize: [{ blockSize: 240 }],
+      contentRect: { height: 240 },
+    } as unknown as ResizeObserverEntry], {} as ResizeObserver)
+    await nextTick()
+
+    expect((wrapper.element as HTMLElement).style.minHeight).toBe('240px')
+
+    await wrapper.setProps({
+      node: {
+        ...loadingNode,
+        raw: '<div><p>streaming card</p></div>',
+        loading: false,
+      } as any,
+    })
+    await nextTick()
+
+    expect((wrapper.element as HTMLElement).style.minHeight).toBe('240px')
+    expect(frames).toHaveLength(1)
+    frames.shift()!(0)
+    await nextTick()
+    expect((wrapper.element as HTMLElement).style.minHeight).toBe('')
   })
 })

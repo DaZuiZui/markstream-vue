@@ -35,6 +35,7 @@ const smoothMaxCharsPerCommit = Number(process.env.MARKSTREAM_STREAMING_SPLIT_SM
 const smoothMaxCommitFps = Number(process.env.MARKSTREAM_STREAMING_SPLIT_SMOOTH_MAX_FPS || 20)
 const skipConfigProbe = process.env.MARKSTREAM_STREAMING_SPLIT_SKIP_CONFIG_PROBE === '1'
 const traceEnabled = process.env.MARKSTREAM_STREAMING_SPLIT_TRACE === '1'
+const cpuProfileEnabled = process.env.MARKSTREAM_STREAMING_SPLIT_CPU_PROFILE === '1'
 const selectedCaseIds = (process.env.MARKSTREAM_STREAMING_SPLIT_CASES || '')
   .split(',')
   .map(value => value.trim())
@@ -325,6 +326,32 @@ function median(values) {
   return sorted[Math.floor(sorted.length / 2)]
 }
 
+function summarizeCpuProfile(profile) {
+  const nodes = new Map(profile.nodes.map(node => [node.id, node]))
+  const totals = new Map()
+  for (let index = 0; index < (profile.samples?.length ?? 0); index++) {
+    const node = nodes.get(profile.samples[index])
+    if (!node)
+      continue
+    const frame = node.callFrame
+    const key = `${frame.functionName}\n${frame.url}\n${frame.lineNumber}`
+    const current = totals.get(key) ?? {
+      functionName: frame.functionName || '(anonymous)',
+      url: frame.url,
+      line: frame.lineNumber + 1,
+      selfTimeMs: 0,
+      samples: 0,
+    }
+    current.selfTimeMs += (profile.timeDeltas?.[index] ?? 0) / 1000
+    current.samples += 1
+    totals.set(key, current)
+  }
+  return Array.from(totals.values())
+    .sort((a, b) => b.selfTimeMs - a.selfTimeMs)
+    .slice(0, 30)
+    .map(entry => ({ ...entry, selfTimeMs: round(entry.selfTimeMs) }))
+}
+
 function medianResult(runs) {
   const keys = [
     'totalMs',
@@ -426,6 +453,10 @@ async function runOnce(browser, port, rendererConfig, chunks, caseId) {
       transferMode: 'ReturnAsStream',
     })
   }
+  if (cpuProfileEnabled) {
+    await client.send('Profiler.enable')
+    await client.send('Profiler.start')
+  }
   const before = await getMetrics(client)
   const result = await page.evaluate(options => window.__runBenchmark(options), {
     chunks,
@@ -435,6 +466,9 @@ async function runOnce(browser, port, rendererConfig, chunks, caseId) {
     stableFrames,
   })
   const after = await getMetrics(client)
+  const cpuProfile = cpuProfileEnabled
+    ? summarizeCpuProfile((await client.send('Profiler.stop')).profile)
+    : undefined
   const trace = traceEnabled ? await stopTracing(client) : {}
   const correctness = await page.evaluate(options => window.__verifyBenchmarkResult(options), {
     expectedContent,
@@ -485,6 +519,7 @@ async function runOnce(browser, port, rendererConfig, chunks, caseId) {
     jsHeapUsedMB: after.JSHeapUsedSize / 1024 / 1024,
     jsHeapDeltaMB: (after.JSHeapUsedSize - before.JSHeapUsedSize) / 1024 / 1024,
     ...trace,
+    cpuProfile,
     correctness,
   }
 }
@@ -803,6 +838,7 @@ async function main() {
         smoothMaxCommitFps,
         skipConfigProbe,
         traceEnabled,
+        cpuProfileEnabled,
         sourceRoot,
         renderers: primaryRenderers.map(renderer => renderer.id),
       },
