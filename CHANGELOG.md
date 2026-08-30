@@ -1,3 +1,39 @@
+## [2.0.7](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.6...markstream-vue@2.0.7) (2026-08-31)
+
+
+### Bug Fixes
+
+* **parser:** keep source relation cache minimal ([4d1b813](https://github.com/Simon-He95/markstream-vue/commit/4d1b8136c37a60f7f3a2b98316175c0b083893b9))
+* **parser:** simplify source relation memo ([5bb8c8d](https://github.com/Simon-He95/markstream-vue/commit/5bb8c8d53f5bfab688efeaa747fda0fa06b0a345))
+* **perf:** scope loading diff cache per block ([306e70a](https://github.com/Simon-He95/markstream-vue/commit/306e70a91f17e360cda5d777251154b2a76846f8))
+* **renderer:** address review findings on measured performance changes ([7fa0ca9](https://github.com/Simon-He95/markstream-vue/commit/7fa0ca9471969a663a579b81f678511dcd4dc18f)), closes [#734](https://github.com/Simon-He95/markstream-vue/issues/734)
+
+
+### Performance Improvements
+
+* avoid rescanning reused HTML prefixes ([887c0cf](https://github.com/Simon-He95/markstream-vue/commit/887c0cf61ea22cbcc57f12dd8c7c239297ec05e7))
+* **diff:** keep measured line-count optimization ([830eb40](https://github.com/Simon-He95/markstream-vue/commit/830eb402a12e174bb10acd5dcd734a05b340a35e))
+* optimize Fenwick tree growth ([1c031c1](https://github.com/Simon-He95/markstream-vue/commit/1c031c17dcbf8b79a874289103096b370f4a0f47))
+* **parser:** memoize streaming source relations ([16e15fb](https://github.com/Simon-He95/markstream-vue/commit/16e15fb38833a4791b09f1545b91374eea7dbfb4))
+* reduce history-restore overscan ([d52890c](https://github.com/Simon-He95/markstream-vue/commit/d52890ca5ea93ac1555762f1166a2bf8ef9648e6))
+* reduce streaming and restore CPU work ([3a5d9e7](https://github.com/Simon-He95/markstream-vue/commit/3a5d9e78f457d2022d1ef62930282fa33736d1ff))
+* **renderer:** cut heavy-restore CPU with measured optimizations ([8b1fb1e](https://github.com/Simon-He95/markstream-vue/commit/8b1fb1e29bae974e3179f62bc9c037895e4fa29f))
+* **renderer:** incrementally compute loading diff stats and memoize stable render data ([8454257](https://github.com/Simon-He95/markstream-vue/commit/8454257b9a18604186fb5b3343c8380d7ed9df21))
+* **streaming:** reduce line-count and boundary allocations ([63bc51c](https://github.com/Simon-He95/markstream-vue/commit/63bc51c31ca1b6bf9106b874d910271dee51795a))
+
+
+### Coordinated Stable Versions
+
+* `stream-markdown-parser@1.2.13`
+* `markstream-core@2.0.7`
+* `markstream-vue@2.0.7`
+* `markstream-react@2.0.7`
+* `markstream-octane@2.0.7`
+* `markstream-svelte@2.0.7`
+* `markstream-angular@2.0.7`
+* `markstream-vue2@2.0.7`
+
+
 ## [2.0.6](https://github.com/Simon-He95/markstream-vue/compare/markstream-vue@2.0.5...markstream-vue@2.0.6) (2026-08-28)
 
 
