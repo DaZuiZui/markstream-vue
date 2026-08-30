@@ -869,6 +869,40 @@ describe('virtual timeline API', () => {
     wrapper.unmount()
   })
 
+  it('defaults to one item beyond the pixel overscan window', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(100)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function () {
+      return Number.parseFloat((this as HTMLElement).style.minHeight || '0') || 1000
+    })
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    })
+
+    const items = Array.from({ length: 10 }, (_, index) => ({
+      id: `item-${index}`,
+      kind: 'user-message',
+      text: `Item ${index}`,
+    }))
+    const wrapper = mount(MarkstreamVirtualTimeline, {
+      attachTo: document.body,
+      props: {
+        items,
+        threadKey: 'default-overscan',
+        stickToBottom: false,
+        estimateItemHeight: () => 1000,
+      },
+    })
+    await flushAll()
+
+    expect((wrapper.vm as any).getVisibleRange()).toEqual({ start: 0, end: 3 })
+    expect(wrapper.findAll('[data-markstream-item-key]')).toHaveLength(3)
+
+    wrapper.unmount()
+  })
+
   it('drops the previous key when an incremental rebuild replaces an item', async () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300)
     vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800)

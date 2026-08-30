@@ -30,6 +30,8 @@ const browserViewportWidth = readPositiveIntEnv('MARKSTREAM_REAL_CORPUS_BROWSER_
 const browserViewportHeight = readPositiveIntEnv('MARKSTREAM_REAL_CORPUS_BROWSER_VIEWPORT_HEIGHT', 900)
 const browserCpuThrottleRate = readPositiveIntEnv('MARKSTREAM_REAL_CORPUS_BROWSER_CPU_THROTTLE_RATE', 1)
 const browserDebugPerformance = process.env.MARKSTREAM_REAL_CORPUS_DEBUG_PERFORMANCE !== '0'
+const browserChatRestoreOverscan = readNonNegativeNumberEnv('MARKSTREAM_REAL_CORPUS_CHAT_RESTORE_OVERSCAN', 1000000)
+const browserChatRestoreOverscanPx = readNonNegativeNumberEnv('MARKSTREAM_REAL_CORPUS_CHAT_RESTORE_OVERSCAN_PX', 1000000)
 const browserCoreSmoothStreamingDefaults = {
   minCharsPerSecond: 40,
   maxCharsPerSecond: 1000,
@@ -601,6 +603,8 @@ const timelineItems = ref([])
 const timelineInitialState = ref(null)
 const timelineThreadKey = ref('')
 const timelineRef = ref(null)
+const timelineOverscan = ref(1000000)
+const timelineOverscanPx = ref(1000000)
 const smoothStreamingOptions = ${JSON.stringify(browserSmoothStreamingOptions)}
 const rendererOptions = ${JSON.stringify(browserRendererOptions)}
 const debugPerformance = ${JSON.stringify(browserDebugPerformance)}
@@ -1284,6 +1288,8 @@ async function prepareChatRestore(options) {
   resetParsePerformance()
   const startedAt = performance.now()
   surface.value = 'timeline'
+  timelineOverscan.value = 1000000
+  timelineOverscanPx.value = 1000000
   timelineThreadKey.value = item.threadKey
   timelineInitialState.value = null
   timelineItems.value = item.items
@@ -1328,6 +1334,8 @@ async function runChatRestore(options) {
   const observers = startRunObservers(root)
   const startedAt = performance.now()
   surface.value = 'timeline'
+  timelineOverscan.value = ${JSON.stringify(browserChatRestoreOverscan)}
+  timelineOverscanPx.value = ${JSON.stringify(browserChatRestoreOverscanPx)}
   timelineThreadKey.value = item.threadKey
   timelineInitialState.value = preparedState
   timelineItems.value = item.items
@@ -1337,11 +1345,12 @@ async function runChatRestore(options) {
   const firstSnapshot = getDomSnapshot()
   const firstTimelineSnapshot = getTimelineSnapshot()
   const hiddenRestoreSlots = measureSlots()
-  const restoreReady = await waitForTimelineReady(options.timeoutMs ?? 30000, item.endMarker)
+  const requiresEndMarker = timelineOverscan.value >= item.itemCount
+  const restoreReady = await waitForTimelineReady(options.timeoutMs ?? 30000, requiresEndMarker ? item.endMarker : undefined)
   const firstVisibleSnapshot = getDomSnapshot()
   const firstVisibleTimelineSnapshot = getTimelineSnapshot()
   const firstVisibleSlots = measureSlots()
-  const stable = await waitForStableRender(options.timeoutMs ?? 30000, item.endMarker)
+  const stable = await waitForStableRender(options.timeoutMs ?? 30000, requiresEndMarker ? item.endMarker : undefined)
   const settledSlots = measureSlots()
   const totalMs = performance.now() - startedAt
   const observerState = observers.stop()
@@ -1510,8 +1519,8 @@ const App = defineComponent({
           items: timelineItems.value,
           threadKey: timelineThreadKey.value,
           initialThreadState: timelineInitialState.value,
-          overscan: 1000000,
-          overscanPx: 1000000,
+          overscan: timelineOverscan.value,
+          overscanPx: timelineOverscanPx.value,
           stickToBottom: false,
           markdownMode: 'chat',
           renderCodeBlocksAsPre: true,
@@ -2042,6 +2051,8 @@ async function main() {
       browserViewportHeight,
       browserCpuThrottleRate,
       browserDebugPerformance,
+      browserChatRestoreOverscan,
+      browserChatRestoreOverscanPx,
       rendererOptions: browserRendererOptions,
       finalTimelineMarkdownOptions: browserFinalTimelineMarkdownOptions,
       standaloneFinalRestoreAutoExpectedOptions: browserStandaloneFinalRestoreAutoExpectedOptions,
