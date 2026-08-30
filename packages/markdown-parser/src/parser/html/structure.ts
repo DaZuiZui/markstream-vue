@@ -526,12 +526,13 @@ export function mergeSplitTopLevelHtmlBlocks(
   source: string,
   context: HtmlStructureContext,
   options?: ParseContext,
+  initialSourceCursor = 0,
 ) {
   if (!source)
     return nodes
 
   const merged = nodes.slice()
-  let sourceHtmlCursor = 0
+  let sourceHtmlCursor = initialSourceCursor
 
   for (let i = 0; i < merged.length; i++) {
     const node = merged[i]

@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { getMarkdown, parseMarkdownToStructure } from '../src'
 
 /**
- * The reuse tail seeds its linkify demotion tracker with the reused prefix
- * nodes' raw strings. The real parse remembers block-level raws DURING nested
- * processing (e.g. per-list-item paragraphs), so a top-level list whose raw
- * contains a filename keyword while its LAST item does not should produce the
- * same output as a cold parse (where the last remembered context has no
- * filename signal).
+ * The reuse tail restores the linkify demotion context captured at the stable
+ * prefix boundary. A top-level list whose raw contains a filename keyword
+ * while its LAST item does not should therefore produce the same output as a
+ * cold parse, where the last remembered context has no filename signal.
  */
 describe('structured reuse linkify seed granularity', () => {
   it('streamed reuse output matches cold parse when prefix list mixes filename keyword and plain items', () => {

@@ -1,5 +1,6 @@
 import type { MarkdownIt } from '../markdown-it-types'
 import type { MarkdownNodeSourceMap, ParseOptions } from '../types'
+import type { LinkifyDemotionContext } from './linkifyHeuristics'
 import type { ParserRuntime } from './runtime'
 
 const PARSE_CONTEXT = Symbol('markstream.parse-context')
@@ -11,12 +12,9 @@ export interface ParseContext extends ParseOptions {
   disableStructuredReuse: boolean
   insideStrong: boolean
   isFragment: boolean
-  linkifyDemotionContext?: {
-    filename?: boolean
-    explicitFilename?: boolean
-    marketTicker?: boolean
-  }
-  linkifyDemotionSeed?: string[]
+  linkifyDemotionContext?: LinkifyDemotionContext
+  linkifyDemotionResultContexts?: Array<LinkifyDemotionContext | undefined>
+  linkifyDemotionSeedContext?: LinkifyDemotionContext
   markdownIt?: MarkdownIt
   runtime?: ParserRuntime
   sourceLineMapper?: (line: number) => MarkdownNodeSourceMap

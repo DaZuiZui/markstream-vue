@@ -613,9 +613,9 @@ describe('parseMarkdownToStructure stream parser integration', () => {
     expect(streamed).toEqual(cold)
     expect(streamed.find(node => node.raw === 'foo.md')?.children?.[0]?.type).toBe('text')
     expect(streamed.find(node => node.raw === 'bar.md')?.children?.[0]?.type).toBe('text')
-    // The tail's linkify demotion tracker is seeded with the reused prefix
-    // node raws, so cross-block demotion context (Files:) is preserved while
-    // the stable prefix is still reused.
+    // The tail's linkify demotion tracker resumes from the stable-prefix
+    // boundary context, so cross-block demotion context (Files:) is preserved
+    // while the stable prefix is still reused.
     expect(timing.processTokensInputTokens).toBeLessThan((md as any).stream.peek().length)
     expect(timing.processTokensReusedTopLevelNodes ?? 0).toBeGreaterThan(0)
   })

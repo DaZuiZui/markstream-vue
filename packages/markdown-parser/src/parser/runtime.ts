@@ -1,5 +1,6 @@
 import type { MarkdownIt } from '../markdown-it-types'
 import type { MarkdownToken, ParsedNode, ParseOptions } from '../types'
+import type { LinkifyDemotionContext } from './linkifyHeuristics'
 
 export interface ExplicitBracketMathContext {
   fenceChar: '`' | '~' | ''
@@ -61,8 +62,7 @@ export interface StructuredStreamRuntimeState {
   mixed: boolean
   source: string
   nodes: ParsedNode[]
-  /** Cached prefix node raws for incremental linkify demotion seeding. */
-  seed: string[]
+  linkifyDemotionContext?: LinkifyDemotionContext
   stableGroupCount: number
   requireClosingStrong: boolean | undefined
   validateLink: ParseOptions['validateLink']
@@ -163,6 +163,7 @@ export class ParserRuntime {
    * it re-processed the whole document. Lets downstream passes tail-window.
    */
   structuredReuseTailStart?: number
+  htmlPassIdentityPreserving = false
   /**
    * Stitched `<details>` output cache keyed by the pre-pass details opener
    * html_block node. Reused prefix details keep the same opener object across
@@ -292,6 +293,7 @@ export class ParserRuntime {
     this.streamParseEnvs.clear()
     this.topLevelStreamParseMode = undefined
     this.structuredStream = undefined
+    this.htmlPassIdentityPreserving = false
     this.siblingHtmlChildren = undefined
     this.detailsStitchCache = new WeakMap()
     this.nodeSourceRanges = new WeakMap()

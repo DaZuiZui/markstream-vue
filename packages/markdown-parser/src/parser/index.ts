@@ -210,18 +210,52 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
   const tailStart = reuseTailStart && reuseTailStart > 0 && reuseTailStart < result.length
     ? reuseTailStart
     : 0
-  if (hasTopLevelHtmlBlock(result)) {
+  const hasHtml = hasTopLevelHtmlBlock(result)
+  if (hasHtml) {
     const htmlPassesStartedAt = timing ? getParserNow() : 0
     const htmlStructureContext: HtmlStructureContext = {
       getInternalNodeSourceRange: node => getInternalNodeSourceRange(node, runtime),
       markdownIt: md,
       parseFragment: (fragment, fragmentOptions) => parseMarkdownWithContext(fragment, fragmentOptions),
     }
-    result = mergeSplitTopLevelHtmlBlocks(result, isFinal, safeMarkdown, htmlStructureContext, internalOptions)
-    result = combineStructuredDetailsHtmlBlocks(result, safeMarkdown, htmlStructureContext, internalOptions, isFinal)[0]
-    result = structureGenericHtmlBlockChildren(result, htmlStructureContext, internalOptions, isFinal, tailStart)
+    const tailSourceStart = tailStart > 0
+      ? getInternalNodeSourceRange(result[tailStart]!, runtime)?.start
+      : undefined
+    const hasDetailsInput = result.some(node =>
+      node.type === 'html_block'
+      && String(node.tag ?? '').toLowerCase() === 'details',
+    )
+    const useHtmlTail = tailStart > 0
+      && runtime.htmlPassIdentityPreserving
+      && !hasDetailsInput
+      && tailSourceStart != null
+    const prefix = useHtmlTail ? result.slice(0, tailStart) : []
+    const htmlInput = useHtmlTail ? result.slice(tailStart) : result
+    const htmlSourceStart = useHtmlTail ? tailSourceStart : 0
+    let htmlResult = mergeSplitTopLevelHtmlBlocks(
+      htmlInput,
+      isFinal,
+      safeMarkdown,
+      htmlStructureContext,
+      internalOptions,
+      htmlSourceStart,
+    )
+    const mergeIdentityPreserving = htmlResult.length === htmlInput.length
+      && htmlResult.every((node, index) => node === htmlInput[index])
+    const hasDetails = hasDetailsInput || htmlResult.some(node =>
+      node.type === 'html_block'
+      && String(node.tag ?? '').toLowerCase() === 'details',
+    )
+    if (hasDetails)
+      htmlResult = combineStructuredDetailsHtmlBlocks(htmlResult, safeMarkdown, htmlStructureContext, internalOptions, isFinal, htmlSourceStart)[0]
+    htmlResult = structureGenericHtmlBlockChildren(htmlResult, htmlStructureContext, internalOptions, isFinal)
+    result = useHtmlTail ? prefix.concat(htmlResult) : htmlResult
+    runtime.htmlPassIdentityPreserving = !hasDetails && mergeIdentityPreserving
     if (timing)
       addTiming(timing, 'htmlBlockPassesMs', getParserNow() - htmlPassesStartedAt)
+  }
+  else {
+    runtime.htmlPassIdentityPreserving = true
   }
 
   if (isFinal)

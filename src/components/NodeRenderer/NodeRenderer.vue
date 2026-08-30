@@ -868,7 +868,7 @@ const deferNodesDomRequired = computed(() => {
 })
 // Provide viewport-priority registrar so heavy nodes can defer work until visible
 const registerNodeVisibility = provideViewportPriority(
-  target => resolveViewportRoot(target ?? containerRef.value ?? null),
+  target => resolveViewportRoot(target?.parentElement ?? containerRef.value ?? null),
   heavyViewportPriorityEnabled,
 )
 const {

@@ -82,8 +82,8 @@ function hasOnlyReusableInlineTokens(tokens: MarkdownToken[], validateLink: Pars
       // Explicit links carry an empty markup. markdown-it linkify emits
       // `link_open`/`link_close` pairs with markup `linkify`/`autolink`;
       // their node output is deterministic given the token, and the tail
-      // re-parse seeds the linkify demotion tracker with the reused prefix
-      // context, so these pairs are safe to reuse.
+      // re-parse restores the linkify demotion context at the reused prefix
+      // boundary, so these pairs are safe to reuse.
       const markup = token.markup ?? ''
       if (markup !== '' && markup !== 'linkify' && markup !== 'autolink')
         return false
@@ -271,7 +271,9 @@ function updateStructuredStreamCache(
   groups: ReusableTopLevelTokenGroups,
   nodes: ParsedNode[],
   options: ParseOptions,
-  previousSeed?: readonly string[],
+  linkifyDemotionContexts?: ParseContext['linkifyDemotionResultContexts'],
+  linkifyDemotionContextOffset = 0,
+  fallbackLinkifyDemotionContext?: ParseContext['linkifyDemotionSeedContext'],
 ) {
   const groupStarts = groups.starts
   if (groupStarts.length === 0 || nodes.length !== groupStarts.length) {
@@ -291,16 +293,10 @@ function updateStructuredStreamCache(
   const stableGroupCount = groups.mixed
     ? Math.max(0, groupStarts.length - 1)
     : sourceEndsWithBlankLine(source) ? groupStarts.length : Math.max(0, groupStarts.length - 1)
-
-  // On the incremental append path the prefix nodes (and their raws) are
-  // unchanged, so reuse the previous seed's prefix instead of re-slicing and
-  // re-stringifying every node's raw on each commit (O(nodes) per commit).
-  // The fallback path (full re-parse) must rebuild the seed in full.
-  const seed = previousSeed && previousSeed.length >= stableGroupCount
-    ? previousSeed.slice(0, stableGroupCount).concat(
-        nodes.slice(stableGroupCount).map(node => String((node as Record<string, unknown>).raw ?? '')),
-      )
-    : nodes.map(node => String((node as Record<string, unknown>).raw ?? ''))
+  const linkifyContextIndex = stableGroupCount - linkifyDemotionContextOffset - 1
+  const linkifyDemotionContext = linkifyContextIndex >= 0
+    ? linkifyDemotionContexts?.[linkifyContextIndex]
+    : fallbackLinkifyDemotionContext
 
   runtime.structuredStream = {
     groupBoundaries,
@@ -310,7 +306,7 @@ function updateStructuredStreamCache(
     mixed: groups.mixed,
     source,
     nodes,
-    seed,
+    linkifyDemotionContext,
     stableGroupCount,
     requireClosingStrong: options.requireClosingStrong,
     validateLink: options.validateLink,
@@ -437,24 +433,33 @@ export function processTopLevelTokensWithReuse(
     && hasStableStructuredStreamGroupBoundaries(previous, tokens, groupStarts, stableGroupCount)
   ) {
     const tailStart = groupStarts[stableGroupCount] ?? tokens.length
-    const tailNodes = callbacks.processTokens(tokens.slice(tailStart), {
+    const tailOptions = {
       ...options,
-      // Prefix raws are cached and append-only: reuse the stored seed instead
-      // of re-slicing + re-stringifying every prefix node on each append.
-      linkifyDemotionSeed: previous.seed.slice(0, stableGroupCount),
-    } as ParseContext)
+      linkifyDemotionSeedContext: previous.linkifyDemotionContext,
+    } as ParseContext
+    const tailNodes = callbacks.processTokens(tokens.slice(tailStart), tailOptions)
     const expectedTailNodes = groupStarts.length - stableGroupCount
 
     if (tailNodes.length === expectedTailNodes) {
       const result = previous.nodes.slice(0, stableGroupCount).concat(tailNodes)
       runtime.structuredReuseTailStart = stableGroupCount
       callbacks.recordReusedTopLevelNodes?.(stableGroupCount)
-      updateStructuredStreamCache(runtime, source, tokens, groups, result, options, previous.seed)
+      updateStructuredStreamCache(
+        runtime,
+        source,
+        tokens,
+        groups,
+        result,
+        options,
+        tailOptions.linkifyDemotionResultContexts,
+        stableGroupCount,
+        previous.linkifyDemotionContext,
+      )
       return result
     }
   }
 
   const result = callbacks.processTokens(tokens, options)
-  updateStructuredStreamCache(runtime, source, tokens, groups, result, options)
+  updateStructuredStreamCache(runtime, source, tokens, groups, result, options, options.linkifyDemotionResultContexts)
   return result
 }
