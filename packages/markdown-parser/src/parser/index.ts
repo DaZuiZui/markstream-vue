@@ -199,13 +199,10 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
     }
   }
 
-  // The structured-reuse path rebuilds nodes from the dirty tail, but the
-  // html passes still run over the whole result: mergeSplit and combine
-  // re-derive post-pass prefix nodes from the pre-pass cache (split html
-  // fragments and un-stitched details live in the reused prefix), so they must
-  // re-run every append. structureGeneric keeps parsed children on the source
-  // node, so reused generic html prefixes are already structured and it can
-  // start at the reused tail safely.
+  // The structured-reuse path rebuilds nodes from the dirty tail. Reuse the
+  // same window for HTML passes only when the previous pass kept every node
+  // identity and the reused prefix contains no details blocks; otherwise the
+  // passes must see the full result to merge across node boundaries.
   const reuseTailStart = runtime.structuredReuseTailStart
   const tailStart = reuseTailStart && reuseTailStart > 0 && reuseTailStart < result.length
     ? reuseTailStart
@@ -218,15 +215,19 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
       markdownIt: md,
       parseFragment: (fragment, fragmentOptions) => parseMarkdownWithContext(fragment, fragmentOptions),
     }
-    const tailSourceStart = tailStart > 0
+    const canReuseHtmlPrefix = tailStart > 0 && runtime.htmlPassIdentityPreserving
+    const tailSourceStart = canReuseHtmlPrefix
       ? getInternalNodeSourceRange(result[tailStart]!, runtime)?.start
       : undefined
-    const hasDetailsInput = result.some(node =>
-      node.type === 'html_block'
-      && String(node.tag ?? '').toLowerCase() === 'details',
-    )
-    const useHtmlTail = tailStart > 0
-      && runtime.htmlPassIdentityPreserving
+    let hasDetailsInput = false
+    for (let i = canReuseHtmlPrefix ? tailStart : 0; i < result.length; i++) {
+      const node = result[i]!
+      if (node.type === 'html_block' && String(node.tag ?? '').toLowerCase() === 'details') {
+        hasDetailsInput = true
+        break
+      }
+    }
+    const useHtmlTail = canReuseHtmlPrefix
       && !hasDetailsInput
       && tailSourceStart != null
     const prefix = useHtmlTail ? result.slice(0, tailStart) : []
@@ -242,15 +243,11 @@ function parseMarkdownWithContext(markdown: string, inputContext: ParseContext):
     )
     const mergeIdentityPreserving = htmlResult.length === htmlInput.length
       && htmlResult.every((node, index) => node === htmlInput[index])
-    const hasDetails = hasDetailsInput || htmlResult.some(node =>
-      node.type === 'html_block'
-      && String(node.tag ?? '').toLowerCase() === 'details',
-    )
-    if (hasDetails)
+    if (hasDetailsInput)
       htmlResult = combineStructuredDetailsHtmlBlocks(htmlResult, safeMarkdown, htmlStructureContext, internalOptions, isFinal, htmlSourceStart)[0]
     htmlResult = structureGenericHtmlBlockChildren(htmlResult, htmlStructureContext, internalOptions, isFinal)
     result = useHtmlTail ? prefix.concat(htmlResult) : htmlResult
-    runtime.htmlPassIdentityPreserving = !hasDetails && mergeIdentityPreserving
+    runtime.htmlPassIdentityPreserving = !hasDetailsInput && mergeIdentityPreserving
     if (timing)
       addTiming(timing, 'htmlBlockPassesMs', getParserNow() - htmlPassesStartedAt)
   }
