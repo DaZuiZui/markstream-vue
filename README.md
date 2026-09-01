@@ -32,15 +32,13 @@ Other packages:
 
 ## Install markstream-vue
 
-Markstream 2.0 is stable: `pnpm add markstream-vue stream-diffs` installs the current
-2.x line; `markstream-vue@1` pins the maintained 1.x line. The 1.x stable line is
-preserved on the `legacy` npm tag, 1.x prereleases on `legacy-next`. See the
-[1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) for
-the stream-diffs code-block migration:
+Markstream 2.x is stable on npm's `latest` tag:
 
 ```bash
-pnpm add markstream-vue stream-diffs
+pnpm add markstream-vue
 ```
+
+Add the optional `stream-diffs` peer only when you need enhanced code and diff blocks. `markstream-vue@1` pins the maintained 1.x line; it is also preserved on the `legacy` npm tag, with 1.x prereleases on `legacy-next`. See the [1.x to 2.0 migration guide](https://markstream.simonhe.me/guide/migration-2-0) for the code-block runtime changes.
 
 For applications that must stay on the 1.x line across the 2.x cutover:
 
@@ -100,7 +98,7 @@ Start with the [framework overview](https://markstream.simonhe.me/frameworks) if
 
 ## Stability
 
-`markstream-vue` has a stable 1.x API contract. The breaking 2.0 line will be released through the npm `next` tag for validation before it can replace `latest`. It removes the Monaco and `stream-markdown` code-block runtimes and uses `stream-diffs` as the only enhanced code-block surface. See [Migrating from 1.x to 2.0](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
+`markstream-vue` 2.x is stable and published on npm's `latest` tag. The maintained 1.x line remains available through `markstream-vue@1` and the `legacy` tag. Version 2 removes the Monaco and `stream-markdown` code-block runtimes; install the optional `stream-diffs` peer when you need the enhanced code-block surface. See [Migrating from 1.x to 2.0](https://markstream.simonhe.me/guide/migration-2-0) before upgrading.
 
 The stable surface includes `MarkdownRender`, streaming content rendering, pre-parsed node rendering, the safe HTML policy, optional Mermaid / KaTeX / D2 / Infographic integrations, enhanced code blocks, virtual-scroll coordination, CSS exports, worker client subpaths, and SSR imports for Vite / Nuxt / VitePress.
 

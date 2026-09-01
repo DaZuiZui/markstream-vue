@@ -62,21 +62,25 @@ pnpm add markstream-vue
 ```
 
 ```vue
-<script setup>
+<script setup lang="ts">
 import MarkdownRender from 'markstream-vue'
+import { ref } from 'vue'
 import 'markstream-vue/index.css'
+
+const content = ref('# Hello\n\nWaiting for the first chunk…')
+const isDone = ref(false)
 </script>
 
 <template>
   <MarkdownRender
     mode="chat"
-    :content="streamingContent"
+    :content="content"
     :final="isDone"
-    smooth-streaming="auto"
-    :fade="false"
   />
 </template>
 ```
+
+Append each incoming chunk to `content`, then set `isDone.value = true` when the stream closes. The `chat` preset already enables its streaming-oriented defaults; only override individual props when you need different behavior.
 
 ## Key capabilities
 

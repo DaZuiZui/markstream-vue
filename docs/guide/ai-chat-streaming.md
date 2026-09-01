@@ -42,16 +42,9 @@ const final = ref(false)
 
 <template>
   <MarkdownRender
-    custom-id="chat"
+    mode="chat"
     :content="streamedText"
     :final="final"
-    :max-live-nodes="0"
-    :batch-rendering="true"
-    :render-batch-size="16"
-    :render-batch-delay="8"
-    :render-batch-budget-ms="4"
-    :fade="false"
-    :typewriter="true"
   />
 </template>
 ```
@@ -61,17 +54,17 @@ Why this path works better:
 - Incoming chunks can be bursty while visible output remains steady.
 - Backlog-aware pacing speeds up automatically when pending text grows.
 - Final parsing waits for visible content to catch up, so end-of-stream settling is stable.
-- `custom-id="chat"` gives you a scoped place to theme the chat surface or override one renderer safely.
-- The default `smooth-streaming="auto"` already enables smooth pacing when `typewriter` is on or `max-live-nodes <= 0`. Only use `:smooth-streaming="true"` if you want first-screen content to also start from blank with the typewriter effect—this bypasses the mounted gate and can cause hydration mismatch or blank flash in SSR scenarios.
+- `mode="chat"` selects the streaming defaults, including `max-live-nodes="0"`, smooth pacing, incremental batches, and no fade.
+- Add `custom-id="chat"` only when you need scoped styles or component overrides. Add `typewriter` only when you want a visible cursor.
 
 Turn it off per surface with `:smooth-streaming="false"` if you want raw chunk cadence. If you already parse in a worker/store and need AST control, keep using `nodes` + `final`.
 
 ## 3. Renderer settings that usually work well
 
-- Keep the default virtualization behavior for long transcripts. Only tune `maxLiveNodes` if you have a measured reason.
+- Keep the `chat` preset for normal messages. For one measured, extremely long message, set a positive `maxLiveNodes` value to enable a bounded node window; use `MarkstreamVirtualTimeline` to virtualize a long list of messages.
 - Use `renderCodeBlocksAsPre` when code fences appear often but the enhanced code surface is too heavy for your chat UI.
 - Leave heavy peers off until you need them. Chat UIs get a large win from not shipping Mermaid, KaTeX, or `stream-diffs` by default.
-- If you disable virtualization (`:max-live-nodes="0"`), then the batching props in [Props & Options](/guide/props) become more important.
+- The `chat` preset already selects batching defaults for `max-live-nodes="0"`. Tune individual batching props only after profiling a real workload.
 
 ## 4. Common upgrade paths
 

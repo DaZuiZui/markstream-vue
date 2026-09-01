@@ -16,8 +16,10 @@ keywords:
 | 场景 | 推荐输入 |
 |------|---------|
 | 文档页、静态文章、低频更新 | `content` |
-| SSE、token 流式输出、AI Chat、高频增量更新 | `content` + `smooth-streaming` |
-| SSR 或 Worker 里预解析完成 | `nodes` |
+| SSE、token 流式输出、AI Chat、高频增量更新 | `content` + `mode="chat"` + `final` |
+| Worker、store 或自定义 AST 管线已经接管解析 | `nodes` + `final` |
+
+SSR 不要求使用 `nodes`。普通 Markdown 可以在 SSR 阶段直接从 `content` 渲染；只有你的架构已经产出解析节点时才使用 `nodes`。
 
 如果你只是在调现有能力，继续看本页和 [Props 与选项](/zh/guide/props) 就够了。只有在你要改变渲染行为时，再跳去看 [覆盖内置组件](/zh/guide/component-overrides)。
 
@@ -37,7 +39,7 @@ const doc = '# 使用示例\n\n支持 **streaming** 渲染。'
 </script>
 
 <template>
-  <MarkdownRender custom-id="docs" :content="doc" />
+  <MarkdownRender :content="doc" />
 </template>
 ```
 
@@ -107,7 +109,7 @@ const oneShotNodes = parseMarkdownToStructure(source, md, { final: true })
 
 ## 流式推荐用法
 
-`content` 模式适合低频更新或一次性渲染；如果你在做 AI Chat、SSE、逐 token 输出，`MarkdownRender` 内置的 smooth streaming 可以对 `content` 更新做 pacing，即使 incoming chunk 是突发式的，可见输出也能保持平稳。默认 `smooth-streaming="auto"` 会在 `typewriter` 开启或 `max-live-nodes <= 0` 时自动启用 pacing。
+低频更新或一次性渲染直接传 `content`。AI Chat、SSE 或逐 token 输出先使用 `mode="chat"`、持续增长的 `content` 和 `final`；这个 preset 会选择面向流式输出的默认值，包括启用内置 smooth pacing 的条件，通常不需要分别设置 `smooth-streaming`、`fade`、batching 或 live-node props。
 
 如果你已经在 worker/store 中自行解析并需要完整 AST 控制，可以继续用 `:nodes` + `:final`——但注意内置 smooth streaming 只作用于 `content` 路径；`nodes` 路径需要直接使用 `useSmoothMarkdownStream` 在解析前对原始文本做 pacing。
 

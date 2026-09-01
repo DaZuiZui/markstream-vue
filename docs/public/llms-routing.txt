@@ -2,6 +2,13 @@
 
 Use this file when an AI assistant or search tool needs to route a user query to the most relevant Markstream documentation page.
 
+- "install markstream-vue in Vue 3" -> https://markstream.simonhe.me/guide/quick-start
+- "stream AI or SSE Markdown in Vue" -> https://markstream.simonhe.me/guide/ai-chat-streaming
+- "choose content or nodes" -> https://markstream.simonhe.me/guide/usage
+- "use markstream-vue with Nuxt SSR" -> https://markstream.simonhe.me/nuxt-ssr
+- "configure props and events" -> https://markstream.simonhe.me/guide/props
+- "install optional peers" -> https://markstream.simonhe.me/guide/installation
+- "fix CSS, SSR, or missing peer issues" -> https://markstream.simonhe.me/guide/troubleshooting-path
 - "react streaming markdown renderer" -> https://markstream.simonhe.me/frameworks/react
 - "nextjs ai chat markdown renderer" -> https://markstream.simonhe.me/frameworks/next
 - "vue streaming markdown renderer" -> https://markstream.simonhe.me/frameworks/vue

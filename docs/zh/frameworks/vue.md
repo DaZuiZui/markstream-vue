@@ -40,7 +40,7 @@ faq:
 
 | 需求 | 推荐做法 |
 | --- | --- |
-| AI 聊天或 SSE 输出 | `mode="chat"`、传 `content` 和 `final`、关闭 `fade` |
+| AI 聊天或 SSE 输出 | `mode="chat"`，传入持续累加的 `content` 和流结束状态 `final` |
 | 文档站或稳定长文 | `mode="docs"`，按需启用 `stream-diffs`、Mermaid、KaTeX |
 | 移动端 WebView | 导入 `markstream-vue/index.px.css` |
 | 50KB 以上长回答 | 使用 `node-virtual="auto"` 和 live node 限制 |
@@ -50,9 +50,13 @@ pnpm add markstream-vue
 ```
 
 ```vue
-<script setup>
+<script setup lang="ts">
 import MarkdownRender from 'markstream-vue'
+import { ref } from 'vue'
 import 'markstream-vue/index.css'
+
+const content = ref('# 你好\n\n等待第一个 chunk…')
+const isDone = ref(false)
 </script>
 
 <template>
@@ -60,10 +64,11 @@ import 'markstream-vue/index.css'
     mode="chat"
     :content="content"
     :final="isDone"
-    :fade="false"
   />
 </template>
 ```
+
+每收到一个 chunk 就追加到 `content`，流关闭时设置 `isDone.value = true`。`chat` preset 已经包含面向流式输出的默认值，只有行为确实需要变化时才覆盖具体 prop。
 
 如果输出来自外部用户或模型，优先使用 `htmlPolicy="escape"` 或默认安全策略，不要把原始 HTML 当成可信内容。只在需要 Mermaid、KaTeX、`stream-diffs`、D2 或 Infographic 时安装对应 peer 依赖。
 

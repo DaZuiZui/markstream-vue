@@ -9,18 +9,15 @@ keywords:
 
 # 指南
 
-这份文档优先按“用户任务”组织，而不是默认要求你从第一页看到最后一页。框架选择先看 [中文框架入口](/zh/frameworks/)，只想跑通第一屏先看 [多框架快速开始](/zh/quick-start)。
+Vue 3 和 Nuxt 项目直接按下面三步接入。其他框架先从 [框架选择](/zh/frameworks/) 找到对应包。
 
-## 我想先把它跑起来
+## 跑通 Vue 接入
 
-- [安装](/zh/guide/installation)：先按场景装对 peer 依赖，并理顺 CSS 顺序。
-- [多框架快速开始](/zh/quick-start)：Vue、React、Svelte、Angular 的最小示例。
-- [Vue 快速开始](/zh/guide/quick-start)：最小 Vue 3 示例。
-- [使用与流式渲染](/zh/guide/usage)：决定该用 `content` 还是 `nodes`。
-- [文档站与 VitePress 集成](/zh/guide/vitepress-docs-integration)：把文档页、`enhanceApp`、可信标签和 CSS 顺序串起来。
-- [AI 聊天与流式输出](/zh/guide/ai-chat-streaming)：当页面持续更新时，一次看完 peers、解析、性能和排障。
-- [按症状排查](/zh/guide/troubleshooting-path)：先判断问题属于样式、peers、SSR，还是自定义标签接法。
-- [Props 与选项](/zh/guide/props)：已经能跑，只是需要调配置。
+1. [Vue 快速开始](/zh/guide/quick-start)：安装、引入 CSS，复制完整的静态或流式示例。
+2. 选择一个场景继续：[AI 聊天与流式输出](/zh/guide/ai-chat-streaming)、[Nuxt SSR](/zh/nuxt-ssr) 或 [文档站与 VitePress](/zh/guide/vitepress-docs-integration)。
+3. 根据 [安装与可选依赖](/zh/guide/installation) 只添加真正需要的 peer。
+
+如果第一屏没有跑通，使用 [按症状排查](/zh/guide/troubleshooting-path)。跑通后再把 [使用与 API](/zh/guide/usage) 和 [Props 与选项](/zh/guide/props) 当作参考，不需要从头读完所有页面。
 
 ## 我想做业务定制
 

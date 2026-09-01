@@ -11,19 +11,15 @@ keywords:
 
 # Guide
 
-This guide keeps the Vue/Nuxt path as the most mature renderer documentation. For framework-specific entry points, start from the [framework landing pages](/frameworks/).
+For Vue 3 and Nuxt, follow the three-step path below. If you use another framework, choose its package from [Frameworks](/frameworks/) first.
 
-## I Want To Get Something Working Quickly
+## Get Vue Working
 
-- [Frameworks](/frameworks/) if you need to choose a package first.
-- [Vue / Nuxt installation](/guide/installation) for `markstream-vue` peer-dependency decisions and CSS order.
-- [Multi-framework Quick Start](/quick-start) for the smallest first render example across packages.
-- [Vue Quick Start](/guide/quick-start) for the smallest Vue 3 example.
-- [Usage & Streaming](/guide/usage) if you need to choose between `content` and `nodes`.
-- [Docs Site & VitePress](/guide/vitepress-docs-integration) if you are wiring stable Markdown pages, theme CSS, and custom tags inside a docs site.
-- [AI Chat & Streaming](/guide/ai-chat-streaming) if the UI updates continuously and you need one guided path for peers, parsing, performance, and troubleshooting.
-- [Troubleshooting by Symptom](/guide/troubleshooting-path) if you do not yet know whether the issue is CSS, peers, SSR, or custom-tag wiring.
-- [Props & Options](/guide/props) if the renderer already works and you only need configuration.
+1. [Vue Quick Start](/guide/quick-start) — install, import CSS, and copy a complete static or streaming example.
+2. Choose one scenario: [AI Chat & Streaming](/guide/ai-chat-streaming), [Nuxt SSR](/nuxt-ssr), or [Docs Site & VitePress](/guide/vitepress-docs-integration).
+3. Add only the optional peers you need from [Installation](/guide/installation).
+
+If the first render fails, use [Troubleshooting by Symptom](/guide/troubleshooting-path). Once it works, use [Usage & API](/guide/usage) and [Props & Options](/guide/props) as reference rather than reading every page in order.
 
 ## I Want To Customize Rendering
 

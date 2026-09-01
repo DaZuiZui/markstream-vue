@@ -14,7 +14,7 @@ If you do not yet know whether the issue is CSS, peers, SSR, or custom-tag wirin
 
 If something breaks, here are common fixes:
 
-- If you get `window is not defined` during SSR, wrap components in `<client-only>` for Nuxt and use the `onMounted` guard for Vite SSR.
+- Standard Markdown rendering is SSR-safe. If a browser-only peer or worker causes `window is not defined`, initialize that feature after mount or place only that feature boundary inside Nuxt `<ClientOnly>`; do not wrap the basic renderer by default.
 - Install `katex` when math rendering fails, and import `katex/dist/katex.min.css` in your app entry.
 - For Mermaid issues, upgrade or pin `mermaid` to a version >= 11 and check asynchronous render logs.
 - If you load KaTeX/Mermaid via CDN `<script>`, make sure `window.katex` / `window.mermaid` exist before first render, or call `setKatexLoader(() => window.katex)` / `setMermaidLoader(() => window.mermaid)` once after they load.

@@ -238,7 +238,7 @@ For immediate rendering of every heavy node, use `<MarkdownRender :content="md" 
 
 `MarkdownRender` keeps a moving window of nodes in memory so extremely long documents stay responsive:
 
-- `maxLiveNodes` (default `320`) caps how many fully rendered nodes remain in the DOM. Tune this based on your layout — lower values reduce memory but require slightly more placeholder churn; higher values prioritise scrollback.
+- `maxLiveNodes` defaults to `220` in `docs` mode and `0` in `chat` / `minimal` mode. Tune it only after measuring your layout: lower positive values reduce memory but require more placeholder churn, while higher values prioritize scrollback.
 - `liveNodeBuffer` controls overscan on both sides of the focus window (default `60`). Increase it when nodes vary wildly in height to avoid visible pop-in while scrolling fast.
 - `deferNodesUntilVisible` together with `viewportPriority` defers mounting heavy nodes (Mermaid, enhanced code surfaces, KaTeX) until an observer reports they are close to the viewport.
 - `batchRendering`, `initialRenderBatchSize`, `renderBatchSize`, `renderBatchDelay`, and `renderBatchBudgetMs` govern how many nodes switch from placeholders to full components per frame. This incremental mode only runs when virtualization is disabled (`:max-live-nodes="0"`); otherwise the virtual window already limits DOM work, so nodes are rendered immediately without placeholders.
