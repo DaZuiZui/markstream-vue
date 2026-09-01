@@ -1,10 +1,10 @@
 import MarkdownRender, { setCustomComponents } from 'markstream-vue'
-import CssHighlightCodeBlock from '../../../../src/components/CodeBlockNode/CssHighlightCodeBlock.vue'
 import React from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot } from 'react-dom/client'
 import { Streamdown } from 'streamdown'
 import { createApp, defineComponent, h, nextTick, onMounted, ref } from 'vue'
+import CssHighlightCodeBlock from '../../../../src/components/CodeBlockNode/CssHighlightCodeBlock.vue'
 import 'markstream-vue/index.css'
 import 'streamdown/styles.css'
 import './style.css'
@@ -373,8 +373,9 @@ const MarkstreamApp = defineComponent({
     if (variant === 'css-highlight-worker') {
       window.__benchmarkUnavailableReason = 'CSS Highlight worker tokenizer is not implemented; provide a pure transferable tokenizer before collecting this row.'
     }
-    else if (cssHighlightVariant)
+    else if (cssHighlightVariant) {
       setCustomComponents(customId, { code_block: CssHighlightCodeBlock })
+    }
     installBenchmark({
       getContent: () => content.value,
       setContent: (value) => {
