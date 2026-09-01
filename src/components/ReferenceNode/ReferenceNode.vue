@@ -16,6 +16,8 @@ defineEmits(['click', 'mouseEnter', 'mouseLeave'])
     class="reference-node cursor-pointer text-xs rounded-md px-1.5 mx-0.5"
     role="button"
     tabindex="0"
+    :data-reference-id="node.id"
+    :data-markstream-reference-id="node.id"
     @click="$emit('click', $event, node.id, messageId, threadId)"
     @mouseenter="$emit('mouseEnter', $event, node.id, messageId, threadId)"
     @mouseleave="$emit('mouseLeave', $event, node.id, messageId, threadId)"

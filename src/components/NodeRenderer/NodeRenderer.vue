@@ -133,7 +133,7 @@ const emit = defineEmits<{
   (e: 'copy', code: string): void
   (e: 'copy-code', code: string): void
   (e: 'handleArtifactClick', payload: CodeBlockPreviewPayload): void
-  (e: 'click', event: MouseEvent): void
+  (e: 'click', event: MouseEvent, referenceId?: string): void
   (e: 'mouseover', event: MouseEvent): void
   (e: 'mouseout', event: MouseEvent): void
   (e: 'virtual-state-change', payload: MarkstreamVirtualState): void
@@ -5899,6 +5899,9 @@ function buildRenderedItem(item: { node: ParsedNode, index: number }, globalSign
     node,
     loading,
     'index-key': indexKey,
+    ...(node.type === 'reference'
+      ? { 'data-markstream-reference-id': String((node as any).id) }
+      : {}),
   }
   const globalNodeProps = {
     'custom-id': rendererProps.customId,
@@ -6197,7 +6200,14 @@ function getBindingsFor(node: ParsedNode, language?: string, component?: unknown
 }
 
 function handleContainerClick(event: MouseEvent) {
-  emit('click', event)
+  const target = event.target instanceof Element
+    ? event.target.closest<HTMLElement>('[data-markstream-reference-id]')
+    : null
+  const boundary = event.currentTarget
+  const referenceId = target && boundary instanceof Element && boundary.contains(target)
+    ? target.dataset.markstreamReferenceId
+    : undefined
+  emit('click', event, referenceId)
 }
 
 function handleContainerMouseover(event: MouseEvent) {

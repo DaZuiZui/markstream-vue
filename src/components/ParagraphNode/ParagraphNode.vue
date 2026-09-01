@@ -145,6 +145,9 @@ function getChildProps(child: NodeChild, index: number) {
     'index-key': `${props.indexKey}-${index}`,
     'custom-id': props.customId,
     'custom-html-tags': resolvedCustomHtmlTags.value,
+    ...(child.type === 'reference'
+      ? { 'data-markstream-reference-id': String(child.id) }
+      : {}),
   }
 }
 

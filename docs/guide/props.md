@@ -195,7 +195,7 @@ Use `html-policy="escape"` when you want literal HTML text to stay visible inste
 | `copy` | `string` | A code block copy button copies code. |
 | `copy-code` | `string` | Same as `copy` (kebab-case alias kept for the public event contract). |
 | `handle-artifact-click` | `CodeBlockPreviewPayload` | A code-block HTML preview artifact is clicked. |
-| `click` | `MouseEvent` | A click bubbles up from renderer content. |
+| `click` | `(event: MouseEvent, referenceId?: string)` | A click bubbles up from renderer content. `referenceId` is present when a reference node was clicked. |
 | `mouseover` | `MouseEvent` | Mouse enters renderer content. |
 | `mouseout` | `MouseEvent` | Mouse leaves renderer content. |
 | `height-change` | `MarkstreamVirtualMetrics` | Logical height metrics are emitted (host virtual-scroll coordination; throttled to the configured `emitIntervalMs`). |

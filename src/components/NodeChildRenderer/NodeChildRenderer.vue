@@ -60,6 +60,7 @@ const fallbackText = computed(() => String((props.node as any).content ?? props.
     :index-key="indexKey"
     :custom-id="customId"
     :is-dark="nestedRendererProps.isDark"
+    :data-markstream-reference-id="node.type === 'reference' ? String(node.id) : undefined"
   >
     <StructuredNodeRenderer
       v-if="hasSlotChildren"
@@ -88,6 +89,7 @@ const fallbackText = computed(() => String((props.node as any).content ?? props.
     :node="node"
     :custom-id="customId"
     :index-key="indexKey"
+    :data-markstream-reference-id="node.type === 'reference' ? String(node.id) : undefined"
   />
   <span v-else-if="fallbackToText">{{ fallbackText }}</span>
 </template>
