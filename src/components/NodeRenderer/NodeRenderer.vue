@@ -133,7 +133,7 @@ const emit = defineEmits<{
   (e: 'copy', code: string): void
   (e: 'copy-code', code: string): void
   (e: 'handleArtifactClick', payload: CodeBlockPreviewPayload): void
-  (e: 'click', event: MouseEvent): void
+  (e: 'click', event: MouseEvent, referenceId?: string): void
   (e: 'mouseover', event: MouseEvent): void
   (e: 'mouseout', event: MouseEvent): void
   (e: 'virtual-state-change', payload: MarkstreamVirtualState): void
@@ -6197,7 +6197,8 @@ function getBindingsFor(node: ParsedNode, language?: string, component?: unknown
 }
 
 function handleContainerClick(event: MouseEvent) {
-  emit('click', event)
+  const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-reference-id]')
+  emit('click', event, target?.dataset.referenceId)
 }
 
 function handleContainerMouseover(event: MouseEvent) {
