@@ -5899,6 +5899,9 @@ function buildRenderedItem(item: { node: ParsedNode, index: number }, globalSign
     node,
     loading,
     'index-key': indexKey,
+    ...(node.type === 'reference'
+      ? { 'data-markstream-reference-id': String((node as any).id) }
+      : {}),
   }
   const globalNodeProps = {
     'custom-id': rendererProps.customId,
@@ -6197,8 +6200,14 @@ function getBindingsFor(node: ParsedNode, language?: string, component?: unknown
 }
 
 function handleContainerClick(event: MouseEvent) {
-  const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-reference-id]')
-  emit('click', event, target?.dataset.referenceId)
+  const target = event.target instanceof Element
+    ? event.target.closest<HTMLElement>('[data-markstream-reference-id]')
+    : null
+  const boundary = event.currentTarget
+  const referenceId = target && boundary instanceof Element && boundary.contains(target)
+    ? target.dataset.markstreamReferenceId
+    : undefined
+  emit('click', event, referenceId)
 }
 
 function handleContainerMouseover(event: MouseEvent) {

@@ -185,7 +185,7 @@ flowchart TD
 | `copy` | `string` | 代码块复制按钮复制了代码。 |
 | `copy-code` | `string` | 与 `copy` 相同（保留的 kebab-case 别名，属于公开事件契约）。 |
 | `handle-artifact-click` | `CodeBlockPreviewPayload` | 点击了代码块 HTML 预览产物。 |
-| `click` | `MouseEvent` | 渲染内容中的点击事件冒泡。 |
+| `click` | `(event: MouseEvent, referenceId?: string)` | 渲染内容中的点击事件冒泡；点击引用节点时会提供 `referenceId`。 |
 | `mouseover` | `MouseEvent` | 鼠标进入渲染内容。 |
 | `mouseout` | `MouseEvent` | 鼠标离开渲染内容。 |
 | `height-change` | `MarkstreamVirtualMetrics` | 发起逻辑高度指标（外部虚拟滚动协调；按 `emitIntervalMs` 节流）。 |

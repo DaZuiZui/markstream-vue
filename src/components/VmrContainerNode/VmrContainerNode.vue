@@ -78,6 +78,7 @@ function getNodeComponent(type: string) {
       :index-key="`${indexKey || 'vmr-container'}-${index}`"
       :typewriter="props.typewriter"
       :fade="props.fade"
+      :data-markstream-reference-id="child.type === 'reference' ? String((child as any).id) : undefined"
     />
   </div>
 </template>
