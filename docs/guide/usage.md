@@ -19,8 +19,10 @@ This page shows how to wire `markstream-vue` into common stacks, how the parser 
 | Situation | Recommended input |
 |-----------|-------------------|
 | Docs pages, static articles, low-frequency updates | `content` |
-| SSE, token streaming, AI chat, or frequent incremental updates | `content` + `smooth-streaming` |
-| SSR or worker-preparsed content | `nodes` |
+| SSE, token streaming, AI chat, or frequent incremental updates | `content` + `mode="chat"` + `final` |
+| A worker, store, or custom AST pipeline already owns parsing | `nodes` + `final` |
+
+SSR does not require the `nodes` path. Standard Markdown can render from `content` during SSR; use `nodes` only when your architecture already produces parsed nodes.
 
 If you only need built-in configuration, stay in this page and [Props & Options](/guide/props). If you need to replace rendering behavior, jump to [Override Built-in Components](/guide/component-overrides).
 
@@ -38,7 +40,7 @@ const doc = '# Usage example\n\nSupports **streaming** nodes.'
 </script>
 
 <template>
-  <MarkdownRender custom-id="docs" :content="doc" />
+  <MarkdownRender :content="doc" />
 </template>
 ```
 
@@ -108,7 +110,7 @@ When `MarkdownRender` parses its own `content`, it intentionally defaults `parse
 
 ## Streaming recommendation
 
-For low-frequency updates, passing `content` directly is convenient. For chat-style token streams or long documents, the built-in smooth streaming on `MarkdownRender` paces `content` updates so visible output stays steady even when incoming chunks are bursty. The default `smooth-streaming="auto"` enables pacing automatically when `typewriter` is on or `max-live-nodes <= 0`.
+For low-frequency updates, pass `content` directly. For chat-style token streams, start with `mode="chat"`, the growing `content` string, and `final`. The preset selects the streaming-oriented defaults, including the conditions that activate built-in smooth pacing, so you normally do not need to set `smooth-streaming`, `fade`, batching, or live-node props individually.
 
 If you already parse in a worker/store and need full AST control, keep using `nodes` + `final` — but note that the built-in smooth streaming only applies to the `content` path; for the `nodes` path use `useSmoothMarkdownStream` directly to pace the raw text before parsing.
 

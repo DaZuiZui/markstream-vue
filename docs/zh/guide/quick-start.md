@@ -1,85 +1,83 @@
 ---
 title: Vue 快速开始
-description: 用最小 Vue 示例快速跑起 markstream-vue，并理解显式 CSS 引入与下一步该看哪些页面。
+description: 用完整、可复制的 Vue 3 示例安装 markstream-vue，并渲染静态或流式 Markdown。
 keywords:
   - Vue 快速开始
   - markstream-vue
-  - 安装
+  - Vue AI 流式 Markdown
 ---
 
 # Vue 快速开始
 
-先在应用入口或 CSS 管线中引入一次渲染器样式：
+这是最短、完整的 Vue 3 接入。先安装：
+
+```bash
+pnpm add markstream-vue
+```
+
+然后在应用入口引入一次渲染器样式：
 
 ```ts
 // main.ts
 import 'markstream-vue/index.css'
 ```
 
-然后渲染 Markdown：
+渲染 Markdown。下面的示例可以直接复制运行：
 
-```vue twoslash
+```vue
 <script setup lang="ts">
 import MarkdownRender from 'markstream-vue'
 
-type MarkdownRenderProps = InstanceType<typeof MarkdownRender>['$props']
+const content = '# Hello World\n\n这是 **加粗** 的文本。'
+</script>
 
-const md: MarkdownRenderProps['content'] = `# Hello World\n\n这是 **加粗** 的文本。`
-const customId: MarkdownRenderProps['customId'] = 'quick-start'
-const isDark: MarkdownRenderProps['isDark'] = false
+<template>
+  <MarkdownRender :content="content" />
+</template>
+```
+
+## 流式渲染 AI 回复
+
+维护一个持续累加的字符串，并在流结束时设置 `final`。`mode="chat"` 已经选择了平滑输出、关闭 fade 等聊天默认值，不需要重复填写底层 props。
+
+```vue
+<script setup lang="ts">
+import MarkdownRender from 'markstream-vue'
+import { ref } from 'vue'
+
+const content = ref('')
+const isDone = ref(false)
+
+function appendChunk(chunk: string) {
+  content.value += chunk
+}
+
+function finishStream() {
+  isDone.value = true
+}
 </script>
 
 <template>
   <MarkdownRender
-    :content="md"
-    :custom-id="customId"
-    :is-dark="isDark"
+    mode="chat"
+    :content="content"
+    :final="isDone"
   />
 </template>
 ```
 
-如果你是为了看 props hover，优先 hover `MarkdownRenderProps['content']`、`MarkdownRenderProps['customId']`、`MarkdownRenderProps['isDark']`，或者上面模板里的对应 attribute。直接 hover 组件名在 Vue 片段里通常信息会更少。
+每收到一个 SSE、WebSocket 或 LLM chunk 就调用 `appendChunk()`，流结束时调用一次 `finishStream()`。默认从 `content` 路径开始；只有 worker、store 或自定义 AST 管线已经接管解析时才使用预解析 `nodes`。
 
-说明：本包的 CSS 会限定在内部 `.markstream-vue` 容器下，以尽量减少对宿主应用全局样式的影响；根 JavaScript 入口不会自动注入样式，所以请把 CSS import 保留在应用入口或 CSS 管线中。如果需要精确控制 layer 顺序，使用 `@import 'markstream-vue/index.css' layer(components);`。
+## 按需添加能力
 
-暗色变量支持两种方式：给祖先节点加 `.dark`，或给 `MarkdownRender` 传入 `:is-dark="true"`（仅对渲染器生效）。
+| 需求 | 安装 | 下一步 |
+| --- | --- | --- |
+| 增强代码块和 diff | `pnpm add stream-diffs` | [代码块](/zh/guide/code-blocks) |
+| Mermaid 图表 | `pnpm add mermaid` | [Mermaid](/zh/guide/mermaid) |
+| KaTeX 数学公式 | `pnpm add katex` | [数学公式](/zh/guide/math) |
+| Nuxt SSR | 无额外依赖 | [Nuxt SSR](/zh/nuxt-ssr) |
+| Tailwind 或 UnoCSS | 无额外依赖 | [Tailwind 与样式](/zh/guide/tailwind) |
 
-如果使用 Nuxt 或 SSR，请用 `<client-only>` 包裹。
+普通 Markdown 本身支持 Nuxt SSR。只有初始化浏览器专属 peer 或 worker 的功能才需要 client-only 边界，不要默认包住整个渲染器。
 
-如果是聊天类流式输出，优先从 `mode="chat"` + `content` 开始；chat 模式里的 `max-live-nodes <= 0` 会启用 `smooth-streaming="auto"`，并默认关闭 fade。如果你已经在 worker/store 中解析，或需要完整 AST 控制，再改用 `:nodes` + `:final`。
-
-快速试一下：
-
-```vue twoslash
-<script setup lang="ts">
-import MarkdownRender from 'markstream-vue'
-
-type MarkdownRenderProps = InstanceType<typeof MarkdownRender>['$props']
-
-const md: MarkdownRenderProps['content'] = `# Hello world
-
-试试 Mermaid：
-
-\`\`\`mermaid
-graph LR
-A-->B
-\`\`\`
-
-试试 D2：
-
-\`\`\`d2
-direction: right
-Client -> API: request
-API -> DB: query
-DB -> API: rows
-API -> Client: response
-\`\`\`
-`
-</script>
-
-<template>
-  <MarkdownRender :content="md" />
-</template>
-```
-
-安装 `mermaid` 或 `@terrastruct/d2` 才能看到图表预览；未安装时会回退为源码展示。
+接下来可阅读 [AI 聊天与流式输出](/zh/guide/ai-chat-streaming) 获取完整接入流程，或阅读 [使用与 API](/zh/guide/usage) 了解 `content`、`nodes` 和高级集成。

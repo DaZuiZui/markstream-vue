@@ -40,16 +40,9 @@ const final = ref(false)
 
 <template>
   <MarkdownRender
-    custom-id="chat"
+    mode="chat"
     :content="streamedText"
     :final="final"
-    :max-live-nodes="0"
-    :batch-rendering="true"
-    :render-batch-size="16"
-    :render-batch-delay="8"
-    :render-batch-budget-ms="4"
-    :fade="false"
-    :typewriter="true"
   />
 </template>
 ```
@@ -59,17 +52,17 @@ const final = ref(false)
 - Incoming chunk 可能是突发式的，但可见输出可以保持平稳。
 - Backlog-aware pacing 在积压文本增多时会自动加速。
 - 最终解析会等到可见内容追上后再触发，避免流结束时的不稳定状态。
-- `custom-id="chat"` 给了你一个安全的作用域，用来定制聊天界面样式或替换单个节点。
-- 默认 `smooth-streaming="auto"` 已经在 `typewriter` 开启或 `max-live-nodes <= 0` 时自动启用 smooth pacing。只有在需要首屏内容也从空白开始 pacing 时才用 `:smooth-streaming="true"`——这会跳过 mounted 门控，在 SSR 场景下可能导致 hydration 不匹配或空白闪烁。
+- `mode="chat"` 会选择流式默认值，包括 `max-live-nodes="0"`、smooth pacing、增量批次和关闭 fade。
+- 只有需要作用域样式或组件覆盖时才添加 `custom-id="chat"`；只有需要可见光标时才添加 `typewriter`。
 
 如果某个渲染面需要原始 chunk 节奏，可以用 `:smooth-streaming="false"` 关闭。如果你已经在 worker/store 中自行解析并需要 AST 控制，可以继续用 `nodes` + `final`。
 
 ## 3. 这几个渲染配置通常最稳
 
-- 长聊天记录优先保留默认虚拟化；只有在你有明确性能测量时再去调 `maxLiveNodes`。
+- 普通消息保持 `chat` preset。单条消息经过测量确认特别长时，可设置正数 `maxLiveNodes` 启用有界节点窗口；长消息列表则使用 `MarkstreamVirtualTimeline` 做时间线虚拟化。
 - 如果代码块很多，但增强代码 surface 对当前聊天界面太重，可以先用 `renderCodeBlocksAsPre` 降级。
 - 重型 peers 先别全装。聊天类页面最容易从“不默认带 Mermaid、KaTeX、`stream-diffs`”里拿到体积收益。
-- 如果你关闭虚拟化（`:max-live-nodes="0"`），那 [Props 与选项](/zh/guide/props) 里的 batching 相关配置就会更重要。
+- `chat` preset 已经为 `max-live-nodes="0"` 选择了 batching 默认值；只有对真实负载做过 profiling 后才单独调这些参数。
 
 ## 4. 常见升级路径
 

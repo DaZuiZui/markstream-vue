@@ -1,6 +1,6 @@
 # markstream-vue — Agent Context (`/llms`)
 
-This file is a **compact, agent-focused** map of `markstream-vue`: where things live, how to answer common questions, and what to check first when users report issues.
+This file is an **agent-focused** map of `markstream-vue`. For a consumer asking “how do I use it?”, give the canonical recipe below before repository details or advanced alternatives.
 
 For human-facing prompts and reusable rollout templates, also see `/guide/ai-workflows`.
 
@@ -10,6 +10,29 @@ For human-facing prompts and reusable rollout templates, also see `/guide/ai-wor
 - Ask **at most one** clarifying question if the request is ambiguous.
 - When debugging, ask for a **minimal repro** (there’s a shareable test page) and walk the user through the checklist below.
 - Avoid raw HTML tags like `&lt;thinking&gt;` in Markdown docs pages; escape them (VitePress compiles Markdown as Vue SFC).
+
+## Canonical consumer recipe
+
+```bash
+pnpm add markstream-vue
+```
+
+```vue
+<script setup lang="ts">
+import MarkdownRender from 'markstream-vue'
+import { ref } from 'vue'
+import 'markstream-vue/index.css'
+
+const content = ref('')
+const isDone = ref(false)
+</script>
+
+<template>
+  <MarkdownRender mode="chat" :content="content" :final="isDone" />
+</template>
+```
+
+Append incoming chunks to `content.value`; set `isDone.value = true` once at end-of-stream. For static Markdown, use only `<MarkdownRender :content="content" />`. Do not add `nodes`, `smooth-streaming`, `fade`, batching, or virtualization props unless the user has a specific need. Optional peers: `stream-diffs` for enhanced code/diff blocks, `mermaid` for Mermaid, and `katex` plus its CSS for math.
 
 ---
 
@@ -48,7 +71,7 @@ There are two layers:
    - Streaming mid-states reduce flicker (unclosed fences / `$$` / partial inline HTML)
 
 2) **Renderer layer** (`markstream-vue`)
-   - Default component: `MarkdownRender` (also referred to as `NodeRenderer`)
+   - Consumer-facing default component: `MarkdownRender`; `NodeRenderer` is the internal component name
    - Takes either `content: string` (parses internally, recommended first for most chat streams) or `nodes: ParsedNode[]` (when another layer owns parsing or AST control)
    - Performance tools:
      - Virtualization window (`maxLiveNodes`, `liveNodeBuffer`)
@@ -86,7 +109,7 @@ When “it doesn’t render” or “looks wrong”, check these in order:
 3) **Loader enabled** if you disabled or override it: `enableMermaid()` / `enableKatex()`.
 4) **Peer CSS imported** where required: `katex/dist/katex.min.css` (Mermaid does not require extra CSS).
 5) **Standalone node wrapper**: standalone node components need a `.markstream-vue` wrapper for scoped styles/vars.
-6) **SSR**: in Nuxt, wrap with `&lt;client-only&gt;` when using browser-only peers/workers.
+6) **SSR**: standard Markdown is SSR-safe; add a client-only boundary only for browser-only peers/workers.
 
 Docs: `docs/guide/troubleshooting.md`, `docs/guide/tailwind.md`, `docs/nuxt-ssr.md`
 
@@ -200,8 +223,8 @@ Use these as “answer skeletons”: quick steps + minimal repro questions + whe
 
 - Signals: “window is not defined”, “SSR crash”
 - Steps:
-  - Wrap renderer in `&lt;client-only&gt;`
-  - Ensure heavy peers/workers initialize only in browser
+  - Keep standard Markdown on the SSR path
+  - Move only browser-only peer/worker initialization behind `onMounted` or a `&lt;ClientOnly&gt;` boundary
 - Ask: “Nuxt version? Error during build or runtime? Which peers are installed/enabled?”
 - Docs: `docs/nuxt-ssr.md`
 

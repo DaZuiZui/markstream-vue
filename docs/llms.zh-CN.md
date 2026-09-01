@@ -1,6 +1,6 @@
 # markstream-vue — Agent Context（中文）（`/llms.zh-CN`）
 
-这个文件是给 AI/LLM/编码代理用的 **项目地图**：帮助快速定位“该看哪份文档/哪段源码”，以及常见问题的最短排错路径。
+这个文件是给 AI/LLM/编码代理用的 **项目地图**。当用户问“怎么用”时，先给出下面的标准接入，再补充仓库细节或高级方案。
 
 如果你想看给人类用户直接复制使用的提示词和接入模板，也请结合 `/zh/guide/ai-workflows` 一起看。
 
@@ -10,6 +10,29 @@
 - 问题不明确时最多问 **1 个**澄清问题，并给出默认建议。
 - 排错优先走 checklist，并尽快要 **最小复现**（仓库有可分享 test page）。
 - 文档页里避免写裸 `&lt;thinking&gt;` 这类标签；请用转义（VitePress 会把 Markdown 当 Vue SFC 编译）。
+
+## 标准用户接入
+
+```bash
+pnpm add markstream-vue
+```
+
+```vue
+<script setup lang="ts">
+import MarkdownRender from 'markstream-vue'
+import { ref } from 'vue'
+import 'markstream-vue/index.css'
+
+const content = ref('')
+const isDone = ref(false)
+</script>
+
+<template>
+  <MarkdownRender mode="chat" :content="content" :final="isDone" />
+</template>
+```
+
+收到 chunk 时追加到 `content.value`，流结束时设置一次 `isDone.value = true`。静态 Markdown 只使用 `<MarkdownRender :content="content" />`。除非用户有明确需求，不要主动添加 `nodes`、`smooth-streaming`、`fade`、batching 或 virtualization props。可选 peer：增强代码块/diff 用 `stream-diffs`，Mermaid 用 `mermaid`，数学公式用 `katex` 并引入其 CSS。
 
 ---
 
@@ -48,7 +71,7 @@
    - 流式 mid-state：未闭合 fence / 未闭合 `$$` / 分段 inline HTML，减少闪烁
 
 2) **渲染层**（`markstream-vue`）
-   - 默认组件：`MarkdownRender`（文档里也常写 `NodeRenderer`）
+   - 面向接入方的默认组件：`MarkdownRender`；`NodeRenderer` 是内部组件名
    - 输入：`content: string`（内部解析，多数聊天流优先推荐）或 `nodes: ParsedNode[]`（当外层已经接管解析或需要 AST 控制时使用）
    - 性能工具：
      - 虚拟化窗口（`maxLiveNodes`, `liveNodeBuffer`）
@@ -86,7 +109,7 @@
 3) **是否启用 loader**（仅在你手动关闭/覆盖时需要）：`enableMermaid()` / `enableKatex()`。
 4) **peer CSS 是否导入**（需要时）：`katex/dist/katex.min.css`（Mermaid 不需要额外 CSS）。
 5) **单独节点组件 wrapper**：单独用节点组件时，外层需要 `.markstream-vue`。
-6) **SSR（Nuxt）**：用 `&lt;client-only&gt;` 包裹，并确保重 peer/worker 仅浏览器初始化。
+6) **SSR（Nuxt）**：普通 Markdown 支持 SSR；只有浏览器专属 peer/worker 才加 client-only 边界。
 
 文档：`docs/guide/troubleshooting.md`, `docs/guide/tailwind.md`, `docs/nuxt-ssr.md`
 
@@ -200,8 +223,8 @@
 
 - 表述： “window is not defined”, “SSR crash”
 - 步骤：
-  - 用 `&lt;client-only&gt;` 包裹
-  - Mermaid/worker 仅浏览器初始化
+  - 普通 Markdown 保留在 SSR 路径
+  - 只有浏览器专属 peer/worker 的初始化放到 `onMounted` 或 `&lt;ClientOnly&gt;` 边界后
 - 最小追问： “Nuxt 版本？报错发生在 build 还是 runtime？安装/启用了哪些 peers？”
 - 文档：`docs/nuxt-ssr.md`
 

@@ -31,7 +31,7 @@ keywords:
 | `typewriter` | `boolean \| 'simple' \| 'precise'` | `false` | 流式内容增长时显示闪烁打字光标。`true` / `'precise'` 使用基于 Range 的精确定位；`'simple'` 使用轻量 CSS 光标。 |
 | `smooth-streaming` | `boolean \| 'auto'` | `'auto'` | 为流式 `content` 更新启用内置 pacing。`'auto'` 会在 `typewriter` 为 `true`、`'simple'`、`'precise'` 或 `max-live-nodes<=0` 时启用。设 `true` 强制启用，`false` 按原始 chunk 节奏渲染。 |
 | `smooth-streaming-options` | `SmoothMarkdownStreamOptions` | – | 内置流式 pacing 的选项（`minCharsPerSecond`、`maxCharsPerSecond`、`targetLatencyMs`、`catchUpLatencyMs`、`catchUpThreshold`、`maxCommitFps`、`startDelayMs`、`maxCharsPerCommit`、`flushOnFinish`）。在渲染器创建时读取；如需动态修改，请更换组件 `key` 重新创建渲染器。 |
-| `parse-coalesce-ms` | `number` | `80` | 1.x 可用的高级性能调参项：内置 smooth streaming 合并字符级更新时的最小解析间隔。`smooth-streaming=false` 时不会节流原始 `content` prop 的更新，也不影响 `nodes` 模式。设为 `0` 可让每次 smooth-stream commit 都触发解析。默认调度语义后续可能继续优化。 |
+| `parse-coalesce-ms` | `number` | `80` | 高级性能调参项：内置 smooth streaming 合并字符级更新时的最小解析间隔。`smooth-streaming=false` 时不会节流原始 `content` prop 的更新，也不影响 `nodes` 模式。设为 `0` 可让每次 smooth-stream commit 都触发解析。默认调度语义后续可能继续优化。 |
 | `fade` | `boolean` | `true` | 控制非代码节点进入淡入和流式追加文本淡入。生成静态截图或 SSR 输出时可关闭。 |
 | `node-virtual` | `boolean \| 'auto'` | `'auto'` | 只控制当前 Markdown 文档内部的 node-level virtualization，不负责聊天或 timeline 列表虚拟滚动。 |
 | `viewport-priority` | `boolean` | `true` | 将内置重节点延迟到接近可视区域时再渲染。设为 `false` 会立即渲染；单独导入并挂载重节点组件时也默认立即渲染。 |
@@ -166,7 +166,7 @@ flowchart TD
 
 | Prop | 默认值 | 说明 |
 | ---- | ------ | ---- |
-| `max-live-nodes` | `320` | 虚拟化阈值；设为 `0` 可关闭虚拟化（全部渲染）。 |
+| `max-live-nodes` | `docs` 模式为 `220`；`chat` / `minimal` 为 `0` | 由 `mode` 选择的虚拟化阈值；只有经过实际测量需要调优时才显式设置。 |
 | `live-node-buffer` | `60` | 视窗前后保留的节点数量（overscan）。 |
 | `batch-rendering` | `true` | 分批渲染（仅当 `max-live-nodes <= 0` 时启用）。 |
 | `smooth-streaming` | `'auto'` | 在 typewriter / 增量模式下内置流式 pacing（`typewriter=true`、`typewriter='simple'`、`typewriter='precise'` 或 `max-live-nodes <= 0`）。设 `true` 强制启用，`false` 按原始 chunk 节奏渲染。 |

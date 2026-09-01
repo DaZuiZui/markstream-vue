@@ -13,13 +13,13 @@ keywords:
 
 Use this page when you need to fine-tune streaming behaviour, control heavy nodes, or understand how `MarkdownRender` interacts with Tailwind/UnoCSS projects.
 
-## 1.0 API tiers
+## 2.x API tiers
 
-Stable props for 1.x: `content`, `nodes`, `final`, `parseOptions`, `customMarkdownIt`, `customHtmlTags`, `htmlPolicy`, `mode`, `domMode`, `showTooltips`, `isDark`, `customId`, `typewriter`, `smoothStreaming`, `smoothStreamingOptions`, `renderCodeBlocksAsPre`, `codeBlockStream`, `codeBlockProps`, `codeBlockDarkTheme`, `codeBlockLightTheme`, `mermaidProps`, `d2Props`, `infographicProps`, `batchRendering`, `deferNodesUntilVisible`, `maxLiveNodes`, `liveNodeBuffer`, `nodeVirtual`, and `virtualScroll`.
+Stable props for 2.x: `content`, `nodes`, `final`, `parseOptions`, `customMarkdownIt`, `customHtmlTags`, `htmlPolicy`, `mode`, `domMode`, `showTooltips`, `isDark`, `customId`, `typewriter`, `smoothStreaming`, `smoothStreamingOptions`, `renderCodeBlocksAsPre`, `codeBlockStream`, `codeBlockProps`, `codeBlockOptions`, `codeBlockDarkTheme`, `codeBlockLightTheme`, `mermaidProps`, `d2Props`, `infographicProps`, `batchRendering`, `deferNodesUntilVisible`, `maxLiveNodes`, `liveNodeBuffer`, `nodeVirtual`, and `virtualScroll`.
 
-Advanced performance tuning prop: `parseCoalesceMs` is available in 1.x, but its scheduling semantics may be refined.
+Advanced performance tuning prop: `parseCoalesceMs` is available in 2.x, but its scheduling semantics may be refined.
 
-Experimental/internal props: `indexKey`, `renderAsFragment`, `debugPerformance`, `initialRenderBatchSize`, `renderBatchSize`, `renderBatchDelay`, `renderBatchBudgetMs`, `renderBatchIdleTimeoutMs`, `viewportPriority`, and `viewportPriorityOptions`. They are available for advanced integrations and internal tests, but are not part of the 1.x compatibility promise yet.
+Experimental/internal props: `indexKey`, `renderAsFragment`, `debugPerformance`, `initialRenderBatchSize`, `renderBatchSize`, `renderBatchDelay`, `renderBatchBudgetMs`, `renderBatchIdleTimeoutMs`, `viewportPriority`, and `viewportPriorityOptions`. They are available for advanced integrations and internal tests, but are not part of the stable compatibility promise.
 
 ## Core props on `MarkdownRender`
 
@@ -176,7 +176,7 @@ Use `html-policy="escape"` when you want literal HTML text to stay visible inste
 
 | Prop | Default | Notes |
 | ---- | ------- | ----- |
-| `max-live-nodes` | `320` | Virtualization threshold; set `0` to disable virtualization (renders everything). |
+| `max-live-nodes` | `220` in `docs`; `0` in `chat` / `minimal` | Virtualization threshold selected by `mode`; set an explicit value only when measured tuning requires it. |
 | `live-node-buffer` | `60` | Overscan window (how many nodes to keep before/after the focus range). |
 | `batch-rendering` | `true` | Incremental rendering batches (only when `max-live-nodes <= 0`). |
 | `smooth-streaming` | `'auto'` | Built-in stream pacing in typewriter/incremental mode (`typewriter=true`, `typewriter='simple'`, `typewriter='precise'`, or `max-live-nodes <= 0`). Set `true` to force-enable, `false` for raw chunk cadence. |

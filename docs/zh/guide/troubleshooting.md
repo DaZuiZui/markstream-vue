@@ -13,7 +13,7 @@ keywords:
 
 如果出现问题，请尝试下面这些通用解决方案：
 
-- 在 SSR 中出现 `window is not defined`：在 Nuxt 中将客户端代码包装为 `<client-only>`，在 Vite SSR 场景中用 `onMounted` 延迟初始化。
+- 普通 Markdown 渲染支持 SSR。只有浏览器专属 peer 或 worker 引发 `window is not defined` 时，才在 mounted 后初始化该能力，或只把对应功能边界放进 Nuxt `<ClientOnly>`；不要默认包住基础渲染器。
 - 数学渲染失败：安装并引入 `katex`，同时在应用入口引入 `katex/dist/katex.min.css`。
 - Mermaid 渲染问题：升级到 `mermaid` >= 11，检查异步渲染日志。
 - 若通过 CDN `<script>` 引入 KaTeX/Mermaid：确保首次渲染前 `window.katex` / `window.mermaid` 已就绪；或在加载完成后调用一次 `setKatexLoader(() => window.katex)` / `setMermaidLoader(() => window.mermaid)` 来重置 loader。

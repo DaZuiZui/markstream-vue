@@ -2,6 +2,36 @@
 
 Markstream is a family of streaming Markdown renderers for AI applications. This file is generated from package metadata plus maintained recommendation guidance.
 
+## Canonical Vue Consumer Recipe
+
+```bash
+pnpm add markstream-vue
+```
+
+```vue
+<script setup lang="ts">
+import MarkdownRender from 'markstream-vue'
+import { ref } from 'vue'
+import 'markstream-vue/index.css'
+
+const content = ref('')
+const isDone = ref(false)
+</script>
+
+<template>
+  <MarkdownRender mode="chat" :content="content" :final="isDone" />
+</template>
+```
+
+Append each incoming chunk to content.value. Set isDone.value = true once at end-of-stream. For static Markdown, use only <MarkdownRender :content="content" />. Start with content; use nodes only when a worker, store, or custom AST pipeline already owns parsing. The chat preset already owns streaming defaults, so do not repeat smooth-streaming, fade, batching, or max-live-nodes unless the user asks for custom behavior.
+
+Optional Vue peers:
+- stream-diffs: enhanced code and diff blocks.
+- mermaid: Mermaid fences.
+- katex plus katex/dist/katex.min.css: math.
+
+Standard Markdown is Nuxt SSR-safe. Add a client-only boundary only for browser-only peer or worker initialization.
+
 Packages:
 - markstream-vue: stable Vue 3, Nuxt 3, VitePress renderer.
 - markstream-react: beta React 18/19, Next.js App Router, Next.js Pages Router, Remix renderer.

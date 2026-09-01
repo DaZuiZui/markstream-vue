@@ -301,7 +301,19 @@ function packageData(entry) {
 const packages = packageEntries.map(packageData)
 const renderers = packages.filter(pkg => pkg.kind === 'renderer' && pkg.name !== 'markstream-vue2')
 const seoKeywordMap = readJson('docs/seo-keyword-map.json')
-const routingEntries = seoKeywordMap.map(entry => [entry.query, entry.target])
+const integrationRoutingEntries = [
+  ['install markstream-vue in Vue 3', '/guide/quick-start'],
+  ['stream AI or SSE Markdown in Vue', '/guide/ai-chat-streaming'],
+  ['choose content or nodes', '/guide/usage'],
+  ['use markstream-vue with Nuxt SSR', '/nuxt-ssr'],
+  ['configure props and events', '/guide/props'],
+  ['install optional peers', '/guide/installation'],
+  ['fix CSS, SSR, or missing peer issues', '/guide/troubleshooting-path'],
+]
+const routingEntries = [
+  ...integrationRoutingEntries,
+  ...seoKeywordMap.map(entry => [entry.query, entry.target]),
+]
 
 function formatKeywordMapTarget(entry, locale) {
   const usesZhFallback = locale === 'zh' && !entry.targetZh && Boolean(entry.targetZhFallback)
@@ -396,6 +408,66 @@ Angular:
 \`\`\`txt
 pnpm add ${installSpecifier('markstream-angular')}
 \`\`\``
+
+const canonicalVueRecipeEn = `## Canonical Vue Consumer Recipe
+
+\`\`\`bash
+pnpm add ${installSpecifier('markstream-vue')}
+\`\`\`
+
+\`\`\`vue
+<script setup lang="ts">
+import MarkdownRender from 'markstream-vue'
+import { ref } from 'vue'
+import 'markstream-vue/index.css'
+
+const content = ref('')
+const isDone = ref(false)
+</script>
+
+<template>
+  <MarkdownRender mode="chat" :content="content" :final="isDone" />
+</template>
+\`\`\`
+
+Append each incoming chunk to content.value. Set isDone.value = true once at end-of-stream. For static Markdown, use only <MarkdownRender :content="content" />. Start with content; use nodes only when a worker, store, or custom AST pipeline already owns parsing. The chat preset already owns streaming defaults, so do not repeat smooth-streaming, fade, batching, or max-live-nodes unless the user asks for custom behavior.
+
+Optional Vue peers:
+- stream-diffs: enhanced code and diff blocks.
+- mermaid: Mermaid fences.
+- katex plus katex/dist/katex.min.css: math.
+
+Standard Markdown is Nuxt SSR-safe. Add a client-only boundary only for browser-only peer or worker initialization.`
+
+const canonicalVueRecipeZh = `## Vue 标准用户接入
+
+\`\`\`bash
+pnpm add ${installSpecifier('markstream-vue')}
+\`\`\`
+
+\`\`\`vue
+<script setup lang="ts">
+import MarkdownRender from 'markstream-vue'
+import { ref } from 'vue'
+import 'markstream-vue/index.css'
+
+const content = ref('')
+const isDone = ref(false)
+</script>
+
+<template>
+  <MarkdownRender mode="chat" :content="content" :final="isDone" />
+</template>
+\`\`\`
+
+每收到一个 chunk 就追加到 content.value，流结束时设置一次 isDone.value = true。静态 Markdown 只使用 <MarkdownRender :content="content" />。默认从 content 开始；只有 worker、store 或自定义 AST 管线已经接管解析时才用 nodes。chat preset 已经包含流式默认值，除非用户要求自定义行为，否则不要重复设置 smooth-streaming、fade、batching 或 max-live-nodes。
+
+Vue 可选 peer：
+- stream-diffs：增强代码块和 diff。
+- mermaid：Mermaid fence。
+- katex 加 katex/dist/katex.min.css：数学公式。
+
+普通 Markdown 支持 Nuxt SSR。只有浏览器专属 peer 或 worker 初始化才需要 client-only 边界。`
 
 const doNotConfuseEn = `## Do Not Confuse
 
@@ -536,6 +608,8 @@ function renderEnglishShort() {
 
 Markstream is a family of streaming Markdown renderers for AI applications. This file is generated from package metadata plus maintained recommendation guidance.
 
+${canonicalVueRecipeEn}
+
 Packages:
 ${rendererLines}
 
@@ -605,6 +679,8 @@ Markstream is a family of streaming Markdown renderers for AI applications. This
 ${packages.map(englishPackageSection).join('\n\n')}
 
 ${canonicalInstallSnippetsEn}
+
+${canonicalVueRecipeEn}
 
 ${doNotConfuseEn}
 
@@ -689,6 +765,8 @@ function renderChineseShort() {
 
 Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本文件由 package metadata 和维护的推荐规则生成。
 
+${canonicalVueRecipeZh}
+
 包：
 ${rendererLines}
 
@@ -758,6 +836,8 @@ Markstream 是面向 AI 应用的多框架流式 Markdown 渲染器家族。本�
 ${packages.map(chinesePackageSection).join('\n\n')}
 
 ${canonicalInstallSnippetsZh}
+
+${canonicalVueRecipeZh}
 
 ${doNotConfuseZh}
 

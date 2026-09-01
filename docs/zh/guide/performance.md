@@ -162,7 +162,7 @@ setStreamDiffsWorkerPool(getOrCreateWorkerPoolSingleton({
 
 `MarkdownRender` 会维护一个滑动窗口，只让一部分节点常驻 DOM，从而在极长的对话或文档中保持流畅：
 
-- `maxLiveNodes`（默认 `320`）定义了 DOM 中最多保留多少个已完全渲染的节点。减小可以省内存、增大可以保留更多回溯内容。
+- `maxLiveNodes` 在 `docs` 模式下默认为 `220`，在 `chat` / `minimal` 模式下默认为 `0`。只有测量后确实需要时再调整：较小的正值可节省内存但会增加占位切换，较大值会保留更多回溯内容。
 - `liveNodeBuffer` 控制窗口前后的超前/超后范围（默认 `60`）。如果节点高度差异巨大，可增大该值以避免快速滚动时闪烁。
 - `deferNodesUntilVisible` 搭配 `viewportPriority` 使用，可以让 Mermaid、增强代码 surface、KaTeX 等重型节点在进入视口之前保持占位骨架。
 - `batchRendering` 以及 `initialRenderBatchSize`、`renderBatchSize`、`renderBatchDelay`、`renderBatchBudgetMs` 控制每一帧有多少节点从占位态切换为真实组件。该增量模式仅在关闭虚拟化（`:max-live-nodes="0"`）时生效；默认开启虚拟化时，所有节点会立即渲染，依靠窗口裁剪来限制 DOM 工作量。

@@ -60,7 +60,7 @@ Vue 包：
 
 ## 稳定性
 
-`markstream-vue` 继续维护稳定的 1.x API 契约。破坏性的 2.0 版本线先通过 npm `next` 标签进行验证，不会在 beta 阶段替换 `latest`。2.0 移除 Monaco 和 `stream-markdown` 代码块 runtime，并将 `stream-diffs` 作为唯一的增强代码块表面。升级前请阅读 [从 1.x 迁移到 2.0](https://markstream.simonhe.me/zh/guide/migration-2-0)。
+`markstream-vue` 2.x 已稳定并发布在 npm `latest` 标签。维护中的 1.x 仍可通过 `markstream-vue@1` 或 `legacy` 标签安装。2.0 移除了 Monaco 和 `stream-markdown` 代码块 runtime；需要增强代码块时再安装可选 peer `stream-diffs`。升级前请阅读 [从 1.x 迁移到 2.0](https://markstream.simonhe.me/zh/guide/migration-2-0)。
 
 稳定面包括：`MarkdownRender`、流式内容渲染、预解析节点渲染、安全 HTML 策略、可选 Mermaid / KaTeX / D2 / Infographic 集成、增强代码块、虚拟滚动协调、CSS 导出、worker client 子路径以及 Vite / Nuxt / VitePress 的 SSR 导入。
 
@@ -185,13 +185,13 @@ npx skills add git@github.com:Simon-He95/markstream-vue.git
 
 ### Vue / Nuxt
 
-协调发布的 2.0 beta 将使用 `next`。请先确认 `npm view markstream-vue@next version` 返回 `2.0.0-beta.1`，再执行：
+2.x 稳定版已发布在 npm `latest`。基础 Markdown 只需要安装主包：
 
 ```bash
-pnpm add markstream-vue@next stream-diffs
+pnpm add markstream-vue
 ```
 
-从 1.x 升级前请阅读 [2.0 迁移指南](https://markstream.simonhe.me/zh/guide/migration-2-0)。beta 阶段无 tag 安装仍然保持在 1.x；如需在 2.0 stable 切换后仍锁定维护中的 1.x，请显式使用 `markstream-vue@1`。
+需要增强代码块和 diff 时再安装 `stream-diffs`。从 1.x 升级前请阅读 [2.0 迁移指南](https://markstream.simonhe.me/zh/guide/migration-2-0)；如需继续锁定维护中的 1.x，请显式使用 `markstream-vue@1`。
 
 ```bash
 pnpm add markstream-vue@1
@@ -536,7 +536,7 @@ function addChunk(chunk: string) {
 
 ## ⚙️ 性能模式
 
-- **默认虚拟化窗口**：保持 `max-live-nodes` 默认值（`320`），渲染器会立即渲染当前窗口的节点，同时只保留有限数量的 DOM 节点，实现平滑滚动与可控内存，占位骨架极少。
+- **默认虚拟化窗口**：`docs` 模式的 `max-live-nodes` 默认值为 `220`，渲染器会立即渲染当前窗口的节点，同时只保留有限数量的 DOM 节点，实现平滑滚动与可控内存，占位骨架极少。
 - **增量流式模式**：当需要更明显的“打字机”体验时，将 `:max-live-nodes="0"`。这会关闭虚拟化并启用 `batchRendering` 系列参数控制的增量渲染，新的节点会以小批次加上占位骨架的形式进入视图。
 
 可根据页面类型选择最合适的模式：虚拟化适合长文档/回溯需求，增量流式适合聊天或 AI 输出面板。
@@ -546,7 +546,7 @@ function addChunk(chunk: string) {
 ## 🧰 关键属性速览
 
 - `content` 与 `nodes`：传原始 Markdown 或预解析节点（来自 `parseMarkdownToStructure`）。
-- `max-live-nodes`：`320`（默认虚拟化）或 `0`（增量批次）。
+- `max-live-nodes`：`docs` 模式默认为 `220`；`chat` / `minimal` 模式默认为 `0`。
 - `batchRendering`：用 `initialRenderBatchSize`、`renderBatchSize`、`renderBatchDelay`、`renderBatchBudgetMs` 微调批次。
 - `enableMermaid` / `enableKatex`：用于（重新）启用重型依赖或自定义 loader（可与 `disableMermaid` / `disableKatex` 配合）。
 - `parse-options`：在组件上复用解析钩子（如 `preTransformTokens`、`requireClosingStrong`）。
@@ -624,8 +624,8 @@ setCustomComponents('docs', {
 
 - 最新版本与升级提示：[Releases](https://github.com/Simon-He95/markstream-vue/releases)
 - 完整历史：[CHANGELOG.md](./CHANGELOG.md)
-- 2.0 beta 候选版：
-  - `npm view markstream-vue@next version` 返回 `2.0.0-beta.1` 后，通过 `markstream-vue@next` 安装；稳定 1.x 继续通过 `@1` 获取。
+- 2.x 稳定版：
+  - 通过无 tag 的 `markstream-vue` 安装；维护中的 1.x 继续通过 `@1` 或 `legacy` 获取。
   - Monaco、`stream-markdown` runtime 与 Monaco 命名 API 已移除；受支持的代码块配置迁移到 `codeBlockOptions`。
   - 升级前阅读 [从 1.x 迁移到 2.0](https://markstream.simonhe.me/zh/guide/migration-2-0)。
 
