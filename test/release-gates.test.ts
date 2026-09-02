@@ -396,7 +396,7 @@ describe('release dependency gates', () => {
     expect(mainScript).toContain('parsePerformance')
     expect(diagnosticScript).toContain('diffParsePerformance')
     expect(mainScript).toContain('replayParsePerformanceBaseline')
-    expect(mainScript).toContain('Replay stream parser should record append/tail/cache hits')
+    expect(mainScript).toContain('Replay stream parser should record a parser execution')
     expect(mainScript).toContain('Replay token clone cost too high')
     expect(benchmarkScript).toContain('parsePerformanceSummary')
     expect(benchmarkScript).toContain('tokenCloneMs')
