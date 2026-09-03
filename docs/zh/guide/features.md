@@ -19,3 +19,9 @@ keywords:
 - 🔌 **零配置出箱**：适用于 Vue 3 项目
 
 要了解更多示例，请查看文档页：`/zh/guide/usage`、`/zh/guide/features`。
+
+<NextStep :items="[
+  { text: '组件画廊', link: '/zh/components/' },
+  { text: '示例', link: '/zh/guide/examples' },
+  { text: 'Showcase', link: '/zh/guide/showcase' },
+]" />

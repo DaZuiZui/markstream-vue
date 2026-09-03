@@ -31,6 +31,9 @@
   --ms-gap-header: 1rem;
   --ms-gap-header-main: 0.625rem;
   --ms-gap-header-actions: 0.125rem;
+  /* ── Container sizes ── */
+  --ms-size-diagram-min-height: 360px;
+  --ms-size-code-max-height: 500px;
   /* Unified default code surface; explicit editor themes may override it. */
   --code-bg: #fff;
   --code-fg: hsl(0 0% 10%);
@@ -969,6 +972,17 @@
   border-top-color: rgba(59, 130, 246, 0.9);
   border-radius: 9999px;
   animation: markstream-react-spin 0.9s linear infinite;
+}
+
+/* Keep the infographic fully visible and centered like the mermaid block:
+   scale down proportionally inside the preview area. The flex centering
+   wrapper lives inside .infographic-preview; the fullscreen modal clone is
+   portaled to body without this class, so it is unaffected. */
+:where(.markstream-react) .infographic-preview svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
 }
 
 :where(.markstream-react) .math-block-node {
@@ -2016,13 +2030,32 @@
 }
 
 :where(.markstream-react) .d2-render {
+  max-height: var(--ms-size-code-max-height);
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* margin: auto (not justify-content: center) keeps overflow scrolling safe. */
+:where(.markstream-react) .d2-svg {
+  margin: auto;
+  width: 100%;
+}
+
+:where(.markstream-react) .d2-render .d2-error {
+  margin-left: auto;
+  margin-right: auto;
 }
 
 :where(.markstream-react) .d2-svg svg.markstream-d2-root-svg {
   width: 100%;
   max-width: 100%;
   height: auto;
+  /* Match the container cap so tall diagrams scale down to fit, mirroring
+     the mermaid block's behavior. When the user sets maxHeight, the inline
+     style exposes the value as --ms-d2-render-max-height; the default
+     fallback here is the shared token. */
+  max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height));
   display: block;
 }
 

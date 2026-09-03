@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue-
 import { useSafeI18n } from '../../composables/useSafeI18n'
 import { hideTooltip, showTooltipForAnchor } from '../../composables/useSingletonTooltip'
 import infographicIconUrl from '../../icon/infographic.svg?url'
-import { clampInfographicPreviewHeight, estimateInfographicPreviewHeight, parsePositiveNumber } from '../../utils/diagramHeight'
+import { clampInfographicPreviewHeight, estimateInfographicPreviewHeight, INFOGRAPHIC_PREVIEW_MIN_HEIGHT, parsePositiveNumber } from '../../utils/diagramHeight'
 import Portal from '../Portal'
 import { getInfographic } from './infographic'
 
@@ -58,23 +58,37 @@ const maxPreviewHeight = computed(() => {
   return parsePositiveNumber(props.maxHeight)
 })
 const estimatedPreviewHeight = computed(() => {
-  return clampInfographicPreviewHeight(
-    parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateInfographicPreviewHeight(baseCode.value),
-    undefined,
-    maxPreviewHeight.value,
-  )
+  return parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateInfographicPreviewHeight(baseCode.value)
 })
-const containerHeight = ref<string>(`${estimatedPreviewHeight.value}px`)
+
+/**
+ * Resolve the preview minimum height from the density CSS token
+ * (--ms-size-diagram-min-height), falling back to the built-in default.
+ * Mirrors the vue3 InfographicBlockNode implementation.
+ */
+function resolveMinContainerHeight() {
+  const raw = infographicContainer.value
+    ? getComputedStyle(infographicContainer.value).getPropertyValue('--ms-size-diagram-min-height').trim()
+    : ''
+  return parsePositiveNumber(raw) ?? INFOGRAPHIC_PREVIEW_MIN_HEIGHT
+}
+
+function resolveEstimatedPreviewHeight() {
+  return clampInfographicPreviewHeight(estimatedPreviewHeight.value, resolveMinContainerHeight(), maxPreviewHeight.value)
+}
+
+const containerHeight = ref<string>(`${resolveEstimatedPreviewHeight()}px`)
 
 function resolveContainerHeight(actualHeight: number) {
+  const estimatedHeight = resolveEstimatedPreviewHeight()
   if (!props.maxHeight || props.maxHeight === 'none')
-    return `${Math.max(actualHeight, estimatedPreviewHeight.value)}px`
+    return `${Math.max(actualHeight, estimatedHeight)}px`
 
   const maxHeight = maxPreviewHeight.value
   if (maxHeight == null)
-    return `${Math.max(actualHeight, estimatedPreviewHeight.value)}px`
+    return `${Math.max(actualHeight, estimatedHeight)}px`
 
-  return `${Math.max(Math.min(actualHeight, maxHeight), estimatedPreviewHeight.value)}px`
+  return `${Math.max(Math.min(actualHeight, maxHeight), estimatedHeight)}px`
 }
 
 function updateContainerHeight() {
@@ -95,12 +109,13 @@ const dragStart = ref({ x: 0, y: 0 })
 
 watch(
   estimatedPreviewHeight,
-  (height) => {
+  () => {
     if (showSource.value || isCollapsed.value)
       return
+    const nextHeight = resolveEstimatedPreviewHeight()
     const currentHeight = parsePositiveNumber(containerHeight.value)
-    if (currentHeight == null || currentHeight < height)
-      containerHeight.value = `${height}px`
+    if (currentHeight == null || currentHeight < nextHeight)
+      containerHeight.value = `${nextHeight}px`
   },
 )
 
@@ -721,7 +736,7 @@ watch(
           </div>
         </div>
         <div
-          class="infographic-preview min-h-[360px] relative transition-all duration-100 overflow-hidden block"
+          class="infographic-preview min-h-[var(--ms-size-diagram-min-height,360px)] relative transition-all duration-100 overflow-hidden block"
           :class="props.isDark ? 'bg-gray-900' : 'bg-gray-50'"
           :style="{ height: containerHeight, maxHeight: props.maxHeight ?? undefined }"
           @mousedown="startDrag"
@@ -822,6 +837,18 @@ watch(
   width: 100%;
   max-height: 100% !important;
   height: 100% !important;
+}
+
+/* Keep the diagram fully visible and centered like the mermaid block:
+   scale down proportionally inside the preview area. The flex centering
+   wrapper is the .absolute inset-0 layer, which has a definite height.
+   Scoped to .infographic-preview only, so the fullscreen modal clone
+   (teleported outside this container) keeps its own sizing. */
+.infographic-preview :deep(svg) {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
 }
 
 /* Dialog transition */

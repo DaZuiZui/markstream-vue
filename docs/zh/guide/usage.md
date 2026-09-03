@@ -11,6 +11,10 @@ keywords:
 
 本页聚焦三个问题：如何在 Vite/VitePress/Nuxt 中集成、解析器如何配合渲染器、样式出错时去哪查看 reset 与 Tailwind/UnoCSS 排障指南。
 
+<PrereqChips :items="[
+  { text: 'Vue 快速开始', link: '/zh/guide/quick-start' },
+]" />
+
 ## 先决定用 `content` 还是 `nodes`
 
 | 场景 | 推荐输入 |
@@ -183,3 +187,9 @@ const node = {
 ```
 
 若仍无法解决，请运行 `pnpm play` 在 playground 中复现，并附带链接到 issue 中。
+
+<NextStep :items="[
+  { text: 'Props 与选项', link: '/zh/guide/props' },
+  { text: 'API 总览', link: '/zh/guide/api' },
+  { text: '覆盖内置组件', link: '/zh/guide/component-overrides' },
+]" />

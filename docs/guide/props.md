@@ -13,6 +13,11 @@ keywords:
 
 Use this page when you need to fine-tune streaming behaviour, control heavy nodes, or understand how `MarkdownRender` interacts with Tailwind/UnoCSS projects.
 
+<PrereqChips :items="[
+  { text: 'Vue Quick Start', link: '/guide/quick-start' },
+  { text: 'Usage: content vs nodes', link: '/guide/usage' },
+]" />
+
 ## 2.x API tiers
 
 Stable props for 2.x: `content`, `nodes`, `final`, `parseOptions`, `customMarkdownIt`, `customHtmlTags`, `htmlPolicy`, `mode`, `domMode`, `showTooltips`, `isDark`, `customId`, `typewriter`, `smoothStreaming`, `smoothStreamingOptions`, `renderCodeBlocksAsPre`, `codeBlockStream`, `codeBlockProps`, `codeBlockOptions`, `codeBlockDarkTheme`, `codeBlockLightTheme`, `mermaidProps`, `d2Props`, `infographicProps`, `batchRendering`, `deferNodesUntilVisible`, `maxLiveNodes`, `liveNodeBuffer`, `nodeVirtual`, and `virtualScroll`.
@@ -322,3 +327,9 @@ const md = '# Title\n\nSome content here.'
 2. **Scope overrides** with `custom-id` and `[data-custom-id="docs"]` selectors.
 3. **Confirm peer CSS** (KaTeX) is imported; Mermaid/D2 do not require extra CSS.
 4. **Check the [CSS checklist](/guide/troubleshooting#css-looks-wrong-start-here)** whenever visuals look off.
+
+<NextStep :items="[
+  { text: 'API Overview', link: '/guide/api' },
+  { text: 'Features Overview', link: '/guide/features' },
+  { text: 'Override Built-in Components', link: '/guide/component-overrides' },
+]" />

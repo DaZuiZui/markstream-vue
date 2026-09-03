@@ -105,3 +105,9 @@ export default defineConfig({
 4. **用 `custom-id` 限定覆盖范围** —— 集成到大型设计系统时，其他全局样式可能影响渲染器。给 `MarkdownRender` 传 `custom-id="docs"`，再通过 `[data-custom-id="docs"]` 编写覆盖，可避免污染其它页面。
 
 如果上述步骤仍无法解决，请使用 `pnpm play` 启动 playground，准备一个只包含 CSS/Markdown 的最小示例并附带链接提 issue。
+
+<NextStep :items="[
+  { text: '按症状排查', link: '/zh/guide/troubleshooting-path' },
+  { text: '安装与可选依赖', link: '/zh/guide/installation' },
+  { text: 'Nuxt SSR', link: '/zh/nuxt-ssr' },
+]" />

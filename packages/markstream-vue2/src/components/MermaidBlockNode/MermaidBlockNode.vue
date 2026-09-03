@@ -7,7 +7,7 @@ import { useSafeI18n } from '../../composables/useSafeI18n'
 import { hideTooltip, showTooltipForAnchor } from '../../composables/useSingletonTooltip'
 import { useViewportPriority } from '../../composables/viewportPriority'
 import mermaidIconUrl from '../../icon/mermaid.svg?url'
-import { clampMermaidPreviewHeight, estimateMermaidPreviewHeight, parsePositiveNumber } from '../../utils/diagramHeight'
+import { clampMermaidPreviewHeight, estimateMermaidPreviewHeight, MERMAID_PREVIEW_MIN_HEIGHT, parsePositiveNumber } from '../../utils/diagramHeight'
 import { safeRaf } from '../../utils/safeRaf'
 import { canParseOffthread as canParseOffthreadClient, findPrefixOffthread as findPrefixOffthreadClient, terminateWorker as terminateMermaidWorker } from '../../workers/mermaidWorkerClient'
 
@@ -211,12 +211,28 @@ const maxPreviewHeight = computed(() => {
   return parsePositiveNumber(props.maxHeight)
 })
 const estimatedPreviewHeight = computed(() => {
-  return clampMermaidPreviewHeight(
-    parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateMermaidPreviewHeight(baseFixedCode.value),
-    undefined,
-    maxPreviewHeight.value,
-  )
+  return parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateMermaidPreviewHeight(baseFixedCode.value)
 })
+
+/**
+ * Resolve the preview minimum height from the density CSS token
+ * (--ms-size-diagram-min-height), falling back to the built-in default.
+ * Mirrors the vue3 MermaidBlockNode implementation.
+ */
+function resolveMinContainerHeight() {
+  const raw = mermaidContainer.value
+    ? getComputedStyle(mermaidContainer.value).getPropertyValue('--ms-size-diagram-min-height').trim()
+    : ''
+  return parsePositiveNumber(raw) ?? MERMAID_PREVIEW_MIN_HEIGHT
+}
+
+function clampPreviewHeight(height: number) {
+  return clampMermaidPreviewHeight(height, resolveMinContainerHeight(), maxPreviewHeight.value)
+}
+
+function resolveEstimatedPreviewHeight() {
+  return clampPreviewHeight(estimatedPreviewHeight.value)
+}
 
 // get the code with the theme configuration
 function getCodeWithTheme(theme: 'light' | 'dark', code = baseFixedCode.value) {
@@ -316,7 +332,7 @@ function scheduleRenderRetry(delayMs = 600) {
   renderRetryTimer = (globalThis as any).setTimeout(run, safeDelay)
 }
 
-const containerHeight = ref<string>(`${estimatedPreviewHeight.value}px`)
+const containerHeight = ref<string>(`${resolveEstimatedPreviewHeight()}px`)
 let resizeObserver: ResizeObserver | null = null
 
 watch(
@@ -324,9 +340,10 @@ watch(
   (height) => {
     if (showSource.value || isCollapsed.value)
       return
+    const nextHeight = clampPreviewHeight(height)
     const currentHeight = parsePositiveNumber(containerHeight.value)
-    if (currentHeight == null || currentHeight < height)
-      containerHeight.value = `${height}px`
+    if (currentHeight == null || currentHeight < nextHeight)
+      containerHeight.value = `${nextHeight}px`
   },
 )
 
@@ -350,7 +367,7 @@ const savedTransformState = ref({
   zoom: 1,
   translateX: 0,
   translateY: 0,
-  containerHeight: `${estimatedPreviewHeight.value}px`,
+  containerHeight: `${resolveEstimatedPreviewHeight()}px`,
 })
 const wheelListeners = computed(() => (props.enableWheelZoom ? { wheel: handleWheel } : {}))
 
@@ -487,7 +504,7 @@ function renderErrorToContainer(error: unknown) {
   errorDiv.appendChild(errorSpan)
   clearElement(mermaidContent.value)
   mermaidContent.value.appendChild(errorDiv)
-  containerHeight.value = `${estimatedPreviewHeight.value}px`
+  containerHeight.value = `${resolveEstimatedPreviewHeight()}px`
   hasRenderError.value = true
   // 在错误显示时，停止任何预览轮询，避免错误被覆盖
   stopPreviewPolling()
@@ -784,7 +801,7 @@ function updateContainerHeight(newContainerWidth?: number) {
     const maxHeight = resolveMaxContainerHeight()
     const newHeight = containerWidth * aspectRatio
     const resolvedHeight = maxHeight == null ? newHeight : Math.min(newHeight, maxHeight)
-    containerHeight.value = `${props.maxHeight === 'none' ? resolvedHeight : Math.max(resolvedHeight, estimatedPreviewHeight.value)}px`
+    containerHeight.value = `${props.maxHeight === 'none' ? resolvedHeight : Math.max(resolvedHeight, resolveEstimatedPreviewHeight())}px`
   }
 }
 
@@ -1961,7 +1978,7 @@ const computedButtonStyle = computed(() => {
         </div>
         <div
           ref="mermaidContainer"
-          class="min-h-[360px] relative overflow-hidden block transition-[height] duration-150 ease-out"
+          class="min-h-[var(--ms-size-diagram-min-height,360px)] relative overflow-hidden block transition-[height] duration-150 ease-out"
           :class="props.isDark ? 'bg-gray-900' : 'bg-gray-50'"
           :style="{ height: containerHeight }"
           v-on="wheelListeners"

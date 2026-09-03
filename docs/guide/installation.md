@@ -143,3 +143,9 @@ Next steps:
 - [Usage & Streaming](/guide/usage) for `content` vs `nodes`
 - [AI Chat & Streaming](/guide/ai-chat-streaming) for chat UIs, SSE, and token streams
 - [Override Built-in Components](/guide/component-overrides) if you need custom rendering
+
+<NextStep :items="[
+  { text: 'Vue Quick Start', link: '/guide/quick-start' },
+  { text: 'AI Chat & Streaming', link: '/guide/ai-chat-streaming' },
+  { text: 'Troubleshooting by Symptom', link: '/guide/troubleshooting-path' },
+]" />

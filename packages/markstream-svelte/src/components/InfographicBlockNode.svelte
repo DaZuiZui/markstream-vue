@@ -5,7 +5,7 @@
   import { getInfographic } from '../optional/infographic'
   import { toSafeSvgMarkup } from '../sanitizeSvg'
   import { hideTooltip, showTooltipForAnchor } from '../tooltip/singletonTooltip'
-  import { clampPreviewHeight, estimateInfographicPreviewHeight, parsePositiveNumber } from './shared/diagram-height'
+  import { clampPreviewHeight, estimateInfographicPreviewHeight, INFOGRAPHIC_PREVIEW_MIN_HEIGHT, parsePositiveNumber, resolveDiagramMinPreviewHeight } from './shared/diagram-height'
   import { clearElement, copyTextToClipboard, downloadSvgMarkup } from './shared/rich-block-helpers'
   import { getString } from './shared/node-helpers'
 
@@ -45,6 +45,7 @@
   const infographicIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="#5b8ff9" d="M5 4.25A2.25 2.25 0 0 1 7.25 2h2.5A2.25 2.25 0 0 1 12 4.25v2.5A2.25 2.25 0 0 1 9.75 9h-2.5A2.25 2.25 0 0 1 5 6.75z"/><path fill="#61d9a6" d="M12 17.25A2.25 2.25 0 0 1 14.25 15h2.5A2.25 2.25 0 0 1 19 17.25v2.5A2.25 2.25 0 0 1 16.75 22h-2.5A2.25 2.25 0 0 1 12 19.75z"/><path fill="#f6bd16" d="M12 4.25A2.25 2.25 0 0 1 14.25 2h2.5A2.25 2.25 0 0 1 19 4.25v2.5A2.25 2.25 0 0 1 16.75 9h-2.5A2.25 2.25 0 0 1 12 6.75z"/><path fill="#5ad8a6" d="M7.5 10.75h1.75a6.25 6.25 0 0 1 6.25 6.25v.25h-2V17a4.25 4.25 0 0 0-4.25-4.25H7.5z"/><path fill="#7262fd" d="M15.5 11.1l3.75 2.16v4.33l-3.75 2.16l-3.75-2.16v-4.33z"/></svg>'
 
   let renderHost: HTMLDivElement | null = $state(null)
+  let blockHost: HTMLElement | null = $state(null)
   let mounted = $state(false)
   let renderToken = $state(0)
   let lastCompletedRenderSignature = $state('')
@@ -75,7 +76,7 @@
   let maxPreviewHeight = $derived(maxHeight === 'none' ? null : parsePositiveNumber(maxHeight))
   let previewHeight = $derived(clampPreviewHeight(
     parsePositiveNumber(estimatedPreviewHeightPx) ?? estimateInfographicPreviewHeight(source),
-    320,
+    resolveDiagramMinPreviewHeight(blockHost, INFOGRAPHIC_PREVIEW_MIN_HEIGHT),
     maxPreviewHeight ?? undefined,
   ))
   let previewStyle = $derived([
@@ -379,6 +380,7 @@
 
 {#if shouldRender}
   <div
+    bind:this={blockHost}
     class:dark={resolvedIsDark}
     class:is-rendering={rendering || resolvedLoading}
     class="markstream-svelte-enhanced-block markstream-svelte-enhanced-block--infographic"

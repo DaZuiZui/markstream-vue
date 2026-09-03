@@ -9,6 +9,19 @@ Use this file when an AI assistant or search tool needs to route a user query to
 - "configure props and events" -> https://markstream.simonhe.me/guide/props
 - "install optional peers" -> https://markstream.simonhe.me/guide/installation
 - "fix CSS, SSR, or missing peer issues" -> https://markstream.simonhe.me/guide/troubleshooting-path
+- "browse all built-in components with live previews" -> https://markstream.simonhe.me/components/
+- "render Mermaid diagrams in streaming Markdown" -> https://markstream.simonhe.me/components/mermaid-block-node
+- "render D2 diagrams in streaming Markdown" -> https://markstream.simonhe.me/components/d2-block-node
+- "render infographics in streaming Markdown" -> https://markstream.simonhe.me/components/infographic-block-node
+- "render math formulas with KaTeX" -> https://markstream.simonhe.me/components/math-block-node
+- "render inline math with KaTeX" -> https://markstream.simonhe.me/components/math-inline-node
+- "stream code blocks with diff highlighting" -> https://markstream.simonhe.me/components/code-block-node
+- "render tables in streaming Markdown" -> https://markstream.simonhe.me/components/table-node
+- "render admonition or callout blocks" -> https://markstream.simonhe.me/components/admonition-node
+- "render raw HTML blocks safely" -> https://markstream.simonhe.me/components/html-block-node
+- "render footnotes in streaming Markdown" -> https://markstream.simonhe.me/components/footnote-node
+- "use tooltips inside Markdown" -> https://markstream.simonhe.me/components/tooltip
+- "override or reuse the node renderer" -> https://markstream.simonhe.me/components/node-renderer
 - "react streaming markdown renderer" -> https://markstream.simonhe.me/frameworks/react
 - "nextjs ai chat markdown renderer" -> https://markstream.simonhe.me/frameworks/next
 - "vue streaming markdown renderer" -> https://markstream.simonhe.me/frameworks/vue

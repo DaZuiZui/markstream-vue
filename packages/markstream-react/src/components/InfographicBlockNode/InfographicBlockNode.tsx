@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom'
 import { useViewportPriority } from '../../context/viewportPriority'
 import { useSafeI18n } from '../../i18n/useSafeI18n'
 import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonTooltip'
-import { clampInfographicPreviewHeight, estimateInfographicPreviewHeight, parsePositiveNumber } from './height'
+import { clampInfographicPreviewHeight, estimateInfographicPreviewHeight, INFOGRAPHIC_PREVIEW_MIN_HEIGHT, parsePositiveNumber } from './height'
 import { getInfographic } from './infographic'
 
 // Inline Icon
@@ -59,13 +59,13 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
     return parsePositiveNumber(props.maxHeight)
   }, [props.maxHeight])
   const estimatedPreviewHeight = useMemo(() => {
-    return clampInfographicPreviewHeight(
-      parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateInfographicPreviewHeight(baseCode),
-      undefined,
-      maxPreviewHeight,
-    )
-  }, [baseCode, maxPreviewHeight, props.estimatedPreviewHeightPx])
-  const [containerHeight, setContainerHeight] = useState(`${estimatedPreviewHeight}px`)
+    return parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateInfographicPreviewHeight(baseCode)
+  }, [baseCode, props.estimatedPreviewHeightPx])
+  // The initializer runs on the first render, before the container ref is
+  // attached, so the built-in default floor applies (matches SSR output).
+  const [containerHeight, setContainerHeight] = useState(
+    () => `${clampInfographicPreviewHeight(estimatedPreviewHeight, INFOGRAPHIC_PREVIEW_MIN_HEIGHT, maxPreviewHeight)}px`,
+  )
   const [hasPreview, setHasPreview] = useState(false)
   const [hasRenderError, setHasRenderError] = useState(false)
 
@@ -84,16 +84,35 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
   const renderGenerationRef = useRef(0)
   const registerViewport = useViewportPriority()
 
+  /**
+   * Resolve the preview minimum height from the density CSS token
+   * (--ms-size-diagram-min-height), falling back to the built-in default.
+   * Mirrors MermaidBlockNode's resolveMinContainerHeight. The container ref
+   * is null before mount / during SSR, which safely yields the default floor.
+   */
+  const resolveMinContainerHeight = useCallback(() => {
+    const container = containerRef.current
+    const raw = container
+      ? getComputedStyle(container).getPropertyValue('--ms-size-diagram-min-height').trim()
+      : ''
+    return parsePositiveNumber(raw) ?? INFOGRAPHIC_PREVIEW_MIN_HEIGHT
+  }, [])
+
+  const resolveEstimatedPreviewHeight = useCallback(() => {
+    return clampInfographicPreviewHeight(estimatedPreviewHeight, resolveMinContainerHeight(), maxPreviewHeight)
+  }, [estimatedPreviewHeight, maxPreviewHeight, resolveMinContainerHeight])
+
   const resolveContainerHeight = useCallback((actualHeight: number) => {
+    const estimatedHeight = resolveEstimatedPreviewHeight()
     if (!props.maxHeight || props.maxHeight === 'none')
-      return `${Math.max(actualHeight, estimatedPreviewHeight)}px`
+      return `${Math.max(actualHeight, estimatedHeight)}px`
 
     const maxHeight = Number.parseFloat(String(props.maxHeight))
     if (!Number.isFinite(maxHeight))
-      return `${Math.max(actualHeight, estimatedPreviewHeight)}px`
+      return `${Math.max(actualHeight, estimatedHeight)}px`
 
-    return `${Math.max(Math.min(actualHeight, maxHeight), estimatedPreviewHeight)}px`
-  }, [estimatedPreviewHeight, props.maxHeight])
+    return `${Math.max(Math.min(actualHeight, maxHeight), estimatedHeight)}px`
+  }, [props.maxHeight, resolveEstimatedPreviewHeight])
 
   const updateContainerHeight = useCallback(() => {
     const el = containerRef.current
@@ -110,11 +129,12 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
       return
     setContainerHeight((current) => {
       const currentHeight = parsePositiveNumber(current)
-      if (currentHeight != null && currentHeight >= estimatedPreviewHeight)
+      const nextHeight = resolveEstimatedPreviewHeight()
+      if (currentHeight != null && currentHeight >= nextHeight)
         return current
-      return `${estimatedPreviewHeight}px`
+      return `${nextHeight}px`
     })
-  }, [estimatedPreviewHeight, isCollapsed, showSource])
+  }, [isCollapsed, resolveEstimatedPreviewHeight, showSource])
 
   const handleCopy = useCallback(async () => {
     try {
@@ -509,8 +529,8 @@ export function InfographicBlockNode(rawProps: InfographicBlockNodeProps & Infog
                       </div>
                     )}
                     <div
-                      className={clsx('infographic-preview min-h-[360px] relative transition-all duration-100 overflow-hidden block', props.isDark ? 'bg-gray-900' : 'bg-gray-50')}
-                      style={{ height: containerHeight, maxHeight: props.maxHeight ?? undefined }}
+                      className={clsx('infographic-preview relative transition-all duration-100 overflow-hidden block', props.isDark ? 'bg-gray-900' : 'bg-gray-50')}
+                      style={{ height: containerHeight, maxHeight: props.maxHeight ?? undefined, minHeight: 'var(--ms-size-diagram-min-height, 360px)' }}
                       onMouseDown={onMouseDown}
                       onMouseMove={onMouseMove}
                       onMouseUp={stopDrag}

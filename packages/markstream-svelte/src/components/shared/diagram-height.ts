@@ -61,3 +61,19 @@ export function clampPreviewHeight(
     ? Math.max(minHeight, height)
     : Math.min(Math.max(minHeight, height), maxHeight)
 }
+
+/**
+ * Resolve the diagram preview minimum height from the CSS token
+ * (`--ms-size-diagram-min-height`), falling back to the provided default.
+ * SSR-safe: without a mounted container (Svelte SSR) the token is unreadable,
+ * so the fallback applies instead.
+ */
+export function resolveDiagramMinPreviewHeight(
+  container: HTMLElement | null | undefined,
+  fallback: number,
+) {
+  const raw = container
+    ? getComputedStyle(container).getPropertyValue('--ms-size-diagram-min-height').trim()
+    : ''
+  return parsePositiveNumber(raw) ?? fallback
+}

@@ -14,6 +14,11 @@ keywords:
 
 Use this path when you are building a chat UI, token stream, SSE response viewer, or any screen where Markdown updates frequently while the user is watching.
 
+<PrereqChips :items="[
+  { text: 'Vue Quick Start', link: '/guide/quick-start' },
+  { text: 'Installation & Optional Peers', link: '/guide/installation' },
+]" />
+
 If you only render static articles or docs pages, go back to [Usage & Streaming](/guide/usage) and prefer the simpler `content` path.
 
 ## 1. Choose the leanest install
@@ -345,3 +350,9 @@ Zero animation — best for server-rendered output, print, or PDF pipelines.
 - [Performance](/guide/performance) for larger transcripts
 - [Renderer & Node Components](/guide/components) for code/math/diagram component choices
 - [Troubleshooting](/guide/troubleshooting) when CSS, peers, or SSR behave unexpectedly
+
+<NextStep :items="[
+  { text: 'Usage: content vs nodes', link: '/guide/usage' },
+  { text: 'SSE & WebSocket Markdown', link: '/use-cases/sse-websocket' },
+  { text: 'Performance', link: '/guide/performance' },
+]" />

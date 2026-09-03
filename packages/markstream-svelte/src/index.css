@@ -67,6 +67,7 @@ markstream-svelte {
   --ms-flow-diagram-y: 1.5em;
   --ms-size-image-max-width: 24rem;
   --ms-size-diagram-min-height: 360px;
+  --ms-size-code-max-height: 500px;
   --ms-duration-standard: 180ms;
   --ms-duration-fast: 120ms;
   --ms-duration-emphasis: 220ms;
@@ -2114,17 +2115,37 @@ body > div[id^="dmermaid-"] {
   white-space: inherit;
 }
 
+/* Center the rendered diagram like the mermaid/infographic blocks: a
+   column flex container with margin:auto children stays centered while
+   remaining scroll-safe when content overflows. */
 .markstream-svelte .d2-render {
   max-height: var(--ms-size-code-max-height);
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
-.markstream-svelte .d2-svg svg,
-.markstream-svelte .infographic-render svg {
+/* margin: auto (not justify-content: center) keeps overflow scrolling safe. */
+.markstream-svelte .d2-svg {
+  margin: auto;
+  width: 100%;
+}
+
+.markstream-svelte .d2-render .d2-error {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.markstream-svelte .d2-svg svg.markstream-d2-root-svg {
+  width: 100%;
   max-width: 100%;
   height: auto;
+  /* Match the container cap so tall diagrams scale down to fit, mirroring
+     the mermaid block's max-height behavior. The inline maxHeight prop
+     exposes its value as --ms-d2-render-max-height so the svg cap always
+     tracks the effective container cap. The fallback is the shared token. */
+  max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height));
   display: block;
-  margin: 0 auto;
 }
 
 .markstream-svelte .d2-error {
@@ -2135,7 +2156,7 @@ body > div[id^="dmermaid-"] {
 .markstream-svelte .infographic-render {
   position: relative;
   width: 100%;
-  min-height: 320px;
+  min-height: var(--ms-size-diagram-min-height);
   overflow: auto;
   text-align: center;
 }
@@ -2149,6 +2170,25 @@ body > div[id^="dmermaid-"] {
   text-align: left;
 }
 
+/* The render host mirrors the mermaid/vue diagram layers: an inset-0
+   layer with a definite height (the inline min-height estimate on
+   .infographic-render) that flex-centers the rendered diagram. */
 .markstream-svelte .infographic-render > div {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 120ms ease;
+}
+
+/* Keep the diagram fully visible and centered like the mermaid block:
+   scale down proportionally inside the preview area. Scoped to the
+   preview container only; the fullscreen modal clone (portaled to body
+   without this wrapper) keeps its own sizing. */
+.markstream-svelte .infographic-render svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
 }

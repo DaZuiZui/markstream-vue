@@ -12,6 +12,11 @@ keywords:
 
 当你在做聊天界面、token 流式输出、SSE 响应预览，或者任何“用户正在看着内容持续变化”的 Markdown 场景时，就走这条路径。
 
+<PrereqChips :items="[
+  { text: 'Vue 快速开始', link: '/zh/guide/quick-start' },
+  { text: '安装与可选依赖', link: '/zh/guide/installation' },
+]" />
+
 如果你的页面其实是静态文章、文档站或低频更新页面，请回到 [使用与流式渲染](/zh/guide/usage)，优先使用更简单的 `content` 路径。
 
 ## 1. 先选最小安装组合
@@ -343,3 +348,9 @@ const isStreaming = computed(() => !final.value)
 - [性能](/zh/guide/performance)：处理更长的聊天记录
 - [渲染器与节点组件](/zh/guide/components)：选择代码块 / 图表 / 公式组件
 - [故障排除](/zh/guide/troubleshooting)：排 CSS、peers 和 SSR
+
+<NextStep :items="[
+  { text: '使用：content 与 nodes', link: '/zh/guide/usage' },
+  { text: 'SSE 与 WebSocket Markdown', link: '/zh/use-cases/sse-websocket' },
+  { text: '性能', link: '/zh/guide/performance' },
+]" />

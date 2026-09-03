@@ -11,6 +11,10 @@ keywords:
 
 当你的 Markdown 里需要出现 `thinking`、`answer-box` 之类“可信的组件式标签”时，这页就是最直接的入口。
 
+<PrereqChips :items="[
+  { text: '覆盖内置组件', link: '/zh/guide/component-overrides' },
+]" />
+
 推荐路径是：
 
 1. 用带 `components` 映射的 `VueRendererMarkdown` 安装插件，获得 app 级隔离
@@ -183,3 +187,9 @@ removeCustomComponents('chat')
 ```
 
 这样可以把自定义行为牢牢限制在当前页面、路由或业务模块里。
+
+<NextStep :items="[
+  { text: '高级解析', link: '/zh/guide/advanced' },
+  { text: 'YAML Front Matter', link: '/zh/guide/frontmatter-cookbook' },
+  { text: 'API 总览', link: '/zh/guide/api' },
+]" />

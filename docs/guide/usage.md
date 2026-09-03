@@ -14,6 +14,10 @@ keywords:
 
 This page shows how to wire `markstream-vue` into common stacks, how the parser fits into the renderer, and which docs to visit when something looks odd (reset order, Tailwind/UnoCSS layers, VitePress integration).
 
+<PrereqChips :items="[
+  { text: 'Vue Quick Start', link: '/guide/quick-start' },
+]" />
+
 ## Choose `content` or `nodes` first
 
 | Situation | Recommended input |
@@ -186,3 +190,9 @@ const node = {
 ```
 
 If visuals still look wrong, reproduce the issue inside the playground (`pnpm play`) and cross-check with the troubleshooting guide before filing a bug.
+
+<NextStep :items="[
+  { text: 'Props & Options', link: '/guide/props' },
+  { text: 'API Overview', link: '/guide/api' },
+  { text: 'Override Built-in Components', link: '/guide/component-overrides' },
+]" />

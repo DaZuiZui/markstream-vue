@@ -44,7 +44,7 @@ describe('pre code block shared shell', () => {
     expect(wrapper.get('.code-block-container').exists()).toBe(true)
     expect(wrapper.get('.code-block-header').exists()).toBe(true)
     expect(wrapper.get('.code-header-title').text()).toBe('src/answer.ts')
-    expect(wrapper.get('.code-header-caption').text()).toBe('Typescript')
+    expect(wrapper.get('.code-header-caption').text()).toBe('TypeScript')
     expect(wrapper.get('.code-action-btn').exists()).toBe(true)
 
     await wrapper.setProps({ showHeader: false })

@@ -3,6 +3,8 @@ import { useData } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
 import { onMounted, ref, watchEffect } from 'vue'
 import FaqFromFrontmatter from './FaqFromFrontmatter.vue'
+import FeatureShowcaseGrid from './FeatureShowcaseGrid.vue'
+import TaskPathCards from './TaskPathCards.vue'
 
 const { page } = useData()
 const stars = ref<number | null>(null)
@@ -42,6 +44,14 @@ function formatNumber(num: number): string {
   <DefaultTheme.Layout>
     <template #doc-after>
       <FaqFromFrontmatter />
+    </template>
+
+    <template #home-features-before>
+      <TaskPathCards />
+    </template>
+
+    <template #home-features-after>
+      <FeatureShowcaseGrid />
     </template>
 
     <template #nav-bar-content-after>

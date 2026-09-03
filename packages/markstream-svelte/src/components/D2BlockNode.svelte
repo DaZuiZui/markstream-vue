@@ -47,7 +47,7 @@
   let {
     node,
     context = undefined,
-    maxHeight = '500px',
+    maxHeight = undefined,
     loading = undefined,
     isDark = undefined,
     themeId = undefined,
@@ -80,7 +80,12 @@
   let resolvedIsDark = $derived(isDark ?? context?.isDark ?? false)
   let shouldRender = $derived(!(resolvedLoading && !source.trim()))
   let showSourceFallback = $derived(showSource || !svgMarkup)
-  let renderStyle = $derived(maxHeight && maxHeight !== 'none' ? `max-height: ${maxHeight}` : '')
+  // Expose the same cap to the stylesheet (via --ms-d2-render-max-height)
+  // so the root svg can scale down proportionally to the container's
+  // max-height; see the .d2-svg svg rule in index.css.
+  let renderStyle = $derived(maxHeight
+    ? `max-height: ${maxHeight}; --ms-d2-render-max-height: ${maxHeight}`
+    : '')
 
   onMount(() => {
     mounted = true

@@ -13,7 +13,7 @@ import {
 import { toSafeMermaidSvgMarkup } from 'stream-markdown-parser'
 import { getMermaid } from '../../optional/mermaid'
 import { canParseOffthread, findPrefixOffthread } from '../../workers/mermaidWorkerClient'
-import { clampPreviewHeight, estimateMermaidPreviewHeight, parsePositiveNumber } from '../shared/diagram-height'
+import { clampPreviewHeight, estimateMermaidPreviewHeight, MERMAID_PREVIEW_MIN_HEIGHT, parsePositiveNumber } from '../shared/diagram-height'
 import { getString } from '../shared/node-helpers'
 import {
   clampNumber,
@@ -264,9 +264,23 @@ export class MermaidBlockNodeComponent implements AfterViewInit, OnChanges, OnDe
   get estimatedPreviewHeightPx() {
     return clampPreviewHeight(
       parsePositiveNumber(this.mergedProps.estimatedPreviewHeightPx) ?? estimateMermaidPreviewHeight(this.code),
-      undefined,
+      this.resolveDiagramMinHeight(),
       this.maxPreviewHeight,
     )
+  }
+
+  /**
+   * Resolve the diagram preview minimum height from the density CSS token
+   * (--ms-size-diagram-min-height), falling back to the built-in default.
+   * Mirrors the vue3 renderer's resolveMinContainerHeight; SSR falls back to
+   * the constant because getComputedStyle is browser-only.
+   */
+  private resolveDiagramMinHeight() {
+    const el = this.previewHost?.nativeElement
+    if (!el || typeof window === 'undefined' || typeof window.getComputedStyle !== 'function')
+      return MERMAID_PREVIEW_MIN_HEIGHT
+    const raw = window.getComputedStyle(el).getPropertyValue('--ms-size-diagram-min-height').trim()
+    return parsePositiveNumber(raw) ?? MERMAID_PREVIEW_MIN_HEIGHT
   }
 
   private get maxPreviewHeight() {

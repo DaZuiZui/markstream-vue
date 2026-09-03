@@ -82,10 +82,10 @@ const bodyStyle = computed(() => {
 })
 const renderStyle = computed(() => {
   if (props.maxHeight === 'none')
-    return { maxHeight: 'none' }
+    return { 'maxHeight': 'none', '--ms-d2-render-max-height': 'none' }
   if (props.maxHeight != null) {
     const max = typeof props.maxHeight === 'number' ? `${props.maxHeight}px` : String(props.maxHeight)
-    return { maxHeight: max }
+    return { 'maxHeight': max, '--ms-d2-render-max-height': max }
   }
   // No explicit prop — CSS token handles it via scoped style
   return undefined
@@ -806,15 +806,35 @@ onBeforeUnmount(() => {
   line-height: 1.5;
 }
 
+/* Center the rendered diagram like the mermaid/infographic blocks: a
+   column flex container with margin:auto children stays centered while
+   remaining scroll-safe when content overflows. */
 .d2-render {
   max-height: var(--ms-size-code-max-height);
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.d2-svg {
+  margin: auto;
+  width: 100%;
+}
+
+.d2-render .d2-error {
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .d2-svg :deep(svg.markstream-d2-root-svg) {
   width: 100%;
   max-width: 100%;
   height: auto;
+  /* Match the container cap so tall diagrams scale down to fit, mirroring
+     the mermaid block's max-height behavior. When the user sets maxHeight,
+     the inline style exposes the value as --ms-d2-render-max-height; the
+     default fallback here is the shared token. */
+  max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height));
   display: block;
 }
 

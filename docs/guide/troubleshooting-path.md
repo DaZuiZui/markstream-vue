@@ -1,6 +1,6 @@
 ---
 title: Troubleshoot markstream-vue by symptom
-description: Diagnose markstream-vue problems by symptom across CSS order, missing peers, SSR boundaries, trusted tags, and streaming performance.
+description: Diagnose markstream-vue by symptom with card guides for missing styles, dead diagrams, SSR errors, peer warnings, and streaming flicker, plus a copyable issue template.
 keywords:
   - markstream-vue troubleshooting
   - Vue Markdown CSS issues
@@ -8,15 +8,20 @@ keywords:
   - missing Mermaid KaTeX stream-diffs peers
   - AI chat streaming performance
   - VitePress Markdown troubleshooting
+  - symptom-first troubleshooting cards
 ---
+
+<script setup>
+import SymptomCards from '../.vitepress/theme/SymptomCards.vue'
+</script>
 
 # Troubleshooting by Symptom
 
-Use this page when something is wrong but you are not yet sure whether the cause is CSS order, missing peers, SSR boundaries, custom-tag wiring, or renderer choice.
+Not sure what is broken yet? Start with the symptom cards below: pick what you actually see — missing styles, a diagram that never renders, an SSR crash, a peer warning — and follow the most likely causes to a fix. If no card matches, the rest of this page routes you by subsystem.
 
-If you already know the exact subsystem, jump straight to the deeper page linked from each section below.
+<SymptomCards />
 
-## Start with the symptom you see
+## Already know the subsystem? Jump directly {#start-with-the-symptom-you-see}
 
 | What you see | Start here | Then go to |
 | --- | --- | --- |
@@ -132,4 +137,4 @@ If it still looks like a real bug, collect:
 - whether Tailwind, UnoCSS, or SSR is involved
 - which optional peers are installed
 
-Then use the hosted test page or issue link from [Troubleshooting](/guide/troubleshooting).
+The Copy issue template button at the top of this page bundles these placeholders for you. Then use the hosted test page or issue link from [Troubleshooting](/guide/troubleshooting).

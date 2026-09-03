@@ -82,3 +82,9 @@ Call `appendChunk()` for each SSE, WebSocket, or LLM chunk and call `finishStrea
 Standard Markdown is SSR-safe in Nuxt. Add a client-only boundary only around features that initialize browser-only peers or workers; do not wrap the basic renderer by default.
 
 Next, read [AI Chat & Streaming](/guide/ai-chat-streaming) for a complete integration path, or [Usage & API](/guide/usage) for `content` versus `nodes` and advanced integration.
+
+<NextStep :items="[
+  { text: 'Installation & Optional Peers', link: '/guide/installation' },
+  { text: 'AI Chat & Streaming', link: '/guide/ai-chat-streaming' },
+  { text: 'Component Gallery', link: '/components/' },
+]" />

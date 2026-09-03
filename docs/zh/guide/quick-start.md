@@ -81,3 +81,9 @@ function finishStream() {
 普通 Markdown 本身支持 Nuxt SSR。只有初始化浏览器专属 peer 或 worker 的功能才需要 client-only 边界，不要默认包住整个渲染器。
 
 接下来可阅读 [AI 聊天与流式输出](/zh/guide/ai-chat-streaming) 获取完整接入流程，或阅读 [使用与 API](/zh/guide/usage) 了解 `content`、`nodes` 和高级集成。
+
+<NextStep :items="[
+  { text: '安装与可选依赖', link: '/zh/guide/installation' },
+  { text: 'AI 聊天与流式输出', link: '/zh/guide/ai-chat-streaming' },
+  { text: '组件画廊', link: '/zh/components/' },
+]" />

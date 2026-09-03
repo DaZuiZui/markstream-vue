@@ -9,7 +9,6 @@ import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonToolti
 import { getD2 } from './d2'
 
 const DEFAULTS = {
-  maxHeight: '500px',
   loading: true,
   progressiveRender: true,
   progressiveIntervalMs: 700,
@@ -166,7 +165,9 @@ export function D2BlockNode(rawProps: D2BlockNodeProps) {
     if (!props.maxHeight)
       return undefined
     const max = typeof props.maxHeight === 'number' ? `${props.maxHeight}px` : String(props.maxHeight)
-    return { maxHeight: max }
+    // Expose the same cap to the stylesheet so the root svg can scale down
+    // proportionally to the container's max-height (see .d2-svg svg rule).
+    return { maxHeight: max, ['--ms-d2-render-max-height' as any]: max }
   }, [props.maxHeight])
 
   const bodyStyle = useMemo(() => {

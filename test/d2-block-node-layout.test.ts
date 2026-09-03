@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
@@ -372,5 +374,61 @@ describe('d2 block layout', () => {
     expect(wrapper.attributes('data-markstream-pending')).toBeUndefined()
 
     wrapper.unmount()
+  })
+})
+
+describe('d2 max-height mechanism', () => {
+  function mountD2(props: Record<string, unknown> = {}) {
+    return mount(D2BlockNode as any, {
+      props: {
+        node: {
+          type: 'code_block',
+          language: 'd2',
+          code: 'a -> b',
+          raw: '```d2\na -> b\n```',
+        },
+        loading: false,
+        ...props,
+      },
+      attachTo: document.body,
+    })
+  }
+
+  it('leaves no inline max-height by default (CSS token wins)', async () => {
+    const wrapper = mountD2()
+    await waitForPreview(wrapper)
+
+    const renderStyle = wrapper.get('.d2-render').attributes('style') || ''
+    expect(renderStyle).not.toContain('max-height')
+    expect(renderStyle).not.toContain('--ms-d2-render-max-height')
+
+    wrapper.unmount()
+  })
+
+  it('exposes inline max-height and custom property when maxHeight is set', async () => {
+    const wrapper = mountD2({ maxHeight: '400px' })
+    await waitForPreview(wrapper)
+
+    const renderStyle = wrapper.get('.d2-render').attributes('style') || ''
+    expect(renderStyle).toContain('max-height: 400px')
+    expect(renderStyle).toContain('--ms-d2-render-max-height: 400px')
+
+    wrapper.unmount()
+  })
+
+  it('treats maxHeight "none" as an explicit override', async () => {
+    const wrapper = mountD2({ maxHeight: 'none' })
+    await waitForPreview(wrapper)
+
+    const renderStyle = wrapper.get('.d2-render').attributes('style') || ''
+    expect(renderStyle).toContain('max-height: none')
+    expect(renderStyle).toContain('--ms-d2-render-max-height: none')
+
+    wrapper.unmount()
+  })
+
+  it('chains the svg cap to the token in scoped CSS', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/components/D2BlockNode/D2BlockNode.vue'), 'utf8')
+    expect(css).toContain('max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height))')
   })
 })

@@ -5,7 +5,7 @@ import { useSafeI18n } from '../../composables/useSafeI18n'
 import { hideTooltip, showTooltipForAnchor } from '../../composables/useSingletonTooltip'
 import { useOffscreenHeavyNodeDeferral, useViewportPriority, useViewportPriorityOptions } from '../../composables/viewportPriority'
 import infographicIcon from '../../icon/infographic.svg?raw'
-import { clampInfographicPreviewHeight, estimateInfographicPreviewHeight, parsePositiveNumber } from '../../utils/diagramHeight'
+import { clampInfographicPreviewHeight, estimateInfographicPreviewHeight, INFOGRAPHIC_PREVIEW_MIN_HEIGHT, parsePositiveNumber } from '../../utils/diagramHeight'
 import { resolveLifecycleIndexKey } from '../../utils/lifecycleIndexKey'
 import { MARKSTREAM_NODE_LIFECYCLE_KEY } from '../../utils/nodeLifecycle'
 import { getInfographic, isInfographicEnabled } from './infographic'
@@ -146,11 +146,24 @@ function resolveContainerHeight(actualHeight: number) {
   return `${Math.min(actualHeight, 500)}px` // ultimate fallback
 }
 
+/**
+ * Resolve the preview minimum height from the density CSS token
+ * (--ms-size-diagram-min-height), falling back to the built-in default.
+ * Mirrors MermaidBlockNode's resolveMinContainerHeight.
+ */
+function resolveMinContainerHeight() {
+  const raw = infographicContainer.value
+    ? getComputedStyle(infographicContainer.value).getPropertyValue('--ms-size-diagram-min-height').trim()
+    : ''
+  return parsePositiveNumber(raw) ?? INFOGRAPHIC_PREVIEW_MIN_HEIGHT
+}
+
 function clampPreviewHeight(height: number) {
+  const minHeight = resolveMinContainerHeight()
   if (props.maxHeight === 'none')
-    return clampInfographicPreviewHeight(height, undefined, null)
+    return clampInfographicPreviewHeight(height, minHeight, null)
   const explicitMax = parsePositiveNumber(props.maxHeight)
-  return clampInfographicPreviewHeight(height, undefined, explicitMax)
+  return clampInfographicPreviewHeight(height, minHeight, explicitMax)
 }
 
 const baseCode = computed(() => props.node.code)
@@ -1023,6 +1036,16 @@ watch(
   background: var(--diagram-bg);
   min-height: var(--ms-size-diagram-min-height);
   transition-duration: var(--ms-duration-fast);
+}
+
+/* Keep the diagram fully visible and centered like the mermaid block:
+   scale down proportionally inside the preview area. The flex centering
+   wrapper is the .absolute inset-0 layer, which has a definite height. */
+.infographic-preview :deep(svg) {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
 }
 
 .infographic-pending-source {
