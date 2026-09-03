@@ -214,7 +214,7 @@ const symptomCards: SymptomCardData[] = [
 ]
 
 const { lang } = useData()
-const isZh = computed(() => lang.value === 'zh-CN')
+const isZh = computed(() => lang.value?.startsWith('zh'))
 
 function localizeText(value: LocalizedText): string {
   return isZh.value ? value.zh : value.en
@@ -342,6 +342,8 @@ function copyWithHiddenTextarea(text: string): boolean {
 
   let copied = false
   try {
+    // Deprecated but kept as a fallback for non-secure contexts where the
+    // async Clipboard API is unavailable (e.g. plain http:// previews).
     copied = document.execCommand('copy')
   }
   catch {

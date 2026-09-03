@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MarkdownRender from 'markstream-vue'
 import { useData } from 'vitepress'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useDark } from './composables/useDark'
 import { optionalMarkdownIt } from './optionalMarkdownIt'
 
@@ -35,6 +35,11 @@ async function copyMarkdown() {
     // Clipboard may be unavailable (insecure context); ignore silently.
   }
 }
+
+onBeforeUnmount(() => {
+  if (copiedTimer)
+    clearTimeout(copiedTimer)
+})
 </script>
 
 <template>

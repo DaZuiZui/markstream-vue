@@ -54,7 +54,7 @@ function detailLink(slug: string): string {
           {{ isZh ? `peer 依赖：${peer}` : `peer: ${peer}` }}
         </span>
         <span v-if="entry.tags.includes('opt-in')" class="ms-detail-badge">
-          {{ isZh ? '需要注册 markdown-it 插件后触发' : 'opt-in: requires a markdown-it plugin' }}
+          {{ isZh ? '需要额外配置后触发（插件 / loader / 渲染选项）' : 'opt-in: requires extra setup (plugin, loader, or renderer option)' }}
         </span>
       </div>
       <p class="ms-detail-desc">
@@ -73,7 +73,7 @@ function detailLink(slug: string): string {
         <h2>{{ isZh ? '深度指南' : 'Deep dive' }}</h2>
         <p>
           {{ isZh ? '这个组件有专门的深度指南：' : 'This component has a dedicated guide:' }}
-          <a :href="isZh ? `/zh${entry.guide}` : entry.guide">{{ entry.guide }}</a>
+          <a :href="isZh ? `/zh${entry.guide}` : entry.guide">{{ isZh ? `/zh${entry.guide}` : entry.guide }}</a>
         </p>
       </section>
 

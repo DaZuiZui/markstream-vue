@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useData } from 'vitepress'
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 const props = defineProps<{
   /** Markdown source copied to the clipboard before opening the playground. */
@@ -31,6 +31,11 @@ async function openPlayground() {
   }
   window.open(playground.value, '_blank', 'noopener')
 }
+
+onBeforeUnmount(() => {
+  if (copiedTimer)
+    clearTimeout(copiedTimer)
+})
 </script>
 
 <template>
