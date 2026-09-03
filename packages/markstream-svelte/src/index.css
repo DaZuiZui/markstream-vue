@@ -67,6 +67,7 @@ markstream-svelte {
   --ms-flow-diagram-y: 1.5em;
   --ms-size-image-max-width: 24rem;
   --ms-size-diagram-min-height: 360px;
+  --ms-size-code-max-height: 500px;
   --ms-duration-standard: 180ms;
   --ms-duration-fast: 120ms;
   --ms-duration-emphasis: 220ms;
