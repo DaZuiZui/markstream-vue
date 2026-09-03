@@ -126,6 +126,7 @@ export const languageMap: Record<string, string> = {
   'js': 'JavaScript',
   'javascript': 'JavaScript',
   'ts': 'TypeScript',
+  'typescript': 'TypeScript',
   'jsx': 'JSX',
   'tsx': 'TSX',
   'html': 'HTML',
