@@ -839,6 +839,18 @@ watch(
   height: 100% !important;
 }
 
+/* Keep the diagram fully visible and centered like the mermaid block:
+   scale down proportionally inside the preview area. The flex centering
+   wrapper is the .absolute inset-0 layer, which has a definite height.
+   Scoped to .infographic-preview only, so the fullscreen modal clone
+   (teleported outside this container) keeps its own sizing. */
+.infographic-preview :deep(svg) {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
 /* Dialog transition */
 .infographic-dialog-enter-from,
 .infographic-dialog-leave-to {

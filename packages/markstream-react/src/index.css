@@ -973,6 +973,17 @@
   animation: markstream-react-spin 0.9s linear infinite;
 }
 
+/* Keep the infographic fully visible and centered like the mermaid block:
+   scale down proportionally inside the preview area. The flex centering
+   wrapper lives inside .infographic-preview; the fullscreen modal clone is
+   portaled to body without this class, so it is unaffected. */
+:where(.markstream-react) .infographic-preview svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
 :where(.markstream-react) .math-block-node {
   margin: 1rem 0;
 }
@@ -2019,12 +2030,28 @@
 
 :where(.markstream-react) .d2-render {
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* margin: auto (not justify-content: center) keeps overflow scrolling safe. */
+:where(.markstream-react) .d2-svg {
+  margin: auto;
+  width: 100%;
+}
+
+:where(.markstream-react) .d2-render .d2-error {
+  margin-left: auto;
+  margin-right: auto;
 }
 
 :where(.markstream-react) .d2-svg svg.markstream-d2-root-svg {
   width: 100%;
   max-width: 100%;
   height: auto;
+  /* Match the container cap (set via --ms-d2-render-max-height) so tall
+     diagrams scale down to fit, mirroring the mermaid block's behavior. */
+  max-height: var(--ms-d2-render-max-height, none);
   display: block;
 }
 

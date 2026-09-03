@@ -34,6 +34,7 @@
   --ms-gap-header-actions: 0.125rem;
   /* Container sizes */
   --ms-size-diagram-min-height: 360px;
+  --ms-size-code-max-height: 500px;
   --code-bg: #fff;
   --code-fg: hsl(0 0% 10%);
   --code-border: hsl(0 0% 87%);
