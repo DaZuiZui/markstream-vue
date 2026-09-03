@@ -44,6 +44,7 @@ const selectedRendererIds = (process.env.MARKSTREAM_STREAMING_SPLIT_RENDERERS ||
   .split(',')
   .map(value => value.trim())
   .filter(Boolean)
+const includeCssHighlight = process.env.MARKSTREAM_STREAMING_SPLIT_INCLUDE_CSS_HIGHLIGHT === '1'
 
 if (!Number.isFinite(targetChunks) || targetChunks <= 0)
   throw new Error('MARKSTREAM_STREAMING_SPLIT_CHUNKS must be a positive number.')
@@ -193,12 +194,16 @@ if (missingCases.length)
 const allPrimaryRenderers = [
   { id: 'streamdown', renderer: 'streamdown', variant: null },
   { id: 'markstream-local', renderer: 'markstream', variant: 'incremental' },
-  { id: 'markstream-css-highlight-local', renderer: 'markstream', variant: 'css-highlight-local' },
-  // Deliberately explicit until a pure transferable tokenizer and worker
-  // lifecycle are implemented. The fixture records this as unavailable
-  // instead of accidentally benchmarking the main-thread implementation.
-  { id: 'markstream-css-highlight-worker', renderer: 'markstream', variant: 'css-highlight-worker' },
 ]
+if (includeCssHighlight || selectedRendererIds.some(id => id.startsWith('markstream-css-highlight-'))) {
+  allPrimaryRenderers.push(
+    { id: 'markstream-css-highlight-local', renderer: 'markstream', variant: 'css-highlight-local' },
+    // Deliberately explicit until a pure transferable tokenizer and worker
+    // lifecycle are implemented. The fixture records this as unavailable
+    // instead of accidentally benchmarking the main-thread implementation.
+    { id: 'markstream-css-highlight-worker', renderer: 'markstream', variant: 'css-highlight-worker' },
+  )
+}
 
 const primaryRenderers = selectedRendererIds.length
   ? allPrimaryRenderers.filter(renderer => selectedRendererIds.includes(renderer.id))

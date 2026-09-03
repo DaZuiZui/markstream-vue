@@ -65,6 +65,19 @@ describe('cssHighlightCodeBlock PoC', () => {
     expect(tokens.map(token => token.category)).toEqual(['keyword', 'string', 'comment'])
   })
 
+  it('keeps URL fragments inside Python and YAML strings intact', () => {
+    for (const [language, code] of [
+      ['python', 'url = "http://example.com#frag"'],
+      ['yaml', 'url: https://example.com/path#section'],
+    ] as const) {
+      const tokens = tokenizeCssHighlightCode(code, language)
+      const stringToken = tokens.find(token => token.category === 'string')
+      expect(stringToken).toBeDefined()
+      expect(code.slice(stringToken!.start, stringToken!.end)).toContain('://')
+      expect(code.slice(stringToken!.start, stringToken!.end)).toContain('#')
+    }
+  })
+
   it('keeps a plain pre while streaming and scopes highlights per instance', async () => {
     const { registry } = installHighlightApi()
     const node = { type: 'code_block' as const, language: 'typescript', code: 'const answer = 42', raw: 'const answer = 42', loading: true }

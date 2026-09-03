@@ -71,9 +71,17 @@ function correctnessSnapshot(root) {
 
 function assertCorrectnessSnapshot(actual, expected) {
   if (actual.text !== expected.text) {
+    let firstDifference = 0
+    while (firstDifference < actual.text.length
+      && firstDifference < expected.text.length
+      && actual.text[firstDifference] === expected.text[firstDifference]) {
+      firstDifference++
+    }
     throw new Error([
       'Final rendered text differs from a static final render.',
       `streamed length=${actual.text.length}, static length=${expected.text.length}`,
+      `first difference at ${firstDifference}: streamed=${JSON.stringify(actual.text.slice(Math.max(0, firstDifference - 80), firstDifference + 120))}`,
+      `first difference at ${firstDifference}: static=${JSON.stringify(expected.text.slice(Math.max(0, firstDifference - 80), firstDifference + 120))}`,
       `streamed tail=${JSON.stringify(actual.text.slice(-240))}`,
       `static tail=${JSON.stringify(expected.text.slice(-240))}`,
     ].join('\n'))
@@ -421,6 +429,7 @@ const MarkstreamApp = defineComponent({
           smoothStreaming: false,
           parseCoalesceMs: 32,
           renderCodeBlocksAsPre: true,
+          customId,
         }),
       ]),
     ])

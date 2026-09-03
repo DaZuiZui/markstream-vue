@@ -133,10 +133,13 @@ function parseMatrix(value, fallback) {
 }
 const lineCounts = parseMatrix(process.env.MARKSTREAM_CSS_HIGHLIGHT_LINES, [100, 1000, 10000])
 const blockCounts = parseMatrix(process.env.MARKSTREAM_CSS_HIGHLIGHT_BLOCKS, [1, 12, 24])
+const density = process.env.MARKSTREAM_CSS_HIGHLIGHT_DENSITY === 'dense' ? 'dense' : 'sparse'
 const modes = ['plain-pre', 'css-highlight-local', 'microlighter-2.1.0', 'microlighter-main', 'stream-diffs-main-thread', 'stream-diffs-worker-pool']
 
 function fixture(lines, blocks) {
-  const source = Array.from({ length: lines }, (_, index) => `const value${index} = ${index}; // benchmark`).join('\n')
+  const source = Array.from({ length: lines }, (_, index) => density === 'dense'
+    ? `export function computeValue${index}(input${index}: string, count${index}: number = ${index}) { const result${index} = input${index}.slice(0, count${index}); return result${index} + "://" + ${index}; } // benchmark ${index}`
+    : `const value${index} = ${index}; // benchmark`).join('\n')
   return Array.from({ length: blocks }, (_, index) => `<pre><code data-language="typescript" id="code-${index}">${source}</code></pre>`).join('')
 }
 
@@ -152,8 +155,11 @@ function localHighlightScript() {
       ['function', /\\b[A-Z_$][\\w$]*(?=\\s*\\()/gi],
     ];
     const hashComments = /#[^\\n]*/g;
+    const yamlUrls = /\\bhttps?:\\/\\/[^\\s]+/gi;
     const rangesByCategory = new Map();
     let rangeCount = 0;
+    let tokenizeMs = 0;
+    let rangeBuildMs = 0;
     for (const root of document.querySelectorAll('pre > code')) {
       const code = root.textContent || '';
       const textNodes = [];
@@ -174,9 +180,15 @@ function localHighlightScript() {
           if (match[0].length === 0) regex.lastIndex++;
         }
       };
+      // Claim strings before comments so URL fragments inside literals are
+      // not mistaken for comment markers (mirrors the real adapter).
+      const tokenizeStarted = performance.now();
+      add(patterns[1][1], patterns[1][0]);
+      if (['yaml', 'yml'].includes(language)) add(yamlUrls, 'string');
       add(patterns[0][1], patterns[0][0]);
       if (['python', 'py', 'shell', 'bash', 'sh', 'yaml', 'yml'].includes(language)) add(hashComments, 'comment');
-      for (const [category, regex] of patterns.slice(1)) add(regex, category);
+      for (const [category, regex] of patterns.slice(2)) add(regex, category);
+      tokenizeMs += performance.now() - tokenizeStarted;
       const resolve = offset => {
         let remaining = offset;
         for (const node of textNodes) {
@@ -185,6 +197,7 @@ function localHighlightScript() {
         }
         return null;
       };
+      const rangeStarted = performance.now();
       for (const token of tokens) {
         const start = resolve(token.start);
         const end = resolve(token.end);
@@ -194,10 +207,12 @@ function localHighlightScript() {
         rangesByCategory.set(token.category, ranges);
         rangeCount++;
       }
+      rangeBuildMs += performance.now() - rangeStarted;
     }
+    const registryStarted = performance.now();
     for (const [category, ranges] of rangesByCategory)
       CSS.highlights.set('benchmark-' + category, new Highlight(...ranges));
-    return rangeCount;
+    return { rangeCount, tokenizeMs, rangeBuildMs, registryMs: performance.now() - registryStarted };
   }`
 }
 
@@ -365,11 +380,23 @@ async function main() {
           })
           try {
             const url = `http://127.0.0.1:${port}/fixture?lines=${lines}&blocks=${blocks}`
-            const started = Date.now()
             await page.goto(url)
+            await page.evaluate(() => {
+              window.__benchmarkLongTasks = []
+              window.__benchmarkLongTaskObserver = new PerformanceObserver((list) => {
+                window.__benchmarkLongTasks.push(...list.getEntries().map(entry => entry.duration))
+              })
+              try {
+                window.__benchmarkLongTaskObserver.observe({ entryTypes: ['longtask'] })
+              }
+              catch {}
+              window.__benchmarkStartedAt = performance.now()
+            })
             let ranges = 0
+            let staticTiming = null
             if (mode === 'css-highlight-local') {
-              ranges = await page.evaluate(`(${localHighlightScript()})()`)
+              staticTiming = await page.evaluate(`(${localHighlightScript()})()`)
+              ranges = staticTiming.rangeCount
             }
             else if (mode.startsWith('microlighter-')) {
               const prefix = mode === 'microlighter-main' ? 'micro-main' : 'micro'
@@ -392,8 +419,19 @@ async function main() {
                 }))
               }, `http://127.0.0.1:${port}/stream/markstream.mjs`)
             }
+            const timing = await page.evaluate(() => {
+              window.__benchmarkLongTaskObserver?.takeRecords?.()
+              window.__benchmarkLongTaskObserver?.disconnect?.()
+              const durations = window.__benchmarkLongTasks || []
+              return {
+                durationMs: performance.now() - window.__benchmarkStartedAt,
+                longTaskCount: durations.length,
+                longTaskTotalMs: durations.reduce((sum, value) => sum + value, 0),
+                longTaskMaxMs: Math.max(0, ...durations),
+              }
+            })
             const domNodes = await page.locator('body *').count()
-            results.push({ mode, blocks, lines, durationMs: Date.now() - started, domNodes, ranges, status: 'measured' })
+            results.push({ mode, blocks, lines, ...timing, domNodes, ranges, staticTiming, status: 'measured' })
           }
           catch (error) {
             const detail = failedRequests.length ? `; requests: ${[...new Set(failedRequests)].join(', ')}` : ''
@@ -414,7 +452,7 @@ async function main() {
     status: 'exploratory',
     generatedAt: new Date().toISOString(),
     environment: { browser: `Chrome ${browserVersion}`, cpu: cpus()[0]?.model || 'unknown', platform: process.platform },
-    fixture: { blocks: blockCounts, lines: lineCounts },
+    fixture: { blocks: blockCounts, lines: lineCounts, density },
     implementations: { 'css-highlight-local': 'same lexer categories and StaticRange strategy as src/components/CodeBlockNode/cssHighlightAdapter.ts', 'microlighter-2.1.0': 'npm package pinned in devDependencies', 'microlighter-main': microMainRoot || 'not supplied' },
     modes,
     results,

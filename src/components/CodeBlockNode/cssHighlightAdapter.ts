@@ -86,6 +86,7 @@ const KEYWORDS = /\b(?:as|async|await|break|case|catch|class|const|continue|debu
 const TYPES = /\b(?:boolean|number|string|unknown|never|any|void|Promise|Array|Record|Date|Error|Map|Set)\b/g
 const NUMBERS = /\b(?:0[xob][\da-f]+|\d+(?:\.\d+)?)\b/gi
 const STRINGS = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g
+const YAML_URLS = /\bhttps?:\/\/\S+/gi
 const COMMENTS = /\/\/[^\n]*|\/\*[\s\S]*?\*\//g
 const HASH_COMMENTS = /#[^\n]*/g
 const FUNCTIONS = /\b[A-Z_$][\w$]*(?=\s*\()/gi
@@ -117,10 +118,15 @@ export function tokenizeCssHighlightCode(code: string, language: string): CssHig
     }
   }
 
+  // Strings must claim their ranges before comment patterns. Otherwise a URL
+  // such as `"https://example.com#section"` is split by `//` or `#` and the
+  // whole literal loses its string highlight.
+  add(STRINGS, 'string')
+  if (['yaml', 'yml'].includes(language.toLowerCase()))
+    add(YAML_URLS, 'string')
   add(COMMENTS, 'comment')
   if (['python', 'py', 'shell', 'bash', 'sh', 'yaml', 'yml'].includes(language.toLowerCase()))
     add(HASH_COMMENTS, 'comment')
-  add(STRINGS, 'string')
   add(KEYWORDS, 'keyword')
   add(TYPES, 'type')
   add(NUMBERS, 'number')
