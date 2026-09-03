@@ -68,10 +68,8 @@ function resetDeck() {
   streamed.value = cards.value.map(() => '')
 }
 
-watch(cards, () => {
-  resetDeck()
-  currentGroup.value = 0
-})
+// `cards` derives from a static import, so the deck never changes and no
+// watcher is needed here; `isMobileViewport` handles regrouping below.
 
 watch(isMobileViewport, () => {
   // Grouping changed; restart the show from the first wave.
@@ -129,11 +127,17 @@ function renderContent(index: number): string {
 
 const autoplayPausedByHover = ref(false)
 const autoplayInView = ref(false)
-const prefersReducedMotion
-  = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+// Reactive so toggling the OS accessibility preference mid-session is honored.
+const prefersReducedMotion = ref(false)
+let motionQuery: MediaQueryList | undefined
+let motionListener: (() => void) | undefined
 
 let advanceTimer: ReturnType<typeof setTimeout> | undefined
 let waveWatchTimer: ReturnType<typeof setTimeout> | undefined
+// Safety net for stuck streams; tracked (and group-tagged) so navigating to
+// another wave cancels it instead of killing the new wave's watcher.
+let waveSafetyTimer: ReturnType<typeof setTimeout> | undefined
+let waveSafetyGroup = -1
 
 function clearAdvanceTimer() {
   if (advanceTimer) {
@@ -149,6 +153,14 @@ function clearWaveWatchTimer() {
   }
 }
 
+function clearWaveSafetyTimer() {
+  if (waveSafetyTimer) {
+    clearTimeout(waveSafetyTimer)
+    waveSafetyTimer = undefined
+  }
+  waveSafetyGroup = -1
+}
+
 function waveIsSettled(groupIndex: number): boolean {
   const group = groups.value[groupIndex] ?? []
   return group.every((_, offset) => {
@@ -160,7 +172,7 @@ function waveIsSettled(groupIndex: number): boolean {
 
 function scheduleAdvance() {
   clearAdvanceTimer()
-  if (autoplayPausedByHover.value || !autoplayInView.value || prefersReducedMotion)
+  if (autoplayPausedByHover.value || !autoplayInView.value || prefersReducedMotion.value)
     return
   advanceTimer = setTimeout(() => {
     advanceTimer = undefined
@@ -170,6 +182,8 @@ function scheduleAdvance() {
 
 function watchWaveAndAdvance(groupIndex: number) {
   clearWaveWatchTimer()
+  clearWaveSafetyTimer()
+  waveSafetyGroup = groupIndex
   const check = () => {
     if (autoplayPausedByHover.value) {
       waveWatchTimer = setTimeout(check, 400)
@@ -183,13 +197,29 @@ function watchWaveAndAdvance(groupIndex: number) {
     waveWatchTimer = setTimeout(check, 250)
   }
   waveWatchTimer = setTimeout(check, 250)
-  // Safety net: never let a stuck stream block the carousel.
-  setTimeout(() => {
-    if (waveWatchTimer) {
+  // Safety net: never let a stuck stream block the carousel. The timer is
+  // tracked and tagged with its wave so navigating away cancels it, instead
+  // of a stale callback clearing whatever wave is currently being watched.
+  waveSafetyTimer = setTimeout(() => {
+    waveSafetyTimer = undefined
+    const stillWatchingThisWave = waveSafetyGroup === groupIndex && waveWatchTimer
+    waveSafetyGroup = -1
+    if (stillWatchingThisWave) {
       clearWaveWatchTimer()
       scheduleAdvance()
     }
   }, WAVE_STREAM_TIMEOUT_MS)
+}
+
+function stopGroupStreams(groupIndex: number) {
+  const group = groups.value[groupIndex] ?? []
+  group.forEach((card, offset) => {
+    const index = cardIndexInDeck(groupIndex, offset)
+    if (cardStates.value[index] === 'playing') {
+      stopCardStream(index)
+      cardStates.value[index] = 'done'
+    }
+  })
 }
 
 function goToGroup(groupIndex: number, options: { autoplay?: boolean } = {}) {
@@ -198,6 +228,10 @@ function goToGroup(groupIndex: number, options: { autoplay?: boolean } = {}) {
     return
   clearAdvanceTimer()
   clearWaveWatchTimer()
+  clearWaveSafetyTimer()
+  // Stop the outgoing wave's streams so rapid navigation does not stack
+  // several waves streaming at once.
+  stopGroupStreams(currentGroup.value)
   currentGroup.value = ((groupIndex % total) + total) % total
 
   const group = groups.value[currentGroup.value] ?? []
@@ -248,11 +282,20 @@ onMounted(() => {
   resizeListener = () => updateViewportKind()
   window.addEventListener('resize', resizeListener, { passive: true })
 
+  if (typeof window.matchMedia === 'function') {
+    motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    prefersReducedMotion.value = motionQuery.matches
+    motionListener = () => {
+      prefersReducedMotion.value = motionQuery?.matches ?? false
+    }
+    motionQuery.addEventListener('change', motionListener)
+  }
+
   const root = document.querySelector('.ms-showcase-carousel')
   if (!root)
     return
 
-  if (prefersReducedMotion) {
+  if (prefersReducedMotion.value) {
     autoplayInView.value = false
     return
   }
@@ -274,6 +317,7 @@ onMounted(() => {
         else {
           clearAdvanceTimer()
           clearWaveWatchTimer()
+          clearWaveSafetyTimer()
         }
       }
     },
@@ -286,8 +330,12 @@ onBeforeUnmount(() => {
   viewportObserver?.disconnect()
   viewportObserver = undefined
   resizeListener && window.removeEventListener('resize', resizeListener)
+  motionListener && motionQuery?.removeEventListener('change', motionListener)
+  motionQuery = undefined
+  motionListener = undefined
   clearAdvanceTimer()
   clearWaveWatchTimer()
+  clearWaveSafetyTimer()
   stopAllStreams()
 })
 </script>
@@ -307,7 +355,7 @@ onBeforeUnmount(() => {
           }}
         </p>
       </div>
-      <div class="ms-showcase-dots" role="tablist" :aria-label="isZh ? '选择轮播组' : 'Choose a wave'">
+      <div class="ms-showcase-dots" role="group" :aria-label="isZh ? '选择轮播组' : 'Choose a wave'">
         <button
           v-for="(group, gi) in groups"
           :key="gi"

@@ -2,7 +2,7 @@
 import type { ComponentCategory } from './data/components'
 import MarkdownRender from 'markstream-vue'
 import { useData } from 'vitepress'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDark } from './composables/useDark'
 import { componentCategories, componentsDocData } from './data/components'
 import { needsCodeFallback, optionalMarkdownIt } from './optionalMarkdownIt'
@@ -31,23 +31,33 @@ const filtered = computed(() => {
   })
 })
 
-const visibleHeavy = ref(new Set<number>())
+// Heavy previews mount lazily once they approach the viewport. Keyed by slug
+// (not filtered-list index) so category/search filtering can never make an
+// unseen card look visible or leave an observable card stuck on its skeleton.
+const visibleHeavy = ref(new Set<string>())
 let observer: IntersectionObserver | undefined
 
-function isCardVisible(index: number): boolean {
-  const entry = filtered.value[index]
-  if (!entry || !entry.heavy)
+function isCardVisible(entry: { slug: string, heavy?: boolean }): boolean {
+  if (!entry.heavy)
     return true
-  return visibleHeavy.value.has(index)
+  return visibleHeavy.value.has(entry.slug)
 }
 
-function detailLink(slug: string): string {
-  return isZh.value ? `/zh/components/${slug}` : `/components/${slug}`
+function observeHeavyCards() {
+  const root = document.querySelector('.ms-gallery')
+  if (!root || !observer)
+    return
+  root.querySelectorAll<HTMLElement>('[data-lazy="true"]').forEach((el) => {
+    const slug = el.dataset.slug
+    // Skip cards already marked visible (unobserved after first intersection).
+    if (slug && !visibleHeavy.value.has(slug))
+      observer?.observe(el)
+  })
 }
 
 onMounted(() => {
   if (typeof IntersectionObserver === 'undefined') {
-    visibleHeavy.value = new Set(componentsDocData.map((_, i) => i))
+    visibleHeavy.value = new Set(componentsDocData.map(entry => entry.slug))
     return
   }
   const root = document.querySelector('.ms-gallery')
@@ -58,17 +68,27 @@ onMounted(() => {
       for (const entry of entries) {
         if (!entry.isIntersecting)
           continue
-        const index = Number((entry.target as HTMLElement).dataset.index)
-        if (Number.isInteger(index)) {
-          visibleHeavy.value = new Set(visibleHeavy.value).add(index)
+        const slug = (entry.target as HTMLElement).dataset.slug
+        if (slug) {
+          visibleHeavy.value = new Set(visibleHeavy.value).add(slug)
           observer?.unobserve(entry.target)
         }
       }
     },
     { rootMargin: '250px' },
   )
-  root.querySelectorAll('[data-lazy="true"]').forEach(el => observer?.observe(el))
+  observeHeavyCards()
 })
+
+// Filtering re-renders the grid with a different subset; make sure every
+// heavy card currently in the DOM (including newly included ones) is observed.
+watch([activeCategory, query], () => {
+  nextTick(() => observeHeavyCards())
+})
+
+function detailLink(slug: string): string {
+  return isZh.value ? `/zh/components/${slug}` : `/components/${slug}`
+}
 
 onBeforeUnmount(() => {
   observer?.disconnect()
@@ -118,10 +138,10 @@ onBeforeUnmount(() => {
 
     <div class="ms-gallery-grid">
       <article
-        v-for="(entry, i) in filtered"
+        v-for="entry in filtered"
         :key="entry.slug"
         class="ms-gallery-card"
-        :data-index="i"
+        :data-slug="entry.slug"
         :data-lazy="entry.heavy ? 'true' : undefined"
       >
         <div class="ms-gallery-head">
@@ -129,7 +149,7 @@ onBeforeUnmount(() => {
           <span
             v-if="entry.tags.includes('opt-in')"
             class="ms-gallery-optin"
-            :title="isZh ? '需要消费方注册对应的 markdown-it 插件才会触发' : 'Only triggers when the consumer registers the matching markdown-it plugin'"
+            :title="isZh ? '需要额外配置才会触发（如 markdown-it 插件、loader 或渲染选项）' : 'Only triggers after extra setup (a markdown-it plugin, a loader, or a renderer option)'"
           >{{ isZh ? 'opt-in' : 'opt-in' }}</span>
           <span v-if="entry.peers.length" class="ms-gallery-peer" :title="isZh ? '渲染此组件需要安装对应的 peer 依赖' : 'Rendering this component requires the listed peer dependency'">
             {{ entry.peers.join(' · ') }}
@@ -138,7 +158,7 @@ onBeforeUnmount(() => {
         <div class="ms-gallery-preview">
           <pre v-if="entry.mdSnippet && needsCodeFallback(entry.slug)" class="ms-gallery-codefallback"><code>{{ entry.mdSnippet }}</code></pre>
           <MarkdownRender
-            v-else-if="entry.mdSnippet && isCardVisible(i)"
+            v-else-if="entry.mdSnippet && isCardVisible(entry)"
             :key="entry.slug"
             :content="entry.mdSnippet"
             :custom-markdown-it="optionalMarkdownIt(entry.slug)"
