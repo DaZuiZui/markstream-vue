@@ -278,9 +278,11 @@ onBeforeUnmount(() => {
           <div v-if="cardState[i] === 'skeleton'" class="ms-showcase-skeleton" aria-hidden="true" />
           <MarkdownRender
             v-else
-            :key="`${cell.title}-${cardState[i] === 'done' ? 'done' : 'live'}`"
+            :key="cell.title"
             :content="renderContent(i)"
             :is-dark="isDark"
+            :typewriter="cardState[i] !== 'full'"
+            :final="cardState[i] !== 'playing'"
             :fade="false"
           />
         </div>
