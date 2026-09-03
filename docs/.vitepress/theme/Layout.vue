@@ -2,7 +2,6 @@
 import { useData } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
 import { onMounted, ref, watchEffect } from 'vue'
-import ComponentMarquee from './ComponentMarquee.vue'
 import FaqFromFrontmatter from './FaqFromFrontmatter.vue'
 import FeatureShowcaseGrid from './FeatureShowcaseGrid.vue'
 import TaskPathCards from './TaskPathCards.vue'
@@ -53,7 +52,6 @@ function formatNumber(num: number): string {
 
     <template #home-features-after>
       <FeatureShowcaseGrid />
-      <ComponentMarquee />
     </template>
 
     <template #nav-bar-content-after>

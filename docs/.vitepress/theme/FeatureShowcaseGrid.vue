@@ -1,291 +1,394 @@
 <script setup lang="ts">
+import type { ComponentDocEntry } from './data/components'
 import MarkdownRender from 'markstream-vue'
 import { useData } from 'vitepress'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDark } from './composables/useDark'
+import { componentsDocData } from './data/components'
+import { needsCodeFallback, optionalMarkdownIt } from './optionalMarkdownIt'
 
 const { lang } = useData()
 const isZh = computed(() => lang.value?.startsWith('zh'))
 const isDark = useDark()
 
-interface ShowcaseCell {
-  title: string
-  md: string
-  link: string
-  /** Heavy renderers (mermaid / katex) skip SSG and only mount when played. */
-  lazy: boolean
+// One card per built-in component, driven by the same data file as the
+// gallery. The deck is split into waves that autoplay: each wave streams its
+// markdown once, then advances to the next wave. Hovering pauses autoplay.
+interface ShowcaseCard extends ComponentDocEntry {
+  /** Cells with no live preview (API-only) never stream. */
+  streamable: boolean
+  /** Cells whose snippet cannot live-render without extra plugins. */
+  codeFallback: boolean
 }
 
-const cellsEn: ShowcaseCell[] = [
-  {
-    title: 'Code blocks',
-    md: [
-      '```ts',
-      'const nodes = parseMarkdownToStructure(chunk)',
-      '// streaming-safe, highlighted, copyable',
-      '```',
-    ].join('\n'),
-    link: '/components/code-block-node',
-    lazy: false,
-  },
-  {
-    title: 'Mermaid diagrams',
-    md: [
-      '```mermaid',
-      'flowchart LR',
-      '  A[Stream] --> B{Closed?}',
-      '  B --> C[Render]',
-      '```',
-    ].join('\n'),
-    link: '/components/mermaid-block-node',
-    lazy: true,
-  },
-  {
-    title: 'Math (KaTeX)',
-    md: 'Mass-energy equivalence $E = mc^2$ and Euler\'s identity $e^{i\\pi} + 1 = 0$ render inline while streaming.',
-    link: '/components/math-inline-node',
-    lazy: true,
-  },
-  {
-    title: 'GFM tables & task lists',
-    md: [
-      '| Feature | Status |',
-      '| --- | --- |',
-      '| Streaming | ✅ |',
-      '| Mermaid | ✅ |',
-      '',
-      '- [x] Stable while streaming',
-      '- [ ] Your feature here',
-    ].join('\n'),
-    link: '/components/table-node',
-    lazy: false,
-  },
-  {
-    title: 'Rich typography',
-    md: 'Use ==highlights==, ++insertions++, ~~strikethrough~~, and inline math like H~2~O or x^2^.',
-    link: '/components/highlight-node',
-    lazy: false,
-  },
-  {
-    title: 'Admonition containers',
-    md: [
-      '::: tip Pro tip',
-      'Wrap any block in a styled container.',
-      ':::',
-    ].join('\n'),
-    link: '/components/admonition-node',
-    lazy: false,
-  },
-]
+const cards = computed<ShowcaseCard[]>(() =>
+  componentsDocData.map(entry => ({
+    ...entry,
+    streamable: entry.mdSnippet.length > 0 && !needsCodeFallback(entry.slug),
+    codeFallback: needsCodeFallback(entry.slug),
+  })),
+)
 
-const cellsZh: ShowcaseCell[] = [
-  {
-    title: '代码块',
-    md: [
-      '```ts',
-      'const nodes = parseMarkdownToStructure(chunk)',
-      '// 流式安全、带高亮、可复制',
-      '```',
-    ].join('\n'),
-    link: '/zh/components/code-block-node',
-    lazy: false,
-  },
-  {
-    title: 'Mermaid 图表',
-    md: [
-      '```mermaid',
-      'flowchart LR',
-      '  A[流] --> B{闭合?}',
-      '  B --> C[渲染]',
-      '```',
-    ].join('\n'),
-    link: '/zh/components/mermaid-block-node',
-    lazy: true,
-  },
-  {
-    title: '数学公式(KaTeX)',
-    md: '质能方程 $E = mc^2$ 与欧拉恒等式 $e^{i\\pi} + 1 = 0$ 都能边流式边渲染。',
-    link: '/zh/components/math-inline-node',
-    lazy: true,
-  },
-  {
-    title: 'GFM 表格与任务列表',
-    md: [
-      '| 能力 | 状态 |',
-      '| --- | --- |',
-      '| 流式渲染 | ✅ |',
-      '| Mermaid | ✅ |',
-      '',
-      '- [x] 流式过程中保持稳定',
-      '- [ ] 你的想法',
-    ].join('\n'),
-    link: '/zh/components/table-node',
-    lazy: false,
-  },
-  {
-    title: '富文本排版',
-    md: '支持 ==高亮==、++插入++、~~删除线~~，以及 H~2~O、x^2^ 这类行内排版。',
-    link: '/zh/components/highlight-node',
-    lazy: false,
-  },
-  {
-    title: '提示容器',
-    md: [
-      '::: tip 小技巧',
-      '任何块级内容都能包进带样式的容器。',
-      ':::',
-    ].join('\n'),
-    link: '/zh/components/admonition-node',
-    lazy: false,
-  },
-]
+const GROUP_SIZE_DESKTOP = 6
+const GROUP_SIZE_MOBILE = 2
 
-const cells = computed(() => (isZh.value ? cellsZh : cellsEn))
+const isMobileViewport = ref(false)
+let resizeListener: (() => void) | undefined
+
+function updateViewportKind() {
+  isMobileViewport.value = window.innerWidth < 760
+}
+
+const groups = computed(() => {
+  const size = isMobileViewport.value ? GROUP_SIZE_MOBILE : GROUP_SIZE_DESKTOP
+  const out: ShowcaseCard[][] = []
+  for (let i = 0; i < cards.value.length; i += size)
+    out.push(cards.value.slice(i, i + size))
+  return out
+})
+
+const currentGroup = ref(0)
+
+const PAUSE_BETWEEN_WAVES_MS = 2600
+const WAVE_STREAM_TIMEOUT_MS = 4500
 
 type CardState = 'full' | 'skeleton' | 'playing' | 'done'
 
-// SSR renders the full document for non-lazy cells (SEO + no-JS), heavy
-// cells start as a skeleton. On the client, every card replays its markdown
-// as a token stream once it scrolls into view. The preview box has a fixed
-// height, so streaming never changes the card size and the page cannot
-// jitter.
-const cardState = ref<CardState[]>(cellsEn.map(cell => (cell.lazy ? 'skeleton' : 'full')))
-const streamed = ref<string[]>(cellsEn.map(() => ''))
+// SSR renders every card statically (full / skeleton for heavy peers), so
+// hydration starts identical and SSG keeps the content for SEO. Autoplay
+// only re-streams a wave after the carousel enters the viewport.
+const cardStates = ref<CardState[]>(
+  cards.value.map(card => (card.heavy && card.streamable ? 'skeleton' : 'full')),
+)
+const streamed = ref<string[]>(cards.value.map(() => ''))
 
-watch(cells, (next) => {
-  stopAll()
-  cardState.value = next.map(cell => (cell.lazy ? 'skeleton' : 'full'))
-  streamed.value = next.map(() => '')
+function resetDeck() {
+  stopAllStreams()
+  cardStates.value = cards.value.map(card => (card.heavy && card.streamable ? 'skeleton' : 'full'))
+  streamed.value = cards.value.map(() => '')
+}
+
+watch(cards, () => {
+  resetDeck()
+  currentGroup.value = 0
+})
+
+watch(isMobileViewport, () => {
+  // Grouping changed; restart the show from the first wave.
+  resetDeck()
+  currentGroup.value = 0
 })
 
 const timers: (ReturnType<typeof setInterval> | undefined)[] = []
 
-function stopCard(index: number) {
+function stopCardStream(index: number) {
   if (timers[index]) {
     clearInterval(timers[index])
     timers[index] = undefined
   }
 }
 
-function stopAll() {
-  timers.forEach((_, i) => stopCard(i))
+function stopAllStreams() {
+  timers.forEach((_, i) => stopCardStream(i))
 }
 
 function playCard(index: number) {
-  const full = cells.value[index]?.md
-  if (!full)
+  const card = cards.value[index]
+  if (!card || !card.streamable) {
+    cardStates.value[index] = 'done'
     return
-  stopCard(index)
+  }
+  stopCardStream(index)
+  const full = card.mdSnippet
   let cursor = 0
   streamed.value[index] = ''
-  cardState.value[index] = 'playing'
+  cardStates.value[index] = 'playing'
   timers[index] = setInterval(() => {
-    // Chunked "tokens", occasionally larger, like a real tokenizer.
     const size = 3 + Math.floor(Math.random() * 5)
     cursor = Math.min(full.length, cursor + size)
     streamed.value[index] = full.slice(0, cursor)
     if (cursor >= full.length) {
-      stopCard(index)
-      cardState.value[index] = 'done'
+      stopCardStream(index)
+      cardStates.value[index] = 'done'
     }
   }, 36)
 }
 
-function renderContent(index: number): string {
-  if (cardState.value[index] === 'playing')
-    return streamed.value[index]
-  return cells.value[index]?.md ?? ''
+function cardIndexInDeck(groupIndex: number, offset: number): number {
+  const size = isMobileViewport.value ? GROUP_SIZE_MOBILE : GROUP_SIZE_DESKTOP
+  return groupIndex * size + offset
 }
 
+function renderContent(index: number): string {
+  if (cardStates.value[index] === 'playing')
+    return streamed.value[index]
+  return cards.value[index]?.mdSnippet ?? ''
+}
+
+// --- Autoplay ----------------------------------------------------------------
+
+const autoplayPausedByHover = ref(false)
+const autoplayInView = ref(false)
 const prefersReducedMotion
   = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-let observer: IntersectionObserver | undefined
+let advanceTimer: ReturnType<typeof setTimeout> | undefined
+let waveWatchTimer: ReturnType<typeof setTimeout> | undefined
+
+function clearAdvanceTimer() {
+  if (advanceTimer) {
+    clearTimeout(advanceTimer)
+    advanceTimer = undefined
+  }
+}
+
+function clearWaveWatchTimer() {
+  if (waveWatchTimer) {
+    clearTimeout(waveWatchTimer)
+    waveWatchTimer = undefined
+  }
+}
+
+function waveIsSettled(groupIndex: number): boolean {
+  const group = groups.value[groupIndex] ?? []
+  return group.every((_, offset) => {
+    const index = cardIndexInDeck(groupIndex, offset)
+    const state = cardStates.value[index]
+    return state === 'done' || state === 'full'
+  })
+}
+
+function scheduleAdvance() {
+  clearAdvanceTimer()
+  if (autoplayPausedByHover.value || !autoplayInView.value || prefersReducedMotion)
+    return
+  advanceTimer = setTimeout(() => {
+    advanceTimer = undefined
+    goToGroup((currentGroup.value + 1) % groups.value.length)
+  }, PAUSE_BETWEEN_WAVES_MS)
+}
+
+function watchWaveAndAdvance(groupIndex: number) {
+  clearWaveWatchTimer()
+  const check = () => {
+    if (autoplayPausedByHover.value) {
+      waveWatchTimer = setTimeout(check, 400)
+      return
+    }
+    if (waveIsSettled(groupIndex)) {
+      waveWatchTimer = undefined
+      scheduleAdvance()
+      return
+    }
+    waveWatchTimer = setTimeout(check, 250)
+  }
+  waveWatchTimer = setTimeout(check, 250)
+  // Safety net: never let a stuck stream block the carousel.
+  setTimeout(() => {
+    if (waveWatchTimer) {
+      clearWaveWatchTimer()
+      scheduleAdvance()
+    }
+  }, WAVE_STREAM_TIMEOUT_MS)
+}
+
+function goToGroup(groupIndex: number, options: { autoplay?: boolean } = {}) {
+  const total = groups.value.length
+  if (!total)
+    return
+  clearAdvanceTimer()
+  clearWaveWatchTimer()
+  currentGroup.value = ((groupIndex % total) + total) % total
+
+  const group = groups.value[currentGroup.value] ?? []
+  group.forEach((card, offset) => {
+    const index = cardIndexInDeck(currentGroup.value, offset)
+    if (card.streamable)
+      playCard(index)
+    else
+      cardStates.value[index] = 'done'
+  })
+
+  if (options.autoplay !== false)
+    watchWaveAndAdvance(currentGroup.value)
+}
+
+function replayCurrentCard(groupIndex: number, offset: number) {
+  const index = cardIndexInDeck(groupIndex, offset)
+  const card = cards.value[index]
+  if (!card?.streamable)
+    return
+  playCard(index)
+}
+
+function previousGroup() {
+  goToGroup(currentGroup.value - 1)
+}
+
+function nextGroup() {
+  goToGroup(currentGroup.value + 1)
+}
+
+function onHoverChange(paused: boolean) {
+  autoplayPausedByHover.value = paused
+  if (paused) {
+    clearAdvanceTimer()
+  }
+  else {
+    // Resume: if the wave already settled, restart the countdown.
+    if (!waveWatchTimer && waveIsSettled(currentGroup.value))
+      scheduleAdvance()
+  }
+}
+
+let viewportObserver: IntersectionObserver | undefined
 
 onMounted(() => {
-  const root = document.querySelector('.ms-showcase')
+  updateViewportKind()
+  resizeListener = () => updateViewportKind()
+  window.addEventListener('resize', resizeListener, { passive: true })
+
+  const root = document.querySelector('.ms-showcase-carousel')
   if (!root)
     return
-  if (typeof IntersectionObserver === 'undefined' || prefersReducedMotion) {
-    // Without observers or with reduced motion, just show the full renders.
-    cardState.value = cells.value.map(() => 'full')
+
+  if (prefersReducedMotion) {
+    autoplayInView.value = false
     return
   }
-  observer = new IntersectionObserver(
+
+  if (typeof IntersectionObserver === 'undefined') {
+    autoplayInView.value = true
+    return
+  }
+
+  viewportObserver = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
-        if (!entry.isIntersecting)
-          continue
-        const index = Number((entry.target as HTMLElement).dataset.index)
-        if (Number.isInteger(index)) {
-          playCard(index)
-          observer?.unobserve(entry.target)
+        autoplayInView.value = entry.isIntersecting
+        if (entry.isIntersecting) {
+          // Replay the current wave whenever the carousel scrolls into view,
+          // so visitors always catch the streaming demo.
+          goToGroup(currentGroup.value)
+        }
+        else {
+          clearAdvanceTimer()
+          clearWaveWatchTimer()
         }
       }
     },
-    { rootMargin: '120px' },
+    { rootMargin: '0px' },
   )
-  root.querySelectorAll('.ms-showcase-card').forEach(el => observer?.observe(el))
+  viewportObserver.observe(root)
 })
 
 onBeforeUnmount(() => {
-  observer?.disconnect()
-  observer = undefined
-  stopAll()
+  viewportObserver?.disconnect()
+  viewportObserver = undefined
+  resizeListener && window.removeEventListener('resize', resizeListener)
+  clearAdvanceTimer()
+  clearWaveWatchTimer()
+  stopAllStreams()
 })
 </script>
 
 <template>
   <div class="ms-showcase-section ms-home-container">
-    <h2 class="ms-showcase-heading">
-      {{ isZh ? '开箱即用的渲染能力' : 'What you get out of the box' }}
-    </h2>
-    <p class="ms-showcase-subtitle">
-      {{
-        isZh
-          ? '每张卡片都会像真实 AI 输出一样逐 token 流式播放 — 未闭合语法保持稳定，语法闭合的瞬间立即渲染。'
-          : 'Every card replays its markdown as a live token stream — incomplete syntax stays stable, and blocks render the moment they close.'
-      }}
-    </p>
-    <div class="ms-showcase">
-      <div
-        v-for="(cell, i) in cells"
-        :key="cell.title"
-        class="ms-showcase-card"
-        :data-index="i"
+    <div class="ms-showcase-head">
+      <div>
+        <h2 class="ms-showcase-heading">
+          {{ isZh ? '开箱即用的渲染能力' : 'What you get out of the box' }}
+        </h2>
+        <p class="ms-showcase-subtitle">
+          {{
+            isZh
+              ? `全部 ${cards.length} 个内置组件自动轮播 — 每一波都会逐 token 流式播放一遍；悬停暂停，移开恢复。`
+              : `All ${cards.length} built-in components on autoplay — every wave replays its markdown as a token stream. Hover to pause, move away to resume.`
+          }}
+        </p>
+      </div>
+      <div class="ms-showcase-dots" role="tablist" :aria-label="isZh ? '选择轮播组' : 'Choose a wave'">
+        <button
+          v-for="(group, gi) in groups"
+          :key="gi"
+          type="button"
+          class="ms-showcase-dot"
+          :class="{ active: gi === currentGroup }"
+          :aria-label="isZh ? `第 ${gi + 1} 组` : `Wave ${gi + 1}`"
+          @click="goToGroup(gi)"
+        />
+      </div>
+    </div>
+
+    <div
+      class="ms-showcase-carousel"
+      @mouseenter="onHoverChange(true)"
+      @mouseleave="onHoverChange(false)"
+    >
+      <button
+        type="button"
+        class="ms-showcase-nav prev"
+        :aria-label="isZh ? '上一组' : 'Previous wave'"
+        @click="previousGroup"
       >
-        <div class="ms-showcase-head">
-          <h3 class="ms-showcase-title">
-            {{ cell.title }}
-          </h3>
-          <div class="ms-showcase-tools">
-            <button
-              type="button"
-              class="ms-showcase-replay"
-              :aria-label="isZh ? `重播「${cell.title}」` : `Replay ${cell.title}`"
-              @click="playCard(i)"
-            >
-              {{ isZh ? '⟳ 重播' : '⟳ Replay' }}
-            </button>
-            <a
-              :href="cell.link"
-              class="ms-showcase-more"
-              :aria-label="isZh ? `查看 ${cell.title} 组件文档` : `View the ${cell.title} component docs`"
-            >{{ isZh ? '文档 →' : 'Docs →' }}</a>
+        ‹
+      </button>
+      <button
+        type="button"
+        class="ms-showcase-nav next"
+        :aria-label="isZh ? '下一组' : 'Next wave'"
+        @click="nextGroup"
+      >
+        ›
+      </button>
+
+      <div
+        v-for="(group, gi) in groups"
+        :key="gi"
+        class="ms-showcase-wave"
+        :class="{ active: gi === currentGroup }"
+        :aria-hidden="gi !== currentGroup"
+      >
+        <article
+          v-for="(card, offset) in group"
+          :key="card.slug"
+          class="ms-showcase-card"
+        >
+          <div class="ms-showcase-card-head">
+            <a :href="isZh ? `/zh/components/${card.slug}` : `/components/${card.slug}`" class="ms-showcase-card-name">
+              {{ card.name }}
+            </a>
+            <div class="ms-showcase-card-tools">
+              <span v-if="card.peers.length" class="ms-showcase-peer">{{ card.peers.join(' · ') }}</span>
+              <button
+                v-if="card.streamable"
+                type="button"
+                class="ms-showcase-replay"
+                :aria-label="isZh ? `重播「${card.name}」` : `Replay ${card.name}`"
+                @click="replayCurrentCard(gi, offset)"
+              >
+                ⟳
+              </button>
+            </div>
           </div>
-        </div>
-        <div class="ms-showcase-preview">
-          <div v-if="cardState[i] === 'skeleton'" class="ms-showcase-skeleton" aria-hidden="true" />
-          <MarkdownRender
-            v-else
-            :key="cell.title"
-            :content="renderContent(i)"
-            :is-dark="isDark"
-            :typewriter="cardState[i] !== 'full'"
-            :final="cardState[i] !== 'playing'"
-            :fade="false"
-          />
-        </div>
+          <div class="ms-showcase-preview">
+            <div v-if="cardStates[cardIndexInDeck(gi, offset)] === 'skeleton'" class="ms-showcase-skeleton" aria-hidden="true" />
+            <pre v-else-if="card.codeFallback" class="ms-showcase-codefallback"><code>{{ card.mdSnippet }}</code></pre>
+            <div v-else-if="!card.mdSnippet" class="ms-showcase-api" aria-hidden="true">
+              <code>{{ card.name }}</code>
+            </div>
+            <MarkdownRender
+              v-else
+              :key="card.slug"
+              :content="renderContent(cardIndexInDeck(gi, offset))"
+              :is-dark="isDark"
+              :custom-markdown-it="optionalMarkdownIt(card.slug)"
+              :typewriter="cardStates[cardIndexInDeck(gi, offset)] !== 'full'"
+              :final="cardStates[cardIndexInDeck(gi, offset)] !== 'playing'"
+              :fade="false"
+            />
+          </div>
+        </article>
       </div>
     </div>
   </div>
@@ -314,6 +417,14 @@ onBeforeUnmount(() => {
   margin-top: 2.5rem;
 }
 
+.ms-showcase-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
 .ms-showcase-heading {
   font-size: 1.35rem;
   font-weight: 700;
@@ -325,61 +436,174 @@ onBeforeUnmount(() => {
 .ms-showcase-subtitle {
   font-size: 0.95rem;
   color: var(--vp-c-text-2);
-  margin: 0 0 1.25rem;
+  margin: 0;
 }
 
-.ms-showcase {
+.ms-showcase-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-bottom: 0.2rem;
+  flex-shrink: 0;
+}
+
+.ms-showcase-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: var(--vp-c-border);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.ms-showcase-dot:hover {
+  background: var(--vp-c-text-3);
+}
+
+.ms-showcase-dot.active {
+  background: var(--vp-c-brand-1);
+  transform: scale(1.15);
+}
+
+.ms-showcase-carousel {
+  position: relative;
+  /* Two rows of fixed-height cards; the mobile layout keeps two cards. */
+  height: 632px;
+}
+
+.ms-showcase-wave {
+  position: absolute;
+  inset: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr 1fr;
   gap: 1rem;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: opacity 0.35s ease, transform 0.35s ease, visibility 0.35s;
+  pointer-events: none;
+}
+
+.ms-showcase-wave.active {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.ms-showcase-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--vp-c-border);
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-2);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
+  opacity: 0;
+}
+
+.ms-showcase-carousel:hover .ms-showcase-nav,
+.ms-showcase-nav:focus-visible {
+  opacity: 1;
+}
+
+.ms-showcase-nav:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+  box-shadow: var(--vp-shadow-1);
+}
+
+.ms-showcase-nav.prev {
+  left: -14px;
+}
+
+.ms-showcase-nav.next {
+  right: -14px;
 }
 
 .ms-showcase-card {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   border: 1px solid var(--vp-c-border);
   border-radius: 12px;
   background: var(--vp-c-bg);
-  padding: 1rem 1.1rem 1.1rem;
-  transition: border-color 0.25s, box-shadow 0.25s, transform 0.25s;
+  padding: 0.75rem 0.9rem 0.9rem;
+  overflow: hidden;
+  transition: border-color 0.25s, box-shadow 0.25s;
 }
 
 .ms-showcase-card:hover {
   border-color: var(--vp-c-brand-1);
   box-shadow: var(--vp-shadow-2);
-  transform: translateY(-2px);
 }
 
-.ms-showcase-head {
+.ms-showcase-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  min-height: 1.6rem;
+  margin-bottom: 0.6rem;
+  min-height: 1.5rem;
 }
 
-.ms-showcase-title {
-  font-size: 0.95rem;
+.ms-showcase-card-name {
+  font-size: 0.82rem;
   font-weight: 650;
+  font-family: var(--vp-font-family-mono);
   color: var(--vp-c-text-1);
-  margin: 0;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.ms-showcase-tools {
+.ms-showcase-card-name:hover {
+  color: var(--vp-c-brand-1);
+  text-decoration: underline;
+}
+
+.ms-showcase-card-tools {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.ms-showcase-peer {
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: var(--vp-c-warning-1);
+  background: var(--vp-c-warning-soft);
+  border-radius: 999px;
+  padding: 0.08rem 0.45rem;
+  white-space: nowrap;
 }
 
 .ms-showcase-replay {
-  font-size: 0.72rem;
-  font-weight: 500;
+  font-size: 0.8rem;
   color: var(--vp-c-text-2);
   background: transparent;
   border: 1px solid var(--vp-c-border);
   border-radius: 999px;
-  padding: 0.1rem 0.55rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.2s, color 0.2s, border-color 0.2s;
@@ -395,24 +619,16 @@ onBeforeUnmount(() => {
   border-color: var(--vp-c-brand-1);
 }
 
-.ms-showcase-more {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--vp-c-brand-1);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.ms-showcase-more:hover {
-  text-decoration: underline;
-}
-
-/* Fixed height keeps the card (and the page) from reflowing while streaming. */
+/* Fixed height keeps the wave (and the page) from reflowing while streaming. */
 .ms-showcase-preview {
-  height: 200px;
+  height: 216px;
   overflow: hidden;
-  font-size: 0.875rem;
-  line-height: 1.6;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.ms-showcase-preview :deep(pre) {
+  margin: 0.3rem 0;
 }
 
 /* The mermaid block ships a ~360px interactive preview area, which would
@@ -420,12 +636,8 @@ onBeforeUnmount(() => {
 .ms-showcase-preview :deep(.mermaid-preview-area),
 .ms-showcase-preview :deep(._mermaid),
 .ms-showcase-preview :deep(._mermaid > div) {
-  min-height: 140px !important;
-  height: 140px !important;
-}
-
-.ms-showcase-preview :deep(pre) {
-  margin: 0.4rem 0;
+  min-height: 150px !important;
+  height: 150px !important;
 }
 
 .ms-showcase-skeleton {
@@ -434,9 +646,65 @@ onBeforeUnmount(() => {
   background: var(--vp-c-default-soft);
 }
 
-@media (max-width: 760px) {
-  .ms-showcase {
+.ms-showcase-codefallback {
+  margin: 0.3rem 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  background: var(--vp-c-default-soft);
+  overflow: auto;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.ms-showcase-codefallback code {
+  font-family: var(--vp-font-family-mono);
+  color: var(--vp-c-text-2);
+  white-space: pre;
+}
+
+.ms-showcase-api {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  border-radius: 8px;
+  background: var(--vp-c-default-soft);
+  color: var(--vp-c-text-3);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 759px) {
+  .ms-showcase-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ms-showcase-carousel {
+    height: 616px;
+  }
+
+  .ms-showcase-wave {
     grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .ms-showcase-nav.prev {
+    left: -6px;
+  }
+
+  .ms-showcase-nav.next {
+    right: -6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-showcase-wave {
+    transition: none;
+    transform: none;
+  }
+
+  .ms-showcase-nav {
+    opacity: 1;
   }
 }
 </style>
