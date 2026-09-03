@@ -2142,8 +2142,8 @@ body > div[id^="dmermaid-"] {
   height: auto;
   /* Match the container cap so tall diagrams scale down to fit, mirroring
      the mermaid block's max-height behavior. The inline maxHeight prop
-     (default 500px) re-exposes its value as --ms-d2-render-max-height so
-     the svg cap always tracks the effective container cap. */
+     exposes its value as --ms-d2-render-max-height so the svg cap always
+     tracks the effective container cap. The fallback is the shared token. */
   max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height));
   display: block;
 }

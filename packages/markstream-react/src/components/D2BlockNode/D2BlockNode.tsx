@@ -8,7 +8,6 @@ import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonToolti
 import { getD2 } from './d2'
 
 const DEFAULTS = {
-  maxHeight: '500px',
   loading: true,
   progressiveRender: true,
   progressiveIntervalMs: 700,

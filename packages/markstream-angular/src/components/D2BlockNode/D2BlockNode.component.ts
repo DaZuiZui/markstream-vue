@@ -106,7 +106,7 @@ const DARK_THEME_OVERRIDES: Record<string, string> = {
         </div>
       </div>
 
-      <div *ngIf="!collapsed" class="markstream-angular-enhanced-block__body d2-block-body" [style.maxHeight]="resolvedMaxHeight">
+      <div *ngIf="!collapsed" class="markstream-angular-enhanced-block__body d2-block-body" [style]="resolvedRenderStyle">
         <div *ngIf="rendering && !showSource" class="mermaid-loading">
           <span class="mermaid-spinner" aria-hidden="true"></span>
           <span>Rendering D2...</span>
@@ -192,8 +192,12 @@ export class D2BlockNodeComponent implements AfterViewInit, OnChanges, OnDestroy
     return this.context?.showTooltips !== false
   }
 
-  get resolvedMaxHeight() {
-    return resolveCssSize(this.mergedProps.maxHeight, '500px')
+  get resolvedRenderStyle() {
+    const maxHeight = this.mergedProps.maxHeight
+    if (maxHeight == null || maxHeight === '')
+      return null
+    const max = resolveCssSize(maxHeight)
+    return `max-height: ${max}; --ms-d2-render-max-height: ${max}`
   }
 
   get resolvedLoading() {
@@ -323,7 +327,7 @@ export class D2BlockNodeComponent implements AfterViewInit, OnChanges, OnDestroy
       if (this.destroyed || token !== this.renderToken)
         return
 
-      const safeSvg = toSafeSvgMarkup(extractRenderedSvg(renderResult))
+      const safeSvg = toSafeSvgMarkup(extractRenderedSvg(renderResult), 'markstream-d2-root-svg')
       if (!safeSvg)
         throw new Error('D2 render returned empty output.')
 

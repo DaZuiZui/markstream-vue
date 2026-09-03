@@ -33,6 +33,7 @@
   --ms-gap-header-actions: 0.125rem;
   /* ── Container sizes ── */
   --ms-size-diagram-min-height: 360px;
+  --ms-size-code-max-height: 500px;
   /* Unified default code surface; explicit editor themes may override it. */
   --code-bg: #fff;
   --code-fg: hsl(0 0% 10%);
@@ -2029,6 +2030,7 @@
 }
 
 :where(.markstream-react) .d2-render {
+  max-height: var(--ms-size-code-max-height);
   overflow: auto;
   display: flex;
   flex-direction: column;
@@ -2049,9 +2051,11 @@
   width: 100%;
   max-width: 100%;
   height: auto;
-  /* Match the container cap (set via --ms-d2-render-max-height) so tall
-     diagrams scale down to fit, mirroring the mermaid block's behavior. */
-  max-height: var(--ms-d2-render-max-height, none);
+  /* Match the container cap so tall diagrams scale down to fit, mirroring
+     the mermaid block's behavior. When the user sets maxHeight, the inline
+     style exposes the value as --ms-d2-render-max-height; the default
+     fallback here is the shared token. */
+  max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height));
   display: block;
 }
 

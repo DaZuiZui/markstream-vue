@@ -1492,14 +1492,14 @@ body > div[id^="dmermaid-"] {
   margin-right: auto;
 }
 
-/* Root svg only (direct child of the host); cap it with the same token as
+/* Root svg with class .markstream-d2-root-svg: cap it with the same token as
    the container so tall diagrams scale down to fit, mirroring the mermaid
    block's max-height behavior. */
-.markstream-angular .d2-svg > svg {
+.markstream-angular .d2-svg svg.markstream-d2-root-svg {
   width: 100%;
   max-width: 100%;
   height: auto;
-  max-height: var(--ms-size-code-max-height);
+  max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height));
   display: block;
 }
 
@@ -1535,20 +1535,23 @@ body > div[id^="dmermaid-"] {
 .markstream-angular .infographic-render {
   position: relative;
   width: 100%;
-  min-height: 320px;
+  min-height: var(--ms-size-diagram-min-height);
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Keep the diagram fully visible and centered like the mermaid block: scale
    down proportionally inside the preview area. Scoped to the preview host so
-   the fullscreen modal (.fullscreen host) keeps its own sizing. */
+   the fullscreen modal (.fullscreen host) keeps its own sizing. The column
+   flex container with margin:auto children stays centered while remaining
+   scroll-safe when content overflows. */
 .markstream-angular .infographic-render svg {
   max-width: 100%;
   max-height: 100%;
   width: auto;
   height: auto;
-  display: block;
-  margin: 0 auto;
+  margin: auto;
 }
 
 .markstream-angular .infographic-pending-source {

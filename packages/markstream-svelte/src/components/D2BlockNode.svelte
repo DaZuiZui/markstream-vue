@@ -47,7 +47,7 @@
   let {
     node,
     context = undefined,
-    maxHeight = '500px',
+    maxHeight = undefined,
     loading = undefined,
     isDark = undefined,
     themeId = undefined,

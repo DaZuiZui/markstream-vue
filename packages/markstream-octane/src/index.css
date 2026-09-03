@@ -22,6 +22,8 @@
   --secondary: 210 40% 96%;
   --muted: 210 40% 96%;
   --muted-foreground: 215.4 16.3% 46.9%;
+  /* ── Container sizes ── */
+  --ms-size-code-max-height: 500px;
   /* Unified default code surface; explicit editor themes may override it. */
   --code-bg: #fff;
   --code-fg: hsl(0 0% 10%);
@@ -1915,13 +1917,29 @@
 }
 
 :where(.markstream-octane) .d2-render {
+  max-height: var(--ms-size-code-max-height);
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+:where(.markstream-octane) .d2-svg {
+  margin: auto;
+  width: 100%;
+}
+
+:where(.markstream-octane) .d2-render .d2-error {
+  margin-left: auto;
+  margin-right: auto;
 }
 
 :where(.markstream-octane) .d2-svg svg.markstream-d2-root-svg {
   width: 100%;
   max-width: 100%;
   height: auto;
+  /* Match the container cap so tall diagrams scale down to fit, mirroring
+     the mermaid block's behavior. The fallback is the shared token. */
+  max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height));
   display: block;
 }
 

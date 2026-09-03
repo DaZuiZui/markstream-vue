@@ -25,7 +25,7 @@ interface D2BlockNodeProps {
 const props = withDefaults(
   defineProps<D2BlockNodeProps>(),
   {
-    maxHeight: '500px',
+    maxHeight: undefined,
     loading: true,
     progressiveRender: true,
     progressiveIntervalMs: 700,
@@ -60,10 +60,13 @@ const bodyStyle = computed(() => {
   return { minHeight: `${bodyMinHeight.value}px` }
 })
 const renderStyle = computed(() => {
-  if (!props.maxHeight)
-    return undefined
-  const max = typeof props.maxHeight === 'number' ? `${props.maxHeight}px` : String(props.maxHeight)
-  return { maxHeight: max }
+  if (props.maxHeight === 'none')
+    return { 'maxHeight': 'none', '--ms-d2-render-max-height': 'none' }
+  if (props.maxHeight != null) {
+    const max = typeof props.maxHeight === 'number' ? `${props.maxHeight}px` : String(props.maxHeight)
+    return { 'maxHeight': max, '--ms-d2-render-max-height': max }
+  }
+  return undefined
 })
 
 const isClient = typeof window !== 'undefined'
@@ -627,8 +630,10 @@ onBeforeUnmount(() => {
   max-width: 100%;
   height: auto;
   /* Match the container cap so tall diagrams scale down to fit, mirroring
-     the mermaid block's max-height behavior. */
-  max-height: var(--ms-size-code-max-height, 500px);
+     the mermaid block's max-height behavior. When the user sets maxHeight,
+     the inline style exposes the value as --ms-d2-render-max-height; the
+     default fallback here is the shared token. */
+  max-height: var(--ms-d2-render-max-height, var(--ms-size-code-max-height, 500px));
   display: block;
 }
 
