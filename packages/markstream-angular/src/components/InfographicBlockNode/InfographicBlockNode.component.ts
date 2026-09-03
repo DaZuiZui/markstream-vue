@@ -11,7 +11,7 @@ import {
   ViewChild,
 } from '@angular/core'
 import { getInfographic } from '../../optional/infographic'
-import { clampPreviewHeight, estimateInfographicPreviewHeight, parsePositiveNumber } from '../shared/diagram-height'
+import { clampPreviewHeight, estimateInfographicPreviewHeight, INFOGRAPHIC_PREVIEW_MIN_HEIGHT, parsePositiveNumber } from '../shared/diagram-height'
 import { getString } from '../shared/node-helpers'
 import {
   clampNumber,
@@ -241,9 +241,23 @@ export class InfographicBlockNodeComponent implements AfterViewInit, OnChanges, 
   get estimatedPreviewHeightPx() {
     return clampPreviewHeight(
       parsePositiveNumber(this.mergedProps.estimatedPreviewHeightPx) ?? estimateInfographicPreviewHeight(this.code),
-      undefined,
+      this.resolveDiagramMinHeight(),
       this.maxPreviewHeight,
     )
+  }
+
+  /**
+   * Resolve the diagram preview minimum height from the density CSS token
+   * (--ms-size-diagram-min-height), falling back to the built-in default.
+   * Mirrors MermaidBlockNode's resolveDiagramMinHeight; SSR falls back to the
+   * constant because getComputedStyle is browser-only.
+   */
+  private resolveDiagramMinHeight() {
+    const el = this.previewHost?.nativeElement
+    if (!el || typeof window === 'undefined' || typeof window.getComputedStyle !== 'function')
+      return INFOGRAPHIC_PREVIEW_MIN_HEIGHT
+    const raw = window.getComputedStyle(el).getPropertyValue('--ms-size-diagram-min-height').trim()
+    return parsePositiveNumber(raw) ?? INFOGRAPHIC_PREVIEW_MIN_HEIGHT
   }
 
   get resolvedContainerMinHeight() {

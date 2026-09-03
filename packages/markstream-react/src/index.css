@@ -31,6 +31,8 @@
   --ms-gap-header: 1rem;
   --ms-gap-header-main: 0.625rem;
   --ms-gap-header-actions: 0.125rem;
+  /* ── Container sizes ── */
+  --ms-size-diagram-min-height: 360px;
   /* Unified default code surface; explicit editor themes may override it. */
   --code-bg: #fff;
   --code-fg: hsl(0 0% 10%);

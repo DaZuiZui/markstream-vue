@@ -17,7 +17,7 @@ import { hideTooltip, showTooltipForAnchor } from '../../tooltip/singletonToolti
 import { getLanguageIcon } from '../../utils/languageIcon'
 import { safeRaf } from '../../utils/safeRaf'
 import { canParseOffthread, findPrefixOffthread, terminateWorker as terminateMermaidWorker } from '../../workers/mermaidWorkerClient'
-import { clampMermaidPreviewHeight, estimateMermaidPreviewHeight, parsePositiveNumber } from './height'
+import { clampMermaidPreviewHeight, estimateMermaidPreviewHeight, MERMAID_PREVIEW_MIN_HEIGHT, parsePositiveNumber } from './height'
 import { getMermaid } from './mermaid'
 
 type Theme = 'light' | 'dark'
@@ -143,12 +143,8 @@ export function MermaidBlockNode(rawProps: MermaidBlockNodeProps & MermaidBlockN
     return parsePositiveNumber(props.maxHeight)
   }, [props.maxHeight])
   const estimatedPreviewHeight = useMemo(() => {
-    return clampMermaidPreviewHeight(
-      parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateMermaidPreviewHeight(baseFixedCode),
-      undefined,
-      maxPreviewHeight,
-    )
-  }, [baseFixedCode, maxPreviewHeight, props.estimatedPreviewHeightPx])
+    return parsePositiveNumber(props.estimatedPreviewHeightPx) ?? estimateMermaidPreviewHeight(baseFixedCode)
+  }, [baseFixedCode, props.estimatedPreviewHeightPx])
 
   const [mermaidAvailable, setMermaidAvailable] = useState(false)
   const [showSource, setShowSource] = useState(false)
@@ -161,7 +157,11 @@ export function MermaidBlockNode(rawProps: MermaidBlockNodeProps & MermaidBlockN
   const [hasRenderedOnce, setHasRenderedOnce] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
-  const [containerHeight, setContainerHeight] = useState(`${estimatedPreviewHeight}px`)
+  // The initializer runs on the first render, before the container ref is
+  // attached, so the built-in default floor applies (matches SSR output).
+  const [containerHeight, setContainerHeight] = useState(
+    () => `${clampMermaidPreviewHeight(estimatedPreviewHeight, MERMAID_PREVIEW_MIN_HEIGHT, maxPreviewHeight)}px`,
+  )
   const [viewportReady, setViewportReady] = useState(typeof window === 'undefined')
 
   const mermaidRef = useRef<any>(null)
@@ -212,16 +212,35 @@ export function MermaidBlockNode(rawProps: MermaidBlockNodeProps & MermaidBlockN
     hasRenderedOnceRef.current = hasRenderedOnce
   }, [hasRenderedOnce])
 
+  /**
+   * Resolve the preview minimum height from the density CSS token
+   * (--ms-size-diagram-min-height), falling back to the built-in default.
+   * The container ref is null before mount / during SSR, which safely yields
+   * the default floor.
+   */
+  const resolveMinContainerHeight = useCallback(() => {
+    const container = containerRef.current
+    const raw = container
+      ? getComputedStyle(container).getPropertyValue('--ms-size-diagram-min-height').trim()
+      : ''
+    return parsePositiveNumber(raw) ?? MERMAID_PREVIEW_MIN_HEIGHT
+  }, [])
+
+  const resolveEstimatedPreviewHeight = useCallback(() => {
+    return clampMermaidPreviewHeight(estimatedPreviewHeight, resolveMinContainerHeight(), maxPreviewHeight)
+  }, [estimatedPreviewHeight, maxPreviewHeight, resolveMinContainerHeight])
+
   useEffect(() => {
     if (showSource || isCollapsed)
       return
     setContainerHeight((current) => {
       const currentHeight = parsePositiveNumber(current)
-      if (currentHeight != null && currentHeight >= estimatedPreviewHeight)
+      const nextHeight = resolveEstimatedPreviewHeight()
+      if (currentHeight != null && currentHeight >= nextHeight)
         return current
-      return `${estimatedPreviewHeight}px`
+      return `${nextHeight}px`
     })
-  }, [estimatedPreviewHeight, isCollapsed, showSource])
+  }, [isCollapsed, resolveEstimatedPreviewHeight, showSource])
 
   useEffect(() => {
     svgCacheRef.current = {}
@@ -314,8 +333,9 @@ export function MermaidBlockNode(rawProps: MermaidBlockNodeProps & MermaidBlockN
     const resolved = Number.isFinite(target) && target > 0 ? target : intrinsicHeight
     const maxHeight = resolveMaxContainerHeight()
     const nextHeight = maxHeight == null ? resolved : Math.min(resolved, maxHeight)
-    setContainerHeight(`${props.maxHeight === 'none' ? nextHeight : Math.max(nextHeight, estimatedPreviewHeight)}px`)
-  }, [estimatedPreviewHeight, props.maxHeight, resolveMaxContainerHeight])
+    const estimatedHeight = resolveEstimatedPreviewHeight()
+    setContainerHeight(`${props.maxHeight === 'none' ? nextHeight : Math.max(nextHeight, estimatedHeight)}px`)
+  }, [props.maxHeight, resolveEstimatedPreviewHeight, resolveMaxContainerHeight])
 
   useEffect(() => {
     if (!containerRef.current || typeof ResizeObserver === 'undefined')
@@ -780,10 +800,14 @@ export function MermaidBlockNode(rawProps: MermaidBlockNodeProps & MermaidBlockN
       <div
         ref={containerRef}
         className={clsx(
-          'min-h-[360px] relative overflow-hidden block transition-[height] duration-150 ease-out',
+          'relative overflow-hidden block transition-[height] duration-150 ease-out',
           props.isDark ? 'bg-gray-900' : 'bg-gray-50',
         )}
-        style={{ height: containerHeight, maxHeight: props.maxHeight ?? undefined }}
+        style={{
+          height: containerHeight,
+          maxHeight: props.maxHeight ?? undefined,
+          minHeight: 'var(--ms-size-diagram-min-height, 360px)',
+        }}
         onWheel={handleWheel}
         onMouseDown={(event) => {
           if (event.button !== 0)

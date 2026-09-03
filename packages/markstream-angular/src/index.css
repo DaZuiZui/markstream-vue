@@ -31,6 +31,7 @@ markstream-angular {
   --ms-inset-panel-y: 0.375rem;
   --ms-gap-header-main: 0.625rem;
   --ms-gap-header-actions: 0.125rem;
+  --ms-size-diagram-min-height: 360px;
   /* Unified default code surface; explicit editor themes may override it. */
   --code-bg: #fff;
   --code-fg: hsl(0 0% 10%);

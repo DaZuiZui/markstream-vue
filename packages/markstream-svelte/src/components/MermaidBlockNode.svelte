@@ -7,7 +7,7 @@
   import { hideTooltip, showTooltipForAnchor, type TooltipPlacement } from '../tooltip/singletonTooltip'
   import { getLanguageIcon } from '../utils/languageIcon'
   import { canParseOffthread, findPrefixOffthread } from '../workers/mermaidWorkerClient'
-  import { clampPreviewHeight, estimateMermaidPreviewHeight, getMermaidDiagramKind, parsePositiveNumber } from './shared/diagram-height'
+  import { clampPreviewHeight, estimateMermaidPreviewHeight, getMermaidDiagramKind, MERMAID_PREVIEW_MIN_HEIGHT, parsePositiveNumber, resolveDiagramMinPreviewHeight } from './shared/diagram-height'
   import { copyTextToClipboard, downloadSvgMarkup } from './shared/rich-block-helpers'
   import { getString } from './shared/node-helpers'
 
@@ -77,6 +77,7 @@
   let showSource = $state(false)
   let modalOpen = $state(false)
   let zoom = $state(1)
+  let blockHost: HTMLElement | null = $state(null)
   let previewHost: HTMLElement | null = $state(null)
   let modalHost: HTMLElement | null = $state(null)
   let renderTimer: ReturnType<typeof setTimeout> | null = $state(null)
@@ -93,7 +94,7 @@
   let maxPreviewHeight = $derived(maxHeight === 'none' ? null : parsePositiveNumber(maxHeight))
   let previewHeight = $derived(clampPreviewHeight(
     parsePositiveNumber(estimatedPreviewHeightPx) ?? estimateMermaidPreviewHeight(source),
-    undefined,
+    resolveDiagramMinPreviewHeight(blockHost, MERMAID_PREVIEW_MIN_HEIGHT),
     maxPreviewHeight ?? undefined,
   ))
   let previewStyle = $derived([
@@ -496,6 +497,7 @@
 
 {#if shouldRender}
   <div
+    bind:this={blockHost}
     class:dark={resolvedIsDark}
     class:is-rendering={resolvedLoading || rendering}
     class="mermaid-block"

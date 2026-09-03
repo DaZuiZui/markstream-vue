@@ -2135,7 +2135,7 @@ body > div[id^="dmermaid-"] {
 .markstream-svelte .infographic-render {
   position: relative;
   width: 100%;
-  min-height: 320px;
+  min-height: var(--ms-size-diagram-min-height);
   overflow: auto;
   text-align: center;
 }
