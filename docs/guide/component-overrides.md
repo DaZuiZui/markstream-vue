@@ -14,6 +14,11 @@ keywords:
 
 Most advanced customization starts with `setCustomComponents`, not parser hooks.
 
+<PrereqChips :items="[
+  { text: 'Usage: content vs nodes', link: '/guide/usage' },
+  { text: 'Renderer & Node Components', link: '/guide/components' },
+]" />
+
 Use this page when you want to:
 
 - replace built-in renderers such as `image`, `code_block`, `mermaid`, or `link`
@@ -194,3 +199,9 @@ removeCustomComponents('docs')
 ```
 
 This is especially helpful in SPAs, Storybook stories, playgrounds, and test suites.
+
+<NextStep :items="[
+  { text: 'Custom Tags & Advanced Components', link: '/guide/custom-components' },
+  { text: 'Component Gallery', link: '/components/' },
+  { text: 'API Overview', link: '/guide/api' },
+]" />

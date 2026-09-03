@@ -11,6 +11,11 @@ keywords:
 
 在集成 `markstream-vue` 时，常会需要微调流式行为、控制重节点渲染或避免 Tailwind/UnoCSS 样式冲突。本页提供对照表与排障提示。
 
+<PrereqChips :items="[
+  { text: 'Vue 快速开始', link: '/zh/guide/quick-start' },
+  { text: '使用：content 与 nodes', link: '/zh/guide/usage' },
+]" />
+
 ## `MarkdownRender` 核心 props
 
 | Prop | 类型 | 默认值 | 说明 |
@@ -312,3 +317,9 @@ const md = '# 标题\n\n演示 props 用法。'
 2. **使用 `custom-id`** 与 `[data-custom-id="docs"]` 限定覆盖范围。
 3. **检查同伴 CSS** 是否导入（KaTeX），Mermaid/D2 不需要额外 CSS。
 4. **查阅 [样式排查清单](/zh/guide/troubleshooting#css-looks-wrong-start-here)**，确保 reset、layer、Uno/Tailwind 配置正确。
+
+<NextStep :items="[
+  { text: 'API 总览', link: '/zh/guide/api' },
+  { text: '功能特性', link: '/zh/guide/features' },
+  { text: '覆盖内置组件', link: '/zh/guide/component-overrides' },
+]" />

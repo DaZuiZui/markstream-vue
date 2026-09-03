@@ -140,3 +140,9 @@ const customId: MarkdownRenderProps['customId'] = 'install-check'
 - [使用与流式渲染](/zh/guide/usage)：`content` 和 `nodes` 的选择
 - [AI 聊天与流式输出](/zh/guide/ai-chat-streaming)：聊天 UI、SSE 与逐 token 输出的完整路径
 - [覆盖内置组件](/zh/guide/component-overrides)：需要业务定制时再进入
+
+<NextStep :items="[
+  { text: 'Vue 快速开始', link: '/zh/guide/quick-start' },
+  { text: 'AI 聊天与流式输出', link: '/zh/guide/ai-chat-streaming' },
+  { text: '按症状排查', link: '/zh/guide/troubleshooting-path' },
+]" />

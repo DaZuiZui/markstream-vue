@@ -11,6 +11,11 @@ keywords:
 
 当你在做文档站、知识库、官网内容页，或者任何“Markdown 主要作为稳定页面内容来展示，而不是像聊天那样持续流式变化”的场景时，就走这条路径。
 
+<PrereqChips :items="[
+  { text: 'Vue 快速开始', link: '/zh/guide/quick-start' },
+  { text: '安装与可选依赖', link: '/zh/guide/installation' },
+]" />
+
 这页的目标是一次解决 VitePress 用户最常见的几个连环问题：
 
 - 我该用 `content` 还是 `nodes`
@@ -149,3 +154,9 @@ const source = `
 - [自定义标签与高级组件](/zh/guide/custom-components)：处理嵌套标签和更复杂场景
 - [Tailwind 集成与样式顺序](/zh/guide/tailwind)：处理 utility CSS 技术栈
 - [故障排除](/zh/guide/troubleshooting)：继续排样式、peers 和 SSR
+
+<NextStep :items="[
+  { text: '自定义标签与高级组件', link: '/zh/guide/custom-components' },
+  { text: 'Tailwind 与样式', link: '/zh/guide/tailwind' },
+  { text: 'Showcase', link: '/zh/guide/showcase' },
+]" />

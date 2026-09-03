@@ -11,6 +11,11 @@ keywords:
 
 大多数高级定制，其实都应该先从 `setCustomComponents` 开始，而不是一上来就改解析器。
 
+<PrereqChips :items="[
+  { text: '使用：content 与 nodes', link: '/zh/guide/usage' },
+  { text: '渲染器与节点组件', link: '/zh/guide/components' },
+]" />
+
 这页适合解决这些问题：
 
 - 想替换 `image`、`code_block`、`mermaid`、`link` 等内置渲染器
@@ -191,3 +196,9 @@ removeCustomComponents('docs')
 ```
 
 这在 SPA、Storybook、playground 和测试场景里尤其有帮助。
+
+<NextStep :items="[
+  { text: '自定义标签与高级组件', link: '/zh/guide/custom-components' },
+  { text: '组件画廊', link: '/zh/components/' },
+  { text: 'API 总览', link: '/zh/guide/api' },
+]" />

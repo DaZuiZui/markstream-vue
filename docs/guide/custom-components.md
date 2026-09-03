@@ -12,6 +12,10 @@ keywords:
 
 Use this page when Markdown needs to contain trusted, component-like tags such as `thinking`, `answer-box`, or other domain-specific blocks.
 
+<PrereqChips :items="[
+  { text: 'Override Built-in Components', link: '/guide/component-overrides' },
+]" />
+
 The recommended app-level path is:
 
 1. install `VueRendererMarkdown` with an app-scoped `components` map
@@ -186,3 +190,9 @@ removeCustomComponents('chat')
 ```
 
 This keeps custom behavior local to the page, route, or app surface that actually needs it.
+
+<NextStep :items="[
+  { text: 'Advanced Parser Hooks', link: '/guide/advanced' },
+  { text: 'YAML Front Matter', link: '/guide/frontmatter-cookbook' },
+  { text: 'API Overview', link: '/guide/api' },
+]" />

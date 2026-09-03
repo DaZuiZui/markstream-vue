@@ -14,6 +14,11 @@ keywords:
 
 Use this path when you are building a docs site, knowledge base, or content-heavy app where Markdown is mostly rendered as stable page content rather than a live token stream.
 
+<PrereqChips :items="[
+  { text: 'Vue Quick Start', link: '/guide/quick-start' },
+  { text: 'Installation & Optional Peers', link: '/guide/installation' },
+]" />
+
 This is the shortest route for VitePress users who need to answer all of these together:
 
 - should I use `content` or `nodes`
@@ -152,3 +157,9 @@ Start here when layout or CSS still looks off: [Troubleshooting](/guide/troubles
 - [Custom Tags & Advanced Components](/guide/custom-components) for nested custom-tag patterns
 - [Tailwind Integration & Style Ordering](/guide/tailwind) for utility CSS stacks
 - [Troubleshooting](/guide/troubleshooting) when styles or peers behave unexpectedly
+
+<NextStep :items="[
+  { text: 'Custom Tags & Advanced Components', link: '/guide/custom-components' },
+  { text: 'Tailwind & Styling', link: '/guide/tailwind' },
+  { text: 'Showcase', link: '/guide/showcase' },
+]" />

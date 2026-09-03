@@ -33,3 +33,9 @@ const md = '# Streamed Features\n\n```mermaid\ngraph LR\nA-->B\n```'
   <MarkdownRender :content="md" />
 </template>
 ```
+
+<NextStep :items="[
+  { text: 'Component Gallery', link: '/components/' },
+  { text: 'Examples', link: '/guide/examples' },
+  { text: 'Showcase', link: '/guide/showcase' },
+]" />

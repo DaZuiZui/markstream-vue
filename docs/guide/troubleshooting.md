@@ -113,3 +113,9 @@ Quick test — run the playground locally to reproduce and debug:
 pnpm play
 # open the playground and reproduce the issue with a minimal Markdown sample
 ```
+
+<NextStep :items="[
+  { text: 'Troubleshooting by Symptom', link: '/guide/troubleshooting-path' },
+  { text: 'Installation & Optional Peers', link: '/guide/installation' },
+  { text: 'Nuxt SSR', link: '/nuxt-ssr' },
+]" />
