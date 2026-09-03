@@ -1,6 +1,6 @@
 import type { EnhanceAppContext } from 'vitepress'
 import TwoslashFloatingVue from '@shikijs/vitepress-twoslash/client'
-import MarkdownRender, { setInfographicLoader } from 'markstream-vue'
+import MarkdownRender, { createKaTeXWorkerFromCDN, setInfographicLoader, setKaTeXWorker } from 'markstream-vue'
 import Theme from 'vitepress/theme'
 import GitHubStarBadge from './GitHubStarBadge.vue'
 import Layout from './Layout.vue'
@@ -25,6 +25,18 @@ export default {
     // Let gallery previews render infographic blocks; the peer is loaded
     // lazily, only when an infographic node actually mounts.
     setInfographicLoader(() => import('@antv/infographic'))
+    // Math nodes render through a KaTeX worker when one is injected; without
+    // it they log a worker error and fall back to sync rendering. Build the
+    // worker from CDN sources at runtime (no bundler worker plumbing, and
+    // SSG-safe because it only runs in the browser).
+    if (typeof window !== 'undefined') {
+      const katexHandle = createKaTeXWorkerFromCDN({
+        katexUrl: 'https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.js',
+        mhchemUrl: 'https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/contrib/mhchem.min.js',
+      })
+      if (katexHandle.worker)
+        setKaTeXWorker(katexHandle.worker)
+    }
   },
 }
 
