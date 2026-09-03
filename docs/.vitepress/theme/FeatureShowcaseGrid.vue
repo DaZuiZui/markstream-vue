@@ -651,14 +651,8 @@ onBeforeUnmount(() => {
   height: 150px !important;
 }
 
-/* The infographic diagram can be taller than the shrunken area; let it
-   scale down proportionally so the whole graphic stays visible. */
-.ms-showcase-preview :deep(.infographic-preview svg) {
-  max-height: 100% !important;
-  max-width: 100% !important;
-  height: auto !important;
-  width: auto !important;
-}
+/* The infographic diagram scales itself inside the preview area (library
+   CSS mirrors the mermaid behavior), so no consumer override is needed. */
 
 .ms-showcase-skeleton {
   height: 100%;

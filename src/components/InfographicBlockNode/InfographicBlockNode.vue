@@ -1038,6 +1038,16 @@ watch(
   transition-duration: var(--ms-duration-fast);
 }
 
+/* Keep the diagram fully visible and centered like the mermaid block:
+   scale down proportionally inside the preview area. The flex centering
+   wrapper is the .absolute inset-0 layer, which has a definite height. */
+.infographic-preview :deep(svg) {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+
 .infographic-pending-source {
   position: absolute;
   inset: 0;
