@@ -12,6 +12,12 @@ const checks = [
     failOnMissing: true,
   },
   {
+    label: 'components',
+    enDir: path.join(root, 'docs', 'components'),
+    zhDir: path.join(root, 'docs', 'zh', 'components'),
+    failOnMissing: true,
+  },
+  {
     label: 'frameworks',
     enDir: path.join(root, 'docs', 'frameworks'),
     zhDir: path.join(root, 'docs', 'zh', 'frameworks'),

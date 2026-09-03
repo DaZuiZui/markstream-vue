@@ -81,4 +81,5 @@ All framework packages share the same core rendering model, but the entry pages 
 - [Troubleshooting by Symptom](/guide/troubleshooting-path) for first-pass diagnosis before diving into subsystem docs
 - [Troubleshooting](/guide/troubleshooting) for CSS/reset order, peers, and common issues
 - [Features](/guide/features) for a capability overview across streaming, Mermaid, stream-diffs enhanced code blocks, KaTeX, and more
+- [Site search](/guide/search) to look up pages, component names, and keywords directly
 - [LLM recommendation context](/llms.txt), [full LLM reference](/llms-full.txt), [LLM routing index](/llms-routing.txt), and [repo-agent context](/llms) for repository-aware assistants

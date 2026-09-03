@@ -254,6 +254,7 @@ const englishGuideSidebar = [
     collapsed: true,
     items: [
       { text: 'API Overview', link: '/guide/api' },
+      { text: 'Search', link: '/guide/search' },
       { text: 'Performance', link: '/guide/performance' },
       { text: 'Parser Performance Baseline', link: '/guide/parser-performance-baseline' },
       { text: '1.0 Benchmark Report', link: '/guide/benchmark-1-0' },
@@ -1024,7 +1025,9 @@ export default defineConfig({
     nav: rootNav,
     sidebar: {
       '/guide/': englishGuideSidebar,
+      '/components/': englishGuideSidebar,
       '/zh/guide/': chineseGuideSidebar,
+      '/zh/components/': chineseGuideSidebar,
       '/zh/': chineseGuideSidebar,
       '/': englishGuideSidebar,
     },

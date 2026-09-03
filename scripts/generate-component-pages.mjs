@@ -23,9 +23,24 @@ function frontmatterList(values) {
 function writeComponentPages(dir, locale) {
   fs.mkdirSync(dir, { recursive: true })
 
-  // Remove stale generated pages; index.md is handwritten and must survive.
+  // Remove stale generated pages only: index.md is handwritten, and so is any
+  // other page without the generated marker — deleting those would silently
+  // destroy hand-written content on the next docs:dev / docs:build run.
+  const slugs = new Set(componentsDocData.map(entry => entry.slug))
   for (const file of fs.readdirSync(dir)) {
-    if (file !== 'index.md' && file.endsWith('.md'))
+    if (file === 'index.md' || !file.endsWith('.md'))
+      continue
+    const slug = file.replace(/\.md$/, '')
+    let looksGenerated = slugs.has(slug)
+    if (!looksGenerated) {
+      try {
+        looksGenerated = fs.readFileSync(path.join(dir, file), 'utf8').includes('<ComponentDetail slug=')
+      }
+      catch {
+        looksGenerated = false
+      }
+    }
+    if (looksGenerated)
       fs.rmSync(path.join(dir, file))
   }
 
@@ -37,6 +52,8 @@ function writeComponentPages(dir, locale) {
   for (const entry of componentsDocData) {
     const category = componentCategories.find(item => item.key === entry.category)
     const categoryLabel = isZh ? (category?.zh ?? entry.category) : (category?.en ?? entry.category)
+    // 'infra' reads awkwardly as a keyword; spell it out for SEO frontmatter.
+    const keywordCategory = entry.category === 'infra' ? 'infrastructure' : entry.category
     const title = isZh ? `${entry.name} 组件详解` : `${entry.name} component`
     const h1 = isZh ? `${entry.name} 组件详解` : `${entry.name} component`
     const description = isZh
@@ -44,7 +61,7 @@ function writeComponentPages(dir, locale) {
       : `${entry.description} Built-in ${categoryLabel} node component of the Markstream streaming Markdown renderer, with a live preview, override notes, and related components.`
     const keywords = isZh
       ? [entry.name, 'markstream 组件', `${categoryLabel} 组件`, '流式 Markdown 渲染']
-      : [entry.name, 'markstream component', `${entry.category} node`, 'streaming markdown']
+      : [entry.name, 'markstream component', `${keywordCategory} node`, 'streaming markdown']
 
     const content = `---
 title: ${yamlSingleQuoted(title)}

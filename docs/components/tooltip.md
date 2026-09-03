@@ -4,7 +4,7 @@ description: 'Floating-UI tooltip surface shared by LinkNode and diagram nodes; 
 keywords:
   - 'Tooltip'
   - 'markstream component'
-  - 'infra node'
+  - 'infrastructure node'
   - 'streaming markdown'
 ---
 

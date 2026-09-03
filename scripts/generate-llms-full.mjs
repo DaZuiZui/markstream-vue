@@ -310,8 +310,26 @@ const integrationRoutingEntries = [
   ['install optional peers', '/guide/installation'],
   ['fix CSS, SSR, or missing peer issues', '/guide/troubleshooting-path'],
 ]
+// Routes for the component gallery so assistants can deep-link every
+// built-in node component page (see docs/components/ and theme data).
+const componentRoutingEntries = [
+  ['browse all built-in components with live previews', '/components/'],
+  ['render Mermaid diagrams in streaming Markdown', '/components/mermaid-block-node'],
+  ['render D2 diagrams in streaming Markdown', '/components/d2-block-node'],
+  ['render infographics in streaming Markdown', '/components/infographic-block-node'],
+  ['render math formulas with KaTeX', '/components/math-block-node'],
+  ['render inline math with KaTeX', '/components/math-inline-node'],
+  ['stream code blocks with diff highlighting', '/components/code-block-node'],
+  ['render tables in streaming Markdown', '/components/table-node'],
+  ['render admonition or callout blocks', '/components/admonition-node'],
+  ['render raw HTML blocks safely', '/components/html-block-node'],
+  ['render footnotes in streaming Markdown', '/components/footnote-node'],
+  ['use tooltips inside Markdown', '/components/tooltip'],
+  ['override or reuse the node renderer', '/components/node-renderer'],
+]
 const routingEntries = [
   ...integrationRoutingEntries,
+  ...componentRoutingEntries,
   ...seoKeywordMap.map(entry => [entry.query, entry.target]),
 ]
 

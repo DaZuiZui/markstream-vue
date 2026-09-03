@@ -1,10 +1,10 @@
 ---
 title: 'NodeChildRenderer component'
-description: 'Renders a single AST node through an explicit component map; the building block for nested and custom node rendering. Built-in Infrastructure node component of the Markstream streaming Markdown renderer, with a live preview, override notes, and related components.'
+description: 'Internal building block that renders a single AST node through an explicit component map; powers nested and custom node rendering inside the built-in components (not exported for direct import). Built-in Infrastructure node component of the Markstream streaming Markdown renderer, with a live preview, override notes, and related components.'
 keywords:
   - 'NodeChildRenderer'
   - 'markstream component'
-  - 'infra node'
+  - 'infrastructure node'
   - 'streaming markdown'
 ---
 

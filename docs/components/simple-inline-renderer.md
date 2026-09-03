@@ -1,10 +1,10 @@
 ---
 title: 'SimpleInlineRenderer component'
-description: 'Fast-path renderer for arrays of simple inline nodes (text, emphasis, links, and friends) without mounting the full block renderer. Built-in Infrastructure node component of the Markstream streaming Markdown renderer, with a live preview, override notes, and related components.'
+description: 'Internal fast-path renderer for arrays of simple inline nodes (text, emphasis, links, and friends) without mounting the full block renderer; used by the built-in components. Built-in Infrastructure node component of the Markstream streaming Markdown renderer, with a live preview, override notes, and related components.'
 keywords:
   - 'SimpleInlineRenderer'
   - 'markstream component'
-  - 'infra node'
+  - 'infrastructure node'
   - 'streaming markdown'
 ---
 

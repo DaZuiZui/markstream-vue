@@ -4,7 +4,7 @@ description: 'Virtualized timeline component for long mixed chat transcripts (pl
 keywords:
   - 'MarkstreamVirtualTimeline'
   - 'markstream component'
-  - 'infra node'
+  - 'infrastructure node'
   - 'streaming markdown'
 ---
 

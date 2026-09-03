@@ -37,7 +37,7 @@ import 'markstream-vue/index.css'
 ```
 
 3. 带 **peer** 徽标的组件需要先安装对应的可选依赖 — 见[安装与可选依赖](/zh/guide/installation)。
-4. 想要不同的外观?几乎所有节点都能安全替换 — 见[覆盖内置组件](/zh/guide/component-overrides)。
+4. 想要不同的外观？几乎所有节点都能安全替换 — 见[覆盖内置组件](/zh/guide/component-overrides)。
 
 ::: tip 默认就是流式
 这些预览在内容逐 token 流入时渲染结果完全一致。未闭合语法保持稳定而不是闪烁 — 这是 Markstream 的核心能力。

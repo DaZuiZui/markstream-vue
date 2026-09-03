@@ -4,7 +4,7 @@ description: 'The core renderer behind MarkdownRender: maps parsed AST nodes to 
 keywords:
   - 'NodeRenderer'
   - 'markstream component'
-  - 'infra node'
+  - 'infrastructure node'
   - 'streaming markdown'
 ---
 

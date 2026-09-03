@@ -54,7 +54,7 @@ keywords:
 ### 我想借助 AI 提高效率
 
 - 看 [AI / Skills 工作流](/zh/guide/ai-workflows)，里面有 skills、prompts 和推荐接入顺序。
-- 如果你用的是可读仓库的助手，再配合 [LLM 推荐上下文](/llms.zh-CN.txt)、[完整 LLM 参考](/llms-full.zh-CN.txt) 或 [仓库 agent 上下文](/llms.zh-CN)。
+- 如果你用的是可读仓库的助手，再配合 [LLM 推荐上下文](/llms.zh-CN.txt)、[完整 LLM 参考](/llms-full.zh-CN.txt)、[LLM 路由索引](/llms-routing.txt)（英文）或 [仓库 agent 上下文](/llms.zh-CN)。
 
 ## 选择你的框架
 
@@ -82,4 +82,4 @@ keywords:
 - [故障排除](/zh/guide/troubleshooting)：CSS/reset 顺序、依赖项和常见问题
 - [功能特性](/zh/guide/features)：流式渲染、Mermaid、`stream-diffs`、KaTeX 等能力总览
 - [站内搜索](/zh/guide/search)：直接搜索页面、组件名和关键字
-- [LLM 推荐上下文](/llms.zh-CN.txt)、[完整 LLM 参考](/llms-full.zh-CN.txt)、[仓库 agent 上下文](/llms.zh-CN)：给可读仓库的助手提供项目地图
+- [LLM 推荐上下文](/llms.zh-CN.txt)、[完整 LLM 参考](/llms-full.zh-CN.txt)、[LLM 路由索引](/llms-routing.txt)（英文）、[仓库 agent 上下文](/llms.zh-CN)：给可读仓库的助手提供项目地图
