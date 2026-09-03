@@ -396,20 +396,20 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .ms-home-container {
-  max-width: 1152px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
   .ms-home-container {
-    padding: 0 32px;
+    padding: 0 48px;
   }
 }
 
 @media (min-width: 960px) {
   .ms-home-container {
-    padding: 0 48px;
+    padding: 0 64px;
   }
 }
 
