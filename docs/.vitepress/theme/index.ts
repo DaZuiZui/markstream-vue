@@ -1,6 +1,6 @@
 import type { EnhanceAppContext } from 'vitepress'
 import TwoslashFloatingVue from '@shikijs/vitepress-twoslash/client'
-import MarkdownRender, { createKaTeXWorkerFromCDN, setInfographicLoader, setKaTeXWorker } from 'markstream-vue'
+import MarkdownRender, { createKaTeXWorkerFromCDN, createMermaidWorkerFromCDN, setInfographicLoader, setKaTeXWorker, setMermaidWorker } from 'markstream-vue'
 import Theme from 'vitepress/theme'
 import GitHubStarBadge from './GitHubStarBadge.vue'
 import Layout from './Layout.vue'
@@ -36,6 +36,14 @@ export default {
       })
       if (katexHandle.worker)
         setKaTeXWorker(katexHandle.worker)
+
+      // Mermaid parsing runs through a worker when one is injected; without
+      // it diagram rendering logs a worker error per diagram.
+      const mermaidHandle = createMermaidWorkerFromCDN({
+        mermaidUrl: 'https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.esm.min.mjs',
+      })
+      if (mermaidHandle.worker)
+        setMermaidWorker(mermaidHandle.worker)
     }
   },
 }
