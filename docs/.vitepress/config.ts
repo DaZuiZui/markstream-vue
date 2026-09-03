@@ -4,6 +4,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { transformerTwoslash } from '@shikijs/vitepress-twoslash'
 import { defineConfig } from 'vitepress'
+import { componentCategories, componentsDocData } from './theme/data/components'
 
 const docsSiteUrl = process.env.VITEPRESS_SITE_URL || 'https://markstream.simonhe.me'
 const docsOgImageUrl = getDocsAbsoluteAssetUrl('/og-image.png')
@@ -58,89 +59,139 @@ const playgroundItems = [
 ]
 
 const rootNav = [
-  { text: 'Frameworks', link: '/frameworks/' },
-  { text: 'Get started', link: '/guide/quick-start' },
-  { text: 'Customization', link: '/guide/component-overrides' },
-  { text: 'Guides', link: '/guide/' },
-  { text: 'API Reference', link: '/guide/api' },
+  {
+    text: 'Learn',
+    items: [
+      { text: 'Vue Quick Start', link: '/guide/quick-start' },
+      { text: 'Installation & Optional Peers', link: '/guide/installation' },
+      { text: 'AI Chat & Streaming', link: '/guide/ai-chat-streaming' },
+      { text: 'All Guides', link: '/guide/' },
+    ],
+  },
+  {
+    text: 'Components',
+    items: [
+      { text: 'Component Gallery', link: '/components/' },
+      { text: 'Override Built-in Components', link: '/guide/component-overrides' },
+      { text: 'Custom Tags & Advanced Components', link: '/guide/custom-components' },
+      { text: 'Renderer & Node Components', link: '/guide/components' },
+    ],
+  },
+  {
+    text: 'Frameworks',
+    items: [
+      { text: 'Overview', link: '/frameworks/' },
+      { text: 'Vue 3', link: '/frameworks/vue' },
+      { text: 'Nuxt', link: '/frameworks/nuxt' },
+      { text: 'Vue 2', link: '/frameworks/vue2' },
+      { text: 'React', link: '/frameworks/react' },
+      { text: 'Next.js', link: '/frameworks/next' },
+      { text: 'Svelte', link: '/frameworks/svelte' },
+      { text: 'Angular', link: '/frameworks/angular' },
+    ],
+  },
   { text: 'Playground', items: playgroundItems },
+  { text: 'Troubleshooting', link: '/guide/troubleshooting-path' },
   { text: 'GitHub', link: 'https://github.com/Simon-He95/markstream-vue' },
 ]
 
 const zhNav = [
-  { text: '框架选择', link: '/zh/frameworks/' },
-  { text: '快速开始', link: '/zh/guide/quick-start' },
-  { text: '自定义', link: '/zh/guide/component-overrides' },
-  { text: '指南', link: '/zh/guide/' },
-  { text: 'API 参考', link: '/zh/guide/api' },
+  {
+    text: '学习',
+    items: [
+      { text: 'Vue 快速开始', link: '/zh/guide/quick-start' },
+      { text: '安装与可选依赖', link: '/zh/guide/installation' },
+      { text: 'AI 聊天与流式输出', link: '/zh/guide/ai-chat-streaming' },
+      { text: '全部指南', link: '/zh/guide/' },
+    ],
+  },
+  {
+    text: '组件',
+    items: [
+      { text: '组件画廊', link: '/zh/components/' },
+      { text: '覆盖内置组件', link: '/zh/guide/component-overrides' },
+      { text: '自定义标签与高级组件', link: '/zh/guide/custom-components' },
+      { text: '渲染器与节点组件', link: '/zh/guide/components' },
+    ],
+  },
+  {
+    text: '框架',
+    items: [
+      { text: '框架总览', link: '/zh/frameworks/' },
+      { text: 'Vue 3', link: '/zh/frameworks/vue' },
+      { text: 'Nuxt', link: '/zh/frameworks/nuxt' },
+      { text: 'Vue 2', link: '/zh/frameworks/vue2' },
+      { text: 'React', link: '/zh/frameworks/react' },
+      { text: 'Next.js', link: '/zh/frameworks/next' },
+      { text: 'Svelte', link: '/zh/frameworks/svelte' },
+      { text: 'Angular', link: '/zh/frameworks/angular' },
+    ],
+  },
   { text: '演示', items: playgroundItems },
-  { text: '搜索', link: '/zh/guide/search' },
+  { text: '排障', link: '/zh/guide/troubleshooting-path' },
   { text: 'GitHub', link: 'https://github.com/Simon-He95/markstream-vue' },
 ]
 
+const englishComponentCategoryGroups = componentCategories.map(category => ({
+  text: category.en,
+  collapsed: true,
+  items: componentsDocData
+    .filter(entry => entry.category === category.key)
+    .map(entry => ({ text: entry.name, link: `/components/${entry.slug}` })),
+}))
+
 const englishGuideSidebar = [
   {
-    text: 'Start Here',
+    text: 'Get Started',
     items: [
       { text: 'Vue Quick Start', link: '/guide/quick-start' },
       { text: 'Installation & Optional Peers', link: '/guide/installation' },
       { text: 'AI Chat & Streaming', link: '/guide/ai-chat-streaming' },
       { text: 'Nuxt SSR', link: '/nuxt-ssr' },
-      { text: 'Docs Site & VitePress', link: '/guide/vitepress-docs-integration' },
-      { text: 'Troubleshooting by Symptom', link: '/guide/troubleshooting-path' },
       { text: 'All Guides', link: '/guide/' },
     ],
   },
   {
-    text: 'Core Concepts',
+    text: 'Components',
+    items: [
+      { text: 'Component Gallery', link: '/components/' },
+      { text: 'Override Built-in Components', link: '/guide/component-overrides' },
+      { text: 'Custom Tags & Advanced Components', link: '/guide/custom-components' },
+      { text: 'Renderer & Node Components', link: '/guide/components' },
+      ...englishComponentCategoryGroups,
+      {
+        text: 'Deep Dive Guides',
+        collapsed: true,
+        items: [
+          { text: 'Code Blocks', link: '/guide/code-blocks' },
+          { text: 'Code Block Header', link: '/guide/codeblock-header' },
+          { text: 'CodeBlockNode', link: '/guide/code-block-node' },
+          { text: 'ImageNode', link: '/guide/image-node' },
+          { text: 'Math', link: '/guide/math' },
+          { text: 'Mermaid', link: '/guide/mermaid' },
+          { text: 'MermaidBlockNode', link: '/guide/mermaid-block-node' },
+          { text: 'MermaidBlockNode (override)', link: '/guide/mermaid-block-node-override' },
+          { text: 'Mermaid export demo', link: '/guide/mermaid-export-demo' },
+          { text: 'D2', link: '/guide/d2' },
+          { text: 'AntV Infographic', link: '/guide/infographic' },
+          { text: 'ECharts', link: '/guide/echarts' },
+          { text: 'Code Block Runtime', link: '/guide/code-block-runtime' },
+        ],
+      },
+    ],
+  },
+  {
+    text: 'Guides by Task',
     collapsed: true,
     items: [
       { text: 'Usage: content vs nodes', link: '/guide/usage' },
       { text: 'Props & Options', link: '/guide/props' },
-      { text: 'Security', link: '/guide/security' },
+      { text: 'Docs Site & VitePress', link: '/guide/vitepress-docs-integration' },
       { text: 'Features Overview', link: '/guide/features' },
       { text: 'Examples', link: '/guide/examples' },
       { text: 'Showcase', link: '/guide/showcase' },
       { text: 'Playground', link: '/guide/playground' },
-    ],
-  },
-  {
-    text: 'Customization',
-    items: [
-      { text: 'Renderer & Node Components', link: '/guide/components' },
-      { text: 'Override Built-in Components', link: '/guide/component-overrides' },
-      { text: 'Custom Tags & Advanced Components', link: '/guide/custom-components' },
-      { text: 'YAML Front Matter', link: '/guide/frontmatter-cookbook' },
-      { text: 'Advanced Parser Hooks', link: '/guide/advanced' },
-      { text: 'Parser Overview', link: '/guide/parser' },
-      { text: 'Parser API', link: '/guide/parser-api' },
-      { text: 'Tailwind & Styling', link: '/guide/tailwind' },
-      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
-    ],
-  },
-  {
-    text: 'Feature Guides',
-    collapsed: true,
-    items: [
-      { text: 'Code Blocks', link: '/guide/code-blocks' },
-      { text: 'Code Block Header', link: '/guide/codeblock-header' },
-      { text: 'CodeBlockNode', link: '/guide/code-block-node' },
-      { text: 'ImageNode', link: '/guide/image-node' },
-      { text: 'Math', link: '/guide/math' },
-      { text: 'Mermaid', link: '/guide/mermaid' },
-      { text: 'MermaidBlockNode', link: '/guide/mermaid-block-node' },
-      { text: 'MermaidBlockNode (override)', link: '/guide/mermaid-block-node-override' },
-      { text: 'Mermaid export demo', link: '/guide/mermaid-export-demo' },
-      { text: 'D2', link: '/guide/d2' },
-      { text: 'AntV Infographic', link: '/guide/infographic' },
-      { text: 'ECharts', link: '/guide/echarts' },
-      { text: 'Code Block Runtime', link: '/guide/code-block-runtime' },
-    ],
-  },
-  {
-    text: 'Use Cases',
-    collapsed: true,
-    items: [
+      { text: 'Security', link: '/guide/security' },
       { text: 'Use Cases overview', link: '/use-cases/' },
       { text: 'Vue AI Chat Markdown', link: '/use-cases/vue-ai-chat-markdown-renderer' },
       { text: 'LLM Token Streams', link: '/use-cases/llm-token-stream-markdown' },
@@ -151,6 +202,24 @@ const englishGuideSidebar = [
       { text: 'Mobile WebView', link: '/use-cases/mobile-webview' },
       { text: 'Streaming Mermaid & KaTeX', link: '/use-cases/streaming-mermaid-katex' },
       { text: 'Long AI Responses', link: '/use-cases/long-ai-responses' },
+    ],
+  },
+  {
+    text: 'Troubleshooting',
+    items: [
+      { text: 'Troubleshooting by Symptom', link: '/guide/troubleshooting-path' },
+      { text: 'Troubleshooting', link: '/guide/troubleshooting' },
+    ],
+  },
+  {
+    text: 'Customize',
+    collapsed: true,
+    items: [
+      { text: 'YAML Front Matter', link: '/guide/frontmatter-cookbook' },
+      { text: 'Advanced Parser Hooks', link: '/guide/advanced' },
+      { text: 'Parser Overview', link: '/guide/parser' },
+      { text: 'Parser API', link: '/guide/parser-api' },
+      { text: 'Tailwind & Styling', link: '/guide/tailwind' },
     ],
   },
   {
@@ -207,6 +276,14 @@ const englishGuideSidebar = [
   },
 ]
 
+const chineseComponentCategoryGroups = componentCategories.map(category => ({
+  text: category.zh,
+  collapsed: true,
+  items: componentsDocData
+    .filter(entry => entry.category === category.key)
+    .map(entry => ({ text: entry.name, link: `/zh/components/${entry.slug}` })),
+}))
+
 const chineseGuideSidebar = [
   {
     text: '开始使用',
@@ -215,59 +292,82 @@ const chineseGuideSidebar = [
       { text: '安装与可选依赖', link: '/zh/guide/installation' },
       { text: 'AI 聊天与流式输出', link: '/zh/guide/ai-chat-streaming' },
       { text: 'Nuxt SSR', link: '/zh/nuxt-ssr' },
-      { text: '文档站与 VitePress', link: '/zh/guide/vitepress-docs-integration' },
-      { text: '按症状排查', link: '/zh/guide/troubleshooting-path' },
       { text: '全部指南', link: '/zh/guide/' },
     ],
   },
   {
-    text: '核心概念',
+    text: '组件',
+    items: [
+      { text: '组件画廊', link: '/zh/components/' },
+      { text: '覆盖内置组件', link: '/zh/guide/component-overrides' },
+      { text: '自定义标签与高级组件', link: '/zh/guide/custom-components' },
+      { text: '渲染器与节点组件', link: '/zh/guide/components' },
+      ...chineseComponentCategoryGroups,
+      {
+        text: '深度指南',
+        collapsed: true,
+        items: [
+          { text: '代码块', link: '/zh/guide/code-blocks' },
+          { text: '代码块头部', link: '/zh/guide/codeblock-header' },
+          { text: 'CodeBlockNode', link: '/zh/guide/code-block-node' },
+          { text: 'ImageNode', link: '/zh/guide/image-node' },
+          { text: 'Math', link: '/zh/guide/math' },
+          { text: 'Mermaid', link: '/zh/guide/mermaid' },
+          { text: 'MermaidBlockNode', link: '/zh/guide/mermaid-block-node' },
+          { text: '覆盖 MermaidBlockNode', link: '/zh/guide/mermaid-block-node-override' },
+          { text: 'Mermaid 导出示例', link: '/zh/guide/mermaid-export-demo' },
+          { text: 'D2 图表', link: '/zh/guide/d2' },
+          { text: 'AntV Infographic', link: '/zh/guide/infographic' },
+          { text: 'ECharts', link: '/zh/guide/echarts' },
+          { text: '代码块运行时', link: '/zh/guide/code-block-runtime' },
+        ],
+      },
+    ],
+  },
+  {
+    text: '按任务浏览',
     collapsed: true,
     items: [
       { text: '使用：content 与 nodes', link: '/zh/guide/usage' },
       { text: 'Props 与选项', link: '/zh/guide/props' },
-      { text: '安全', link: '/zh/guide/security' },
+      { text: '文档站与 VitePress', link: '/zh/guide/vitepress-docs-integration' },
       { text: '功能特性', link: '/zh/guide/features' },
       { text: '示例', link: '/zh/guide/examples' },
       { text: 'Showcase', link: '/zh/guide/showcase' },
       { text: 'Playground', link: '/zh/guide/playground' },
+      { text: '安全', link: '/zh/guide/security' },
+      { text: '使用场景总览', link: '/zh/use-cases/' },
+      { text: 'Vue AI 聊天 Markdown', link: '/zh/use-cases/vue-ai-chat-markdown-renderer' },
+      { text: 'LLM token 流 Markdown', link: '/zh/use-cases/llm-token-stream-markdown' },
+      { text: 'AI 聊天流式 Markdown', link: '/zh/use-cases/ai-chat-streaming' },
+      { text: 'SSE 与 WebSocket Markdown', link: '/zh/use-cases/sse-websocket' },
+      { text: '未闭合 Markdown 渲染', link: '/zh/use-cases/incomplete-markdown-renderer' },
+      { text: '流式代码块', link: '/zh/use-cases/streaming-code-blocks' },
+      { text: '移动端 WebView Markdown', link: '/zh/use-cases/mobile-webview' },
+      { text: '流式 Mermaid 与 KaTeX', link: '/zh/use-cases/streaming-mermaid-katex' },
+      { text: '长 AI 回答渲染', link: '/zh/use-cases/long-ai-responses' },
+    ],
+  },
+  {
+    text: '故障排除',
+    items: [
+      { text: '按症状排查', link: '/zh/guide/troubleshooting-path' },
+      { text: '故障排除', link: '/zh/guide/troubleshooting' },
     ],
   },
   {
     text: '自定义',
+    collapsed: true,
     items: [
-      { text: '渲染器与节点组件', link: '/zh/guide/components' },
-      { text: '覆盖内置组件', link: '/zh/guide/component-overrides' },
-      { text: '自定义标签与高级组件', link: '/zh/guide/custom-components' },
       { text: 'YAML Front Matter', link: '/zh/guide/frontmatter-cookbook' },
       { text: '高级解析', link: '/zh/guide/advanced' },
       { text: '解析器概览', link: '/zh/guide/parser' },
       { text: '解析器 API', link: '/zh/guide/parser-api' },
       { text: 'Tailwind 与样式', link: '/zh/guide/tailwind' },
-      { text: '故障排除', link: '/zh/guide/troubleshooting' },
     ],
   },
   {
-    text: '功能专题',
-    collapsed: true,
-    items: [
-      { text: '代码块', link: '/zh/guide/code-blocks' },
-      { text: '代码块头部', link: '/zh/guide/codeblock-header' },
-      { text: 'CodeBlockNode', link: '/zh/guide/code-block-node' },
-      { text: 'ImageNode', link: '/zh/guide/image-node' },
-      { text: 'Math', link: '/zh/guide/math' },
-      { text: 'Mermaid', link: '/zh/guide/mermaid' },
-      { text: 'MermaidBlockNode', link: '/zh/guide/mermaid-block-node' },
-      { text: '覆盖 MermaidBlockNode', link: '/zh/guide/mermaid-block-node-override' },
-      { text: 'Mermaid 导出示例', link: '/zh/guide/mermaid-export-demo' },
-      { text: 'D2 图表', link: '/zh/guide/d2' },
-      { text: 'AntV Infographic', link: '/zh/guide/infographic' },
-      { text: 'ECharts', link: '/zh/guide/echarts' },
-      { text: '代码块运行时', link: '/zh/guide/code-block-runtime' },
-    ],
-  },
-  {
-    text: '框架与选型',
+    text: '框架与迁移',
     collapsed: true,
     items: [
       { text: '框架总览', link: '/zh/frameworks/' },
@@ -278,31 +378,6 @@ const chineseGuideSidebar = [
       { text: 'Next.js 流式 Markdown 渲染器', link: '/zh/frameworks/next' },
       { text: 'Svelte 流式 Markdown 渲染器', link: '/zh/frameworks/svelte' },
       { text: 'Angular 流式 Markdown 渲染器', link: '/zh/frameworks/angular' },
-      { text: 'AI 聊天流式 Markdown', link: '/zh/use-cases/ai-chat-streaming' },
-      { text: 'SSE 与 WebSocket Markdown', link: '/zh/use-cases/sse-websocket' },
-      { text: '移动端 WebView Markdown', link: '/zh/use-cases/mobile-webview' },
-      { text: 'react-markdown 对比', link: '/zh/compare/react-markdown' },
-      { text: 'Streamdown 对比', link: '/zh/compare/streamdown' },
-      { text: 'marked / markdown-it 对比', link: '/zh/compare/marked-markdown-it' },
-    ],
-  },
-  {
-    text: '使用场景',
-    collapsed: true,
-    items: [
-      { text: '使用场景总览', link: '/zh/use-cases/' },
-      { text: 'Vue AI 聊天 Markdown', link: '/zh/use-cases/vue-ai-chat-markdown-renderer' },
-      { text: 'LLM token 流 Markdown', link: '/zh/use-cases/llm-token-stream-markdown' },
-      { text: '未闭合 Markdown 渲染', link: '/zh/use-cases/incomplete-markdown-renderer' },
-      { text: '流式代码块', link: '/zh/use-cases/streaming-code-blocks' },
-      { text: '流式 Mermaid 与 KaTeX', link: '/zh/use-cases/streaming-mermaid-katex' },
-      { text: '长 AI 回答渲染', link: '/zh/use-cases/long-ai-responses' },
-    ],
-  },
-  {
-    text: '框架与迁移',
-    collapsed: true,
-    items: [
       { text: 'Nuxt SSR', link: '/zh/nuxt-ssr' },
       { text: 'Vue 2 快速开始', link: '/zh/guide/vue2-quick-start' },
       { text: 'Vue 2 安装', link: '/zh/guide/vue2-installation' },
@@ -333,6 +408,9 @@ const chineseGuideSidebar = [
       { text: '迁移到 1.0', link: '/zh/guide/migration-1-0' },
       { text: '为什么使用？', link: '/zh/guide/why' },
       { text: '对比', link: '/zh/guide/compared' },
+      { text: 'vs react-markdown', link: '/zh/compare/react-markdown' },
+      { text: 'vs Streamdown', link: '/zh/compare/streamdown' },
+      { text: 'vs marked / markdown-it', link: '/zh/compare/marked-markdown-it' },
       { text: '代码块运行时内部', link: '/zh/guide/code-block-runtime-internals' },
       { text: 'Legacy 构建与 iOS 正则兼容', link: '/zh/guide/legacy-builds' },
       { text: '贡献指南', link: '/zh/guide/contributing' },
@@ -921,6 +999,27 @@ export default defineConfig({
     },
     search: {
       provider: 'local',
+      options: {
+        locales: {
+          zh: {
+            translations: {
+              button: {
+                buttonText: '搜索文档',
+                buttonAriaLabel: '搜索文档',
+              },
+              modal: {
+                noResultsText: '未找到相关结果',
+                resetButtonTitle: '清除查询条件',
+                footer: {
+                  selectText: '选择',
+                  navigateText: '切换',
+                  closeText: '关闭',
+                },
+              },
+            },
+          },
+        },
+      },
     },
     nav: rootNav,
     sidebar: {
