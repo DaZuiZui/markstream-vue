@@ -355,6 +355,10 @@ export function createMermaidWorkerFromCDN(options: MermaidCDNWorkerOptions): Me
   const url = URL.createObjectURL(blob)
 
   let revoked = false
+  // Revoke the object URL when the caller is done with the worker.
+  // The URL is also revoked automatically right after Worker construction
+  // (a spec-compliant fetch from an object URL keeps the blob alive even
+  // after revocation). Kept public for API compatibility.
   const dispose = () => {
     if (revoked)
       return
@@ -370,7 +374,13 @@ export function createMermaidWorkerFromCDN(options: MermaidCDNWorkerOptions): Me
     ? ({ ...(options.workerOptions ?? {}), type: 'module' as const } satisfies WorkerOptions)
     : options.workerOptions
 
-  const worker = new Worker(url, workerOptions)
+  let worker: Worker | null = null
+  try {
+    worker = new Worker(url, workerOptions)
+  }
+  finally {
+    dispose()
+  }
   if (options.debug) {
     try {
       ;(worker as any).postMessage({ type: 'init', debug: true })
