@@ -640,6 +640,23 @@ onBeforeUnmount(() => {
   height: 150px !important;
 }
 
+/* Same for the infographic block: its preview area defaults to 400px and
+   its diagram is taller than the box, so shrink the area and let the SVG
+   scale down to fit, centered. */
+.ms-showcase-preview :deep(.infographic-preview),
+.ms-showcase-preview :deep(.infographic-preview > div),
+.ms-showcase-preview :deep(.infographic-preview > div > div) {
+  min-height: 140px !important;
+  height: 140px !important;
+}
+
+.ms-showcase-preview :deep(.infographic-preview svg) {
+  max-height: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  width: auto !important;
+}
+
 .ms-showcase-skeleton {
   height: 100%;
   border-radius: 8px;
