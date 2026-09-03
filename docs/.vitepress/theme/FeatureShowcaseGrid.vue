@@ -383,6 +383,7 @@ onBeforeUnmount(() => {
               :content="renderContent(cardIndexInDeck(gi, offset))"
               :is-dark="isDark"
               :custom-markdown-it="optionalMarkdownIt(card.slug)"
+              :infographic-props="{ estimatedPreviewHeightPx: 150 }"
               :typewriter="cardStates[cardIndexInDeck(gi, offset)] !== 'full'"
               :final="cardStates[cardIndexInDeck(gi, offset)] !== 'playing'"
               :fade="false"
@@ -631,25 +632,27 @@ onBeforeUnmount(() => {
   margin: 0.3rem 0;
 }
 
-/* The mermaid block ships a ~360px interactive preview area, which would
-   push its diagram below the fixed-height box. Shrink it to fit. */
+/* Diagram blocks read --ms-size-diagram-min-height from their own root
+   (.markstream-vue), which re-declares the default 360px; override it on
+   that root so both the CSS min-height and the JS clamps pick up 150px. */
+.ms-showcase-preview :deep(.markstream-vue) {
+  --ms-size-diagram-min-height: 150px;
+}
+
+/* Keep the interactive areas tight until every code path honors the token
+   (the blocks also clamp inline heights in JS at init). */
 .ms-showcase-preview :deep(.mermaid-preview-area),
 .ms-showcase-preview :deep(._mermaid),
-.ms-showcase-preview :deep(._mermaid > div) {
+.ms-showcase-preview :deep(._mermaid > div),
+.ms-showcase-preview :deep(.infographic-preview),
+.ms-showcase-preview :deep(.infographic-preview > div),
+.ms-showcase-preview :deep(.infographic-preview > div > div) {
   min-height: 150px !important;
   height: 150px !important;
 }
 
-/* Same for the infographic block: its preview area defaults to 400px and
-   its diagram is taller than the box, so shrink the area and let the SVG
-   scale down to fit, centered. */
-.ms-showcase-preview :deep(.infographic-preview),
-.ms-showcase-preview :deep(.infographic-preview > div),
-.ms-showcase-preview :deep(.infographic-preview > div > div) {
-  min-height: 140px !important;
-  height: 140px !important;
-}
-
+/* The infographic diagram can be taller than the shrunken area; let it
+   scale down proportionally so the whole graphic stays visible. */
 .ms-showcase-preview :deep(.infographic-preview svg) {
   max-height: 100% !important;
   max-width: 100% !important;
