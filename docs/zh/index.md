@@ -18,6 +18,9 @@ hero:
   name: Markstream
   text: 面向 AI 应用的流式 Markdown 渲染器
   tagline: Vue • React • Svelte • Angular • Nuxt • Next.js
+  image:
+    src: /markstream-hero.webp
+    alt: markstream-vue 流式 Markdown playground 插画
   actions:
     - theme: brand
       text: 快速开始
@@ -32,7 +35,7 @@ hero:
 
 适用于 AI 应用的多框架流式 Markdown 渲染器家族，支持 Mermaid 渐进渲染、流式代码块对比和高性能大文档处理 — 覆盖 Vue、React、Svelte、Angular、Nuxt 和 Next.js。
 
-上方演示面板用 `markstream-vue` 真实流式渲染一段回答：未闭合语法保持稳定、代码块渐进出现、语法闭合的瞬间图表立即渲染。
+下方的能力卡片会用 `markstream-vue` 像真实 AI 输出一样逐 token 流式播放：未闭合语法保持稳定、代码块渐进出现、语法闭合的瞬间图表立即渲染。
 
 ## 找到你的路
 

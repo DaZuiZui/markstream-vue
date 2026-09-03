@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MarkdownRender from 'markstream-vue'
 import { useData } from 'vitepress'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useDark } from './composables/useDark'
 
 const { lang } = useData()
@@ -12,7 +12,7 @@ interface ShowcaseCell {
   title: string
   md: string
   link: string
-  /** Heavy renderers (mermaid / katex) are mounted only when scrolled near. */
+  /** Heavy renderers (mermaid / katex) skip SSG and only mount when played. */
   lazy: boolean
 }
 
@@ -33,9 +33,8 @@ const cellsEn: ShowcaseCell[] = [
     md: [
       '```mermaid',
       'flowchart LR',
-      '  A[Token stream] --> B{Syntax closed?}',
-      '  B -- yes --> C[Render now]',
-      '  B -- no --> D[Stable placeholder]',
+      '  A[Stream] --> B{Closed?}',
+      '  B --> C[Render]',
       '```',
     ].join('\n'),
     link: '/components/mermaid-block-node',
@@ -96,9 +95,8 @@ const cellsZh: ShowcaseCell[] = [
     md: [
       '```mermaid',
       'flowchart LR',
-      '  A[Token 流] --> B{语法闭合?}',
-      '  B -- 是 --> C[立即渲染]',
-      '  B -- 否 --> D[稳定占位]',
+      '  A[流] --> B{闭合?}',
+      '  B --> C[渲染]',
       '```',
     ].join('\n'),
     link: '/zh/components/mermaid-block-node',
@@ -144,24 +142,75 @@ const cellsZh: ShowcaseCell[] = [
 
 const cells = computed(() => (isZh.value ? cellsZh : cellsEn))
 
-const visibleHeavy = ref(new Set<number>())
-let observer: IntersectionObserver | undefined
+type CardState = 'full' | 'skeleton' | 'playing' | 'done'
 
-function isCellVisible(index: number): boolean {
-  const cell = cells.value[index]
-  if (!cell || !cell.lazy)
-    return true
-  return visibleHeavy.value.has(index)
+// SSR renders the full document for non-lazy cells (SEO + no-JS), heavy
+// cells start as a skeleton. On the client, every card replays its markdown
+// as a token stream once it scrolls into view. The preview box has a fixed
+// height, so streaming never changes the card size and the page cannot
+// jitter.
+const cardState = ref<CardState[]>(cellsEn.map(cell => (cell.lazy ? 'skeleton' : 'full')))
+const streamed = ref<string[]>(cellsEn.map(() => ''))
+
+watch(cells, (next) => {
+  stopAll()
+  cardState.value = next.map(cell => (cell.lazy ? 'skeleton' : 'full'))
+  streamed.value = next.map(() => '')
+})
+
+const timers: (ReturnType<typeof setInterval> | undefined)[] = []
+
+function stopCard(index: number) {
+  if (timers[index]) {
+    clearInterval(timers[index])
+    timers[index] = undefined
+  }
 }
 
-onMounted(() => {
-  if (typeof IntersectionObserver === 'undefined') {
-    visibleHeavy.value = new Set(cells.value.map((_, i) => i))
+function stopAll() {
+  timers.forEach((_, i) => stopCard(i))
+}
+
+function playCard(index: number) {
+  const full = cells.value[index]?.md
+  if (!full)
     return
-  }
+  stopCard(index)
+  let cursor = 0
+  streamed.value[index] = ''
+  cardState.value[index] = 'playing'
+  timers[index] = setInterval(() => {
+    // Chunked "tokens", occasionally larger, like a real tokenizer.
+    const size = 3 + Math.floor(Math.random() * 5)
+    cursor = Math.min(full.length, cursor + size)
+    streamed.value[index] = full.slice(0, cursor)
+    if (cursor >= full.length) {
+      stopCard(index)
+      cardState.value[index] = 'done'
+    }
+  }, 36)
+}
+
+function renderContent(index: number): string {
+  if (cardState.value[index] === 'playing')
+    return streamed.value[index]
+  return cells.value[index]?.md ?? ''
+}
+
+const prefersReducedMotion
+  = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+let observer: IntersectionObserver | undefined
+
+onMounted(() => {
   const root = document.querySelector('.ms-showcase')
   if (!root)
     return
+  if (typeof IntersectionObserver === 'undefined' || prefersReducedMotion) {
+    // Without observers or with reduced motion, just show the full renders.
+    cardState.value = cells.value.map(() => 'full')
+    return
+  }
   observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
@@ -169,32 +218,33 @@ onMounted(() => {
           continue
         const index = Number((entry.target as HTMLElement).dataset.index)
         if (Number.isInteger(index)) {
-          visibleHeavy.value = new Set(visibleHeavy.value).add(index)
+          playCard(index)
           observer?.unobserve(entry.target)
         }
       }
     },
-    { rootMargin: '200px' },
+    { rootMargin: '120px' },
   )
-  root.querySelectorAll('[data-lazy="true"]').forEach(el => observer?.observe(el))
+  root.querySelectorAll('.ms-showcase-card').forEach(el => observer?.observe(el))
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
   observer = undefined
+  stopAll()
 })
 </script>
 
 <template>
-  <div class="ms-showcase-section">
+  <div class="ms-showcase-section ms-home-container">
     <h2 class="ms-showcase-heading">
       {{ isZh ? '开箱即用的渲染能力' : 'What you get out of the box' }}
     </h2>
     <p class="ms-showcase-subtitle">
       {{
         isZh
-          ? '每张卡片都是真实渲染结果 — 点击进入对应组件文档,复制示例即可使用。'
-          : 'Every card is a live render — click through to the component docs and copy the example.'
+          ? '每张卡片都会像真实 AI 输出一样逐 token 流式播放 — 未闭合语法保持稳定，语法闭合的瞬间立即渲染。'
+          : 'Every card replays its markdown as a live token stream — incomplete syntax stays stable, and blocks render the moment they close.'
       }}
     </p>
     <div class="ms-showcase">
@@ -203,21 +253,36 @@ onBeforeUnmount(() => {
         :key="cell.title"
         class="ms-showcase-card"
         :data-index="i"
-        :data-lazy="cell.lazy ? 'true' : undefined"
       >
         <div class="ms-showcase-head">
           <h3 class="ms-showcase-title">
             {{ cell.title }}
           </h3>
-          <a
-            :href="cell.link"
-            class="ms-showcase-more"
-            :aria-label="isZh ? `查看 ${cell.title} 组件文档` : `View the ${cell.title} component docs`"
-          >{{ isZh ? '文档 →' : 'Docs →' }}</a>
+          <div class="ms-showcase-tools">
+            <button
+              type="button"
+              class="ms-showcase-replay"
+              :aria-label="isZh ? `重播「${cell.title}」` : `Replay ${cell.title}`"
+              @click="playCard(i)"
+            >
+              {{ isZh ? '⟳ 重播' : '⟳ Replay' }}
+            </button>
+            <a
+              :href="cell.link"
+              class="ms-showcase-more"
+              :aria-label="isZh ? `查看 ${cell.title} 组件文档` : `View the ${cell.title} component docs`"
+            >{{ isZh ? '文档 →' : 'Docs →' }}</a>
+          </div>
         </div>
         <div class="ms-showcase-preview">
-          <MarkdownRender v-if="isCellVisible(i)" :key="cell.md" :content="cell.md" :is-dark="isDark" :fade="false" />
-          <div v-else class="ms-showcase-skeleton" aria-hidden="true" />
+          <div v-if="cardState[i] === 'skeleton'" class="ms-showcase-skeleton" aria-hidden="true" />
+          <MarkdownRender
+            v-else
+            :key="`${cell.title}-${cardState[i] === 'done' ? 'done' : 'live'}`"
+            :content="renderContent(i)"
+            :is-dark="isDark"
+            :fade="false"
+          />
         </div>
       </div>
     </div>
@@ -225,6 +290,24 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.ms-home-container {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+@media (min-width: 768px) {
+  .ms-home-container {
+    padding: 0 32px;
+  }
+}
+
+@media (min-width: 960px) {
+  .ms-home-container {
+    padding: 0 48px;
+  }
+}
+
 .ms-showcase-section {
   margin-top: 2.5rem;
 }
@@ -271,6 +354,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
+  min-height: 1.6rem;
 }
 
 .ms-showcase-title {
@@ -278,6 +362,35 @@ onBeforeUnmount(() => {
   font-weight: 650;
   color: var(--vp-c-text-1);
   margin: 0;
+}
+
+.ms-showcase-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.ms-showcase-replay {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--vp-c-text-2);
+  background: transparent;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.ms-showcase-card:hover .ms-showcase-replay,
+.ms-showcase-replay:focus-visible {
+  opacity: 1;
+}
+
+.ms-showcase-replay:hover {
+  color: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
 }
 
 .ms-showcase-more {
@@ -292,19 +405,29 @@ onBeforeUnmount(() => {
   text-decoration: underline;
 }
 
+/* Fixed height keeps the card (and the page) from reflowing while streaming. */
 .ms-showcase-preview {
-  flex: 1;
+  height: 200px;
+  overflow: hidden;
   font-size: 0.875rem;
   line-height: 1.6;
-  overflow: hidden;
+}
+
+/* The mermaid block ships a ~360px interactive preview area, which would
+   push its diagram below the fixed-height box. Shrink it to fit. */
+.ms-showcase-preview :deep(.mermaid-preview-area),
+.ms-showcase-preview :deep(._mermaid),
+.ms-showcase-preview :deep(._mermaid > div) {
+  min-height: 140px !important;
+  height: 140px !important;
 }
 
 .ms-showcase-preview :deep(pre) {
-  margin: 0.5rem 0;
+  margin: 0.4rem 0;
 }
 
 .ms-showcase-skeleton {
-  min-height: 120px;
+  height: 100%;
   border-radius: 8px;
   background: var(--vp-c-default-soft);
 }

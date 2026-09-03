@@ -2,9 +2,9 @@
 import { useData } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
 import { onMounted, ref, watchEffect } from 'vue'
+import ComponentMarquee from './ComponentMarquee.vue'
 import FaqFromFrontmatter from './FaqFromFrontmatter.vue'
 import FeatureShowcaseGrid from './FeatureShowcaseGrid.vue'
-import HomeStreamDemo from './HomeStreamDemo.vue'
 import TaskPathCards from './TaskPathCards.vue'
 
 const { page } = useData()
@@ -47,16 +47,13 @@ function formatNumber(num: number): string {
       <FaqFromFrontmatter />
     </template>
 
-    <template #home-hero-image>
-      <HomeStreamDemo />
-    </template>
-
     <template #home-features-before>
       <TaskPathCards />
     </template>
 
     <template #home-features-after>
       <FeatureShowcaseGrid />
+      <ComponentMarquee />
     </template>
 
     <template #nav-bar-content-after>

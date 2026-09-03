@@ -135,7 +135,21 @@ const cards = computed(() => (isZh.value ? cardsZh : cardsEn))
 
 <style scoped>
 .ms-task-cards {
-  margin-top: 2.5rem;
+  max-width: 1152px;
+  margin: 2.5rem auto 0;
+  padding: 0 24px;
+}
+
+@media (min-width: 768px) {
+  .ms-task-cards {
+    padding: 0 32px;
+  }
+}
+
+@media (min-width: 960px) {
+  .ms-task-cards {
+    padding: 0 48px;
+  }
 }
 
 .ms-task-title {

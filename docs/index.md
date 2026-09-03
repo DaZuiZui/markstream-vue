@@ -18,6 +18,9 @@ hero:
   name: Markstream
   text: Streaming Markdown renderers for AI apps
   tagline: Vue • React • Svelte • Angular • Nuxt • Next.js
+  image:
+    src: /markstream-hero.webp
+    alt: markstream-vue streaming Markdown playground illustration
   actions:
     - theme: brand
       text: Get started
@@ -32,7 +35,7 @@ hero:
 
 A streaming-friendly Markdown renderer family with progressive Mermaid support, streaming diff code blocks, and high-performance handling of large documents — available for Vue, React, Svelte, Angular, Nuxt, and Next.js.
 
-The demo panel above streams a real response through `markstream-vue` — incomplete syntax stays stable, code blocks appear progressively, and diagrams render the moment they close.
+The showcase cards below replay their markdown as a live token stream through `markstream-vue` — incomplete syntax stays stable, code blocks appear progressively, and diagrams render the moment they close.
 
 ## Find your way
 
